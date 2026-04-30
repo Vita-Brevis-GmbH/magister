@@ -11,16 +11,12 @@ Verifies:
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from magister_api.auth.oidc import OidcAuthorizeRequest, OidcUserInfo
-from magister_api.config import Settings, get_settings
-from magister_api.db import get_session
-from magister_api.main import create_app
 from magister_api.models.audit import AuditEvent
 from magister_api.routers.auth import get_oidc_client
 
@@ -53,57 +49,6 @@ class FakeOidcClient:
         if state != expected_state:
             raise ValueError("oidc_state_mismatch")
         return self._userinfo
-
-
-def _settings_for_app(database_url: str) -> Settings:
-    return Settings(
-        environment="test",  # type: ignore[arg-type]
-        database_url=database_url,
-        audit_key="auth-flow-test-key",  # type: ignore[arg-type]
-        session_secret="auth-flow-session",  # type: ignore[arg-type]
-        csrf_secret="auth-flow-csrf",  # type: ignore[arg-type]
-        oidc_issuer="https://login.example.test/v2.0",
-        oidc_client_id="client-id",
-        oidc_client_secret="client-secret",  # type: ignore[arg-type]
-        oidc_redirect_uri="http://testserver/auth/callback",
-        bootstrap_admins=["admin@example.ch"],
-        session_cookie_secure=False,
-    )
-
-
-@pytest_asyncio.fixture
-async def app(engine: AsyncEngine, database_url: str):
-    settings = _settings_for_app(database_url)
-    app = create_app(settings)
-
-    sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
-
-    async def _override_session():
-        async with sm() as session:
-            try:
-                yield session
-            except Exception:
-                await session.rollback()
-                raise
-            else:
-                await session.commit()
-
-    app.dependency_overrides[get_settings] = lambda: settings
-    app.dependency_overrides[get_session] = _override_session
-    yield app
-    # Truncate all tables between tests to keep them independent.
-    async with engine.begin() as conn:
-        await conn.exec_driver_sql(
-            "TRUNCATE audit_events, sessions, role_assignments, ad_user_cache, schools "
-            "RESTART IDENTITY CASCADE"
-        )
-
-
-@pytest_asyncio.fixture
-async def client(app: FastAPI):
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://testserver") as c:
-        yield c
 
 
 def _bootstrap_userinfo() -> OidcUserInfo:
@@ -202,7 +147,6 @@ class TestBootstrapLoginFlow:
 
         # /auth/me without a session must now 401.
         # httpx removes cookies cleared via Set-Cookie expiry — re-issue a fresh client.
-        from httpx import ASGITransport
         from httpx import AsyncClient as Cli
 
         async with Cli(transport=ASGITransport(app=app), base_url="http://testserver") as fresh:
