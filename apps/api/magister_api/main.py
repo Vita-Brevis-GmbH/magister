@@ -19,6 +19,7 @@ from magister_api.db import dispose_engine, init_engine
 from magister_api.logging_config import configure_logging
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.routers.auth import router as auth_router
+from magister_api.routers.classes import router as classes_router
 
 
 @asynccontextmanager
@@ -54,6 +55,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(AuditContextMiddleware)
 
     app.include_router(auth_router)
+    app.include_router(classes_router)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
