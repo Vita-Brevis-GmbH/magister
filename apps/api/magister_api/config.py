@@ -1,0 +1,106 @@
+"""Application configuration loaded from environment variables.
+
+All Magister settings use the ``MAGISTER_`` prefix. Secrets are wrapped in
+``SecretStr`` so they never accidentally land in logs or `repr()` output.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from typing import Any
+
+from pydantic import Field, SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="MAGISTER_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+        case_sensitive=False,
+    )
+
+    environment: str = Field(default="development")
+    log_level: str = Field(default="INFO")
+
+    database_url: str = Field(
+        default="postgresql+asyncpg://magister:magister@localhost:5432/magister",
+    )
+
+    audit_key: SecretStr = Field(
+        default=SecretStr(""),
+        description="Symmetric key for pgcrypto pgp_sym_encrypt of audit_events.payload.",
+    )
+
+    oidc_issuer: str = Field(default="")
+    oidc_client_id: str = Field(default="")
+    oidc_client_secret: SecretStr = Field(default=SecretStr(""))
+    oidc_redirect_uri: str = Field(default="http://localhost:8000/auth/callback")
+    oidc_scopes: list[str] = Field(default_factory=lambda: ["openid", "profile", "email"])
+
+    session_secret: SecretStr = Field(default=SecretStr(""))
+    session_lifetime_minutes: int = Field(default=480)
+    session_cookie_name: str = Field(default="magister_session")
+    session_cookie_secure: bool = Field(default=True)
+
+    csrf_secret: SecretStr = Field(default=SecretStr(""))
+    csrf_cookie_name: str = Field(default="magister_csrf")
+    csrf_header_name: str = Field(default="X-CSRF-Token")
+
+    bootstrap_admins: list[str] = Field(default_factory=list)
+
+    ad_dcs: list[str] = Field(default_factory=list)
+    ad_bind_dn: str | None = None
+    ad_bind_password: SecretStr | None = None
+
+    rate_limit_auth: str = Field(default="10/minute")
+    rate_limit_password_reset: str = Field(default="10/minute")
+
+    @field_validator("bootstrap_admins", "ad_dcs", "oidc_scopes", mode="before")
+    @classmethod
+    def _split_csv(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return [s.strip() for s in v.split(",") if s.strip()]
+        return v
+
+    @field_validator("environment")
+    @classmethod
+    def _check_env(cls, v: str) -> str:
+        allowed = {"development", "staging", "production", "test"}
+        if v not in allowed:
+            raise ValueError(f"environment must be one of {allowed}, got {v!r}")
+        return v
+
+    def require_runtime_secrets(self) -> None:
+        """Raise if a runtime-required secret is empty.
+
+        Intentionally NOT called at import time so unit tests can run with
+        partial config; the FastAPI app factory calls this on startup.
+        """
+        missing: list[str] = []
+        if not self.audit_key.get_secret_value():
+            missing.append("MAGISTER_AUDIT_KEY")
+        if not self.session_secret.get_secret_value():
+            missing.append("MAGISTER_SESSION_SECRET")
+        if not self.csrf_secret.get_secret_value():
+            missing.append("MAGISTER_CSRF_SECRET")
+        if self.environment == "production":
+            if not self.oidc_issuer:
+                missing.append("MAGISTER_OIDC_ISSUER")
+            if not self.oidc_client_id:
+                missing.append("MAGISTER_OIDC_CLIENT_ID")
+            if not self.oidc_client_secret.get_secret_value():
+                missing.append("MAGISTER_OIDC_CLIENT_SECRET")
+        if missing:
+            raise RuntimeError("Missing required runtime secrets: " + ", ".join(missing))
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
+
+
+def reset_settings_cache() -> None:
+    get_settings.cache_clear()

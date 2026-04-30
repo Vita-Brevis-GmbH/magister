@@ -1,0 +1,62 @@
+name: backend-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/backend-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: magister_test
+          POSTGRES_PASSWORD: magister_test
+          POSTGRES_DB: magister_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U magister_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      MAGISTER_TEST_DATABASE_URL: postgresql+asyncpg://magister_test:magister_test@localhost:5432/magister_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Enable pgcrypto in test DB
+        env:
+          PGPASSWORD: magister_test
+        run: psql -h localhost -U magister_test -d magister_test -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+
+      - name: Ruff lint
+        run: uv run ruff check magister_api tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check magister_api tests
+
+      - name: Pyright (strict)
+        run: uv run pyright
+
+      - name: Pytest (unit + integration)
+        run: uv run pytest -q
