@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.eggs/
+build/
+dist/
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+
+# Node / Frontend
+node_modules/
+.vite/
+.turbo/
+.next/
+apps/web/dist/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Build artefacts / runtime
+*.log
+*.pid
+*.sqlite
+*.sqlite3
+
+# Local Compose data volumes (when running locally)
+deploy/compose/caddy_data/
+deploy/compose/caddy_config/
+deploy/compose/postgres_data/
+deploy/compose/backups/
