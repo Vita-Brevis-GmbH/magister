@@ -17,10 +17,12 @@ from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
 from magister_api.db import dispose_engine, init_engine
 from magister_api.logging_config import configure_logging
+from magister_api.routers.admin_sync import router as admin_sync_router
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.routers.auth import router as auth_router
 from magister_api.routers.class_teachers import router as class_teachers_router
 from magister_api.routers.classes import router as classes_router
+from magister_api.routers.users import router as users_router
 
 
 @asynccontextmanager
@@ -58,6 +60,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(classes_router)
     app.include_router(class_teachers_router)
+    app.include_router(users_router)
+    app.include_router(admin_sync_router)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
