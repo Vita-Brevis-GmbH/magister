@@ -70,10 +70,14 @@ MAGISTER_OIDC_REDIRECT_URI=https://magister.<schultraeger>.ch/auth/callback
 # persistent in DB).
 MAGISTER_BOOTSTRAP_ADMINS=admin1@<schultraeger>.ch,admin2@<schultraeger>.ch
 
-# AD details (consumed by issue #3 / #7)
+# AD details
 MAGISTER_AD_DCS=dc1.<schule>.local,dc2.<schule>.local
 MAGISTER_AD_BIND_DN=CN=svc-magister,OU=ServiceAccounts,DC=<schule>,DC=local
 MAGISTER_AD_BIND_PASSWORD=<ad-svc-pw>
+# Subtree the periodic user sync walks. The school for each user is derived
+# from the OU path matching schools.scope_short (case-insensitive substring).
+MAGISTER_AD_USERS_SEARCH_BASE=OU=Users,DC=<schule>,DC=local
+MAGISTER_AD_SYNC_INTERVAL_MINUTES=15
 ```
 
 ## 5. Migrations ausführen
@@ -114,6 +118,35 @@ Verifikation aus der DB:
 SELECT id, action, actor_upn, ts FROM audit_events ORDER BY id;
 -- payload ist bytea-encrypted; Decrypt nur über den AuditService:
 --   await AuditService(session, settings).read(event_id)
+```
+
+## 7a. AD-Sync triggern
+
+Der erste Sync füllt `ad_user_cache`. Manuell als Admin:
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
+  -H "Cookie: magister_session=<sid>" \
+  -H "X-CSRF-Token: <csrf>"
+# { "synced_count": 1234, "school_partition": {"1": 800, "2": 434} }
+```
+
+Periodischer Sync via Cron / systemd-timer:
+
+```bash
+*/15 * * * *  curl -fsSL -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
+  -H "Cookie: magister_session=<service-session>" \
+  -H "X-CSRF-Token: <service-csrf>" >/dev/null
+```
+
+In M2 wandert der Trigger in einen App-internen Lifespan-Task; bis dahin reicht
+ein externer Scheduler.
+
+Listing prüfen (Schulleitung oder Admin):
+
+```bash
+curl https://magister.<schultraeger>.ch/users?limit=10
+# { "items": [...], "total": ..., "last_sync_at": "..." }
 ```
 
 ## 8. Health-Check
