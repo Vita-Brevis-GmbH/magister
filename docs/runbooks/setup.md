@@ -149,6 +149,50 @@ curl https://magister.<schultraeger>.ch/users?limit=10
 # { "items": [...], "total": ..., "last_sync_at": "..." }
 ```
 
+## 7b. Schüler-Passwort-Reset E2E
+
+**Voraussetzungen:** Sync (§7a) ist gelaufen, Schüler ist im `ad_user_cache`,
+Klassenlehrer:in hat aktive `class_teacher_roles`-Row für die Klasse, in
+der der Schüler aktive `class_memberships`-Row hat.
+
+**AD-Seite (einmalig):** Service-Account braucht "Reset Password" + "Write
+Account Restrictions" auf der Schüler-OU (siehe `ARCHITECTURE.md` §4.4).
+
+**Generate-Mode** (KL):
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/students/<guid>/password-reset \
+  -H "Cookie: magister_session=<sid>" \
+  -H "X-CSRF-Token: <csrf>" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "generate"}'
+# { "mode": "generate", "force_change": true, "temp_password": "p7Q-..." }
+```
+
+`temp_password` wird **einmalig** zurückgeliefert und nirgendwo persistiert.
+Schüler muss bei nächstem Logon ein neues PW setzen (`pwdLastSet=0`).
+
+**Manual-Mode** (KL gibt eigenes PW vor, ggf. ohne Forced-Change):
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/students/<guid>/password-reset \
+  -d '{"mode": "manual", "manual_password": "Apfel-Stuhl-77!", "force_change": false}'
+```
+
+Magister probebindet das angegebene PW zuerst gegen AD; bei Policy-Fehler
+gibt's `422 manual_password_rejected_by_ad` ohne den Reset durchzuführen.
+
+**Audit verifizieren:**
+
+```sql
+SELECT id, action, actor_upn, target_id, ts FROM audit_events
+ WHERE action = 'student_password_reset' ORDER BY id DESC LIMIT 5;
+-- Klartext-PW MUSS abwesend sein:
+SELECT encode(payload, 'escape') FROM audit_events
+ WHERE action = 'student_password_reset' LIMIT 1;
+-- (Plaintext eines decrypted payload erfolgt ausschliesslich über AuditService.read)
+```
+
 ## 8. Health-Check
 
 ```bash

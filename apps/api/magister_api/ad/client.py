@@ -23,6 +23,7 @@ from ldap3 import (
     BASE,
     FIRST,
     MOCK_SYNC,
+    MODIFY_REPLACE,
     SAFE_SYNC,
     SIMPLE,
     SUBTREE,
@@ -287,6 +288,100 @@ class AdClient:
                     conn.unbind()
                 except LDAPException:
                     pass
+
+    async def find_user_dn(self, ad_object_guid: str) -> str | None:
+        """Return the LDAP DN for a user identified by ``objectGUID``."""
+        return await run_in_threadpool(self._sync_find_user_dn, ad_object_guid)
+
+    def _sync_find_user_dn(self, ad_object_guid: str) -> str | None:
+        conn, owned = self._acquire_connection()
+        try:
+            # AD octet-string filter requires the GUID expressed as \xx\xx... bytes.
+            try:
+                guid_bytes = uuid.UUID(ad_object_guid).bytes_le
+            except ValueError:
+                return None
+            search_filter = "(objectGUID=" + "".join(f"\\{b:02x}" for b in guid_bytes) + ")"
+            base = self._settings.ad_users_search_base or ""
+            ok = conn.search(
+                search_base=base,
+                search_filter=search_filter,
+                search_scope=SUBTREE,
+                attributes=["distinguishedName"],
+            )
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                return None
+            for entry in conn.response or []:
+                if entry.get("type") != "searchResEntry":
+                    continue
+                return entry.get("dn") or None
+            return None
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
+        """Reset ``unicodePwd`` and (optionally) set ``pwdLastSet=0`` for forced change."""
+        await run_in_threadpool(self._sync_modify_password, user_dn, new_password, force_change)
+
+    def _sync_modify_password(self, user_dn: str, new_password: str, force_change: bool) -> None:
+        # AD requires unicodePwd as quoted UTF-16-LE bytes.
+        encoded = f'"{new_password}"'.encode("utf-16-le")
+        changes: dict[str, list[tuple[str, list[bytes | str]]]] = {
+            "unicodePwd": [(MODIFY_REPLACE, [encoded])],
+        }
+        if force_change:
+            changes["pwdLastSet"] = [(MODIFY_REPLACE, ["0"])]
+
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.modify(user_dn, changes)
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_modify_failed")
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
+        """Try a SIMPLE bind as ``user_dn`` to validate the password against AD policy."""
+        return await run_in_threadpool(self._sync_probe_bind, user_dn, password)
+
+    def _sync_probe_bind(self, user_dn: str, password: str) -> bool:
+        if self._settings.ad_use_mock:
+            # In mock mode we don't actually check passwords; the policy gate
+            # is exercised by the unit tests on ``passes_default_complexity``.
+            return True
+        try:
+            conn = Connection(
+                _make_pool(self._settings),
+                user=user_dn,
+                password=password,
+                authentication=SIMPLE,
+                client_strategy=SAFE_SYNC,
+                auto_bind=True,
+                receive_timeout=10,
+            )
+        except LDAPException:
+            return False
+        try:
+            return True
+        finally:
+            try:
+                conn.unbind()
+            except LDAPException:
+                pass
 
     # --- Test helpers --------------------------------------------------------
 
