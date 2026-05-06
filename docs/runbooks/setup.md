@@ -70,10 +70,14 @@ MAGISTER_OIDC_REDIRECT_URI=https://magister.<schultraeger>.ch/auth/callback
 # persistent in DB).
 MAGISTER_BOOTSTRAP_ADMINS=admin1@<schultraeger>.ch,admin2@<schultraeger>.ch
 
-# AD details (consumed by issue #3 / #7)
+# AD details
 MAGISTER_AD_DCS=dc1.<schule>.local,dc2.<schule>.local
 MAGISTER_AD_BIND_DN=CN=svc-magister,OU=ServiceAccounts,DC=<schule>,DC=local
 MAGISTER_AD_BIND_PASSWORD=<ad-svc-pw>
+# Subtree the periodic user sync walks. The school for each user is derived
+# from the OU path matching schools.scope_short (case-insensitive substring).
+MAGISTER_AD_USERS_SEARCH_BASE=OU=Users,DC=<schule>,DC=local
+MAGISTER_AD_SYNC_INTERVAL_MINUTES=15
 ```
 
 ## 5. Migrations ausführen
@@ -114,6 +118,79 @@ Verifikation aus der DB:
 SELECT id, action, actor_upn, ts FROM audit_events ORDER BY id;
 -- payload ist bytea-encrypted; Decrypt nur über den AuditService:
 --   await AuditService(session, settings).read(event_id)
+```
+
+## 7a. AD-Sync triggern
+
+Der erste Sync füllt `ad_user_cache`. Manuell als Admin:
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
+  -H "Cookie: magister_session=<sid>" \
+  -H "X-CSRF-Token: <csrf>"
+# { "synced_count": 1234, "school_partition": {"1": 800, "2": 434} }
+```
+
+Periodischer Sync via Cron / systemd-timer:
+
+```bash
+*/15 * * * *  curl -fsSL -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
+  -H "Cookie: magister_session=<service-session>" \
+  -H "X-CSRF-Token: <service-csrf>" >/dev/null
+```
+
+In M2 wandert der Trigger in einen App-internen Lifespan-Task; bis dahin reicht
+ein externer Scheduler.
+
+Listing prüfen (Schulleitung oder Admin):
+
+```bash
+curl https://magister.<schultraeger>.ch/users?limit=10
+# { "items": [...], "total": ..., "last_sync_at": "..." }
+```
+
+## 7b. Schüler-Passwort-Reset E2E
+
+**Voraussetzungen:** Sync (§7a) ist gelaufen, Schüler ist im `ad_user_cache`,
+Klassenlehrer:in hat aktive `class_teacher_roles`-Row für die Klasse, in
+der der Schüler aktive `class_memberships`-Row hat.
+
+**AD-Seite (einmalig):** Service-Account braucht "Reset Password" + "Write
+Account Restrictions" auf der Schüler-OU (siehe `ARCHITECTURE.md` §4.4).
+
+**Generate-Mode** (KL):
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/students/<guid>/password-reset \
+  -H "Cookie: magister_session=<sid>" \
+  -H "X-CSRF-Token: <csrf>" \
+  -H "Content-Type: application/json" \
+  -d '{"mode": "generate"}'
+# { "mode": "generate", "force_change": true, "temp_password": "p7Q-..." }
+```
+
+`temp_password` wird **einmalig** zurückgeliefert und nirgendwo persistiert.
+Schüler muss bei nächstem Logon ein neues PW setzen (`pwdLastSet=0`).
+
+**Manual-Mode** (KL gibt eigenes PW vor, ggf. ohne Forced-Change):
+
+```bash
+curl -X POST https://magister.<schultraeger>.ch/students/<guid>/password-reset \
+  -d '{"mode": "manual", "manual_password": "Apfel-Stuhl-77!", "force_change": false}'
+```
+
+Magister probebindet das angegebene PW zuerst gegen AD; bei Policy-Fehler
+gibt's `422 manual_password_rejected_by_ad` ohne den Reset durchzuführen.
+
+**Audit verifizieren:**
+
+```sql
+SELECT id, action, actor_upn, target_id, ts FROM audit_events
+ WHERE action = 'student_password_reset' ORDER BY id DESC LIMIT 5;
+-- Klartext-PW MUSS abwesend sein:
+SELECT encode(payload, 'escape') FROM audit_events
+ WHERE action = 'student_password_reset' LIMIT 1;
+-- (Plaintext eines decrypted payload erfolgt ausschliesslich über AuditService.read)
 ```
 
 ## 8. Health-Check

@@ -54,6 +54,17 @@ class Settings(BaseSettings):
     ad_dcs: list[str] = Field(default_factory=list)
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None
+    ad_users_search_base: str | None = Field(
+        default=None,
+        description=(
+            "LDAP search base for the periodic user sync (e.g. OU=Users,DC=schule,DC=local)."
+        ),
+    )
+    ad_sync_interval_minutes: int = Field(default=15)
+    ad_use_mock: bool = Field(
+        default=False,
+        description="When true the AD client uses ldap3's MOCK_SYNC strategy (tests).",
+    )
 
     rate_limit_auth: str = Field(default="10/minute")
     rate_limit_password_reset: str = Field(default="10/minute")
