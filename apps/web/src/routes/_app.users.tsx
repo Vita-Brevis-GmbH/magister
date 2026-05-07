@@ -3,6 +3,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useUsers, type UseUsersParams } from "@/api/hooks";
+import type { AdUserOut } from "@/api/types";
+import { ResetPasswordModal } from "@/components/ResetPasswordModal";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -22,6 +25,7 @@ function UsersPage(): JSX.Element {
   const { t } = useTranslation();
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
+  const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
 
   const params: UseUsersParams = {
     limit: 50,
@@ -69,6 +73,7 @@ function UsersPage(): JSX.Element {
               <TableHead>UPN</TableHead>
               <TableHead>{t("users.kind")}</TableHead>
               <TableHead>{t("users.enabled")}</TableHead>
+              <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -77,11 +82,25 @@ function UsersPage(): JSX.Element {
                 <TableCell className="font-medium">{u.upn}</TableCell>
                 <TableCell>{u.kind}</TableCell>
                 <TableCell>{u.enabled ? t("users.yes") : t("users.no")}</TableCell>
+                <TableCell className="text-right">
+                  {u.kind === "student" && u.enabled ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setResetTarget(u)}
+                    >
+                      {t("password_reset.button")}
+                    </Button>
+                  ) : null}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       )}
+
+      <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
     </div>
   );
 }

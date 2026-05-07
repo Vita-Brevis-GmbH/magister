@@ -43,3 +43,18 @@ export interface AdUserListResponse {
   limit: number;
   last_sync_at: string | null;
 }
+
+export type StudentPasswordResetMode = "generate" | "manual";
+
+export interface StudentPasswordResetRequest {
+  mode: StudentPasswordResetMode;
+  manual_password?: string;
+  force_change?: boolean;
+}
+
+export interface StudentPasswordResetResponse {
+  mode: StudentPasswordResetMode;
+  force_change: boolean;
+  /** Set only when mode="generate"; never returned a second time. */
+  temp_password: string | null;
+}

@@ -45,7 +45,32 @@
     "no": "No",
     "last_sync_at": "Last AD sync",
     "never_synced": "never synced",
-    "empty": "No users."
+    "empty": "No users.",
+    "actions": "Actions"
+  },
+  "password_reset": {
+    "button": "Reset password",
+    "title": "Reset student password",
+    "mode_label": "Mode",
+    "mode_generate": "Generate",
+    "mode_generate_desc": "Magister creates a random password and shows it once.",
+    "mode_manual": "Set manually",
+    "mode_manual_desc": "Type a password yourself (e.g. when you've already handed one out).",
+    "manual_password_label": "New password",
+    "manual_password_hint": "At least {{min}} characters.",
+    "force_change_label": "Require student to change password on next sign-in",
+    "submit": "Reset password",
+    "success_generate_intro": "The new password is:",
+    "success_generate_note": "Write it down or hand it over now — it will not be shown again.",
+    "success_manual": "Password updated.",
+    "temp_password_label": "Temporary password",
+    "copy": "Copy",
+    "copied": "Copied",
+    "error_student_disabled": "Student is disabled in AD — reset not possible.",
+    "error_student_not_in_ad": "Student not found in AD. Check AD sync.",
+    "error_student_not_found": "Student not found.",
+    "error_not_a_student": "This user is not a student.",
+    "error_password_policy": "Password does not meet AD policy."
   },
   "errors": {
     "title": "Error",
@@ -61,6 +86,8 @@
   },
   "common": {
     "loading": "Loading…",
-    "retry": "Retry"
+    "retry": "Retry",
+    "cancel": "Cancel",
+    "close": "Close"
   }
 }

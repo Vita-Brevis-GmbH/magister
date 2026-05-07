@@ -46,7 +46,32 @@
     "no": "No",
     "last_sync_at": "Ultima sincronizzazione AD",
     "never_synced": "mai sincronizzato",
-    "empty": "Nessun utente."
+    "empty": "Nessun utente.",
+    "actions": "Azioni"
+  },
+  "password_reset": {
+    "button": "Reimposta password",
+    "title": "Reimposta password dello studente",
+    "mode_label": "Modalità",
+    "mode_generate": "Genera",
+    "mode_generate_desc": "Magister crea una password casuale e la mostra una sola volta.",
+    "mode_manual": "Imposta manualmente",
+    "mode_manual_desc": "Inserisci tu la password (ad es. se l'hai già consegnata).",
+    "manual_password_label": "Nuova password",
+    "manual_password_hint": "Almeno {{min}} caratteri.",
+    "force_change_label": "Richiedi allo studente di cambiare la password al prossimo accesso",
+    "submit": "Reimposta password",
+    "success_generate_intro": "La nuova password è:",
+    "success_generate_note": "Annotala o consegnala ora — non verrà più mostrata.",
+    "success_manual": "Password aggiornata.",
+    "temp_password_label": "Password temporanea",
+    "copy": "Copia",
+    "copied": "Copiato",
+    "error_student_disabled": "Lo studente è disabilitato in AD — reimpostazione impossibile.",
+    "error_student_not_in_ad": "Studente non trovato in AD. Controlla la sincronizzazione AD.",
+    "error_student_not_found": "Studente non trovato.",
+    "error_not_a_student": "Questo utente non è uno studente.",
+    "error_password_policy": "La password non rispetta la policy AD."
   },
   "errors": {
     "title": "Errore",
@@ -62,6 +87,8 @@
   },
   "common": {
     "loading": "Caricamento…",
-    "retry": "Riprova"
+    "retry": "Riprova",
+    "cancel": "Annulla",
+    "close": "Chiudi"
   }
 }
