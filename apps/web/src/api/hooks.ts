@@ -2,8 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiFetch } from "./client";
-import type { AdUserListResponse, ClassOut, CurrentUserOut } from "./types";
+import { apiFetch, type ApiError } from "./client";
+import type {
+  AdUserListResponse,
+  ClassOut,
+  CurrentUserOut,
+  StudentPasswordResetRequest,
+  StudentPasswordResetResponse,
+} from "./types";
 
 export const queryKeys = {
   me: ["me"] as const,
@@ -62,5 +68,17 @@ export function useUsers(params: UseUsersParams = {}) {
   return useQuery<AdUserListResponse>({
     queryKey: queryKeys.users(params),
     queryFn: () => apiFetch<AdUserListResponse>(path),
+  });
+}
+
+// --- Student password reset ------------------------------------------------
+
+export function useResetStudentPassword(adObjectGuid: string) {
+  return useMutation<StudentPasswordResetResponse, ApiError, StudentPasswordResetRequest>({
+    mutationFn: (body) =>
+      apiFetch<StudentPasswordResetResponse>(`/students/${adObjectGuid}/password-reset`, {
+        method: "POST",
+        body,
+      }),
   });
 }

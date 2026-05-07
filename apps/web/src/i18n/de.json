@@ -45,7 +45,32 @@
     "no": "Nein",
     "last_sync_at": "Letzter AD-Sync",
     "never_synced": "noch nicht synchronisiert",
-    "empty": "Keine User gefunden."
+    "empty": "Keine User gefunden.",
+    "actions": "Aktionen"
+  },
+  "password_reset": {
+    "button": "Passwort zurücksetzen",
+    "title": "Schüler-Passwort zurücksetzen",
+    "mode_label": "Modus",
+    "mode_generate": "Generieren",
+    "mode_generate_desc": "Magister erstellt ein zufälliges Passwort und zeigt es einmalig an.",
+    "mode_manual": "Manuell setzen",
+    "mode_manual_desc": "Du gibst das Passwort selbst ein (z. B. wenn du es bereits ausgehändigt hast).",
+    "manual_password_label": "Neues Passwort",
+    "manual_password_hint": "Mindestens {{min}} Zeichen.",
+    "force_change_label": "Schüler:in muss Passwort beim nächsten Login ändern",
+    "submit": "Passwort zurücksetzen",
+    "success_generate_intro": "Das neue Passwort lautet:",
+    "success_generate_note": "Notiere oder übergib das Passwort jetzt — es wird nicht erneut angezeigt.",
+    "success_manual": "Passwort wurde gesetzt.",
+    "temp_password_label": "Temporäres Passwort",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "error_student_disabled": "Schüler:in ist im AD deaktiviert — Reset nicht möglich.",
+    "error_student_not_in_ad": "Schüler:in im AD nicht gefunden. AD-Sync prüfen.",
+    "error_student_not_found": "Schüler:in nicht gefunden.",
+    "error_not_a_student": "Dieser User ist kein:e Schüler:in.",
+    "error_password_policy": "Das Passwort entspricht nicht den AD-Richtlinien."
   },
   "errors": {
     "title": "Fehler",
@@ -61,6 +86,8 @@
   },
   "common": {
     "loading": "Lädt…",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "cancel": "Abbrechen",
+    "close": "Schliessen"
   }
 }

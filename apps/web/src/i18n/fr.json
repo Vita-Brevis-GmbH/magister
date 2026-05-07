@@ -46,7 +46,32 @@
     "no": "Non",
     "last_sync_at": "Dernière synchronisation AD",
     "never_synced": "jamais synchronisé",
-    "empty": "Aucun utilisateur."
+    "empty": "Aucun utilisateur.",
+    "actions": "Actions"
+  },
+  "password_reset": {
+    "button": "Réinitialiser le mot de passe",
+    "title": "Réinitialiser le mot de passe de l'élève",
+    "mode_label": "Mode",
+    "mode_generate": "Générer",
+    "mode_generate_desc": "Magister crée un mot de passe aléatoire et l'affiche une seule fois.",
+    "mode_manual": "Définir manuellement",
+    "mode_manual_desc": "Saisissez vous-même le mot de passe (par ex. si vous l'avez déjà remis).",
+    "manual_password_label": "Nouveau mot de passe",
+    "manual_password_hint": "Au moins {{min}} caractères.",
+    "force_change_label": "Forcer l'élève à changer de mot de passe à la prochaine connexion",
+    "submit": "Réinitialiser le mot de passe",
+    "success_generate_intro": "Le nouveau mot de passe est :",
+    "success_generate_note": "Notez-le ou remettez-le maintenant — il ne sera plus affiché.",
+    "success_manual": "Mot de passe mis à jour.",
+    "temp_password_label": "Mot de passe temporaire",
+    "copy": "Copier",
+    "copied": "Copié",
+    "error_student_disabled": "L'élève est désactivé·e dans l'AD — réinitialisation impossible.",
+    "error_student_not_in_ad": "Élève introuvable dans l'AD. Vérifiez la synchronisation AD.",
+    "error_student_not_found": "Élève introuvable.",
+    "error_not_a_student": "Cet utilisateur n'est pas un·e élève.",
+    "error_password_policy": "Le mot de passe ne respecte pas la politique AD."
   },
   "errors": {
     "title": "Erreur",
@@ -62,6 +87,8 @@
   },
   "common": {
     "loading": "Chargement…",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "close": "Fermer"
   }
 }
