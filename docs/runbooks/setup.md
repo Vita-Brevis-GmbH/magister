@@ -82,26 +82,54 @@ MAGISTER_AD_SYNC_INTERVAL_MINUTES=15
 
 ## 5. Migrations ausführen
 
+Lokal (Dev/CI):
 ```bash
 cd apps/api
 uv sync --extra dev
 uv run alembic upgrade head
 ```
 
-Der erste Migrations-Lauf legt an: `schools`, `ad_user_cache`, `sessions`,
-`role_assignments`, `audit_events` (mit verschlüsseltem `payload bytea`).
+Im Compose-Stack laufen die Migrationen **automatisch beim Start des
+`magister-api`-Containers** (Entrypoint führt `alembic upgrade head` vor
+`uvicorn` aus). Wer das skippen will (z.B. CLI-One-Shot), setzt
+`MAGISTER_SKIP_MIGRATIONS=1`.
 
-> Magister fährt Migrationen NICHT automatisch beim Containerstart hoch — das
-> ist Absicht (CLAUDE.md: kein Auto-Migrate in Production).
+Der erste Migrations-Lauf legt an: `schools`, `ad_user_cache`, `sessions`,
+`role_assignments`, `audit_events` (mit verschlüsseltem `payload bytea`),
+`classes`, `class_teacher_roles`, `class_memberships`.
 
 ## 6. API starten
 
-Lokal:
+### 6a. Compose-Stack (empfohlen für Schulträger-Setup)
+
+```bash
+cd deploy/compose
+cp .env.example .env
+# .env editieren: MAGISTER_PUBLIC_HOSTNAME, MAGISTER_ACME_EMAIL, alle Secrets,
+# OIDC-Werte, AD-Werte, MAGISTER_BOOTSTRAP_ADMINS
+docker compose pull   # holt magister-api von GHCR + postgres + caddy
+docker compose up -d
+```
+
+Stack-Komponenten:
+- **caddy** — Reverse-Proxy mit Auto-TLS (Let's-Encrypt). Hört auf 80/443.
+- **magister-api** — FastAPI; macht beim Start `alembic upgrade head`.
+- **postgres** — PostgreSQL 16; `pgcrypto` wird via Migration aktiviert.
+- **pg-backup** — Cron-Sidecar, schreibt täglich `pg_dump.gz` in das
+  `backups`-Volume. Cron-Schedule via `BACKUP_CRON`, Retention via
+  `BACKUP_RETENTION_DAYS` (default 14 Tage).
+
+```bash
+docker compose ps
+docker compose logs -f magister-api caddy
+docker compose exec postgres psql -U magister magister -c '\dt'
+```
+
+### 6b. Lokal ohne Container (Dev)
+
 ```bash
 uv run uvicorn magister_api.main:app --host 0.0.0.0 --port 8000
 ```
-
-Compose: kommt mit dem Stack-PR (#X). Bis dahin: lokal/Systemd-Unit nach Wahl.
 
 ## 7. Bootstrap-Login durchspielen
 

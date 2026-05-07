@@ -1,0 +1,16 @@
+# Speed up build context + keep unrelated files out of the image.
+.venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.pyright
+.mypy_cache
+.coverage
+coverage.xml
+htmlcov
+tests
+.env
+.env.*
+!.env.example

@@ -2,7 +2,6 @@
 name = "magister-api"
 version = "0.1.0"
 description = "Magister backend — user & class management for schools (Schola Levis / Vita Brevis)"
-readme = "../../README.md"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
 authors = [{ name = "Vita Brevis GmbH" }]
