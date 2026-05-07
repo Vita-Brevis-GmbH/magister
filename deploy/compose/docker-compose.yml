@@ -1,0 +1,118 @@
+# Magister production-ish compose stack.
+#
+# Caddy terminates TLS via ACME, reverse-proxies HTTP to magister-api.
+# magister-api connects to postgres via the internal network.
+# pg-backup runs pg_dump on a cron schedule into /var/backups/magister.
+#
+# Required env (see deploy/compose/.env.example):
+#   MAGISTER_PUBLIC_HOSTNAME            — public FQDN, e.g. magister.example.ch
+#   MAGISTER_ACME_EMAIL                 — Let's-Encrypt contact mail
+#   MAGISTER_API_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-api:latest
+#   POSTGRES_USER / _PASSWORD / _DB     — Postgres bootstrap
+#   MAGISTER_AUDIT_KEY                  — pgcrypto sym key (do NOT rotate)
+#   MAGISTER_SESSION_SECRET             — session signing
+#   MAGISTER_CSRF_SECRET                — csrf hmac
+#   MAGISTER_OIDC_*                     — OIDC against Entra
+#   MAGISTER_AD_*                       — AD ServerPool + bind
+#   MAGISTER_BOOTSTRAP_ADMINS           — first-login admin UPNs (comma-sep)
+#
+# Bring up:
+#   cp .env.example .env  &&  edit  &&  docker compose up -d
+# Logs:
+#   docker compose logs -f magister-api
+# Manual AD sync:
+#   docker compose exec magister-api curl -X POST http://localhost:8000/admin/ad-sync ...
+# Backup:
+#   pg-backup writes /var/backups/magister/<date>.sql.gz; mount the volume
+#   to your backup host or rsync it off-box from there.
+
+name: magister
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-magister}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-magister}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-magister} -d $${POSTGRES_DB:-magister}"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [internal]
+
+  magister-api:
+    image: ${MAGISTER_API_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-api:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MAGISTER_ENVIRONMENT: production
+      MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}
+      MAGISTER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-magister}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-magister}
+      MAGISTER_AUDIT_KEY: ${MAGISTER_AUDIT_KEY:?MAGISTER_AUDIT_KEY is required}
+      MAGISTER_SESSION_SECRET: ${MAGISTER_SESSION_SECRET:?MAGISTER_SESSION_SECRET is required}
+      MAGISTER_CSRF_SECRET: ${MAGISTER_CSRF_SECRET:?MAGISTER_CSRF_SECRET is required}
+      MAGISTER_SESSION_COOKIE_SECURE: "true"
+      MAGISTER_OIDC_ISSUER: ${MAGISTER_OIDC_ISSUER}
+      MAGISTER_OIDC_CLIENT_ID: ${MAGISTER_OIDC_CLIENT_ID}
+      MAGISTER_OIDC_CLIENT_SECRET: ${MAGISTER_OIDC_CLIENT_SECRET}
+      MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/auth/callback
+      MAGISTER_BOOTSTRAP_ADMINS: ${MAGISTER_BOOTSTRAP_ADMINS:-}
+      MAGISTER_AD_DCS: ${MAGISTER_AD_DCS:-}
+      MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
+      MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
+      MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
+      MAGISTER_AD_SYNC_INTERVAL_MINUTES: ${MAGISTER_AD_SYNC_INTERVAL_MINUTES:-15}
+    networks: [internal]
+    # No public ports — only Caddy reaches it on the internal network.
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - magister-api
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MAGISTER_PUBLIC_HOSTNAME: ${MAGISTER_PUBLIC_HOSTNAME}
+      MAGISTER_ACME_EMAIL: ${MAGISTER_ACME_EMAIL:?MAGISTER_ACME_EMAIL is required}
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal]
+
+  pg-backup:
+    build:
+      context: ./pg-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:-magister}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-magister}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_CRON: ${BACKUP_CRON:-15 2 * * *}  # 02:15 daily by default
+    volumes:
+      - backups:/var/backups/magister
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+  backups:

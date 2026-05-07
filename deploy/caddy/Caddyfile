@@ -1,0 +1,40 @@
+# Magister reverse proxy.
+#
+# Auto-TLS via Let's-Encrypt; the public hostname and ACME email are passed
+# as env from docker-compose. The frontend is served by Caddy directly once
+# the magister-web image lands; until then, all paths route to the API.
+
+{
+    email {$MAGISTER_ACME_EMAIL}
+    # Production defaults; uncomment for staging certs while testing:
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$MAGISTER_PUBLIC_HOSTNAME} {
+    encode zstd gzip
+
+    # Security headers; Strict-Transport-Security is added by the auto-TLS
+    # path automatically when the cert is in place.
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "geolocation=(), microphone=(), camera=()"
+        # Tighten as the frontend takes shape (CSP needs the actual asset origins).
+    }
+
+    # Health-probes — answered by the API.
+    handle /healthz {
+        reverse_proxy magister-api:8000
+    }
+
+    # API + auth surface. Until the magister-web image exists, this matches
+    # everything; once the SPA lands we'll add a `handle_path` for /api/*
+    # and serve the static bundle for /.
+    handle {
+        reverse_proxy magister-api:8000 {
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}

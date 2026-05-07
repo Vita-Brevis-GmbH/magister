@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "apps/api/**"
+      - "deploy/**"
       - ".github/workflows/backend-ci.yml"
 
 jobs:
@@ -60,3 +61,35 @@ jobs:
 
       - name: Pytest (unit + integration)
         run: uv run pytest -q
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          push: false
+          load: true
+          tags: magister-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke-test image (--help on uvicorn entrypoint)
+        run: |
+          docker run --rm \
+            -e MAGISTER_SKIP_MIGRATIONS=1 \
+            magister-api:ci uvicorn --help > /dev/null
+
+      - name: Validate compose config
+        run: |
+          cd deploy/compose
+          cp .env.example .env
+          sed -i 's/CHANGE_ME/ci_placeholder_secret/g' .env
+          docker compose config > /dev/null
