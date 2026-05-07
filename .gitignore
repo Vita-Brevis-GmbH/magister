@@ -48,3 +48,4 @@ deploy/compose/caddy_data/
 deploy/compose/caddy_config/
 deploy/compose/postgres_data/
 deploy/compose/backups/
+tsconfig.tsbuildinfo

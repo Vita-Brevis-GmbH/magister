@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "Magister",
+    "tagline": "Schulverwaltung für Schweizer Schulen"
+  },
+  "nav": {
+    "dashboard": "Übersicht",
+    "classes": "Klassen",
+    "users": "User",
+    "logout": "Abmelden"
+  },
+  "auth": {
+    "login_title": "Anmeldung",
+    "login_intro": "Melde dich mit deinem Schulkonto an.",
+    "login_button": "Mit Entra ID anmelden",
+    "logged_in_as": "Angemeldet als",
+    "expires_at": "Sitzung gültig bis",
+    "roles": "Rollen",
+    "school_scope": "Schul-Scope",
+    "no_roles": "(keine)"
+  },
+  "me": {
+    "title": "Mein Profil"
+  },
+  "classes": {
+    "title": "Klassen",
+    "name": "Name",
+    "kuerzel": "Kürzel",
+    "jahrgangsstufe": "Jahrgangsstufe",
+    "school": "Schule",
+    "status": "Status",
+    "status_active": "aktiv",
+    "status_archived": "archiviert",
+    "empty": "Keine Klassen vorhanden."
+  },
+  "users": {
+    "title": "User",
+    "filter_kind_teacher": "Lehrpersonen",
+    "filter_kind_student": "Schüler:innen",
+    "filter_kind_all": "Alle",
+    "search_placeholder": "Suche (Name oder UPN)…",
+    "kind": "Typ",
+    "enabled": "Aktiv",
+    "yes": "Ja",
+    "no": "Nein",
+    "last_sync_at": "Letzter AD-Sync",
+    "never_synced": "noch nicht synchronisiert",
+    "empty": "Keine User gefunden."
+  },
+  "errors": {
+    "title": "Fehler",
+    "generic": "Etwas ist schiefgelaufen. Versuche es erneut.",
+    "unauthenticated": "Bitte anmelden.",
+    "forbidden": "Keine Berechtigung.",
+    "not_found": "Nicht gefunden.",
+    "ad_unavailable": "Active Directory ist nicht erreichbar — Daten sind möglicherweise veraltet.",
+    "user_not_synced": "Dein Konto ist noch nicht in Magister synchronisiert. Wende dich an die IT.",
+    "user_disabled": "Konto ist deaktiviert.",
+    "csrf_invalid": "Sitzung abgelaufen. Bitte erneut anmelden.",
+    "rate_limited": "Zu viele Anfragen. Bitte einen Moment warten."
+  },
+  "common": {
+    "loading": "Lädt…",
+    "retry": "Erneut versuchen"
+  }
+}
