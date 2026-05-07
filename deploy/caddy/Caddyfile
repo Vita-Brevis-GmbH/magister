@@ -1,8 +1,10 @@
 # Magister reverse proxy.
 #
 # Auto-TLS via Let's-Encrypt; the public hostname and ACME email are passed
-# as env from docker-compose. The frontend is served by Caddy directly once
-# the magister-web image lands; until then, all paths route to the API.
+# as env from docker-compose. The Schweizer Schul-SPA is served by the
+# magister-web container; the FastAPI backend lives behind the /api/* prefix
+# and is mounted at "/" on the backend itself — Caddy strips /api/ on the
+# way through (handle_path), so the backend stays prefix-agnostic.
 
 {
     email {$MAGISTER_ACME_EMAIL}
@@ -23,18 +25,25 @@
         # Tighten as the frontend takes shape (CSP needs the actual asset origins).
     }
 
-    # Health-probes — answered by the API.
+    # Health-probes for ops — answered by the API directly, no /api/ prefix.
     handle /healthz {
         reverse_proxy magister-api:8000
     }
 
-    # API + auth surface. Until the magister-web image exists, this matches
-    # everything; once the SPA lands we'll add a `handle_path` for /api/*
-    # and serve the static bundle for /.
-    handle {
+    # API + auth surface. handle_path strips the /api/ prefix before
+    # forwarding — backend routers stay mounted at "/auth", "/classes",
+    # "/users", "/students", "/admin", and don't need to know about Caddy.
+    handle_path /api/* {
         reverse_proxy magister-api:8000 {
             header_up X-Forwarded-Host {host}
             header_up X-Forwarded-Proto {scheme}
         }
+    }
+
+    # Everything else is the SPA. magister-web (nginx:alpine) serves the
+    # Vite bundle plus an index.html SPA fallback for client-side routes
+    # like /classes, /users, /me — so a hard refresh still hits the SPA.
+    handle {
+        reverse_proxy magister-web:80
     }
 }

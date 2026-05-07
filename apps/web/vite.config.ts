@@ -17,13 +17,15 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // The SPA hits /api/* and Caddy strips the prefix in production. In dev
+    // we mirror that: proxy /api/* to localhost:8000 and rewrite away the
+    // /api so the backend (which is mounted at root) sees the original path.
     proxy: {
-      "/auth": "http://localhost:8000",
-      "/users": "http://localhost:8000",
-      "/classes": "http://localhost:8000",
-      "/students": "http://localhost:8000",
-      "/admin": "http://localhost:8000",
-      "/healthz": "http://localhost:8000",
+      "/api": {
+        target: "http://localhost:8000",
+        changeOrigin: false,
+        rewrite: (p) => p.replace(/^\/api/, ""),
+      },
     },
   },
   build: {

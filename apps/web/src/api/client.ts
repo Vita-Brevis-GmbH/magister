@@ -4,12 +4,17 @@
  *   on mutating requests (CSRF double-submit; see backend csrf.py).
  * - throws a typed {@link ApiError} on non-2xx so React-Query's onError
  *   layer can handle it once.
- * - on 401, clears query cache and redirects to /auth/login (the backend
- *   handles the OIDC redirect from there).
+ * - on 401, clears query cache and redirects to /login (where the user
+ *   can hit a full-page link to /api/auth/login for the OIDC redirect).
+ *
+ * All paths passed in are relative to the API root and are prefixed with
+ * {@link API_BASE} ("/api"). Caddy's `handle_path /api/*` strips the prefix
+ * before forwarding to the backend, which still mounts at "/".
  */
 
 import type { QueryClient } from "@tanstack/react-query";
 
+export const API_BASE = "/api";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 const CSRF_COOKIE = "magister_csrf";
 
@@ -58,7 +63,8 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
     }
   }
 
-  const res = await fetch(path, {
+  const url = path.startsWith("/") ? `${API_BASE}${path}` : path;
+  const res = await fetch(url, {
     ...init,
     method,
     headers,

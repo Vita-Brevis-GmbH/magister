@@ -8,6 +8,7 @@
 #   MAGISTER_PUBLIC_HOSTNAME            — public FQDN, e.g. magister.example.ch
 #   MAGISTER_ACME_EMAIL                 — Let's-Encrypt contact mail
 #   MAGISTER_API_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-api:latest
+#   MAGISTER_WEB_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-web:latest
 #   POSTGRES_USER / _PASSWORD / _DB     — Postgres bootstrap
 #   MAGISTER_AUDIT_KEY                  — pgcrypto sym key (do NOT rotate)
 #   MAGISTER_SESSION_SECRET             — session signing
@@ -62,7 +63,7 @@ services:
       MAGISTER_OIDC_ISSUER: ${MAGISTER_OIDC_ISSUER}
       MAGISTER_OIDC_CLIENT_ID: ${MAGISTER_OIDC_CLIENT_ID}
       MAGISTER_OIDC_CLIENT_SECRET: ${MAGISTER_OIDC_CLIENT_SECRET}
-      MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/auth/callback
+      MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/api/auth/callback
       MAGISTER_BOOTSTRAP_ADMINS: ${MAGISTER_BOOTSTRAP_ADMINS:-}
       MAGISTER_AD_DCS: ${MAGISTER_AD_DCS:-}
       MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
@@ -72,11 +73,18 @@ services:
     networks: [internal]
     # No public ports — only Caddy reaches it on the internal network.
 
+  magister-web:
+    image: ${MAGISTER_WEB_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-web:latest}
+    restart: unless-stopped
+    networks: [internal]
+    # No public ports — Caddy proxies /* to it on the internal network.
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
     depends_on:
       - magister-api
+      - magister-web
     ports:
       - "80:80"
       - "443:443"

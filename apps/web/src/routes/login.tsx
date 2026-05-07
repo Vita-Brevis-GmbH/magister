@@ -25,7 +25,7 @@ function LoginPage(): JSX.Element {
           <CardDescription>{t("auth.login_intro")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <a href="/auth/login" className={cn(buttonClasses)}>
+          <a href="/api/auth/login" className={cn(buttonClasses)}>
             {t("auth.login_button")}
           </a>
         </CardContent>
