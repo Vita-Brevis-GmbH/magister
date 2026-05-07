@@ -32,6 +32,9 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      - name: Generate route tree
+        run: pnpm routes:generate
+
       - name: Lint
         run: pnpm lint
 
