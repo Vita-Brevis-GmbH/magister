@@ -22,17 +22,19 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
 }
 
 describe("apiFetch", () => {
-  it("returns parsed JSON on 2xx", async () => {
+  it("returns parsed JSON on 2xx and prepends /api to absolute paths", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
     const out = await apiFetch<{ ok: boolean }>("/healthz");
     expect(out).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/healthz");
   });
 
   it("attaches X-CSRF-Token from cookie on POST", async () => {
     document.cookie = "magister_csrf=abc123";
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     await apiFetch("/classes", { method: "POST", body: { name: "4a" } });
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/classes");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     const headers = init.headers as Headers;
     expect(headers.get("X-CSRF-Token")).toBe("abc123");

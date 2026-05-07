@@ -16,11 +16,22 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/magister-api
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            context: apps/api
+            dockerfile: apps/api/Dockerfile
+            license: AGPL-3.0-or-later
+          - app: web
+            context: apps/web
+            dockerfile: apps/web/Dockerfile
+            license: AGPL-3.0-or-later
     steps:
       - uses: actions/checkout@v4
 
@@ -38,9 +49,10 @@ jobs:
           tag_input="${{ inputs.tag }}"
           ref_tag="${GITHUB_REF_NAME}"  # e.g. v0.1.0 on tag pushes
           short_sha=$(echo "${GITHUB_SHA}" | cut -c1-7)
-          repo_lc=$(echo "${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
+          owner_lc=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          image_name="${owner_lc}/magister-${{ matrix.app }}"
           {
-            echo "image=${REGISTRY}/${repo_lc}"
+            echo "image=${REGISTRY}/${image_name}"
             if [[ -n "${tag_input}" ]]; then
               echo "primary=${tag_input}"
             elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
@@ -57,18 +69,18 @@ jobs:
       - name: Build & push
         uses: docker/build-push-action@v6
         with:
-          context: apps/api
-          file: apps/api/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ steps.tags.outputs.image }}:${{ steps.tags.outputs.primary }}
             ${{ steps.tags.outputs.image }}:sha-${{ steps.tags.outputs.sha }}
             ${{ steps.tags.outputs.image }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
           labels: |
-            org.opencontainers.image.title=magister-api
+            org.opencontainers.image.title=magister-${{ matrix.app }}
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.licenses=AGPL-3.0-or-later
+            org.opencontainers.image.licenses=${{ matrix.license }}

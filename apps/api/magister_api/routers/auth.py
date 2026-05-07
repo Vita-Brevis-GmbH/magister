@@ -89,7 +89,10 @@ async def login(
         httponly=True,
         secure=settings.session_cookie_secure,
         samesite="lax",  # OIDC redirect is cross-site
-        path="/auth",
+        # Path "/" instead of "/auth" so the cookie survives a reverse-proxy
+        # like Caddy that mounts the API under a sub-prefix (e.g. /api/auth/*).
+        # Still HttpOnly + 10-min TTL.
+        path="/",
     )
     return response
 
@@ -139,7 +142,7 @@ async def callback(
         raise HTTPException(status_code=403, detail=exc.code) from exc
 
     response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    response.delete_cookie(OIDC_FLOW_COOKIE, path="/auth")
+    response.delete_cookie(OIDC_FLOW_COOKIE, path="/")
     _set_session_cookie(response, result.session.id, settings)
     _set_csrf_cookie(response, issue_csrf_token(result.session.id, settings), settings)
     return response
