@@ -9,8 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PYTHON_DOWNLOADS=never \
     UV_COMPILE_BYTECODE=1
 
-# Install uv (pinned to a stable line; can be bumped via build-arg).
-COPY --from=ghcr.io/astral-sh/uv:0.8 /uv /usr/local/bin/uv
+# Pin uv to a tested version. Bumping is a deliberate dep-update PR.
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
