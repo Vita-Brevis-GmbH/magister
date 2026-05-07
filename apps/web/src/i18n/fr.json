@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "_status": "stub — to be reviewed by a native FR reviewer before M3 production rollout"
+  },
+  "app": {
+    "title": "Magister",
+    "tagline": "Administration scolaire pour les écoles suisses"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "classes": "Classes",
+    "users": "Utilisateurs",
+    "logout": "Se déconnecter"
+  },
+  "auth": {
+    "login_title": "Connexion",
+    "login_intro": "Connectez-vous avec votre compte d'école.",
+    "login_button": "Se connecter avec Entra ID",
+    "logged_in_as": "Connecté en tant que",
+    "expires_at": "Session valable jusqu'à",
+    "roles": "Rôles",
+    "school_scope": "Portée d'école",
+    "no_roles": "(aucun)"
+  },
+  "me": { "title": "Mon profil" },
+  "classes": {
+    "title": "Classes",
+    "name": "Nom",
+    "kuerzel": "Abréviation",
+    "jahrgangsstufe": "Année",
+    "school": "École",
+    "status": "Statut",
+    "status_active": "actif",
+    "status_archived": "archivé",
+    "empty": "Aucune classe."
+  },
+  "users": {
+    "title": "Utilisateurs",
+    "filter_kind_teacher": "Enseignants",
+    "filter_kind_student": "Élèves",
+    "filter_kind_all": "Tous",
+    "search_placeholder": "Rechercher (nom ou UPN)…",
+    "kind": "Type",
+    "enabled": "Actif",
+    "yes": "Oui",
+    "no": "Non",
+    "last_sync_at": "Dernière synchronisation AD",
+    "never_synced": "jamais synchronisé",
+    "empty": "Aucun utilisateur."
+  },
+  "errors": {
+    "title": "Erreur",
+    "generic": "Une erreur est survenue. Réessayez.",
+    "unauthenticated": "Veuillez vous connecter.",
+    "forbidden": "Accès refusé.",
+    "not_found": "Introuvable.",
+    "ad_unavailable": "Active Directory injoignable — les données peuvent être obsolètes.",
+    "user_not_synced": "Votre compte n'est pas encore synchronisé. Contactez l'IT.",
+    "user_disabled": "Compte désactivé.",
+    "csrf_invalid": "Session expirée. Reconnectez-vous.",
+    "rate_limited": "Trop de requêtes. Réessayez dans un instant."
+  },
+  "common": {
+    "loading": "Chargement…",
+    "retry": "Réessayer"
+  }
+}

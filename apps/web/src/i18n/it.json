@@ -1,0 +1,67 @@
+{
+  "_meta": {
+    "_status": "stub — to be reviewed by a native IT reviewer before M3 production rollout"
+  },
+  "app": {
+    "title": "Magister",
+    "tagline": "Amministrazione scolastica per le scuole svizzere"
+  },
+  "nav": {
+    "dashboard": "Cruscotto",
+    "classes": "Classi",
+    "users": "Utenti",
+    "logout": "Esci"
+  },
+  "auth": {
+    "login_title": "Accedi",
+    "login_intro": "Accedi con il tuo account scolastico.",
+    "login_button": "Accedi con Entra ID",
+    "logged_in_as": "Accesso come",
+    "expires_at": "Sessione valida fino a",
+    "roles": "Ruoli",
+    "school_scope": "Portata scolastica",
+    "no_roles": "(nessuno)"
+  },
+  "me": { "title": "Il mio profilo" },
+  "classes": {
+    "title": "Classi",
+    "name": "Nome",
+    "kuerzel": "Sigla",
+    "jahrgangsstufe": "Anno",
+    "school": "Scuola",
+    "status": "Stato",
+    "status_active": "attiva",
+    "status_archived": "archiviata",
+    "empty": "Nessuna classe."
+  },
+  "users": {
+    "title": "Utenti",
+    "filter_kind_teacher": "Insegnanti",
+    "filter_kind_student": "Studenti",
+    "filter_kind_all": "Tutti",
+    "search_placeholder": "Cerca (nome o UPN)…",
+    "kind": "Tipo",
+    "enabled": "Attivo",
+    "yes": "Sì",
+    "no": "No",
+    "last_sync_at": "Ultima sincronizzazione AD",
+    "never_synced": "mai sincronizzato",
+    "empty": "Nessun utente."
+  },
+  "errors": {
+    "title": "Errore",
+    "generic": "Qualcosa è andato storto. Riprova.",
+    "unauthenticated": "Effettua l'accesso.",
+    "forbidden": "Non autorizzato.",
+    "not_found": "Non trovato.",
+    "ad_unavailable": "Active Directory non raggiungibile — i dati potrebbero essere obsoleti.",
+    "user_not_synced": "Il tuo account non è ancora sincronizzato. Contatta l'IT.",
+    "user_disabled": "Account disabilitato.",
+    "csrf_invalid": "Sessione scaduta. Effettua nuovamente l'accesso.",
+    "rate_limited": "Troppe richieste. Riprova tra poco."
+  },
+  "common": {
+    "loading": "Caricamento…",
+    "retry": "Riprova"
+  }
+}

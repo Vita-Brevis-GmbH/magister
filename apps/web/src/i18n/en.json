@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "Magister",
+    "tagline": "School administration for Swiss schools"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "classes": "Classes",
+    "users": "Users",
+    "logout": "Sign out"
+  },
+  "auth": {
+    "login_title": "Sign in",
+    "login_intro": "Sign in with your school account.",
+    "login_button": "Sign in with Entra ID",
+    "logged_in_as": "Signed in as",
+    "expires_at": "Session valid until",
+    "roles": "Roles",
+    "school_scope": "School scope",
+    "no_roles": "(none)"
+  },
+  "me": {
+    "title": "My profile"
+  },
+  "classes": {
+    "title": "Classes",
+    "name": "Name",
+    "kuerzel": "Short name",
+    "jahrgangsstufe": "Year",
+    "school": "School",
+    "status": "Status",
+    "status_active": "active",
+    "status_archived": "archived",
+    "empty": "No classes."
+  },
+  "users": {
+    "title": "Users",
+    "filter_kind_teacher": "Teachers",
+    "filter_kind_student": "Students",
+    "filter_kind_all": "All",
+    "search_placeholder": "Search (name or UPN)…",
+    "kind": "Kind",
+    "enabled": "Enabled",
+    "yes": "Yes",
+    "no": "No",
+    "last_sync_at": "Last AD sync",
+    "never_synced": "never synced",
+    "empty": "No users."
+  },
+  "errors": {
+    "title": "Error",
+    "generic": "Something went wrong. Try again.",
+    "unauthenticated": "Please sign in.",
+    "forbidden": "Not allowed.",
+    "not_found": "Not found.",
+    "ad_unavailable": "Active Directory is unreachable — data may be stale.",
+    "user_not_synced": "Your account is not yet synced into Magister. Contact IT.",
+    "user_disabled": "Account disabled.",
+    "csrf_invalid": "Session expired. Please sign in again.",
+    "rate_limited": "Too many requests. Try again in a moment."
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry"
+  }
+}
