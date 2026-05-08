@@ -25,12 +25,14 @@ class SessionRepository:
         lifetime: timedelta,
         ip: str | None,
         user_agent: str | None,
+        auth_kind: str = "oidc",
     ) -> Session:
         now = utcnow()
         row = Session(
             id=session_id,
             ad_object_guid=ad_object_guid,
             oidc_subject=oidc_subject,
+            auth_kind=auth_kind,
             expires_at=now + lifetime,
             last_seen_at=now,
             ip=ip,

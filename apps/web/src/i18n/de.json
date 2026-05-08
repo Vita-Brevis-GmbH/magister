@@ -7,6 +7,7 @@
     "dashboard": "Übersicht",
     "classes": "Klassen",
     "users": "User",
+    "admin": "Administration",
     "logout": "Abmelden"
   },
   "auth": {
@@ -17,7 +18,16 @@
     "expires_at": "Sitzung gültig bis",
     "roles": "Rollen",
     "school_scope": "Schul-Scope",
-    "no_roles": "(keine)"
+    "no_roles": "(keine)",
+    "login_local_disclosure": "Anderen Anmeldeweg verwenden",
+    "login_local_username": "Benutzername",
+    "login_local_password": "Passwort",
+    "login_local_submit": "Anmelden",
+    "errors": {
+      "invalid_credentials": "Benutzername oder Passwort falsch.",
+      "account_locked": "Konto vorübergehend gesperrt nach mehreren Fehlversuchen. Bitte später erneut versuchen.",
+      "local_login_disabled": "Lokale Anmeldung ist deaktiviert."
+    }
   },
   "me": {
     "title": "Mein Profil"
@@ -83,6 +93,28 @@
     "user_disabled": "Konto ist deaktiviert.",
     "csrf_invalid": "Sitzung abgelaufen. Bitte erneut anmelden.",
     "rate_limited": "Zu viele Anfragen. Bitte einen Moment warten."
+  },
+  "admin": {
+    "local_admin": {
+      "title": "Lokales Admin-Konto",
+      "description": "Break-Glass-Zugang für die initiale Einrichtung und für Notfälle, wenn Entra ID nicht verfügbar ist.",
+      "status_title": "Status",
+      "enabled_label": "Aktiv",
+      "locked_until_label": "Gesperrt bis",
+      "enable_button": "Lokales Konto aktivieren",
+      "disable_button": "Lokales Konto deaktivieren",
+      "change_password_title": "Passwort ändern",
+      "change_password_description": "Ein neues Passwort setzen. Mindestens 12 Zeichen.",
+      "current_password_label": "Aktuelles Passwort",
+      "new_password_label": "Neues Passwort",
+      "confirm_password_label": "Neues Passwort bestätigen",
+      "change_password_submit": "Passwort ändern",
+      "password_too_short": "Mindestens {{min}} Zeichen.",
+      "password_mismatch": "Die beiden Passwörter stimmen nicht überein.",
+      "password_changed": "Passwort wurde geändert.",
+      "error_invalid_current": "Aktuelles Passwort ist falsch.",
+      "error_not_configured": "Lokales Admin-Konto ist nicht konfiguriert."
+    }
   },
   "common": {
     "loading": "Lädt…",

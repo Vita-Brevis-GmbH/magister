@@ -37,13 +37,22 @@ class AdUserCache(Base):
 
 
 class Session(Base):
-    """Server-side session record. Cookie carries only the opaque session id."""
+    """Server-side session record. Cookie carries only the opaque session id.
+
+    Sessions can be issued by either the OIDC flow (``auth_kind='oidc'``,
+    ``oidc_subject`` set) or by the local-admin login (``auth_kind='local'``,
+    ``oidc_subject=''``). The ``ad_object_guid`` is always populated — local
+    admin sessions point at a stable sentinel guid.
+    """
 
     __tablename__ = "sessions"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     ad_object_guid: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     oidc_subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    auth_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="oidc", default="oidc"
+    )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

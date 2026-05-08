@@ -7,9 +7,10 @@ Create Date: 2026-04-30
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0001_foundation"
@@ -51,19 +52,13 @@ def upgrade() -> None:
         sa.Column("surname", sa.String(length=200), nullable=True),
         sa.Column("mail", sa.String(length=320), nullable=True),
         sa.Column("kind", sa.String(length=16), nullable=False),
-        sa.Column(
-            "enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")
-        ),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("last_sync_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("ms_ds_consistency_guid", sa.String(length=64), nullable=True),
         sa.UniqueConstraint("upn", name="uq_ad_user_cache_upn"),
     )
-    op.create_index(
-        "ix_ad_user_cache_school_id", "ad_user_cache", ["school_id"]
-    )
-    op.create_index(
-        "ix_ad_user_cache_kind_enabled", "ad_user_cache", ["kind", "enabled"]
-    )
+    op.create_index("ix_ad_user_cache_school_id", "ad_user_cache", ["school_id"])
+    op.create_index("ix_ad_user_cache_kind_enabled", "ad_user_cache", ["kind", "enabled"])
     op.create_index(
         "ix_ad_user_cache_ms_ds_consistency_guid",
         "ad_user_cache",
@@ -124,9 +119,7 @@ def upgrade() -> None:
         "role_assignments",
         ["ad_object_guid"],
     )
-    op.create_index(
-        "ix_role_assignments_school_id", "role_assignments", ["school_id"]
-    )
+    op.create_index("ix_role_assignments_school_id", "role_assignments", ["school_id"])
     # Partial unique index for the admin (school_id IS NULL) case, since
     # PostgreSQL treats NULLs as distinct in regular unique constraints.
     op.execute(
@@ -162,9 +155,7 @@ def upgrade() -> None:
     op.create_index("ix_audit_events_ts", "audit_events", ["ts"])
     op.create_index("ix_audit_events_action", "audit_events", ["action"])
     op.create_index("ix_audit_events_school_id", "audit_events", ["school_id"])
-    op.create_index(
-        "ix_audit_events_target", "audit_events", ["target_kind", "target_id"]
-    )
+    op.create_index("ix_audit_events_target", "audit_events", ["target_kind", "target_id"])
 
 
 def downgrade() -> None:
@@ -176,17 +167,13 @@ def downgrade() -> None:
 
     op.execute("DROP INDEX IF EXISTS ix_role_assignments_admin_unique")
     op.drop_index("ix_role_assignments_school_id", table_name="role_assignments")
-    op.drop_index(
-        "ix_role_assignments_ad_object_guid", table_name="role_assignments"
-    )
+    op.drop_index("ix_role_assignments_ad_object_guid", table_name="role_assignments")
     op.drop_table("role_assignments")
 
     op.drop_index("ix_sessions_ad_object_guid", table_name="sessions")
     op.drop_table("sessions")
 
-    op.drop_index(
-        "ix_ad_user_cache_ms_ds_consistency_guid", table_name="ad_user_cache"
-    )
+    op.drop_index("ix_ad_user_cache_ms_ds_consistency_guid", table_name="ad_user_cache")
     op.drop_index("ix_ad_user_cache_kind_enabled", table_name="ad_user_cache")
     op.drop_index("ix_ad_user_cache_school_id", table_name="ad_user_cache")
     op.drop_table("ad_user_cache")

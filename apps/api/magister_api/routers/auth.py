@@ -7,22 +7,35 @@ lives in :mod:`magister_api.services.auth`.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from itsdangerous import BadSignature, URLSafeSerializer
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.audit.service import AuditService
 from magister_api.auth.csrf import issue_csrf_token
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
 from magister_api.auth.oidc import EntraOidcClient, OidcClient
+from magister_api.auth.sessions import new_session_id
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.repositories.auth import SessionRepository
+from magister_api.repositories.local_admin import LocalAdminRepository
 from magister_api.schemas.auth import CurrentUserOut
+from magister_api.schemas.local_admin import LocalLoginRequest
 from magister_api.services.auth import AuthService, LoginRefusedError
+from magister_api.services.local_admin import (
+    LOCAL_ADMIN_GUID,
+    LocalAdminService,
+    LoginFailed,
+    LoginOk,
+    LoginRefusal,
+)
 
 OIDC_FLOW_COOKIE = "magister_oidc_flow"
 
@@ -184,6 +197,107 @@ async def me(user: AuthenticatedUser = Depends(get_current_user)) -> CurrentUser
         roles=list(user.roles),
         expires_at=user.expires_at,  # type: ignore[arg-type]
     )
+
+
+@router.get("/capabilities")
+async def capabilities(
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, bool]:
+    """Tell the SPA which login paths to render.
+
+    Public + unauthenticated by design — the page that calls this is the
+    pre-login screen. Returns booleans only (no secrets).
+    """
+    oidc_enabled = bool(settings.oidc_issuer and settings.oidc_client_id)
+    local_row = await LocalAdminRepository(session).get()
+    local_login_enabled = local_row is not None and local_row.enabled
+    return {"oidc_enabled": oidc_enabled, "local_login_enabled": local_login_enabled}
+
+
+_REFUSAL_TO_STATUS: dict[LoginRefusal, int] = {
+    LoginRefusal.UNKNOWN_USER: status.HTTP_401_UNAUTHORIZED,
+    LoginRefusal.WRONG_PASSWORD: status.HTTP_401_UNAUTHORIZED,
+    LoginRefusal.DISABLED: status.HTTP_403_FORBIDDEN,
+    LoginRefusal.LOCKED: status.HTTP_423_LOCKED,
+}
+
+
+@router.post("/login/local")
+# 20/min keeps the IP-level brute-force ceiling generous enough that the
+# per-account lockout (5 consecutive failures, see LocalAdminService) is the
+# binding constraint for an interactive operator typo, while still cutting
+# off automated attackers fast.
+@limiter.limit("20/minute")  # pyright: ignore[reportUntypedFunctionDecorator]
+async def login_local(
+    request: Request,
+    payload: LocalLoginRequest,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Username + password login for the break-glass local admin.
+
+    CSRF-exempt (predates the session) via the existing `/auth/login` prefix
+    in :class:`CsrfMiddleware.EXEMPT_PATH_PREFIXES`. Rate-limited per IP.
+    """
+    svc = LocalAdminService(session)
+    result = await svc.authenticate(payload.username, payload.password)
+    request_id = getattr(request.state, "request_id", "")
+    client_ip = getattr(request.state, "client_ip", None)
+    user_agent = request.headers.get("user-agent")
+
+    if isinstance(result, LoginFailed):
+        # Audit the failure (no payload secrets — allowlist enforces).
+        audit = AuditService(session, settings)
+        await audit.emit(
+            action="local_login_failed",
+            target_kind="local_admin",
+            target_id=payload.username[:64],
+            actor_upn=f"{payload.username}@magister.local",
+            actor_object_guid=None,
+            school_id=None,
+            ip=client_ip,
+            request_id=request_id,
+            payload={"reason": result.reason.value},
+        )
+        # Return a JSONResponse rather than raising HTTPException: the
+        # session-per-request wrapper rolls back on raised exceptions,
+        # which would undo the failed_login_count increment that drives
+        # the per-account lockout.
+        return JSONResponse(
+            status_code=_REFUSAL_TO_STATUS[result.reason],
+            content={"detail": result.reason.value},
+        )
+
+    assert isinstance(result, LoginOk)
+    sid = new_session_id()
+    sessions_repo = SessionRepository(session)
+    await sessions_repo.create(
+        session_id=sid,
+        ad_object_guid=LOCAL_ADMIN_GUID,
+        oidc_subject="",  # not an OIDC session
+        lifetime=timedelta(minutes=settings.session_lifetime_minutes),
+        ip=client_ip,
+        user_agent=user_agent,
+        auth_kind="local",
+    )
+    audit = AuditService(session, settings)
+    await audit.emit(
+        action="local_login",
+        target_kind="session",
+        target_id=sid[:12],
+        actor_upn=f"{result.admin.username}@magister.local",
+        actor_object_guid=LOCAL_ADMIN_GUID,
+        school_id=None,
+        ip=client_ip,
+        request_id=request_id,
+        payload={"user_agent": user_agent},
+    )
+
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _set_session_cookie(response, sid, settings)
+    _set_csrf_cookie(response, issue_csrf_token(sid, settings), settings)
+    return response
 
 
 __all__ = ["router", "limiter", "get_oidc_client"]

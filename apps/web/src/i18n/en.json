@@ -7,6 +7,7 @@
     "dashboard": "Dashboard",
     "classes": "Classes",
     "users": "Users",
+    "admin": "Admin",
     "logout": "Sign out"
   },
   "auth": {
@@ -17,7 +18,16 @@
     "expires_at": "Session valid until",
     "roles": "Roles",
     "school_scope": "School scope",
-    "no_roles": "(none)"
+    "no_roles": "(none)",
+    "login_local_disclosure": "Use another sign-in method",
+    "login_local_username": "Username",
+    "login_local_password": "Password",
+    "login_local_submit": "Sign in",
+    "errors": {
+      "invalid_credentials": "Wrong username or password.",
+      "account_locked": "Account temporarily locked after too many failed attempts. Try again later.",
+      "local_login_disabled": "Local sign-in is disabled."
+    }
   },
   "me": {
     "title": "My profile"
@@ -83,6 +93,28 @@
     "user_disabled": "Account disabled.",
     "csrf_invalid": "Session expired. Please sign in again.",
     "rate_limited": "Too many requests. Try again in a moment."
+  },
+  "admin": {
+    "local_admin": {
+      "title": "Local admin account",
+      "description": "Break-glass access for initial setup and recovery when Entra ID is unavailable.",
+      "status_title": "Status",
+      "enabled_label": "Enabled",
+      "locked_until_label": "Locked until",
+      "enable_button": "Enable local account",
+      "disable_button": "Disable local account",
+      "change_password_title": "Change password",
+      "change_password_description": "Set a new password. At least 12 characters.",
+      "current_password_label": "Current password",
+      "new_password_label": "New password",
+      "confirm_password_label": "Confirm new password",
+      "change_password_submit": "Change password",
+      "password_too_short": "At least {{min}} characters.",
+      "password_mismatch": "The two passwords do not match.",
+      "password_changed": "Password changed.",
+      "error_invalid_current": "Current password is wrong.",
+      "error_not_configured": "Local admin account is not configured."
+    }
   },
   "common": {
     "loading": "Loading…",
