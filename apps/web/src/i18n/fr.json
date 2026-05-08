@@ -96,6 +96,36 @@
     "rate_limited": "Trop de requêtes. Réessayez dans un instant."
   },
   "admin": {
+    "settings": {
+      "title": "Paramètres système",
+      "description": "Configuration OIDC et AD. Les changements prennent effet immédiatement.",
+      "oidc_section": "Entra ID (OIDC)",
+      "oidc_section_desc": "Émetteur, client ID, client secret et URI de redirection pour la connexion des enseignants + admins.",
+      "ad_section": "Active Directory (LDAPS)",
+      "ad_section_desc": "Contrôleurs de domaine, DN/mot de passe de bind et base de recherche pour la synchronisation.",
+      "save": "Enregistrer",
+      "success": "Paramètres enregistrés.",
+      "error_invalid": "Entrée invalide. Veuillez vérifier.",
+      "placeholder_secret_set": "•••••••• (défini)",
+      "placeholder_secret_unset": "(non défini)",
+      "csv_hint": "Séparés par des virgules.",
+      "last_updated": "Dernière modification",
+      "field": {
+        "oidc_issuer": "URL de l'émetteur",
+        "oidc_client_id": "Client ID",
+        "oidc_client_secret": "Client secret",
+        "oidc_client_secret_hint": "Laisser vide pour conserver la valeur enregistrée.",
+        "oidc_redirect_uri": "URI de redirection",
+        "oidc_scopes": "Scopes",
+        "bootstrap_admins": "Bootstrap admins (UPN)",
+        "ad_dcs": "Contrôleurs de domaine",
+        "ad_bind_dn": "DN de bind",
+        "ad_bind_password": "Mot de passe de bind",
+        "ad_bind_password_hint": "Laisser vide pour conserver la valeur enregistrée.",
+        "ad_users_search_base": "Base de recherche (utilisateurs)",
+        "ad_sync_interval_minutes": "Intervalle de synchronisation (minutes)"
+      }
+    },
     "local_admin": {
       "title": "Compte administrateur local",
       "description": "Accès de secours pour la configuration initiale et en cas d'indisponibilité d'Entra ID.",

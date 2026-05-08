@@ -93,6 +93,13 @@ class Settings(BaseSettings):
     def require_runtime_secrets(self) -> None:
         """Raise if a runtime-required secret is empty.
 
+        Only the cryptographic + DB env vars are mandatory now — OIDC + AD
+        config moved into the ``app_settings`` table (M1.5b) and is editable
+        from the GUI. The lifespan-seed copies any pre-existing
+        ``MAGISTER_OIDC_*`` / ``MAGISTER_AD_*`` env into the DB on first
+        boot, so existing deployments keep working without env after the
+        upgrade.
+
         Intentionally NOT called at import time so unit tests can run with
         partial config; the FastAPI app factory calls this on startup.
         """
@@ -103,13 +110,6 @@ class Settings(BaseSettings):
             missing.append("MAGISTER_SESSION_SECRET")
         if not self.csrf_secret.get_secret_value():
             missing.append("MAGISTER_CSRF_SECRET")
-        if self.environment == "production":
-            if not self.oidc_issuer:
-                missing.append("MAGISTER_OIDC_ISSUER")
-            if not self.oidc_client_id:
-                missing.append("MAGISTER_OIDC_CLIENT_ID")
-            if not self.oidc_client_secret.get_secret_value():
-                missing.append("MAGISTER_OIDC_CLIENT_SECRET")
         if missing:
             raise RuntimeError("Missing required runtime secrets: " + ", ".join(missing))
 
