@@ -7,9 +7,10 @@ Create Date: 2026-04-30
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0004_class_memberships"
@@ -43,12 +44,8 @@ def upgrade() -> None:
             name="ck_class_memberships_window",
         ),
     )
-    op.create_index(
-        "ix_class_memberships_class_id", "class_memberships", ["class_id"]
-    )
-    op.create_index(
-        "ix_class_memberships_ad_object_guid", "class_memberships", ["ad_object_guid"]
-    )
+    op.create_index("ix_class_memberships_class_id", "class_memberships", ["class_id"])
+    op.create_index("ix_class_memberships_ad_object_guid", "class_memberships", ["ad_object_guid"])
     op.create_index(
         "ix_class_memberships_window",
         "class_memberships",
@@ -58,8 +55,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_class_memberships_window", table_name="class_memberships")
-    op.drop_index(
-        "ix_class_memberships_ad_object_guid", table_name="class_memberships"
-    )
+    op.drop_index("ix_class_memberships_ad_object_guid", table_name="class_memberships")
     op.drop_index("ix_class_memberships_class_id", table_name="class_memberships")
     op.drop_table("class_memberships")

@@ -23,6 +23,11 @@ export function Layout() {
             <Link to="/users" activeProps={{ className: "font-semibold underline" }}>
               {t("nav.users")}
             </Link>
+            {me.data?.is_admin ? (
+              <Link to="/admin/local-admin" activeProps={{ className: "font-semibold underline" }}>
+                {t("nav.admin")}
+              </Link>
+            ) : null}
             <Link to="/me" activeProps={{ className: "font-semibold underline" }}>
               {me.data?.upn ?? t("common.loading")}
             </Link>

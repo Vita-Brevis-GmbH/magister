@@ -7,9 +7,10 @@ Create Date: 2026-04-30
 
 from __future__ import annotations
 
-from typing import Sequence
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "0003_class_teacher_roles"
@@ -61,8 +62,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_class_teacher_roles_window", table_name="class_teacher_roles")
-    op.drop_index(
-        "ix_class_teacher_roles_ad_object_guid", table_name="class_teacher_roles"
-    )
+    op.drop_index("ix_class_teacher_roles_ad_object_guid", table_name="class_teacher_roles")
     op.drop_index("ix_class_teacher_roles_class_id", table_name="class_teacher_roles")
     op.drop_table("class_teacher_roles")

@@ -15,8 +15,9 @@ from magister_api import __version__
 from magister_api.audit.middleware import AuditContextMiddleware
 from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
-from magister_api.db import dispose_engine, init_engine
+from magister_api.db import dispose_engine, get_sessionmaker, init_engine
 from magister_api.logging_config import configure_logging
+from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_sync import router as admin_sync_router
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.routers.auth import router as auth_router
@@ -25,6 +26,7 @@ from magister_api.routers.class_teachers import router as class_teachers_router
 from magister_api.routers.classes import router as classes_router
 from magister_api.routers.student_password_reset import router as student_pw_reset_router
 from magister_api.routers.users import router as users_router
+from magister_api.services.local_admin import LocalAdminService
 
 
 @asynccontextmanager
@@ -32,6 +34,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings: Settings = app.state.settings
     settings.require_runtime_secrets()
     init_engine(settings)
+
+    # First-run seed for the local-admin row when the env vars are set and
+    # the table is empty. Idempotent and refuses plaintext.
+    sm = get_sessionmaker()
+    async with sm() as seed_session:
+        await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
+
     yield
     await dispose_engine()
 
@@ -65,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(class_memberships_router)
     app.include_router(users_router)
     app.include_router(admin_sync_router)
+    app.include_router(admin_local_admin_router)
     app.include_router(student_pw_reset_router)
 
     @app.get("/healthz", tags=["meta"])

@@ -25,6 +25,7 @@ class AuthenticatedUser:
     school_scope: tuple[int, ...]
     roles: tuple[str, ...]
     expires_at: object  # datetime, kept untyped to avoid an import cycle in dataclasses
+    auth_kind: str = "oidc"  # "oidc" | "local"
 
     def to_scope(self) -> ScopeContext:
         return ScopeContext(
@@ -42,6 +43,7 @@ def _roles_to_user(
     upn: str,
     role_rows: list[RoleAssignment],
     expires_at: object,
+    auth_kind: str = "oidc",
 ) -> AuthenticatedUser:
     roles: list[str] = []
     schools: set[int] = set()
@@ -59,6 +61,7 @@ def _roles_to_user(
         school_scope=tuple(sorted(schools)),
         roles=tuple(roles),
         expires_at=expires_at,
+        auth_kind=auth_kind,
     )
 
 
@@ -98,6 +101,7 @@ async def get_optional_user(
         upn=upn,
         role_rows=role_rows,
         expires_at=sess.expires_at,
+        auth_kind=sess.auth_kind,
     )
 
 

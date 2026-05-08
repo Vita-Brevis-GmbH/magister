@@ -107,9 +107,22 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.exec_driver_sql(
             "TRUNCATE class_memberships, class_teacher_roles, classes, audit_events, "
-            "sessions, role_assignments, ad_user_cache, schools "
+            "sessions, role_assignments, ad_user_cache, schools, local_admins "
             "RESTART IDENTITY CASCADE"
         )
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    """slowapi keeps an in-memory store across tests in the same process.
+
+    Without this reset, rate-limited routes (``/auth/login/local``,
+    ``/students/.../password-reset``) bleed counts into each other and
+    legitimate requests start returning 429.
+    """
+    from magister_api.routers.auth import limiter
+
+    limiter.reset()
 
 
 @pytest_asyncio.fixture

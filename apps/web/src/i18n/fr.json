@@ -10,6 +10,7 @@
     "dashboard": "Tableau de bord",
     "classes": "Classes",
     "users": "Utilisateurs",
+    "admin": "Administration",
     "logout": "Se déconnecter"
   },
   "auth": {
@@ -20,7 +21,16 @@
     "expires_at": "Session valable jusqu'à",
     "roles": "Rôles",
     "school_scope": "Portée d'école",
-    "no_roles": "(aucun)"
+    "no_roles": "(aucun)",
+    "login_local_disclosure": "Utiliser une autre méthode de connexion",
+    "login_local_username": "Nom d'utilisateur",
+    "login_local_password": "Mot de passe",
+    "login_local_submit": "Se connecter",
+    "errors": {
+      "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect.",
+      "account_locked": "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard.",
+      "local_login_disabled": "La connexion locale est désactivée."
+    }
   },
   "me": { "title": "Mon profil" },
   "classes": {
@@ -84,6 +94,28 @@
     "user_disabled": "Compte désactivé.",
     "csrf_invalid": "Session expirée. Reconnectez-vous.",
     "rate_limited": "Trop de requêtes. Réessayez dans un instant."
+  },
+  "admin": {
+    "local_admin": {
+      "title": "Compte administrateur local",
+      "description": "Accès de secours pour la configuration initiale et en cas d'indisponibilité d'Entra ID.",
+      "status_title": "Statut",
+      "enabled_label": "Actif",
+      "locked_until_label": "Verrouillé jusqu'à",
+      "enable_button": "Activer le compte local",
+      "disable_button": "Désactiver le compte local",
+      "change_password_title": "Changer le mot de passe",
+      "change_password_description": "Définir un nouveau mot de passe. Au moins 12 caractères.",
+      "current_password_label": "Mot de passe actuel",
+      "new_password_label": "Nouveau mot de passe",
+      "confirm_password_label": "Confirmer le nouveau mot de passe",
+      "change_password_submit": "Changer le mot de passe",
+      "password_too_short": "Au moins {{min}} caractères.",
+      "password_mismatch": "Les deux mots de passe ne correspondent pas.",
+      "password_changed": "Mot de passe modifié.",
+      "error_invalid_current": "Le mot de passe actuel est incorrect.",
+      "error_not_configured": "Le compte administrateur local n'est pas configuré."
+    }
   },
   "common": {
     "loading": "Chargement…",

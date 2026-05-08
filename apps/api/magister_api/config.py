@@ -51,6 +51,12 @@ class Settings(BaseSettings):
 
     bootstrap_admins: list[str] = Field(default_factory=list)
 
+    # Local-admin (break-glass) — only consulted on first boot when the
+    # `local_admins` table is empty. Always pass a pre-computed argon2id
+    # hash; plaintext is refused. See `magister-cli hash-password`.
+    local_admin_username: str = Field(default="admin")
+    local_admin_password_hash: SecretStr | None = Field(default=None)
+
     ad_dcs: list[str] = Field(default_factory=list)
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None

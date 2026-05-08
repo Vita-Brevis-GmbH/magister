@@ -10,6 +10,7 @@
     "dashboard": "Cruscotto",
     "classes": "Classi",
     "users": "Utenti",
+    "admin": "Amministrazione",
     "logout": "Esci"
   },
   "auth": {
@@ -20,7 +21,16 @@
     "expires_at": "Sessione valida fino a",
     "roles": "Ruoli",
     "school_scope": "Portata scolastica",
-    "no_roles": "(nessuno)"
+    "no_roles": "(nessuno)",
+    "login_local_disclosure": "Usa un altro metodo di accesso",
+    "login_local_username": "Nome utente",
+    "login_local_password": "Password",
+    "login_local_submit": "Accedi",
+    "errors": {
+      "invalid_credentials": "Nome utente o password errati.",
+      "account_locked": "Account bloccato temporaneamente dopo troppi tentativi falliti. Riprova più tardi.",
+      "local_login_disabled": "L'accesso locale è disabilitato."
+    }
   },
   "me": { "title": "Il mio profilo" },
   "classes": {
@@ -84,6 +94,28 @@
     "user_disabled": "Account disabilitato.",
     "csrf_invalid": "Sessione scaduta. Effettua nuovamente l'accesso.",
     "rate_limited": "Troppe richieste. Riprova tra poco."
+  },
+  "admin": {
+    "local_admin": {
+      "title": "Account amministratore locale",
+      "description": "Accesso di emergenza per la configurazione iniziale e in caso di indisponibilità di Entra ID.",
+      "status_title": "Stato",
+      "enabled_label": "Attivo",
+      "locked_until_label": "Bloccato fino a",
+      "enable_button": "Abilita account locale",
+      "disable_button": "Disabilita account locale",
+      "change_password_title": "Cambia password",
+      "change_password_description": "Imposta una nuova password. Almeno 12 caratteri.",
+      "current_password_label": "Password attuale",
+      "new_password_label": "Nuova password",
+      "confirm_password_label": "Conferma nuova password",
+      "change_password_submit": "Cambia password",
+      "password_too_short": "Almeno {{min}} caratteri.",
+      "password_mismatch": "Le due password non corrispondono.",
+      "password_changed": "Password modificata.",
+      "error_invalid_current": "Password attuale errata.",
+      "error_not_configured": "Account amministratore locale non configurato."
+    }
   },
   "common": {
     "loading": "Caricamento…",

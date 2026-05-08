@@ -11,6 +11,29 @@ export interface CurrentUserOut {
   expires_at: string;
 }
 
+export interface AuthCapabilities {
+  oidc_enabled: boolean;
+  local_login_enabled: boolean;
+}
+
+export interface LocalLoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LocalAdminOut {
+  username: string;
+  enabled: boolean;
+  locked_until: string | null;
+  last_login_at: string | null;
+  password_changed_at: string;
+}
+
+export interface LocalAdminPasswordChangeRequest {
+  current_password: string;
+  new_password: string;
+}
+
 export type SchoolClassStatus = "active" | "archived";
 
 export interface ClassOut {

@@ -5,8 +5,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ApiError } from "./client";
 import type {
   AdUserListResponse,
+  AuthCapabilities,
   ClassOut,
   CurrentUserOut,
+  LocalAdminOut,
+  LocalAdminPasswordChangeRequest,
+  LocalLoginRequest,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
 } from "./types";
@@ -15,6 +19,8 @@ export const queryKeys = {
   me: ["me"] as const,
   classes: ["classes"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
+  authCapabilities: ["auth-capabilities"] as const,
+  localAdmin: ["local-admin"] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -68,6 +74,56 @@ export function useUsers(params: UseUsersParams = {}) {
   return useQuery<AdUserListResponse>({
     queryKey: queryKeys.users(params),
     queryFn: () => apiFetch<AdUserListResponse>(path),
+  });
+}
+
+// --- Auth capabilities + local login --------------------------------------
+
+export function useAuthCapabilities() {
+  return useQuery<AuthCapabilities>({
+    queryKey: queryKeys.authCapabilities,
+    queryFn: () => apiFetch<AuthCapabilities>("/auth/capabilities"),
+    // Pre-login screen — keep it cheap; one fetch per page load is enough.
+    staleTime: 60_000,
+  });
+}
+
+export function useLocalLogin() {
+  return useMutation<void, ApiError, LocalLoginRequest>({
+    mutationFn: (body) =>
+      apiFetch<void>("/auth/login/local", {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+// --- Local admin lifecycle (admin-only) -----------------------------------
+
+export function useLocalAdmin() {
+  return useQuery<LocalAdminOut>({
+    queryKey: queryKeys.localAdmin,
+    queryFn: () => apiFetch<LocalAdminOut>("/admin/local-admin"),
+  });
+}
+
+export function useChangeLocalAdminPassword() {
+  return useMutation<void, ApiError, LocalAdminPasswordChangeRequest>({
+    mutationFn: (body) => apiFetch<void>("/admin/local-admin/password", { method: "POST", body }),
+  });
+}
+
+export function useSetLocalAdminEnabled() {
+  const qc = useQueryClient();
+  return useMutation<LocalAdminOut, ApiError, boolean>({
+    mutationFn: (enabled) =>
+      apiFetch<LocalAdminOut>("/admin/local-admin", {
+        method: "PATCH",
+        body: { enabled },
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.localAdmin, data);
+    },
   });
 }
 
