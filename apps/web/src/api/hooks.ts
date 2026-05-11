@@ -8,7 +8,13 @@ import type {
   AppSettingsOut,
   AppSettingsUpdate,
   AuthCapabilities,
+  ClassCreate,
+  ClassMembershipCreate,
+  ClassMembershipOut,
   ClassOut,
+  ClassTeacherCreate,
+  ClassTeacherOut,
+  ClassUpdate,
   CurrentUserOut,
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
@@ -20,6 +26,9 @@ import type {
 export const queryKeys = {
   me: ["me"] as const,
   classes: ["classes"] as const,
+  classDetail: (classId: number) => ["classes", classId] as const,
+  classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
+  classMemberships: (classId: number) => ["classes", classId, "students"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
@@ -54,6 +63,116 @@ export function useClasses() {
   return useQuery<ClassOut[]>({
     queryKey: queryKeys.classes,
     queryFn: () => apiFetch<ClassOut[]>("/classes"),
+  });
+}
+
+export function useClass(classId: number) {
+  return useQuery<ClassOut>({
+    queryKey: queryKeys.classDetail(classId),
+    queryFn: () => apiFetch<ClassOut>(`/classes/${classId}`),
+  });
+}
+
+export function useCreateClass() {
+  const qc = useQueryClient();
+  return useMutation<ClassOut, ApiError, ClassCreate>({
+    mutationFn: (body) => apiFetch<ClassOut>("/classes", { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+export function useUpdateClass(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassOut, ApiError, ClassUpdate>({
+    mutationFn: (body) => apiFetch<ClassOut>(`/classes/${classId}`, { method: "PATCH", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.classDetail(classId), data);
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+export function useArchiveClass() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (classId) => apiFetch<void>(`/classes/${classId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+// --- Class teachers --------------------------------------------------------
+
+export function useClassTeachers(classId: number) {
+  return useQuery<ClassTeacherOut[]>({
+    queryKey: queryKeys.classTeachers(classId),
+    queryFn: () => apiFetch<ClassTeacherOut[]>(`/classes/${classId}/teachers`),
+  });
+}
+
+export function useAssignClassTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassTeacherOut, ApiError, ClassTeacherCreate>({
+    mutationFn: (body) =>
+      apiFetch<ClassTeacherOut>(`/classes/${classId}/teachers`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classTeachers(classId) });
+    },
+  });
+}
+
+export function useRevokeClassTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) =>
+      apiFetch<void>(`/classes/${classId}/teachers/${roleId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classTeachers(classId) });
+    },
+  });
+}
+
+// --- Class memberships -----------------------------------------------------
+
+export function useClassMemberships(classId: number) {
+  return useQuery<ClassMembershipOut[]>({
+    queryKey: queryKeys.classMemberships(classId),
+    queryFn: () => apiFetch<ClassMembershipOut[]>(`/classes/${classId}/students`),
+  });
+}
+
+export function useAddClassMembership(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassMembershipOut, ApiError, ClassMembershipCreate>({
+    mutationFn: (body) =>
+      apiFetch<ClassMembershipOut>(`/classes/${classId}/students`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export function useRemoveClassMembership(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (membershipId) =>
+      apiFetch<void>(`/classes/${classId}/students/${membershipId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
   });
 }
 
