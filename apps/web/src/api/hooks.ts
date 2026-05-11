@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ApiError } from "./client";
 import type {
   AdUserListResponse,
+  AppSettingsOut,
+  AppSettingsUpdate,
   AuthCapabilities,
   ClassOut,
   CurrentUserOut,
@@ -21,6 +23,7 @@ export const queryKeys = {
   users: (params: UseUsersParams) => ["users", params] as const,
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
+  appSettings: ["app-settings"] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -123,6 +126,27 @@ export function useSetLocalAdminEnabled() {
       }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.localAdmin, data);
+    },
+  });
+}
+
+// --- App settings (admin-only) --------------------------------------------
+
+export function useAppSettings() {
+  return useQuery<AppSettingsOut>({
+    queryKey: queryKeys.appSettings,
+    queryFn: () => apiFetch<AppSettingsOut>("/admin/app-settings"),
+  });
+}
+
+export function useUpdateAppSettings() {
+  const qc = useQueryClient();
+  return useMutation<AppSettingsOut, ApiError, AppSettingsUpdate>({
+    mutationFn: (body) => apiFetch<AppSettingsOut>("/admin/app-settings", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.appSettings, data);
+      // Capabilities may flip when oidc_issuer/client_id change.
+      qc.invalidateQueries({ queryKey: queryKeys.authCapabilities });
     },
   });
 }

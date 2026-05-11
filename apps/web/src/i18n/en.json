@@ -95,6 +95,36 @@
     "rate_limited": "Too many requests. Try again in a moment."
   },
   "admin": {
+    "settings": {
+      "title": "System settings",
+      "description": "OIDC and AD configuration. Changes take effect immediately, no restart.",
+      "oidc_section": "Entra ID (OIDC)",
+      "oidc_section_desc": "Issuer, client ID, client secret and redirect URI for teacher + admin sign-in.",
+      "ad_section": "Active Directory (LDAPS)",
+      "ad_section_desc": "Domain controllers, bind DN/password and search base for the user sync.",
+      "save": "Save",
+      "success": "Settings saved.",
+      "error_invalid": "Input is invalid. Please review.",
+      "placeholder_secret_set": "•••••••• (set)",
+      "placeholder_secret_unset": "(not set)",
+      "csv_hint": "Comma-separated.",
+      "last_updated": "Last updated",
+      "field": {
+        "oidc_issuer": "Issuer URL",
+        "oidc_client_id": "Client ID",
+        "oidc_client_secret": "Client secret",
+        "oidc_client_secret_hint": "Leave empty to keep the stored value.",
+        "oidc_redirect_uri": "Redirect URI",
+        "oidc_scopes": "Scopes",
+        "bootstrap_admins": "Bootstrap admins (UPNs)",
+        "ad_dcs": "Domain controllers",
+        "ad_bind_dn": "Bind DN",
+        "ad_bind_password": "Bind password",
+        "ad_bind_password_hint": "Leave empty to keep the stored value.",
+        "ad_users_search_base": "Search base (users)",
+        "ad_sync_interval_minutes": "Sync interval (minutes)"
+      }
+    },
     "local_admin": {
       "title": "Local admin account",
       "description": "Break-glass access for initial setup and recovery when Entra ID is unavailable.",

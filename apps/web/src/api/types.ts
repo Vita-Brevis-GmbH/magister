@@ -81,3 +81,36 @@ export interface StudentPasswordResetResponse {
   /** Set only when mode="generate"; never returned a second time. */
   temp_password: string | null;
 }
+
+export interface AppSettingsOut {
+  version: number;
+  oidc_issuer: string | null;
+  oidc_client_id: string | null;
+  oidc_client_secret_set: boolean;
+  oidc_redirect_uri: string | null;
+  oidc_scopes: string[];
+  bootstrap_admins: string[];
+  ad_dcs: string[];
+  ad_bind_dn: string | null;
+  ad_bind_password_set: boolean;
+  ad_users_search_base: string | null;
+  ad_sync_interval_minutes: number;
+  updated_at: string;
+  updated_by_upn: string | null;
+}
+
+/** Send `null`/omitted to leave fields untouched. The two secret fields are
+ *  only updated when a non-empty string is sent — empty string is a no-op. */
+export interface AppSettingsUpdate {
+  oidc_issuer?: string | null;
+  oidc_client_id?: string | null;
+  oidc_client_secret?: string | null;
+  oidc_redirect_uri?: string | null;
+  oidc_scopes?: string[] | null;
+  bootstrap_admins?: string[] | null;
+  ad_dcs?: string[] | null;
+  ad_bind_dn?: string | null;
+  ad_bind_password?: string | null;
+  ad_users_search_base?: string | null;
+  ad_sync_interval_minutes?: number | null;
+}

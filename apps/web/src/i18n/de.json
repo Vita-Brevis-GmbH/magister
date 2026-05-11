@@ -95,6 +95,36 @@
     "rate_limited": "Zu viele Anfragen. Bitte einen Moment warten."
   },
   "admin": {
+    "settings": {
+      "title": "Systemeinstellungen",
+      "description": "OIDC- und AD-Konfiguration. Änderungen greifen sofort, ohne Neustart.",
+      "oidc_section": "Entra ID (OIDC)",
+      "oidc_section_desc": "Issuer, Client-ID, Client-Secret und Redirect-URI für die Anmeldung von Lehrpersonen + Admins.",
+      "ad_section": "Active Directory (LDAPS)",
+      "ad_section_desc": "Domain-Controller, Bind-DN/Passwort und Such-Basis für den User-Sync.",
+      "save": "Speichern",
+      "success": "Einstellungen gespeichert.",
+      "error_invalid": "Eingabe ist ungültig. Bitte prüfen.",
+      "placeholder_secret_set": "•••••••• (gesetzt)",
+      "placeholder_secret_unset": "(nicht gesetzt)",
+      "csv_hint": "Komma-getrennt.",
+      "last_updated": "Zuletzt geändert",
+      "field": {
+        "oidc_issuer": "Issuer-URL",
+        "oidc_client_id": "Client-ID",
+        "oidc_client_secret": "Client-Secret",
+        "oidc_client_secret_hint": "Leer lassen, um den gespeicherten Wert nicht zu ändern.",
+        "oidc_redirect_uri": "Redirect-URI",
+        "oidc_scopes": "Scopes",
+        "bootstrap_admins": "Bootstrap-Admins (UPNs)",
+        "ad_dcs": "Domain-Controller",
+        "ad_bind_dn": "Bind-DN",
+        "ad_bind_password": "Bind-Passwort",
+        "ad_bind_password_hint": "Leer lassen, um den gespeicherten Wert nicht zu ändern.",
+        "ad_users_search_base": "Such-Basis (User)",
+        "ad_sync_interval_minutes": "Sync-Intervall (Minuten)"
+      }
+    },
     "local_admin": {
       "title": "Lokales Admin-Konto",
       "description": "Break-Glass-Zugang für die initiale Einrichtung und für Notfälle, wenn Entra ID nicht verfügbar ist.",

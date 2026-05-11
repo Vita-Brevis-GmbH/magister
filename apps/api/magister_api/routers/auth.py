@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.auth.csrf import issue_csrf_token
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
+from magister_api.auth.effective_settings import get_effective_settings
 from magister_api.auth.oidc import EntraOidcClient, OidcClient
 from magister_api.auth.sessions import new_session_id
 from magister_api.config import Settings, get_settings
@@ -43,8 +44,22 @@ limiter = Limiter(key_func=get_remote_address)
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-def get_oidc_client(settings: Settings = Depends(get_settings)) -> OidcClient:
-    return EntraOidcClient(settings)
+def get_oidc_client(
+    request: Request,
+    eff: Settings = Depends(get_effective_settings),
+) -> OidcClient:
+    """OIDC client built from the effective (DB-overlaid) settings.
+
+    Cached on ``app.state`` keyed by ``effective_settings`` identity so we
+    don't construct a new ``EntraOidcClient`` per request — the dep above
+    already returns the same Settings instance until the version bumps.
+    """
+    cached: tuple[int, OidcClient] | None = getattr(request.app.state, "_oidc_client_cache", None)
+    if cached is not None and cached[0] == id(eff):
+        return cached[1]
+    client = EntraOidcClient(eff)
+    request.app.state._oidc_client_cache = (id(eff), client)
+    return client
 
 
 def _flow_serializer(settings: Settings) -> URLSafeSerializer:
@@ -81,7 +96,7 @@ def _set_csrf_cookie(response: Response, value: str, settings: Settings) -> None
 @router.get("/login")
 async def login(
     request: Request,
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
     oidc: OidcClient = Depends(get_oidc_client),
 ) -> RedirectResponse:
     if not settings.oidc_issuer or not settings.oidc_client_id:
@@ -117,7 +132,7 @@ async def callback(
     state: str | None = None,
     error: str | None = None,
     flow_cookie: str | None = Cookie(default=None, alias=OIDC_FLOW_COOKIE),
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
     oidc: OidcClient = Depends(get_oidc_client),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
@@ -201,13 +216,15 @@ async def me(user: AuthenticatedUser = Depends(get_current_user)) -> CurrentUser
 
 @router.get("/capabilities")
 async def capabilities(
-    settings: Settings = Depends(get_settings),
+    settings: Settings = Depends(get_effective_settings),
     session: AsyncSession = Depends(get_session),
 ) -> dict[str, bool]:
     """Tell the SPA which login paths to render.
 
     Public + unauthenticated by design — the page that calls this is the
-    pre-login screen. Returns booleans only (no secrets).
+    pre-login screen. Returns booleans only (no secrets). OIDC reads from
+    the DB-overlaid effective settings, so toggling OIDC config in the GUI
+    immediately reflects without a process restart.
     """
     oidc_enabled = bool(settings.oidc_issuer and settings.oidc_client_id)
     local_row = await LocalAdminRepository(session).get()

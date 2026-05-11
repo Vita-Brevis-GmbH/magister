@@ -59,6 +59,14 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
             "CREATE UNIQUE INDEX IF NOT EXISTS ix_classes_school_active_name "
             "ON classes (school_id, name) WHERE status = 'active'"
         )
+        # The 0006 migration inserts the singleton; mirror that for tests
+        # that bypass alembic and use Base.metadata.create_all.
+        await conn.exec_driver_sql(
+            "INSERT INTO app_settings (id, version, oidc_scopes, "
+            "bootstrap_admins, ad_dcs) "
+            "VALUES (1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb) "
+            "ON CONFLICT DO NOTHING"
+        )
     yield eng
     await eng.dispose()
 
@@ -107,8 +115,16 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.exec_driver_sql(
             "TRUNCATE class_memberships, class_teacher_roles, classes, audit_events, "
-            "sessions, role_assignments, ad_user_cache, schools, local_admins "
-            "RESTART IDENTITY CASCADE"
+            "sessions, role_assignments, ad_user_cache, schools, local_admins, "
+            "app_settings RESTART IDENTITY CASCADE"
+        )
+        # The migration inserts the singleton; recreate it after each
+        # truncate so reads keep returning a row.
+        await conn.exec_driver_sql(
+            "INSERT INTO app_settings (id, version, oidc_scopes, "
+            "bootstrap_admins, ad_dcs) "
+            "VALUES (1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb) "
+            "ON CONFLICT DO NOTHING"
         )
 
 

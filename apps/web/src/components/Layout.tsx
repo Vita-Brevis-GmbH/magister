@@ -24,7 +24,7 @@ export function Layout() {
               {t("nav.users")}
             </Link>
             {me.data?.is_admin ? (
-              <Link to="/admin/local-admin" activeProps={{ className: "font-semibold underline" }}>
+              <Link to="/admin/settings" activeProps={{ className: "font-semibold underline" }}>
                 {t("nav.admin")}
               </Link>
             ) : null}
