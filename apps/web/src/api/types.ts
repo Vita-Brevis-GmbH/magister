@@ -47,6 +47,52 @@ export interface ClassOut {
   updated_at: string;
 }
 
+export interface ClassCreate {
+  name: string;
+  kuerzel: string | null;
+  jahrgangsstufe: number;
+  school_id?: number;
+}
+
+export interface ClassUpdate {
+  name?: string | null;
+  kuerzel?: string | null;
+}
+
+export type ClassTeacherRole = "haupt" | "co" | "stellvertretung";
+
+export interface ClassTeacherOut {
+  id: number;
+  class_id: number;
+  ad_object_guid: string;
+  role: ClassTeacherRole;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ClassTeacherCreate {
+  ad_object_guid: string;
+  role: ClassTeacherRole;
+  valid_from: string;
+  valid_to?: string | null;
+}
+
+export interface ClassMembershipOut {
+  id: number;
+  class_id: number;
+  ad_object_guid: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ClassMembershipCreate {
+  ad_object_guid: string;
+  valid_from?: string | null;
+  valid_to?: string | null;
+}
+
 export interface AdUserOut {
   ad_object_guid: string;
   school_id: number | null;
