@@ -64,6 +64,8 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S105", "S106", "S107", "S311"]
 "alembic/**/*.py" = ["E501"]
+# CLI subcommands legitimately print to stdout — that's the whole point.
+"magister_api/cli/**/*.py" = ["T201"]
 
 [tool.ruff.format]
 quote-style = "double"

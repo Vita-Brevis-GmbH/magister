@@ -1,14 +1,23 @@
 #!/usr/bin/env python3
 """Magister CLI — small ops tool for things you can't (yet) do via the API.
 
-Usage:
-    magister-cli hash-password           # reads password from stdin (no echo)
-    magister-cli hash-password --plain   # reads password from stdin (shown)
+Subcommands:
+    hash-password    — prompt for a password and print its argon2id hash
+                       (used to seed MAGISTER_LOCAL_ADMIN_PASSWORD_HASH)
+    seed-demo        — populate the DB with a small demo data set so an
+                       empty deployment can show the full UI without
+                       waiting for an AD-sync. Wraps
+                       ``python -m magister_api.cli.seed_demo``.
 
-Designed to run from the apps/api/.venv (so argon2-cffi is available):
+The CLI needs the API venv so SQLAlchemy + argon2-cffi + magister_api
+are importable. From a repo checkout:
 
     cd apps/api
     uv run ../../scripts/magister-cli hash-password
+    uv run ../../scripts/magister-cli seed-demo
+
+Inside the production Docker image the seed subcommand is reachable as
+``python -m magister_api.cli.seed_demo`` directly (no wrapper needed).
 """
 
 from __future__ import annotations
@@ -50,6 +59,22 @@ def cmd_hash_password(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_seed_demo(args: argparse.Namespace) -> int:
+    try:
+        from magister_api.cli.seed_demo import main as seed_main
+    except ImportError:
+        sys.stderr.write(
+            "magister_api is not importable — run inside apps/api's venv:\n"
+            "  cd apps/api && uv run ../../scripts/magister-cli seed-demo\n"
+        )
+        return 2
+
+    forwarded: list[str] = []
+    if args.force:
+        forwarded.append("--force")
+    return seed_main(forwarded)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="magister-cli", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -66,6 +91,18 @@ def main() -> int:
         "password is NOT echoed back.",
     )
     hp.set_defaults(func=cmd_hash_password)
+
+    sd = sub.add_parser(
+        "seed-demo",
+        help="Populate the DB with a small demo data set (1 school, "
+        "3 teachers, 12 students, 2 classes with KL + memberships).",
+    )
+    sd.add_argument(
+        "--force",
+        action="store_true",
+        help="Seed even if the DB already contains classes. Use with care.",
+    )
+    sd.set_defaults(func=cmd_seed_demo)
 
     args = parser.parse_args()
     return args.func(args)
