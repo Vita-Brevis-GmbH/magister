@@ -18,8 +18,10 @@ router = APIRouter(prefix="/users", tags=["users"])
 
 
 # KL-as-actor permission lands in #6 (kl_perm helper exists already in services.class_teachers).
-# Until then, listing is open to Schulleitung-or-above; KL access is enabled in the next PR.
-require_listing = require_role("schulleitung")
+# Until then, listing is open to Schulleitung-or-above and SMI; KL access is enabled in the next PR.
+# SMI sees users from every school it is assigned to (per-school grants accumulate
+# into ``school_scope``); the repository's scope filter does the rest.
+require_listing = require_role("schulleitung", "smi")
 
 
 @router.get("", response_model=AdUserListResponse)

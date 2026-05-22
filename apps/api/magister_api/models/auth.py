@@ -65,10 +65,12 @@ class Session(Base):
 
 
 class RoleAssignment(Base):
-    """Admin and Schulleitung role grants.
+    """Admin, Schulleitung and SMI role grants.
 
     `role='admin'` always has ``school_id=NULL`` (cross-school).
-    `role='schulleitung'` always has a non-null ``school_id``.
+    `role='schulleitung'` always has a non-null ``school_id`` (one row per school).
+    `role='smi'` always has a non-null ``school_id`` (one row per school;
+    grant on every school of the Schulträger to give cross-school reach).
     """
 
     __tablename__ = "role_assignments"

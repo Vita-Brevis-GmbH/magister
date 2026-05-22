@@ -26,6 +26,7 @@ from magister_api.routers.class_memberships import router as class_memberships_r
 from magister_api.routers.class_teachers import router as class_teachers_router
 from magister_api.routers.classes import router as classes_router
 from magister_api.routers.student_password_reset import router as student_pw_reset_router
+from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
 from magister_api.routers.users import router as users_router
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
@@ -80,6 +81,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_local_admin_router)
     app.include_router(admin_settings_router)
     app.include_router(student_pw_reset_router)
+    app.include_router(teacher_pw_reset_router)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:

@@ -49,4 +49,20 @@ class StudentPasswordResetResponse(BaseModel):
     )
 
 
-__all__ = ["StudentPasswordResetRequest", "StudentPasswordResetResponse"]
+# Teacher-PW-reset shares the exact same request/response shape as the
+# student endpoint (mode/manual_password/force_change → temp_password). The
+# subclasses exist only so OpenAPI emits distinct model names per resource.
+class TeacherPasswordResetRequest(StudentPasswordResetRequest):
+    pass
+
+
+class TeacherPasswordResetResponse(StudentPasswordResetResponse):
+    pass
+
+
+__all__ = [
+    "StudentPasswordResetRequest",
+    "StudentPasswordResetResponse",
+    "TeacherPasswordResetRequest",
+    "TeacherPasswordResetResponse",
+]

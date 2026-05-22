@@ -251,6 +251,28 @@ async def as_schulleitung_b(
         yield c
 
 
+@pytest_asyncio.fixture
+async def as_smi_a(
+    app: FastAPI,
+    app_settings: Settings,
+    db_session: AsyncSession,
+    school_a: int,
+) -> AsyncIterator[AsyncClient]:
+    sid, csrf = await seed_user_with_session(
+        session=db_session,
+        settings=app_settings,
+        upn="smi-a@example.ch",
+        ad_object_guid="00000000-0000-0000-0000-0000000000a2",
+        school_id=school_a,
+        kind="teacher",
+        role="smi",
+        role_school_id=school_a,
+    )
+    await db_session.commit()
+    async with _build_client_with_session(app, sid, csrf) as c:
+        yield c
+
+
 # Re-export for tests that need raw access.
 __all__ = ["seed_user_with_session"]
 _ = (Any,)
