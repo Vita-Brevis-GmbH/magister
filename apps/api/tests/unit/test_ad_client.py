@@ -87,6 +87,38 @@ class TestParseAdEntry:
         assert rec.kind == "student"
         assert rec.distinguished_name == "CN=Anna,OU=A,DC=schule,DC=local"
 
+    def test_extended_attributes(self) -> None:
+        """displayName, sAMAccountName, address fields all flow through."""
+        rec = parse_ad_entry(
+            self._attrs(
+                displayName="Anna Beispiel",
+                sAMAccountName="anna.b",
+                streetAddress="Schulweg 12",
+                l="Musterhausen",
+                postalCode="3000",
+                co="Schweiz",
+            ),
+            "CN=Anna,OU=A,DC=schule,DC=local",
+        )
+        assert rec.display_name == "Anna Beispiel"
+        assert rec.sam_account_name == "anna.b"
+        assert rec.street_address == "Schulweg 12"
+        assert rec.locality == "Musterhausen"
+        assert rec.postal_code == "3000"
+        assert rec.country == "Schweiz"
+        # device_name stays None until Phase 4 plugs in the Computer-OU sync.
+        assert rec.device_name is None
+
+    def test_extended_attributes_default_none(self) -> None:
+        """Missing optional attrs come back as None, not as empty strings."""
+        rec = parse_ad_entry(self._attrs(), "CN=Anna")
+        assert rec.display_name is None
+        assert rec.sam_account_name is None
+        assert rec.street_address is None
+        assert rec.locality is None
+        assert rec.postal_code is None
+        assert rec.country is None
+
     def test_disabled_account(self) -> None:
         rec = parse_ad_entry(
             self._attrs(userAccountControl=0x200 | UAC_ACCOUNTDISABLE),

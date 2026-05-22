@@ -149,6 +149,50 @@ class TestPartialUpdates:
         assert eff.oidc_client_secret == "real-secret"
 
 
+class TestMailDomains:
+    """`mail_domains` is the allowlist powering the user-edit form's UPN/mail dropdowns."""
+
+    async def test_defaults_to_empty_list(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        out = await svc.get_redacted_for_api()
+        assert out.mail_domains == []
+        eff = await svc.get_effective()
+        assert eff.mail_domains == []
+
+    async def test_update_round_trips(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        await svc.update(
+            AppSettingsUpdate(mail_domains=["schule.example.ch", "lehrer.example.ch"]),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="r1",
+        )
+        out = await svc.get_redacted_for_api()
+        assert out.mail_domains == ["schule.example.ch", "lehrer.example.ch"]
+        eff = await svc.get_effective()
+        assert eff.mail_domains == ["schule.example.ch", "lehrer.example.ch"]
+
+    async def test_empty_list_clears(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        await svc.update(
+            AppSettingsUpdate(mail_domains=["a.ch"]),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="r1",
+        )
+        await svc.update(
+            AppSettingsUpdate(mail_domains=[]),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="r2",
+        )
+        out = await svc.get_redacted_for_api()
+        assert out.mail_domains == []
+
+
 class TestSingletonEnforcement:
     async def test_inserting_id_other_than_one_violates_check(
         self, db_session: AsyncSession

@@ -27,6 +27,7 @@ class AppSettingsOut(BaseModel):
     oidc_redirect_uri: str | None
     oidc_scopes: list[str]
     bootstrap_admins: list[str]
+    mail_domains: list[str]
 
     # AD
     ad_dcs: list[str]
@@ -60,6 +61,13 @@ class AppSettingsUpdate(BaseModel):
     oidc_redirect_uri: str | None = None
     oidc_scopes: list[str] | None = None
     bootstrap_admins: list[str] | None = None
+    mail_domains: list[str] | None = Field(
+        default=None,
+        description=(
+            "Allowlist of mail/UPN domains the user-edit form may pick from. "
+            "Send an empty list to clear; send null/omit to leave unchanged."
+        ),
+    )
 
     ad_dcs: list[str] | None = None
     ad_bind_dn: str | None = None

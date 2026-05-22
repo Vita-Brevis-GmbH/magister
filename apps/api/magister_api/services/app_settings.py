@@ -45,6 +45,7 @@ class EffectiveAppSettings:
     oidc_redirect_uri: str | None
     oidc_scopes: list[str]
     bootstrap_admins: list[str]
+    mail_domains: list[str]
     ad_dcs: list[str]
     ad_bind_dn: str | None
     ad_bind_password: str | None
@@ -88,6 +89,7 @@ class AppSettingsService:
             AppSettings.oidc_redirect_uri,
             AppSettings.oidc_scopes,
             AppSettings.bootstrap_admins,
+            AppSettings.mail_domains,
             AppSettings.ad_dcs,
             AppSettings.ad_bind_dn,
             func.pgp_sym_decrypt(AppSettings.ad_bind_password_enc, self._key).label(
@@ -108,6 +110,7 @@ class AppSettingsService:
             oidc_redirect_uri=row.oidc_redirect_uri,
             oidc_scopes=list(row.oidc_scopes or []),
             bootstrap_admins=list(row.bootstrap_admins or []),
+            mail_domains=list(row.mail_domains or []),
             ad_dcs=list(row.ad_dcs or []),
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password=row.ad_bind_password,
@@ -125,6 +128,7 @@ class AppSettingsService:
             AppSettings.oidc_redirect_uri,
             AppSettings.oidc_scopes,
             AppSettings.bootstrap_admins,
+            AppSettings.mail_domains,
             AppSettings.ad_dcs,
             AppSettings.ad_bind_dn,
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
@@ -143,6 +147,7 @@ class AppSettingsService:
             oidc_redirect_uri=row.oidc_redirect_uri,
             oidc_scopes=list(row.oidc_scopes or []),
             bootstrap_admins=list(row.bootstrap_admins or []),
+            mail_domains=list(row.mail_domains or []),
             ad_dcs=list(row.ad_dcs or []),
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password_set=bool(row.ad_bind_password_set),
@@ -178,6 +183,7 @@ class AppSettingsService:
             "oidc_redirect_uri": payload.oidc_redirect_uri,
             "oidc_scopes": payload.oidc_scopes,
             "bootstrap_admins": payload.bootstrap_admins,
+            "mail_domains": payload.mail_domains,
             "ad_dcs": payload.ad_dcs,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_users_search_base": payload.ad_users_search_base,
@@ -307,6 +313,7 @@ def _empty_effective() -> EffectiveAppSettings:
         oidc_redirect_uri=None,
         oidc_scopes=[],
         bootstrap_admins=[],
+        mail_domains=[],
         ad_dcs=[],
         ad_bind_dn=None,
         ad_bind_password=None,

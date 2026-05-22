@@ -43,6 +43,15 @@ class AppSettings(Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
+    # Allowlist of mail domains the user-edit form may pick from for UPN
+    # and mail attributes (e.g. ["schule.example.ch", "lehrer.example.ch"]).
+    # An empty list means no domains are configured — the user-PATCH
+    # endpoint then refuses any UPN/mail change. Schulträger-IT pflegt
+    # diese Liste im Admin-GUI.
+    mail_domains: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
     # --- AD ---
     ad_dcs: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"

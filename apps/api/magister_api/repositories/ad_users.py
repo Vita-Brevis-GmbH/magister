@@ -115,13 +115,24 @@ class AdUserCacheSyncRepository:
                     "ad_object_guid": r.ad_object_guid,
                     "school_id": school_id_resolver(r),
                     "upn": r.upn,
+                    "sam_account_name": r.sam_account_name,
                     "given_name": r.given_name,
                     "surname": r.surname,
+                    "display_name": r.display_name,
                     "mail": r.mail,
                     "kind": r.kind,
                     "enabled": r.enabled,
                     "last_sync_at": now,
                     "ms_ds_consistency_guid": r.ms_ds_consistency_guid,
+                    "street_address": r.street_address,
+                    "locality": r.locality,
+                    "postal_code": r.postal_code,
+                    "country": r.country,
+                    "device_name": r.device_name,
+                    # temp_device_name is Magister-only — do NOT overwrite on
+                    # AD sync. We omit it from both VALUES and the ON-CONFLICT
+                    # set; existing rows keep whatever was set via the
+                    # PATCH-user endpoint.
                 }
             )
         stmt = (
@@ -132,8 +143,10 @@ class AdUserCacheSyncRepository:
                 set_={
                     "school_id": pg_insert(AdUserCache).excluded.school_id,
                     "upn": pg_insert(AdUserCache).excluded.upn,
+                    "sam_account_name": pg_insert(AdUserCache).excluded.sam_account_name,
                     "given_name": pg_insert(AdUserCache).excluded.given_name,
                     "surname": pg_insert(AdUserCache).excluded.surname,
+                    "display_name": pg_insert(AdUserCache).excluded.display_name,
                     "mail": pg_insert(AdUserCache).excluded.mail,
                     "kind": pg_insert(AdUserCache).excluded.kind,
                     "enabled": pg_insert(AdUserCache).excluded.enabled,
@@ -141,6 +154,11 @@ class AdUserCacheSyncRepository:
                     "ms_ds_consistency_guid": pg_insert(
                         AdUserCache
                     ).excluded.ms_ds_consistency_guid,
+                    "street_address": pg_insert(AdUserCache).excluded.street_address,
+                    "locality": pg_insert(AdUserCache).excluded.locality,
+                    "postal_code": pg_insert(AdUserCache).excluded.postal_code,
+                    "country": pg_insert(AdUserCache).excluded.country,
+                    "device_name": pg_insert(AdUserCache).excluded.device_name,
                 },
             )
         )

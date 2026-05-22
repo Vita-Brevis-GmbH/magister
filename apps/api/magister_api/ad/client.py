@@ -43,14 +43,21 @@ UAC_ACCOUNTDISABLE = 0x0002
 DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "objectGUID",
     "userPrincipalName",
+    "sAMAccountName",
     "givenName",
     "sn",
+    "displayName",
     "mail",
     "userAccountControl",
     "objectClass",
     "memberOf",
     "mS-DS-ConsistencyGuid",
     "distinguishedName",
+    # Physical address (mirrored into ad_user_cache).
+    "streetAddress",
+    "l",
+    "postalCode",
+    "co",
 )
 
 
@@ -60,13 +67,22 @@ class AdUserRecord:
 
     ad_object_guid: str
     upn: str
+    sam_account_name: str | None
     given_name: str | None
     surname: str | None
+    display_name: str | None
     mail: str | None
     enabled: bool
     kind: str
     ms_ds_consistency_guid: str | None
     distinguished_name: str
+    street_address: str | None
+    locality: str | None
+    postal_code: str | None
+    country: str | None
+    # Populated by the Phase-4 device sync from the Computer-OU
+    # (``managedBy=<user-dn>``). None until then.
+    device_name: str | None = None
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -160,16 +176,23 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         consistency_guid = consistency_guid_raw.lower()
     else:
         consistency_guid = None
+    sam = _first_value(entry_attrs.get("sAMAccountName"))
     return AdUserRecord(
         ad_object_guid=_decode_object_guid(object_guid_raw),
         upn=str(upn).strip().lower(),
+        sam_account_name=str(sam).strip() if sam else None,
         given_name=_first_value(entry_attrs.get("givenName")),
         surname=_first_value(entry_attrs.get("sn")),
+        display_name=_first_value(entry_attrs.get("displayName")),
         mail=_first_value(entry_attrs.get("mail")),
         enabled=bool(uac & UAC_ACCOUNTDISABLE) is False,
         kind=_kind_from_member_of(member_of),
         ms_ds_consistency_guid=consistency_guid,
         distinguished_name=dn,
+        street_address=_first_value(entry_attrs.get("streetAddress")),
+        locality=_first_value(entry_attrs.get("l")),
+        postal_code=_first_value(entry_attrs.get("postalCode")),
+        country=_first_value(entry_attrs.get("co")),
     )
 
 
