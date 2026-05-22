@@ -138,4 +138,43 @@ async def require_teacher_writer(
     raise HTTPException(status_code=404, detail="teacher_not_found")
 
 
-__all__ = ["require_class_writer", "require_student_writer", "require_teacher_writer"]
+async def require_user_writer(
+    ad_object_guid: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> tuple[AuthenticatedUser, AdUserCache]:
+    """Ensure the caller may write attribute changes to ``ad_object_guid``.
+
+    Kind-agnostic version of :func:`require_teacher_writer`: accepts the
+    same admin / SMI-of-user's-school tiers, but works for any user kind
+    (teacher / student / admin). Per-field admin-only gating (UPN,
+    sAMAccountName) is enforced in the service layer, not here.
+
+    Returns ``(user, ad_user_cache_row)``. Outsiders get 404
+    ``user_not_found`` to avoid leaking existence.
+    """
+    # scope-bypass: the AD-cache lookup itself must succeed before the
+    # school-scope gate can decide.
+    target = await session.get(AdUserCache, ad_object_guid)
+    if target is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    if user.is_admin:
+        return user, target
+
+    if (
+        "smi" in user.roles
+        and target.school_id is not None
+        and target.school_id in user.school_scope
+    ):
+        return user, target
+
+    raise HTTPException(status_code=404, detail="user_not_found")
+
+
+__all__ = [
+    "require_class_writer",
+    "require_student_writer",
+    "require_teacher_writer",
+    "require_user_writer",
+]

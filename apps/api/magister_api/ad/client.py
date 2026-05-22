@@ -434,6 +434,47 @@ class AdClient:
 
     # --- Test helpers --------------------------------------------------------
 
+    async def modify_user_attributes(
+        self, *, user_dn: str, attributes: dict[str, str | None]
+    ) -> None:
+        """Apply a MODIFY_REPLACE to one or more attributes of a user entry.
+
+        Each value in ``attributes`` is either the new string value, or
+        ``None`` to clear the attribute (LDAP delete-then-no-replace).
+        AD-side schema constraints (uniqueness of userPrincipalName /
+        sAMAccountName, attribute-length caps) bubble up as
+        :class:`AdUnavailableError` — callers translate them to 4xx.
+        """
+        await run_in_threadpool(self._sync_modify_attributes, user_dn, dict(attributes))
+
+    def _sync_modify_attributes(
+        self, user_dn: str, attributes: dict[str, str | None]
+    ) -> None:
+        if not attributes:
+            return
+        changes: dict[str, list[tuple[str, list[str]]]] = {}
+        for attr, value in attributes.items():
+            if value is None or value == "":
+                # Clearing: ldap3 expects an empty MODIFY_REPLACE list.
+                changes[attr] = [(MODIFY_REPLACE, [])]
+            else:
+                changes[attr] = [(MODIFY_REPLACE, [value])]
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.modify(user_dn, changes)
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_modify_failed")
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     def mock_connection(self) -> Connection:
         """Return the persistent MOCK_SYNC connection so tests can seed entries."""
         if not self._settings.ad_use_mock:
