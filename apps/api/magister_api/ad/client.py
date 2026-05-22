@@ -176,10 +176,36 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
 # --- Pool / Connection construction --------------------------------------------------
 
 
+def _make_tls(settings: Settings) -> Tls:
+    """Build the TLS config for the LDAPS pool.
+
+    - ``validate=CERT_REQUIRED`` rejects untrusted DC certificates.
+    - ``version=PROTOCOL_TLS_CLIENT`` plus the ``OP_NO_TLSv1*`` mask
+      forbids anything below TLS 1.2. Many AD deployments still cap at
+      TLS 1.2, so we cannot mandate 1.3 here as we do on the public web
+      edge; everything older than 1.2 is refused.
+    - ``ca_certs_file`` pins the trust anchor to the Schulträger root CA
+      when configured, giving defence-in-depth against a compromised
+      system trust store. Falls back to the OS bundle when unset.
+    """
+    import ssl
+
+    # SSLv2 was already removed from OpenSSL — `ssl.OP_NO_SSLv2` is 0 on
+    # modern Python and listing it is pointless. SSLv3 + TLS 1.0/1.1 are
+    # the ones that still need the explicit OP_NO_*.
+    ssl_options = ssl.OP_NO_SSLv3 | ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
+    return Tls(
+        validate=ssl.CERT_REQUIRED,
+        version=ssl.PROTOCOL_TLS_CLIENT,
+        ssl_options=[ssl_options],
+        ca_certs_file=settings.ad_ca_bundle_path,
+    )
+
+
 def _make_pool(settings: Settings) -> ServerPool:
     if not settings.ad_dcs:
         raise AdUnavailableError("MAGISTER_AD_DCS is empty")
-    tls = Tls(validate=2)  # ssl.CERT_REQUIRED — strict cert validation by default
+    tls = _make_tls(settings)
     servers: list[Server] = [
         Server(host, port=636, use_ssl=True, get_info="NO_INFO", tls=tls)
         for host in settings.ad_dcs

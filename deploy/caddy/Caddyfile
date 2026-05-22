@@ -5,45 +5,89 @@
 # magister-web container; the FastAPI backend lives behind the /api/* prefix
 # and is mounted at "/" on the backend itself — Caddy strips /api/ on the
 # way through (handle_path), so the backend stays prefix-agnostic.
-
 {
-    email {$MAGISTER_ACME_EMAIL}
-    # Production defaults; uncomment for staging certs while testing:
-    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+	email {$MAGISTER_ACME_EMAIL}
+	# Production defaults; uncomment for staging certs while testing:
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+(security_headers) {
+	header {
+		# HSTS — explicit so includeSubDomains + preload are guaranteed
+		# regardless of Caddy version defaults. 1-year lifetime per RFC 6797.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+		# MIME-sniff lock-down + clickjacking + referrer minimisation.
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Disable powerful platform APIs the SPA does not use. Listed
+		# explicitly so a future dep that quietly adopts one fails loud.
+		Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(self), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), interest-cohort=()"
+
+		# Cross-Origin isolation. Magister is strictly same-origin; no
+		# external embeds (CDN images, fonts, iframes). `require-corp` will
+		# therefore not break the SPA, and it removes the legacy fallback
+		# paths that Spectre-style side-channels exploit.
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+
+		# Content-Security-Policy. The SPA is fully self-hosted, so the
+		# baseline is `'self'` everywhere with three concessions:
+		#   - `img-src data:` for inline favicons / SVG data URLs.
+		#   - `style-src 'unsafe-inline'` because Radix UI / shadcn-ui
+		#     attach dynamic `<style>` tags for positioning (popover,
+		#     dialog overlay). Inline-style attributes via React `style`
+		#     props are NOT covered by style-src, so this only affects
+		#     Radix's portal-managed elements.
+		#   - `connect-src 'self'` keeps the API + auth surface on the
+		#     same origin (Caddy fronts both behind /api/*).
+		Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-elem 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+
+		# Strip the Server header so the reverse-proxy version is not
+		# advertised. nginx behind us already does `server_tokens off`.
+		-Server
+	}
 }
 
 {$MAGISTER_PUBLIC_HOSTNAME} {
-    encode zstd gzip
+	# TLS pin: only TLS 1.3. The TLS 1.3 spec constrains cipher negotiation
+	# to three AEAD suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305) —
+	# all are fast and side-channel-resistant, so we let the browser pick
+	# per platform (ChaCha20 wins on mobile, AES-GCM on AES-NI desktops).
+	# Pinning the key-exchange curves to x25519 + secp256r1 keeps the
+	# handshake on the quickest paths and rules out the slow ones.
+	tls {
+		protocols tls1.3
+		curves x25519 secp256r1
+	}
 
-    # Security headers; Strict-Transport-Security is added by the auto-TLS
-    # path automatically when the cert is in place.
-    header {
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "geolocation=(), microphone=(), camera=()"
-        # Tighten as the frontend takes shape (CSP needs the actual asset origins).
-    }
+	encode zstd gzip
 
-    # Health-probes for ops — answered by the API directly, no /api/ prefix.
-    handle /healthz {
-        reverse_proxy magister-api:8000
-    }
+	import security_headers
 
-    # API + auth surface. handle_path strips the /api/ prefix before
-    # forwarding — backend routers stay mounted at "/auth", "/classes",
-    # "/users", "/students", "/admin", and don't need to know about Caddy.
-    handle_path /api/* {
-        reverse_proxy magister-api:8000 {
-            header_up X-Forwarded-Host {host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
+	# Health-probes for ops — answered by the API directly, no /api/ prefix.
+	handle /healthz {
+		reverse_proxy magister-api:8000
+	}
 
-    # Everything else is the SPA. magister-web (nginx:alpine) serves the
-    # Vite bundle plus an index.html SPA fallback for client-side routes
-    # like /classes, /users, /me — so a hard refresh still hits the SPA.
-    handle {
-        reverse_proxy magister-web:80
-    }
+	# API + auth surface. handle_path strips the /api/ prefix before
+	# forwarding — backend routers stay mounted at "/auth", "/classes",
+	# "/users", "/students", "/teachers", "/admin", and don't need to know
+	# about Caddy.
+	handle_path /api/* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Everything else is the SPA. magister-web (nginx:alpine) serves the
+	# Vite bundle plus an index.html SPA fallback for client-side routes
+	# like /classes, /users, /me — so a hard refresh still hits the SPA.
+	handle {
+		reverse_proxy magister-web:80
+	}
 }

@@ -71,6 +71,15 @@ class Settings(BaseSettings):
         default=False,
         description="When true the AD client uses ldap3's MOCK_SYNC strategy (tests).",
     )
+    ad_ca_bundle_path: str | None = Field(
+        default=None,
+        description=(
+            "Optional path to a PEM CA bundle that the LDAPS connection must "
+            "verify the domain-controller cert against. When unset, ldap3 "
+            "falls back to the OS trust store. Pin this to the Schulträger "
+            "root CA for defence-in-depth against a compromised system CA."
+        ),
+    )
 
     rate_limit_auth: str = Field(default="10/minute")
     rate_limit_password_reset: str = Field(default="10/minute")
