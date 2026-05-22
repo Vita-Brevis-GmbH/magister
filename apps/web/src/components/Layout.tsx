@@ -2,35 +2,55 @@ import { Link, Outlet } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
 import { useCurrentUser, useLogout } from "@/api/hooks";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
+import { displayLabel } from "@/lib/userDisplay";
 
 export function Layout() {
   const { t } = useTranslation();
   const me = useCurrentUser();
   const logout = useLogout();
+  const navActive = "rounded-md bg-accent px-3 py-1.5 text-foreground";
+  const navIdle = "rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground";
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b">
-        <div className="container mx-auto flex items-center justify-between px-4 py-3">
-          <Link to="/" className="font-serif text-lg font-semibold">
-            {t("app.title")}
+      <header className="border-b bg-card/40 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+        <div className="container mx-auto flex h-14 items-center justify-between px-4">
+          <Link to="/" className="flex items-center gap-2">
+            <span className="font-serif text-lg font-semibold tracking-tight">
+              {t("app.title")}
+            </span>
           </Link>
-          <nav className="flex items-center gap-4 text-sm">
-            <Link to="/classes" activeProps={{ className: "font-semibold underline" }}>
+
+          <nav className="flex items-center gap-1 text-sm font-medium">
+            <Link to="/classes" activeProps={{ className: navActive }} inactiveProps={{ className: navIdle }}>
               {t("nav.classes")}
             </Link>
-            <Link to="/users" activeProps={{ className: "font-semibold underline" }}>
+            <Link to="/users" activeProps={{ className: navActive }} inactiveProps={{ className: navIdle }}>
               {t("nav.users")}
             </Link>
             {me.data?.is_admin ? (
-              <Link to="/admin/settings" activeProps={{ className: "font-semibold underline" }}>
+              <Link
+                to="/admin/settings"
+                activeProps={{ className: navActive }}
+                inactiveProps={{ className: navIdle }}
+              >
                 {t("nav.admin")}
               </Link>
             ) : null}
-            <Link to="/me" activeProps={{ className: "font-semibold underline" }}>
-              {me.data?.upn ?? t("common.loading")}
-            </Link>
+          </nav>
+
+          <div className="flex items-center gap-3">
+            {me.data ? (
+              <Link
+                to="/me"
+                className="flex items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-accent"
+              >
+                <UserAvatar user={me.data} size="sm" />
+                <span className="hidden md:inline">{displayLabel(me.data)}</span>
+              </Link>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
@@ -39,7 +59,7 @@ export function Layout() {
             >
               {t("nav.logout")}
             </Button>
-          </nav>
+          </div>
         </div>
       </header>
       <main className="container mx-auto px-4 py-6">

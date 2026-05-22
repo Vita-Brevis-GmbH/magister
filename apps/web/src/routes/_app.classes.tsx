@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -36,12 +36,19 @@ export const Route = createFileRoute("/_app/classes")({
 });
 
 function ClassesPage(): JSX.Element {
+  // When a child route (e.g. /classes/$classId) is active, hand off to
+  // its Outlet — TanStack file-based routing treats _app.classes.tsx as
+  // the parent layout, so without this the list would stack on top of
+  // the detail page.
+  const childMatches = useChildMatches();
   const { t } = useTranslation();
   const q = useClasses();
   const me = useCurrentUser();
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
+
+  if (childMatches.length > 0) return <Outlet />;
 
   // Schulleitung + admin can write; KL is read-only here (their write surface
   // is the class-detail page's students section).

@@ -78,11 +78,48 @@ async def list_users(
     )
 
 
+# Read-side dependency for the user-edit form: admin + SMI may see the
+# mail-domains allowlist so the UI can render a dropdown of valid
+# UPN/mail suffixes.
+require_user_edit_reader = require_role("smi")
+
+
+@router.get("/mail-domains")
+async def mail_domains(
+    user: AuthenticatedUser = Depends(require_user_edit_reader),  # noqa: ARG001
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, list[str]]:
+    """Return the configured mail-domain allowlist.
+
+    SMI and admin tiers both need this to render the user-edit form's
+    UPN/mail dropdowns. We expose it on the user-resource (not the
+    admin-resource) so SMI's RBAC tier covers it without widening the
+    admin-settings surface.
+    """
+    eff = await AppSettingsService(session, settings).get_effective()
+    return {"domains": list(eff.mail_domains)}
+
+
 def _ip_request_id(request: Request) -> tuple[str | None, str]:
     return (
         getattr(request.state, "client_ip", None),
         getattr(request.state, "request_id", ""),
     )
+
+
+@router.get("/{ad_object_guid}", response_model=AdUserOut)
+async def get_user(
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+) -> AdUserOut:
+    """Return one cached user row.
+
+    Same RBAC as PATCH: admin or SMI of the user's school can see the
+    detail (which is the prerequisite for the edit form). Schulleitung /
+    KL get 404 — they don't have the user-edit surface today.
+    """
+    _, target = user_and_target
+    return AdUserOut.model_validate(target)
 
 
 @router.patch("/{ad_object_guid}", response_model=AdUserOut)

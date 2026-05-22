@@ -37,6 +37,12 @@ class ClassTeacherOut(BaseModel):
     valid_from: datetime
     valid_to: datetime | None
     created_at: datetime
+    # Enriched from ad_user_cache so the SPA can render a friendly label
+    # without making a second /users call (which KL can't access).
+    display_name: str | None = None
+    given_name: str | None = None
+    surname: str | None = None
+    upn: str | None = None
 
 
 __all__ = ["ClassTeacherCreate", "ClassTeacherOut"]
