@@ -80,6 +80,13 @@ class Settings(BaseSettings):
             "root CA for defence-in-depth against a compromised system CA."
         ),
     )
+    ad_computers_search_base: str | None = Field(
+        default=None,
+        description=(
+            "Optional LDAP base for the Computer-OU walk. Unset = device "
+            "sync is skipped; device_name in ad_user_cache stays as-is."
+        ),
+    )
 
     rate_limit_auth: str = Field(default="10/minute")
     rate_limit_password_reset: str = Field(default="10/minute")

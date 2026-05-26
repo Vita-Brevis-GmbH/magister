@@ -59,6 +59,9 @@ class AppSettings(Base):
     ad_bind_dn: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_bind_password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     ad_users_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Optional: subtree to walk for ``Computer`` objects whose ``managedBy``
+    # points at a user. Unset = device sync is skipped silently.
+    ad_computers_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_sync_interval_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=15, server_default="15"
     )

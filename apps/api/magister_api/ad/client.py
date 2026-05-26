@@ -338,6 +338,63 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def search_managed_computers(
+        self, *, search_base: str | None = None
+    ) -> dict[str, str]:
+        """Return ``{user_dn_lowercase: device_name}`` for every ``Computer``
+        object whose ``managedBy`` points at a user.
+
+        Used by the periodic sync (Phase 4) to populate
+        ``ad_user_cache.device_name``. Empty / unset ``search_base`` is a
+        soft-no-op (the feature is optional): returns ``{}`` instead of
+        raising, so the sync flow stays linear.
+
+        DN comparison is case-insensitive in LDAP, so the map is keyed on
+        the lowercased managedBy DN. Callers must lookup with
+        ``user_dn.lower()``.
+        """
+        base = search_base or self._settings.ad_computers_search_base
+        if not base:
+            return {}
+        return await run_in_threadpool(self._sync_search_managed_computers, base)
+
+    def _sync_search_managed_computers(self, base: str) -> dict[str, str]:
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.search(
+                search_base=base,
+                search_filter="(&(objectClass=computer)(managedBy=*))",
+                search_scope=SUBTREE,
+                attributes=["cn", "name", "managedBy"],
+            )
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_computer_search_failed")
+            out: dict[str, str] = {}
+            for entry in conn.response or []:
+                if entry.get("type") != "searchResEntry":
+                    continue
+                attrs = entry.get("attributes", {})
+                managed_by = _first_value(attrs.get("managedBy"))
+                if not managed_by:
+                    continue
+                device_name = _first_value(attrs.get("cn")) or _first_value(attrs.get("name"))
+                if not device_name:
+                    continue
+                # If a user manages multiple computers we deterministically
+                # keep the first one we see (the search order is the LDAP
+                # server's). Phase 1 nailed device_name as a single string.
+                key = str(managed_by).lower()
+                out.setdefault(key, str(device_name))
+            return out
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def find_user_dn(self, ad_object_guid: str) -> str | None:
         """Return the LDAP DN for a user identified by ``objectGUID``."""
         return await run_in_threadpool(self._sync_find_user_dn, ad_object_guid)

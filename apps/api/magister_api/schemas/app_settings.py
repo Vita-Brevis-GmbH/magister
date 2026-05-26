@@ -34,6 +34,7 @@ class AppSettingsOut(BaseModel):
     ad_bind_dn: str | None
     ad_bind_password_set: bool
     ad_users_search_base: str | None
+    ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
 
     # Audit fingerprint
@@ -79,6 +80,7 @@ class AppSettingsUpdate(BaseModel):
         ),
     )
     ad_users_search_base: str | None = None
+    ad_computers_search_base: str | None = None
     ad_sync_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 

@@ -172,10 +172,12 @@ export interface AppSettingsOut {
   oidc_redirect_uri: string | null;
   oidc_scopes: string[];
   bootstrap_admins: string[];
+  mail_domains: string[];
   ad_dcs: string[];
   ad_bind_dn: string | null;
   ad_bind_password_set: boolean;
   ad_users_search_base: string | null;
+  ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
   updated_at: string;
   updated_by_upn: string | null;
@@ -190,9 +192,11 @@ export interface AppSettingsUpdate {
   oidc_redirect_uri?: string | null;
   oidc_scopes?: string[] | null;
   bootstrap_admins?: string[] | null;
+  mail_domains?: string[] | null;
   ad_dcs?: string[] | null;
   ad_bind_dn?: string | null;
   ad_bind_password?: string | null;
   ad_users_search_base?: string | null;
+  ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;
 }

@@ -193,6 +193,8 @@
     "settings": {
       "title": "System settings",
       "description": "OIDC and AD configuration. Changes take effect immediately, no restart.",
+      "mail_section": "Mail domains",
+      "mail_section_desc": "Domains offered as UPN and mail suffix in the user-edit form.",
       "oidc_section": "Entra ID (OIDC)",
       "oidc_section_desc": "Issuer, client ID, client secret and redirect URI for teacher + admin sign-in.",
       "ad_section": "Active Directory (LDAPS)",
@@ -217,7 +219,10 @@
         "ad_bind_password": "Bind password",
         "ad_bind_password_hint": "Leave empty to keep the stored value.",
         "ad_users_search_base": "Search base (users)",
-        "ad_sync_interval_minutes": "Sync interval (minutes)"
+        "ad_computers_search_base": "Search base (computers)",
+        "ad_computers_search_base_hint": "Optional. Path to the Computer-OU; devices are matched via managedBy=<user-dn>. Leave empty to disable device sync.",
+        "ad_sync_interval_minutes": "Sync interval (minutes)",
+        "mail_domains": "Allowed mail domains"
       }
     },
     "local_admin": {

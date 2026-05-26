@@ -149,6 +149,29 @@ class TestPartialUpdates:
         assert eff.oidc_client_secret == "real-secret"
 
 
+class TestComputersSearchBase:
+    """``ad_computers_search_base`` powers the optional Phase-4 device sync."""
+
+    async def test_defaults_to_none(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        out = await svc.get_redacted_for_api()
+        assert out.ad_computers_search_base is None
+        eff = await svc.get_effective()
+        assert eff.ad_computers_search_base is None
+
+    async def test_round_trips(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        await svc.update(
+            AppSettingsUpdate(ad_computers_search_base="OU=Computers,DC=schule,DC=local"),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="r1",
+        )
+        out = await svc.get_redacted_for_api()
+        assert out.ad_computers_search_base == "OU=Computers,DC=schule,DC=local"
+
+
 class TestMailDomains:
     """`mail_domains` is the allowlist powering the user-edit form's UPN/mail dropdowns."""
 

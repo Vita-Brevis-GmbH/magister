@@ -194,6 +194,8 @@
     "settings": {
       "title": "Paramètres système",
       "description": "Configuration OIDC et AD. Les changements prennent effet immédiatement.",
+      "mail_section": "Domaines e-mail",
+      "mail_section_desc": "Domaines proposés dans le formulaire d'édition utilisateur.",
       "oidc_section": "Entra ID (OIDC)",
       "oidc_section_desc": "Émetteur, client ID, client secret et URI de redirection pour la connexion des enseignants + admins.",
       "ad_section": "Active Directory (LDAPS)",
@@ -218,7 +220,10 @@
         "ad_bind_password": "Mot de passe de bind",
         "ad_bind_password_hint": "Laisser vide pour conserver la valeur enregistrée.",
         "ad_users_search_base": "Base de recherche (utilisateurs)",
-        "ad_sync_interval_minutes": "Intervalle de synchronisation (minutes)"
+        "ad_computers_search_base": "Base de recherche (ordinateurs)",
+        "ad_computers_search_base_hint": "Optionnel. Chemin de l'OU des ordinateurs ; correspondance via managedBy=<user-dn>. Vide = sync d'appareils désactivée.",
+        "ad_sync_interval_minutes": "Intervalle de synchronisation (minutes)",
+        "mail_domains": "Domaines e-mail autorisés"
       }
     },
     "local_admin": {

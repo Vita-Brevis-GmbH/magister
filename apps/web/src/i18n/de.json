@@ -197,6 +197,8 @@
       "oidc_section_desc": "Issuer, Client-ID, Client-Secret und Redirect-URI für die Anmeldung von Lehrpersonen + Admins.",
       "ad_section": "Active Directory (LDAPS)",
       "ad_section_desc": "Domain-Controller, Bind-DN/Passwort und Such-Basis für den User-Sync.",
+      "mail_section": "Mail-Domains",
+      "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",
       "save": "Speichern",
       "success": "Einstellungen gespeichert.",
       "error_invalid": "Eingabe ist ungültig. Bitte prüfen.",
@@ -217,7 +219,10 @@
         "ad_bind_password": "Bind-Passwort",
         "ad_bind_password_hint": "Leer lassen, um den gespeicherten Wert nicht zu ändern.",
         "ad_users_search_base": "Such-Basis (User)",
-        "ad_sync_interval_minutes": "Sync-Intervall (Minuten)"
+        "ad_computers_search_base": "Such-Basis (Computer)",
+        "ad_computers_search_base_hint": "Optional. Pfad zur Computer-OU; Geräte werden über managedBy=<user-dn> zugeordnet. Leer lassen, um die Geräte-Synchronisation zu deaktivieren.",
+        "ad_sync_interval_minutes": "Sync-Intervall (Minuten)",
+        "mail_domains": "Erlaubte Mail-Domains"
       }
     },
     "local_admin": {

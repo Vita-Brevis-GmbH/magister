@@ -50,6 +50,7 @@ class EffectiveAppSettings:
     ad_bind_dn: str | None
     ad_bind_password: str | None
     ad_users_search_base: str | None
+    ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
 
 
@@ -96,6 +97,7 @@ class AppSettingsService:
                 "ad_bind_password"
             ),
             AppSettings.ad_users_search_base,
+            AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
         ).where(AppSettings.id == 1)
         result = await self.session.execute(stmt)
@@ -115,6 +117,7 @@ class AppSettingsService:
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password=row.ad_bind_password,
             ad_users_search_base=row.ad_users_search_base,
+            ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
         )
 
@@ -133,6 +136,7 @@ class AppSettingsService:
             AppSettings.ad_bind_dn,
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
             AppSettings.ad_users_search_base,
+            AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
@@ -152,6 +156,7 @@ class AppSettingsService:
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password_set=bool(row.ad_bind_password_set),
             ad_users_search_base=row.ad_users_search_base,
+            ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
@@ -187,6 +192,7 @@ class AppSettingsService:
             "ad_dcs": payload.ad_dcs,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_users_search_base": payload.ad_users_search_base,
+            "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
         }
         for col, val in plain_fields.items():
@@ -284,6 +290,8 @@ class AppSettingsService:
                 values["ad_bind_password_enc"] = func.pgp_sym_encrypt(bind_pw, self._key)
         if settings.ad_users_search_base:
             values["ad_users_search_base"] = settings.ad_users_search_base
+        if settings.ad_computers_search_base:
+            values["ad_computers_search_base"] = settings.ad_computers_search_base
         if settings.ad_sync_interval_minutes:
             values["ad_sync_interval_minutes"] = settings.ad_sync_interval_minutes
 
@@ -318,6 +326,7 @@ def _empty_effective() -> EffectiveAppSettings:
         ad_bind_dn=None,
         ad_bind_password=None,
         ad_users_search_base=None,
+        ad_computers_search_base=None,
         ad_sync_interval_minutes=15,
     )
 
