@@ -272,6 +272,9 @@ scripts/
 - Feature-Branches: `feat/<slug>` · `fix/<slug>` · `chore/<slug>`
 - Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `refactor:`, `test:`, `ci:`)
 - Squash-Merge als Default
+- Vor dem ersten Commit die Git-Hooks installieren, damit ruff/pyright lokal
+  in denselben Versionen wie die CI laufen:
+  `uv run --project apps/api pre-commit install --hook-type pre-commit --hook-type pre-push`
 
 ## Lizenz
 
