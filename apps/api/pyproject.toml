@@ -28,8 +28,12 @@ dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
-    "ruff>=0.5",
-    "pyright>=1.1.370",
+    # Linters pinned exactly: their output is version-sensitive, so a loose
+    # range lets a dev's local ruff/pyright disagree with backend-ci (this is
+    # how PR #24 landed unformatted). Keep in lockstep with the CI versions.
+    "ruff==0.15.12",
+    "pyright==1.1.409",
+    "pre-commit>=3.7",
 ]
 
 [build-system]
