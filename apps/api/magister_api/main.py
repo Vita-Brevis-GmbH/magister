@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -28,6 +30,7 @@ from magister_api.routers.classes import router as classes_router
 from magister_api.routers.student_password_reset import router as student_pw_reset_router
 from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
 from magister_api.routers.users import router as users_router
+from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 
@@ -45,8 +48,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
         await AppSettingsService(seed_session, settings).seed_from_env_if_empty(settings)
 
-    yield
-    await dispose_engine()
+    # Periodic AD sync (interval from app_settings, GUI-editable at runtime).
+    stop_event = asyncio.Event()
+    sync_task = asyncio.create_task(
+        run_ad_sync_loop(settings, sm, stop_event=stop_event),
+        name="ad-sync-scheduler",
+    )
+
+    try:
+        yield
+    finally:
+        stop_event.set()
+        sync_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await sync_task
+        await dispose_engine()
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

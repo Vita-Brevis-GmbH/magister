@@ -1,6 +1,6 @@
-"""Admin-triggered AD sync. The periodic scheduler is a follow-up — for M1 we
-keep the manual ``POST /admin/ad-sync`` endpoint and drive it from a cron sidecar
-or a future lifespan task.
+"""Admin-triggered AD sync. This is the manual on-demand trigger; the recurring
+sync runs in-process via :mod:`magister_api.services.ad_sync_scheduler` (started
+from the app lifespan, interval from ``app_settings.ad_sync_interval_minutes``).
 """
 
 from __future__ import annotations

@@ -66,6 +66,17 @@ class _SettingsCacheEntry:
     settings: Settings
 
 
+async def load_effective_settings(session: AsyncSession, base: Settings) -> Settings:
+    """Overlay the current ``app_settings`` row onto *base* without a Request.
+
+    The per-request dependency below caches by version; this bare helper is for
+    request-less callers such as the AD-sync scheduler
+    (:mod:`magister_api.services.ad_sync_scheduler`).
+    """
+    eff = await AppSettingsService(session, base).get_effective()
+    return _overlay(base, eff)
+
+
 async def get_effective_settings(
     request: Request,
     settings: Settings = Depends(get_settings),
@@ -89,4 +100,4 @@ async def get_effective_settings(
     return overlaid
 
 
-__all__ = ["get_effective_settings"]
+__all__ = ["get_effective_settings", "load_effective_settings"]
