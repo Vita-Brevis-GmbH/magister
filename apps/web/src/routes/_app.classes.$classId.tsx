@@ -15,6 +15,7 @@ import {
   useUsers,
 } from "@/api/hooks";
 import type { AdUserOut, ClassMembershipOut, ClassTeacherOut, ClassTeacherRole } from "@/api/types";
+import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -35,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/classes/$classId")({
   component: ClassDetailPage,
@@ -139,7 +141,9 @@ function TeachersSection({
             <TableBody>
               {(q.data ?? []).map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-mono text-xs">{row.ad_object_guid}</TableCell>
+                  <TableCell>
+                    <PersonCell row={row} />
+                  </TableCell>
                   <TableCell>{teacherRoleLabel(row.role, t)}</TableCell>
                   <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
                   <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
@@ -164,6 +168,28 @@ function TeachersSection({
       </CardContent>
       <AssignTeacherModal classId={classId} open={addOpen} onClose={() => setAddOpen(false)} />
     </Card>
+  );
+}
+
+interface PersonRow {
+  ad_object_guid: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}
+
+function PersonCell({ row }: { row: PersonRow }): JSX.Element {
+  const upn = row.upn ?? "";
+  const safe = { ...row, upn };
+  return (
+    <div className="flex items-center gap-3">
+      <UserAvatar user={safe} size="sm" />
+      <div className="flex flex-col leading-tight">
+        <span className="font-medium">{displayLabel(safe)}</span>
+        {upn ? <span className="text-xs text-muted-foreground">{upn}</span> : null}
+      </div>
+    </div>
   );
 }
 
@@ -372,7 +398,7 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("classes.student_guid")}</TableHead>
+                <TableHead>{t("classes.student")}</TableHead>
                 <TableHead>{t("classes.valid_from")}</TableHead>
                 <TableHead>{t("classes.valid_to")}</TableHead>
                 <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
@@ -381,7 +407,9 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
             <TableBody>
               {(q.data ?? []).map((row: ClassMembershipOut) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-mono text-xs">{row.ad_object_guid}</TableCell>
+                  <TableCell>
+                    <PersonCell row={row} />
+                  </TableCell>
                   <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
                   <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">

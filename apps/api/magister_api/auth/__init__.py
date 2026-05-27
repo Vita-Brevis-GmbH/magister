@@ -13,7 +13,12 @@ from magister_api.auth.current_user import (
     get_current_user,
     get_optional_user,
 )
-from magister_api.auth.rbac import require_admin, require_role, require_schulleitung
+from magister_api.auth.rbac import (
+    require_admin,
+    require_role,
+    require_schulleitung,
+    require_smi,
+)
 from magister_api.auth.sessions import (
     SESSION_ID_BYTES,
     new_session_id,
@@ -30,5 +35,6 @@ __all__ = [
     "require_admin",
     "require_role",
     "require_schulleitung",
+    "require_smi",
     "verify_csrf_token",
 ]

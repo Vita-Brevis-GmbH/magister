@@ -87,6 +87,38 @@ class TestParseAdEntry:
         assert rec.kind == "student"
         assert rec.distinguished_name == "CN=Anna,OU=A,DC=schule,DC=local"
 
+    def test_extended_attributes(self) -> None:
+        """displayName, sAMAccountName, address fields all flow through."""
+        rec = parse_ad_entry(
+            self._attrs(
+                displayName="Anna Beispiel",
+                sAMAccountName="anna.b",
+                streetAddress="Schulweg 12",
+                l="Musterhausen",
+                postalCode="3000",
+                co="Schweiz",
+            ),
+            "CN=Anna,OU=A,DC=schule,DC=local",
+        )
+        assert rec.display_name == "Anna Beispiel"
+        assert rec.sam_account_name == "anna.b"
+        assert rec.street_address == "Schulweg 12"
+        assert rec.locality == "Musterhausen"
+        assert rec.postal_code == "3000"
+        assert rec.country == "Schweiz"
+        # device_name stays None until Phase 4 plugs in the Computer-OU sync.
+        assert rec.device_name is None
+
+    def test_extended_attributes_default_none(self) -> None:
+        """Missing optional attrs come back as None, not as empty strings."""
+        rec = parse_ad_entry(self._attrs(), "CN=Anna")
+        assert rec.display_name is None
+        assert rec.sam_account_name is None
+        assert rec.street_address is None
+        assert rec.locality is None
+        assert rec.postal_code is None
+        assert rec.country is None
+
     def test_disabled_account(self) -> None:
         rec = parse_ad_entry(
             self._attrs(userAccountControl=0x200 | UAC_ACCOUNTDISABLE),
@@ -116,3 +148,53 @@ class TestParseAdEntry:
         )
         assert rec.matches_school_via_ou("alpha") is True
         assert rec.matches_school_via_ou("beta") is False
+
+
+class TestMakeTls:
+    """The LDAPS TLS config must enforce CERT_REQUIRED + TLS 1.2 floor."""
+
+    def _settings(self, **overrides: Any) -> Any:
+        from magister_api.config import Settings
+
+        defaults: dict[str, Any] = {
+            "ad_dcs": ["dc1.example.local"],
+            "audit_key": "x",
+            "session_secret": "x",
+            "csrf_secret": "x",
+        }
+        defaults.update(overrides)
+        return Settings(**defaults)
+
+    def test_cert_required_and_no_old_tls(self) -> None:
+        import ssl
+
+        from magister_api.ad.client import _make_tls
+
+        tls = _make_tls(self._settings())
+        assert tls.validate == ssl.CERT_REQUIRED
+        # ssl_options is a list per ldap3; the combined int must have all
+        # legacy-TLS OP_NO bits set so SSLv3 and TLS 1.0/1.1 are refused.
+        # (ssl.OP_NO_SSLv2 is 0 on modern Python — SSLv2 is gone from OpenSSL.)
+        assert tls.ssl_options is not None
+        combined = 0
+        for opt in tls.ssl_options:
+            combined |= opt
+        assert combined & ssl.OP_NO_SSLv3
+        assert combined & ssl.OP_NO_TLSv1
+        assert combined & ssl.OP_NO_TLSv1_1
+        assert tls.version == ssl.PROTOCOL_TLS_CLIENT
+
+    def test_ca_bundle_path_threaded_through(self, tmp_path: Any) -> None:
+        from magister_api.ad.client import _make_tls
+
+        # ldap3.Tls validates the path exists at construction; use a real file.
+        ca = tmp_path / "ad-ca.pem"
+        ca.write_text("-----BEGIN CERTIFICATE-----\nfake\n-----END CERTIFICATE-----\n")
+        tls = _make_tls(self._settings(ad_ca_bundle_path=str(ca)))
+        assert tls.ca_certs_file == str(ca)
+
+    def test_ca_bundle_absent_uses_system_trust(self) -> None:
+        from magister_api.ad.client import _make_tls
+
+        tls = _make_tls(self._settings())
+        assert tls.ca_certs_file is None

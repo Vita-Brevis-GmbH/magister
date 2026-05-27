@@ -203,10 +203,22 @@ async def logout(
 
 
 @router.get("/me", response_model=CurrentUserOut)
-async def me(user: AuthenticatedUser = Depends(get_current_user)) -> CurrentUserOut:
+async def me(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CurrentUserOut:
+    # Enrich with the cached name fields so the UI can greet by display name
+    # (or full name) instead of the raw UPN. scope-bypass: this is the
+    # authenticated user looking up their own row.
+    from magister_api.models.auth import AdUserCache
+
+    cache = await session.get(AdUserCache, user.ad_object_guid)
     return CurrentUserOut(
         ad_object_guid=user.ad_object_guid,
         upn=user.upn,
+        given_name=cache.given_name if cache else None,
+        surname=cache.surname if cache else None,
+        display_name=cache.display_name if cache else None,
         is_admin=user.is_admin,
         school_scope=list(user.school_scope),
         roles=list(user.roles),

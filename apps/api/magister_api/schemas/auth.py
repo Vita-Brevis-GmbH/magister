@@ -16,6 +16,7 @@ class CurrentUserOut(BaseModel):
     upn: Upn
     given_name: str | None = None
     surname: str | None = None
+    display_name: str | None = None
     is_admin: bool
     school_scope: list[int] = Field(
         default_factory=list,

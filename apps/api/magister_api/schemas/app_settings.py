@@ -27,12 +27,14 @@ class AppSettingsOut(BaseModel):
     oidc_redirect_uri: str | None
     oidc_scopes: list[str]
     bootstrap_admins: list[str]
+    mail_domains: list[str]
 
     # AD
     ad_dcs: list[str]
     ad_bind_dn: str | None
     ad_bind_password_set: bool
     ad_users_search_base: str | None
+    ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
 
     # Audit fingerprint
@@ -60,6 +62,13 @@ class AppSettingsUpdate(BaseModel):
     oidc_redirect_uri: str | None = None
     oidc_scopes: list[str] | None = None
     bootstrap_admins: list[str] | None = None
+    mail_domains: list[str] | None = Field(
+        default=None,
+        description=(
+            "Allowlist of mail/UPN domains the user-edit form may pick from. "
+            "Send an empty list to clear; send null/omit to leave unchanged."
+        ),
+    )
 
     ad_dcs: list[str] | None = None
     ad_bind_dn: str | None = None
@@ -71,6 +80,7 @@ class AppSettingsUpdate(BaseModel):
         ),
     )
     ad_users_search_base: str | None = None
+    ad_computers_search_base: str | None = None
     ad_sync_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
 
 

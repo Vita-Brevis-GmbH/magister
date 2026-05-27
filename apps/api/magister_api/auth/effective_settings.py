@@ -53,6 +53,8 @@ def _overlay(base: Settings, eff: EffectiveAppSettings) -> Settings:
         update["ad_bind_password"] = SecretStr(eff.ad_bind_password)
     if eff.ad_users_search_base:
         update["ad_users_search_base"] = eff.ad_users_search_base
+    if eff.ad_computers_search_base:
+        update["ad_computers_search_base"] = eff.ad_computers_search_base
     if eff.ad_sync_interval_minutes:
         update["ad_sync_interval_minutes"] = eff.ad_sync_interval_minutes
     return base.model_copy(update=update)

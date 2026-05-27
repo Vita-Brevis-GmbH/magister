@@ -19,6 +19,7 @@ from magister_api.schemas.class_memberships import (
     ClassMembershipCreate,
     ClassMembershipOut,
 )
+from magister_api.services._user_enrich import fetch_user_labels
 from magister_api.services.class_memberships import (
     ClassMembershipService,
     ClassNotInScopeError,
@@ -48,7 +49,25 @@ async def list_class_students(
         rows = await svc.list_active(class_id)
     except ClassNotInScopeError as exc:
         raise HTTPException(status_code=404, detail="class_not_found") from exc
-    return [ClassMembershipOut.model_validate(r) for r in rows]
+    labels = await fetch_user_labels(session, (r.ad_object_guid for r in rows))
+    out: list[ClassMembershipOut] = []
+    for r in rows:
+        lbl = labels.get(r.ad_object_guid)
+        out.append(
+            ClassMembershipOut(
+                id=r.id,
+                class_id=r.class_id,
+                ad_object_guid=r.ad_object_guid,
+                valid_from=r.valid_from,
+                valid_to=r.valid_to,
+                created_at=r.created_at,
+                display_name=lbl.display_name if lbl else None,
+                given_name=lbl.given_name if lbl else None,
+                surname=lbl.surname if lbl else None,
+                upn=lbl.upn if lbl else None,
+            )
+        )
+    return out
 
 
 @router.post("", response_model=ClassMembershipOut, status_code=status.HTTP_201_CREATED)

@@ -63,6 +63,11 @@ Details: [`ARCHITECTURE.md`](ARCHITECTURE.md) · Anforderungen: [`SPEC.md`](SPEC
 Getestet gegen Ubuntu 24.04 LTS und Debian 12. Voraussetzung: Root- oder
 sudo-Zugang.
 
+> **Tipp:** Für eine end-to-end-Anleitung mit allen Befehlen, Firewall-
+> Setup, AD-Delegationen, Mail-Domains, SMI-Rollen-Grant und
+> Smoke-Tests siehe [`docs/runbooks/install-ubuntu.md`](docs/runbooks/install-ubuntu.md).
+> Die Kurzfassung unten reicht für eine Demo.
+
 ### 1 — Hostname + DNS
 
 Magister braucht einen FQDN, auf den ein DNS-A/AAAA-Record für die

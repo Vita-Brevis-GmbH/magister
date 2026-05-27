@@ -21,10 +21,12 @@ interface FormState {
   oidc_redirect_uri: string;
   oidc_scopes: string;
   bootstrap_admins: string;
+  mail_domains: string;
   ad_dcs: string;
   ad_bind_dn: string;
   ad_bind_password: string;
   ad_users_search_base: string;
+  ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
 }
 
@@ -36,10 +38,12 @@ function fromOut(data: AppSettingsOut): FormState {
     oidc_redirect_uri: data.oidc_redirect_uri ?? "",
     oidc_scopes: data.oidc_scopes.join(", "),
     bootstrap_admins: data.bootstrap_admins.join(", "),
+    mail_domains: data.mail_domains.join(", "),
     ad_dcs: data.ad_dcs.join(", "),
     ad_bind_dn: data.ad_bind_dn ?? "",
     ad_bind_password: "",
     ad_users_search_base: data.ad_users_search_base ?? "",
+    ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
   };
 }
@@ -73,6 +77,10 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   if (JSON.stringify(admins) !== JSON.stringify(current.bootstrap_admins)) {
     payload.bootstrap_admins = admins;
   }
+  const mail_domains = splitCsv(form.mail_domains).map((d) => d.toLowerCase());
+  if (JSON.stringify(mail_domains) !== JSON.stringify(current.mail_domains)) {
+    payload.mail_domains = mail_domains;
+  }
   const dcs = splitCsv(form.ad_dcs);
   if (JSON.stringify(dcs) !== JSON.stringify(current.ad_dcs)) {
     payload.ad_dcs = dcs;
@@ -82,6 +90,9 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   if (form.ad_users_search_base !== (current.ad_users_search_base ?? "")) {
     payload.ad_users_search_base = form.ad_users_search_base || null;
+  }
+  if (form.ad_computers_search_base !== (current.ad_computers_search_base ?? "")) {
+    payload.ad_computers_search_base = form.ad_computers_search_base || null;
   }
   const interval = Number(form.ad_sync_interval_minutes);
   if (Number.isFinite(interval) && interval !== current.ad_sync_interval_minutes) {
@@ -250,6 +261,15 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
             <Input id="ad-search-base" {...field("ad_users_search_base")} />
           </div>
           <div className="space-y-1">
+            <Label htmlFor="ad-computers-search-base">
+              {t("admin.settings.field.ad_computers_search_base")}
+            </Label>
+            <Input id="ad-computers-search-base" {...field("ad_computers_search_base")} />
+            <p className="text-xs text-muted-foreground">
+              {t("admin.settings.field.ad_computers_search_base_hint")}
+            </p>
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="ad-sync-interval">
               {t("admin.settings.field.ad_sync_interval_minutes")}
             </Label>
@@ -260,6 +280,20 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               max={1440}
               {...field("ad_sync_interval_minutes")}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("admin.settings.mail_section")}</CardTitle>
+          <CardDescription>{t("admin.settings.mail_section_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label htmlFor="mail-domains">{t("admin.settings.field.mail_domains")}</Label>
+            <Input id="mail-domains" {...field("mail_domains")} />
+            <p className="text-xs text-muted-foreground">{t("admin.settings.csv_hint")}</p>
           </div>
         </CardContent>
       </Card>

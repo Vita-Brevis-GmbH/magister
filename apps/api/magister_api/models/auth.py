@@ -23,8 +23,10 @@ class AdUserCache(Base):
         ForeignKey("schools.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     upn: Mapped[str] = mapped_column(String(320), nullable=False, unique=True)
+    sam_account_name: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     given_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     surname: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     mail: Mapped[str | None] = mapped_column(String(320), nullable=True)
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -32,6 +34,20 @@ class AdUserCache(Base):
     ms_ds_consistency_guid: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True
     )
+    # Physical-address attributes mirrored from AD (streetAddress, l,
+    # postalCode, co). Free-text so we can mirror what AD has without
+    # imposing a structure the school's IT may not maintain.
+    street_address: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    locality: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Device-Zuordnung. ``device_name`` mirrors the primary device synced
+    # from AD's Computer-OU (``managedBy=<user-dn>``) — populated by the
+    # Phase-4 device sync; settable manually as fallback.
+    # ``temp_device_name`` is Magister-only: a loan device while the
+    # primary is in repair. Never written to AD.
+    device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    temp_device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 
@@ -65,10 +81,12 @@ class Session(Base):
 
 
 class RoleAssignment(Base):
-    """Admin and Schulleitung role grants.
+    """Admin, Schulleitung and SMI role grants.
 
     `role='admin'` always has ``school_id=NULL`` (cross-school).
-    `role='schulleitung'` always has a non-null ``school_id``.
+    `role='schulleitung'` always has a non-null ``school_id`` (one row per school).
+    `role='smi'` always has a non-null ``school_id`` (one row per school;
+    grant on every school of the Schulträger to give cross-school reach).
     """
 
     __tablename__ = "role_assignments"

@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, type ApiError } from "./client";
 import type {
   AdUserListResponse,
+  AdUserOut,
   AppSettingsOut,
   AppSettingsUpdate,
   AuthCapabilities,
@@ -19,8 +20,10 @@ import type {
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
+  MailDomainsOut,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
+  UserAttributesUpdate,
 } from "./types";
 
 export const queryKeys = {
@@ -30,6 +33,8 @@ export const queryKeys = {
   classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
   classMemberships: (classId: number) => ["classes", classId, "students"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
+  user: (guid: string) => ["user", guid] as const,
+  mailDomains: ["mail-domains"] as const,
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
@@ -196,6 +201,34 @@ export function useUsers(params: UseUsersParams = {}) {
   return useQuery<AdUserListResponse>({
     queryKey: queryKeys.users(params),
     queryFn: () => apiFetch<AdUserListResponse>(path),
+  });
+}
+
+export function useUser(guid: string) {
+  return useQuery<AdUserOut>({
+    queryKey: queryKeys.user(guid),
+    queryFn: () => apiFetch<AdUserOut>(`/users/${guid}`),
+    enabled: !!guid,
+  });
+}
+
+export function useUpdateUser(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
+    mutationFn: (body) =>
+      apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.user(guid), data);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+export function useMailDomains() {
+  return useQuery<MailDomainsOut>({
+    queryKey: queryKeys.mailDomains,
+    queryFn: () => apiFetch<MailDomainsOut>("/users/mail-domains"),
+    staleTime: 5 * 60_000,
   });
 }
 

@@ -8,11 +8,21 @@ from fastapi import Depends, HTTPException, status
 
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
 
-# All RBAC tiers visible to routers; "kl" (Klassenlehrer) is derived from
-# class_teacher_roles in later issues. M1 foundation only knows admin/schulleitung.
+# RBAC tiers known to routers.
+#   admin         — cross-school super-role (school_id=NULL).
+#   schulleitung  — per-school; class & teacher management.
+#   smi           — per-school Schulträger-IT; cross-school user listing
+#                   and password reset for students *and* teachers within
+#                   their assigned schools. No system-config powers.
+#   kl            — Klassenlehrer; derived from class_teacher_roles (not stored
+#                   in role_assignments).
 ROLE_ADMIN = "admin"
 ROLE_SCHULLEITUNG = "schulleitung"
+ROLE_SMI = "smi"
 ROLE_KL = "kl"
+
+# Roles that live in ``role_assignments`` (kl is in ``class_teacher_roles``).
+ROLE_ASSIGNMENT_ROLES: frozenset[str] = frozenset({ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI})
 
 
 def require_role(
@@ -40,3 +50,4 @@ def require_role(
 
 require_admin = require_role(ROLE_ADMIN)
 require_schulleitung = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG)
+require_smi = require_role(ROLE_ADMIN, ROLE_SMI)

@@ -87,8 +87,9 @@ DC-FQDNs kommen aus `MAGISTER_AD_DCS` env. Kein DNS-Auto-Discovery. Bei Hard-Fai
 ### 4.2 Bind
 
 - Service-Account-DN + Passwort aus Secrets (Compose-secret-file)
-- LDAPS auf Port 636, TLS 1.2+
-- Sealed + signed bind (`channel_binding` aktiv, wo verfügbar)
+- LDAPS auf Port 636, **TLS 1.2 minimum** (`OP_NO_TLSv1`/`OP_NO_TLSv1_1` ssl-options gesetzt)
+- Cert-Validation: `CERT_REQUIRED`; optional explizites CA-Bundle via `MAGISTER_AD_CA_BUNDLE_PATH` für Pin auf die Schulträger-Root-CA (Defence-in-Depth gegen kompromittiertes System-Truststore)
+- **Auth-Mechanik:** Simple Bind über LDAPS. Der TLS-Tunnel liefert Confidentiality + Integrity ein — das ist äquivalent zur AD-Anforderung "LDAP signing required" (Microsoft ADV190023). **Echte SASL-Sealing/Signing mit Channel-Binding (EPA, RFC 5929)** ist mit ldap3 2.9 nicht direkt zugänglich und ist Teil des M2-Hardening-Pakets (Upgrade auf ldap3 ≥ 4.x + GSSAPI/NTLM-Bind).
 - Credential-Strings dürfen niemals geloggt werden (siehe `CLAUDE.md` Niemals-Regeln)
 
 ### 4.3 Reset-Mechanik
@@ -114,13 +115,35 @@ Kein User-Create, keine Group-Membership-Writes (M1 hält Klassen ausschliesslic
 
 ## 5. Sicherheitsmodell
 
-- **Session-Cookies:** HttpOnly · Secure · SameSite=Strict · Lifetime 8h sliding
+### 5.1 Transport-Layer (öffentlicher Web-Edge)
+
+- **TLS 1.3 only** im Caddy (`servers { protocols tls1.3 }`); ältere Versionen werden im Handshake hart abgelehnt
+- **Cipher-Suites:** in TLS 1.3 spec-konstrainiert auf 3 AEAD-Suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305) — alle schnell und side-channel-resistent
+- **Auto-TLS via ACME** (Let's Encrypt), automatische Renewals durch Caddy
+- **HSTS:** `max-age=31536000; includeSubDomains; preload`
+
+### 5.2 HTTP-Security-Header (Caddyfile, alle Responses)
+
+- **Content-Security-Policy:** `default-src 'self'`; `script-src 'self'`; `frame-ancestors 'none'`; `object-src 'none'`; `upgrade-insecure-requests` — Zugeständnis `style-src 'unsafe-inline'` nur für Radix-UI-Portal-Styles
+- **Cross-Origin-Isolation:** COOP `same-origin` · COEP `require-corp` · CORP `same-origin` — Magister hat keine externen Embeds, der strikteste Modus ist daher unkritisch
+- **X-Content-Type-Options** `nosniff` · **X-Frame-Options** `DENY` · **Referrer-Policy** `strict-origin-when-cross-origin`
+- **Permissions-Policy:** alle Platform-APIs explizit deaktiviert (Kamera, Mikrofon, Geolocation, USB, MIDI, Payment, FloC, …); ein Future-Dep, der eine ungewollt aktiviert, scheitert laut
+- **Server-Header** wird von Caddy entfernt; nginx im SPA-Container hat `server_tokens off`
+
+### 5.3 Frontend-Bundle
+
+- **Subresource-Integrity (SRI):** Vite-Plugin (`vite.config.ts`) hängt `integrity="sha384-..."` an alle Script-/Link-Tags in `index.html`; Bundle-Tampering wird vom Browser im Pre-Execution-Check abgefangen
+- **`modulePreload.polyfill = false`** entfernt den von Vite sonst injizierten Inline-Script — CSP bleibt ohne `'unsafe-inline'` für Scripts
+
+### 5.4 Application-Layer
+
+- **Session-Cookies:** HttpOnly · Secure · SameSite=Strict · Lifetime 8h sliding (OIDC-Flow-Cookie nutzt SameSite=Lax wegen Cross-Site-Redirect, HttpOnly, 10-min TTL)
 - **CSRF:** Double-Submit-Cookie + Custom Header `X-CSRF-Token` für mutating requests
 - **RBAC-Layer:** FastAPI-Dependencies pro Endpoint (`Depends(require_role("kl_or_above"))`)
 - **Schul-Scope:** Repository-Layer hängt automatisch `WHERE school_id IN (?)` an alle Queries; explizite Bypass-Marker pflicht für Admin-Queries (Code-Kommentar `# scope-bypass: <reason>`)
 - **Audit-Middleware:** wrapped jede mutating route, schreibt vor Response in `audit_events`
 - **Secrets:** via Docker secrets (Compose) oder Env, niemals im Image gebakt
-- **Rate-Limiting:** auf `/auth/*` und `/password-reset` (10/min/IP, 30/min/user)
+- **Rate-Limiting:** auf `/auth/*`, `/students/.../password-reset` und `/teachers/.../password-reset` (10/min/IP, 30/min/user)
 - **Logging:** strukturiert JSONL; PII-Felder über Allowlist; Klartext-Geheimnisse hart gesperrt
 - **Audit-Encryption:** `audit_events.payload` column-level via `pgcrypto` encrypted-at-rest; Application-Key aus Docker-Secret `MAGISTER_AUDIT_KEY`
 - **Input-Validation:** alle Strings über Pydantic Validators an Boundary; UPN-Regex, GUID-Format

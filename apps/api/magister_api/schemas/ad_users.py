@@ -13,12 +13,20 @@ class AdUserOut(BaseModel):
     ad_object_guid: str
     school_id: int | None
     upn: str
+    sam_account_name: str | None = None
     given_name: str | None
     surname: str | None
+    display_name: str | None = None
     mail: str | None
     kind: str
     enabled: bool
     last_sync_at: datetime | None
+    street_address: str | None = None
+    locality: str | None = None
+    postal_code: str | None = None
+    country: str | None = None
+    device_name: str | None = None
+    temp_device_name: str | None = None
 
 
 class AdUserListResponse(BaseModel):

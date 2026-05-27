@@ -43,14 +43,21 @@ UAC_ACCOUNTDISABLE = 0x0002
 DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "objectGUID",
     "userPrincipalName",
+    "sAMAccountName",
     "givenName",
     "sn",
+    "displayName",
     "mail",
     "userAccountControl",
     "objectClass",
     "memberOf",
     "mS-DS-ConsistencyGuid",
     "distinguishedName",
+    # Physical address (mirrored into ad_user_cache).
+    "streetAddress",
+    "l",
+    "postalCode",
+    "co",
 )
 
 
@@ -60,13 +67,22 @@ class AdUserRecord:
 
     ad_object_guid: str
     upn: str
+    sam_account_name: str | None
     given_name: str | None
     surname: str | None
+    display_name: str | None
     mail: str | None
     enabled: bool
     kind: str
     ms_ds_consistency_guid: str | None
     distinguished_name: str
+    street_address: str | None
+    locality: str | None
+    postal_code: str | None
+    country: str | None
+    # Populated by the Phase-4 device sync from the Computer-OU
+    # (``managedBy=<user-dn>``). None until then.
+    device_name: str | None = None
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -160,26 +176,59 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         consistency_guid = consistency_guid_raw.lower()
     else:
         consistency_guid = None
+    sam = _first_value(entry_attrs.get("sAMAccountName"))
     return AdUserRecord(
         ad_object_guid=_decode_object_guid(object_guid_raw),
         upn=str(upn).strip().lower(),
+        sam_account_name=str(sam).strip() if sam else None,
         given_name=_first_value(entry_attrs.get("givenName")),
         surname=_first_value(entry_attrs.get("sn")),
+        display_name=_first_value(entry_attrs.get("displayName")),
         mail=_first_value(entry_attrs.get("mail")),
         enabled=bool(uac & UAC_ACCOUNTDISABLE) is False,
         kind=_kind_from_member_of(member_of),
         ms_ds_consistency_guid=consistency_guid,
         distinguished_name=dn,
+        street_address=_first_value(entry_attrs.get("streetAddress")),
+        locality=_first_value(entry_attrs.get("l")),
+        postal_code=_first_value(entry_attrs.get("postalCode")),
+        country=_first_value(entry_attrs.get("co")),
     )
 
 
 # --- Pool / Connection construction --------------------------------------------------
 
 
+def _make_tls(settings: Settings) -> Tls:
+    """Build the TLS config for the LDAPS pool.
+
+    - ``validate=CERT_REQUIRED`` rejects untrusted DC certificates.
+    - ``version=PROTOCOL_TLS_CLIENT`` plus the ``OP_NO_TLSv1*`` mask
+      forbids anything below TLS 1.2. Many AD deployments still cap at
+      TLS 1.2, so we cannot mandate 1.3 here as we do on the public web
+      edge; everything older than 1.2 is refused.
+    - ``ca_certs_file`` pins the trust anchor to the Schulträger root CA
+      when configured, giving defence-in-depth against a compromised
+      system trust store. Falls back to the OS bundle when unset.
+    """
+    import ssl
+
+    # SSLv2 was already removed from OpenSSL — `ssl.OP_NO_SSLv2` is 0 on
+    # modern Python and listing it is pointless. SSLv3 + TLS 1.0/1.1 are
+    # the ones that still need the explicit OP_NO_*.
+    ssl_options = ssl.OP_NO_SSLv3 | ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
+    return Tls(
+        validate=ssl.CERT_REQUIRED,
+        version=ssl.PROTOCOL_TLS_CLIENT,
+        ssl_options=[ssl_options],
+        ca_certs_file=settings.ad_ca_bundle_path,
+    )
+
+
 def _make_pool(settings: Settings) -> ServerPool:
     if not settings.ad_dcs:
         raise AdUnavailableError("MAGISTER_AD_DCS is empty")
-    tls = Tls(validate=2)  # ssl.CERT_REQUIRED — strict cert validation by default
+    tls = _make_tls(settings)
     servers: list[Server] = [
         Server(host, port=636, use_ssl=True, get_info="NO_INFO", tls=tls)
         for host in settings.ad_dcs
@@ -289,6 +338,63 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def search_managed_computers(
+        self, *, search_base: str | None = None
+    ) -> dict[str, str]:
+        """Return ``{user_dn_lowercase: device_name}`` for every ``Computer``
+        object whose ``managedBy`` points at a user.
+
+        Used by the periodic sync (Phase 4) to populate
+        ``ad_user_cache.device_name``. Empty / unset ``search_base`` is a
+        soft-no-op (the feature is optional): returns ``{}`` instead of
+        raising, so the sync flow stays linear.
+
+        DN comparison is case-insensitive in LDAP, so the map is keyed on
+        the lowercased managedBy DN. Callers must lookup with
+        ``user_dn.lower()``.
+        """
+        base = search_base or self._settings.ad_computers_search_base
+        if not base:
+            return {}
+        return await run_in_threadpool(self._sync_search_managed_computers, base)
+
+    def _sync_search_managed_computers(self, base: str) -> dict[str, str]:
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.search(
+                search_base=base,
+                search_filter="(&(objectClass=computer)(managedBy=*))",
+                search_scope=SUBTREE,
+                attributes=["cn", "name", "managedBy"],
+            )
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_computer_search_failed")
+            out: dict[str, str] = {}
+            for entry in conn.response or []:
+                if entry.get("type") != "searchResEntry":
+                    continue
+                attrs = entry.get("attributes", {})
+                managed_by = _first_value(attrs.get("managedBy"))
+                if not managed_by:
+                    continue
+                device_name = _first_value(attrs.get("cn")) or _first_value(attrs.get("name"))
+                if not device_name:
+                    continue
+                # If a user manages multiple computers we deterministically
+                # keep the first one we see (the search order is the LDAP
+                # server's). Phase 1 nailed device_name as a single string.
+                key = str(managed_by).lower()
+                out.setdefault(key, str(device_name))
+            return out
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def find_user_dn(self, ad_object_guid: str) -> str | None:
         """Return the LDAP DN for a user identified by ``objectGUID``."""
         return await run_in_threadpool(self._sync_find_user_dn, ad_object_guid)
@@ -384,6 +490,47 @@ class AdClient:
                 pass
 
     # --- Test helpers --------------------------------------------------------
+
+    async def modify_user_attributes(
+        self, *, user_dn: str, attributes: dict[str, str | None]
+    ) -> None:
+        """Apply a MODIFY_REPLACE to one or more attributes of a user entry.
+
+        Each value in ``attributes`` is either the new string value, or
+        ``None`` to clear the attribute (LDAP delete-then-no-replace).
+        AD-side schema constraints (uniqueness of userPrincipalName /
+        sAMAccountName, attribute-length caps) bubble up as
+        :class:`AdUnavailableError` — callers translate them to 4xx.
+        """
+        await run_in_threadpool(self._sync_modify_attributes, user_dn, dict(attributes))
+
+    def _sync_modify_attributes(
+        self, user_dn: str, attributes: dict[str, str | None]
+    ) -> None:
+        if not attributes:
+            return
+        changes: dict[str, list[tuple[str, list[str]]]] = {}
+        for attr, value in attributes.items():
+            if value is None or value == "":
+                # Clearing: ldap3 expects an empty MODIFY_REPLACE list.
+                changes[attr] = [(MODIFY_REPLACE, [])]
+            else:
+                changes[attr] = [(MODIFY_REPLACE, [value])]
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.modify(user_dn, changes)
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_modify_failed")
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
 
     def mock_connection(self) -> Connection:
         """Return the persistent MOCK_SYNC connection so tests can seed entries."""

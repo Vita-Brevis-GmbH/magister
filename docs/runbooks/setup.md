@@ -4,6 +4,10 @@ Dieses Runbook deckt die Erst-Inbetriebnahme der Magister-API ab — Auth + Audi
 sind bereits implementiert (Issues #1, #2). User-Listing, Klassen etc. kommen
 in den Folge-Issues.
 
+> **Für die fertige End-to-End-Installation auf Ubuntu** siehe
+> [`install-ubuntu.md`](install-ubuntu.md). Dieses Runbook hier ist die
+> Backend-/Foundation-Sicht (Entra-App, DB, Service-Account, Sync).
+
 ## 1. Voraussetzungen
 
 - Linux-Server (Compose-Stack später; lokal reicht Docker oder lokales Postgres)
@@ -183,8 +187,20 @@ curl https://magister.<schultraeger>.ch/users?limit=10
 Klassenlehrer:in hat aktive `class_teacher_roles`-Row für die Klasse, in
 der der Schüler aktive `class_memberships`-Row hat.
 
-**AD-Seite (einmalig):** Service-Account braucht "Reset Password" + "Write
-Account Restrictions" auf der Schüler-OU (siehe `ARCHITECTURE.md` §4.4).
+**AD-Seite (einmalig):** Service-Account braucht auf der Schüler-OU:
+
+- `Read all properties`
+- `Reset Password` (Extended Right)
+- `Write Account Restrictions` (für `pwdLastSet=0`)
+- `Write displayName`, `Write streetAddress`, `Write l`, `Write postalCode`, `Write co`, `Write mail` (für User-Attribut-Edits aus Phase 2)
+- Auf der Lehrer-OU zusätzlich `Write userPrincipalName` + `Write sAMAccountName` (admin-only Login-Wechsel)
+
+Computer-OU (optional, Phase 4): nur `Read all properties` — Magister
+schreibt keine Computer-Attribute, sondern liest `managedBy` zur
+Zuordnung an User. Aktivieren via `MAGISTER_AD_COMPUTERS_SEARCH_BASE`
+(env) bzw. **Such-Basis (Computer)** im Admin-GUI.
+
+Siehe auch `ARCHITECTURE.md` §4.4.
 
 **Generate-Mode** (KL):
 
@@ -221,6 +237,37 @@ SELECT encode(payload, 'escape') FROM audit_events
 -- (Plaintext eines decrypted payload erfolgt ausschliesslich über AuditService.read)
 ```
 
+## 7c. Mail-Domains konfigurieren
+
+Damit die User-Edit-UI eine Domain-Auswahl für UPN + Mail anbieten kann,
+muss der Admin im GUI **Administration → Systemeinstellungen → Mail-Domains**
+die erlaubten Domains als CSV setzen (z. B.
+`schule.example.ch, lehrer.schule.example.ch`).
+
+Ohne diesen Eintrag schlagen UPN/Mail-Änderungen mit
+`422 mail_domains_not_configured` fehl — alle anderen Felder
+(displayName, Adresse, Leihgerät) gehen davon unbeeinflusst.
+
+## 7d. SMI-Rollen vergeben
+
+SMI = per-school Schulträger-IT-Rolle (cross-school User-Listing +
+PW-Reset für Lehrer:innen + User-Attribute außer UPN/sAMAccountName).
+Vergabe aktuell via DB (eigenes Grant-UI ist Roadmap M2):
+
+```bash
+docker compose exec postgres psql -U magister -d magister <<'SQL'
+-- Pro Schule, die der SMI sehen soll, einen Eintrag.
+INSERT INTO role_assignments (ad_object_guid, school_id, role, granted_by)
+SELECT
+  (SELECT ad_object_guid FROM ad_user_cache WHERE upn = 'it-helpdesk@schule.example.ch'),
+  s.id, 'smi', 'ops@example.ch'
+FROM schools s;
+SQL
+```
+
+Der/die SMI muss sich einmal aus- und neu anmelden, damit die Rolle in
+die Session überschwappt.
+
 ## 8. Health-Check
 
 ```bash
@@ -236,3 +283,9 @@ curl https://magister.<schultraeger>.ch/healthz
 | `/auth/callback` → 403 `user_not_synced` | UPN ist nicht in `MAGISTER_BOOTSTRAP_ADMINS` und der periodische AD-Sync (#3) hat den User noch nicht erfasst | Erst `MAGISTER_BOOTSTRAP_ADMINS` benutzen oder den Sync abwarten |
 | `RuntimeError: Missing required runtime secrets` beim Container-Start | Eine der Required-Vars (`MAGISTER_AUDIT_KEY`, `MAGISTER_SESSION_SECRET`, `MAGISTER_CSRF_SECRET`) fehlt | `.env` ergänzen, Container neu starten |
 | Audit-Logs lassen sich nicht lesen | `MAGISTER_AUDIT_KEY` wurde rotiert | Keine Lösung ausser Restore: existierende Audit-Rows sind mit dem alten Key verschlüsselt — Schlüssel aus Backup wiederherstellen |
+| `PATCH /users/{guid}` schlägt mit `503 ad_unavailable` fehl | Service-Account hat keine Write-Permission auf das Attribut | Delegation auf der Schüler/Lehrer-OU ergänzen (siehe §7b) |
+| `422 domain_not_allowed` bei UPN/Mail-Edit | Domain ist nicht in `mail_domains` der App-Settings | Admin → Systemeinstellungen → Mail-Domains ergänzen |
+| `422 mail_domains_not_configured` | `mail_domains` ist leer | dito |
+| `403 admin_only_field:upn,sam_account_name` | SMI versucht Login-Name zu ändern | Per Design admin-only — Admin-Account verwenden |
+| `409 upn_conflict:<val>` | Ziel-UPN existiert bereits an anderem User | Anderen UPN wählen oder Konflikt-User erst migrieren |
+| Geräte-Sync findet keine Computer | `ad_computers_search_base` leer oder Computer haben kein `managedBy` | Such-Basis setzen ODER Geräte-Anzeige bewusst weglassen — Phase 4 ist optional |

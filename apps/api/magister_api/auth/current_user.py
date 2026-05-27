@@ -52,7 +52,7 @@ def _roles_to_user(
         roles.append(r.role)
         if r.role == "admin":
             is_admin = True
-        elif r.role == "schulleitung" and r.school_id is not None:
+        elif r.role in ("schulleitung", "smi") and r.school_id is not None:
             schools.add(r.school_id)
     return AuthenticatedUser(
         ad_object_guid=ad_object_guid,

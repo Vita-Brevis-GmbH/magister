@@ -18,12 +18,20 @@ const STUDENT: AdUserOut = {
   ad_object_guid: "11111111-2222-3333-4444-555555555555",
   school_id: 1,
   upn: "anna.muster@schule.example.ch",
+  sam_account_name: null,
   given_name: "Anna",
   surname: "Muster",
+  display_name: null,
   mail: null,
   kind: "student",
   enabled: true,
   last_sync_at: null,
+  street_address: null,
+  locality: null,
+  postal_code: null,
+  country: null,
+  device_name: null,
+  temp_device_name: null,
 };
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

@@ -5,6 +5,7 @@ export interface CurrentUserOut {
   upn: string;
   given_name: string | null;
   surname: string | null;
+  display_name: string | null;
   is_admin: boolean;
   school_scope: number[];
   roles: string[];
@@ -69,6 +70,10 @@ export interface ClassTeacherOut {
   valid_from: string;
   valid_to: string | null;
   created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
 }
 
 export interface ClassTeacherCreate {
@@ -85,6 +90,10 @@ export interface ClassMembershipOut {
   valid_from: string;
   valid_to: string | null;
   created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
 }
 
 export interface ClassMembershipCreate {
@@ -97,12 +106,39 @@ export interface AdUserOut {
   ad_object_guid: string;
   school_id: number | null;
   upn: string;
+  sam_account_name: string | null;
   given_name: string | null;
   surname: string | null;
+  display_name: string | null;
   mail: string | null;
   kind: "teacher" | "student" | "admin";
   enabled: boolean;
   last_sync_at: string | null;
+  street_address: string | null;
+  locality: string | null;
+  postal_code: string | null;
+  country: string | null;
+  device_name: string | null;
+  temp_device_name: string | null;
+}
+
+/** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null
+ *  clears (where the backend allows it). `upn` and `sam_account_name` are
+ *  admin-only and must be non-empty when sent. */
+export interface UserAttributesUpdate {
+  display_name?: string | null;
+  upn?: string | null;
+  sam_account_name?: string | null;
+  mail?: string | null;
+  street_address?: string | null;
+  locality?: string | null;
+  postal_code?: string | null;
+  country?: string | null;
+  temp_device_name?: string | null;
+}
+
+export interface MailDomainsOut {
+  domains: string[];
 }
 
 export interface AdUserListResponse {
@@ -136,10 +172,12 @@ export interface AppSettingsOut {
   oidc_redirect_uri: string | null;
   oidc_scopes: string[];
   bootstrap_admins: string[];
+  mail_domains: string[];
   ad_dcs: string[];
   ad_bind_dn: string | null;
   ad_bind_password_set: boolean;
   ad_users_search_base: string | null;
+  ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
   updated_at: string;
   updated_by_upn: string | null;
@@ -154,9 +192,11 @@ export interface AppSettingsUpdate {
   oidc_redirect_uri?: string | null;
   oidc_scopes?: string[] | null;
   bootstrap_admins?: string[] | null;
+  mail_domains?: string[] | null;
   ad_dcs?: string[] | null;
   ad_bind_dn?: string | null;
   ad_bind_password?: string | null;
   ad_users_search_base?: string | null;
+  ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;
 }

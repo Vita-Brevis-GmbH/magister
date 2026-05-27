@@ -9,7 +9,7 @@ periodic scheduler in the future. Each invocation emits an audit event:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +27,8 @@ class SyncResult:
     synced_count: int
     school_partition: dict[int, int]
     """{school_id → count}; key 0 = unmatched (no school)."""
+    device_count: int = 0
+    """Number of users that received a device_name from the Computer-OU walk."""
 
 
 class AdSyncService:
@@ -84,6 +86,17 @@ class AdSyncService:
         for r in records:
             sid = resolver(r) or 0
             partition[sid] = partition.get(sid, 0) + 1
+
+        # Optional Computer-OU walk: map user-DN → device_name. Empty
+        # search-base returns {} silently (the feature is optional).
+        device_map = await self.ad.search_managed_computers()
+        if device_map:
+            records = [
+                replace(r, device_name=device_map.get(r.distinguished_name.lower()))
+                for r in records
+            ]
+        device_count = sum(1 for r in records if r.device_name)
+
         synced = await self.repo.upsert_from_ad(records, school_id_resolver=resolver)
 
         await self.audit.emit(
@@ -97,7 +110,12 @@ class AdSyncService:
             request_id=request_id,
             payload={
                 "synced_count": synced,
+                "device_count": device_count,
                 "school_partition": {str(k): v for k, v in partition.items()},
             },
         )
-        return SyncResult(synced_count=synced, school_partition=partition)
+        return SyncResult(
+            synced_count=synced,
+            school_partition=partition,
+            device_count=device_count,
+        )

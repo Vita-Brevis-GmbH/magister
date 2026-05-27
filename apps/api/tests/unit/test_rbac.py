@@ -8,7 +8,12 @@ import pytest
 from fastapi import HTTPException
 
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_admin, require_role, require_schulleitung
+from magister_api.auth.rbac import (
+    require_admin,
+    require_role,
+    require_schulleitung,
+    require_smi,
+)
 
 
 def _user(*, is_admin: bool = False, roles: tuple[str, ...] = ()) -> AuthenticatedUser:
@@ -56,3 +61,33 @@ class TestRequireRole:
     def test_require_role_empty_raises(self) -> None:
         with pytest.raises(ValueError):
             require_role()
+
+    @pytest.mark.asyncio
+    async def test_require_smi_passes_for_smi_role(self) -> None:
+        out = await require_smi(_user(roles=("smi",)))
+        assert "smi" in out.roles
+
+    @pytest.mark.asyncio
+    async def test_require_smi_passes_for_admin(self) -> None:
+        out = await require_smi(_user(is_admin=True))
+        assert out.is_admin is True
+
+    @pytest.mark.asyncio
+    async def test_require_smi_blocks_schulleitung(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            await require_smi(_user(roles=("schulleitung",)))
+        assert exc.value.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_smi_passes_user_listing(self) -> None:
+        """``/users`` accepts schulleitung OR smi (plus admin)."""
+        dep = require_role("schulleitung", "smi")
+        out = await dep(_user(roles=("smi",)))
+        assert "smi" in out.roles
+
+    @pytest.mark.asyncio
+    async def test_kl_only_blocked_from_user_listing(self) -> None:
+        dep = require_role("schulleitung", "smi")
+        with pytest.raises(HTTPException) as exc:
+            await dep(_user(roles=("kl",)))
+        assert exc.value.status_code == 403
