@@ -164,9 +164,7 @@ class UserAttributesService:
         # 5) Write AD-bound fields via LDAP MODIFY (if any).
         # ------------------------------------------------------------------
         ad_changes = {
-            _PAYLOAD_TO_AD_ATTR[f]: v
-            for f, v in actual_changes.items()
-            if f in AD_FIELDS
+            _PAYLOAD_TO_AD_ATTR[f]: v for f, v in actual_changes.items() if f in AD_FIELDS
         }
         if ad_changes:
             user_dn = await self.ad.find_user_dn(target.ad_object_guid)

@@ -268,9 +268,7 @@ class TestRbac:
         school_b: int,
         mock_ad: AdClient,
     ) -> None:
-        await _seed_user(
-            db_session, school_id=school_b, guid=OTHER_SCHOOL_TEACHER_GUID
-        )
+        await _seed_user(db_session, school_id=school_b, guid=OTHER_SCHOOL_TEACHER_GUID)
         app.dependency_overrides[get_ad_client] = lambda: mock_ad
         try:
             r = await as_smi_a.patch(
@@ -392,9 +390,7 @@ class TestNoOp:
         # Manually set display_name so the request "changes" it back to the same.
         from sqlalchemy import update as sql_update
 
-        async with async_sessionmaker(
-            engine, expire_on_commit=False, autoflush=False
-        )() as s:
+        async with async_sessionmaker(engine, expire_on_commit=False, autoflush=False)() as s:
             await s.execute(
                 sql_update(AdUserCache)
                 .where(AdUserCache.ad_object_guid == TEACHER_GUID)
@@ -413,16 +409,16 @@ class TestNoOp:
             app.dependency_overrides.pop(get_ad_client, None)
 
         # No user_attribute_changed audit event for the no-op.
-        async with async_sessionmaker(
-            engine, expire_on_commit=False, autoflush=False
-        )() as s:
+        async with async_sessionmaker(engine, expire_on_commit=False, autoflush=False)() as s:
             count = (
-                await s.execute(
-                    select(AuditEvent).where(
-                        AuditEvent.action == "user_attribute_changed"
+                (
+                    await s.execute(
+                        select(AuditEvent).where(AuditEvent.action == "user_attribute_changed")
                     )
                 )
-            ).scalars().all()
+                .scalars()
+                .all()
+            )
         assert len(count) == 0
 
 

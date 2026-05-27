@@ -21,7 +21,8 @@
 #   cp .env.example .env  &&  edit  &&  docker compose up -d
 # Logs:
 #   docker compose logs -f magister-api
-# Manual AD sync:
+# AD sync: runs automatically in-process every MAGISTER_AD_SYNC_INTERVAL_MINUTES
+#   (GUI-editable, no restart). Manual on-demand trigger:
 #   docker compose exec magister-api curl -X POST http://localhost:8000/admin/ad-sync ...
 # Backup:
 #   pg-backup writes /var/backups/magister/<date>.sql.gz; mount the volume

@@ -1,7 +1,8 @@
 """AD-Sync service: pulls users from AD via :class:`AdClient`, upserts ``ad_user_cache``.
 
-The sync is initiated by an Admin via :http:post:`/admin/ad-sync` (M1) and by a
-periodic scheduler in the future. Each invocation emits an audit event:
+The sync is initiated by an Admin via :http:post:`/admin/ad-sync` and by the
+periodic scheduler (:mod:`magister_api.services.ad_sync_scheduler`). Each
+invocation emits an audit event:
 
 - ``ad_sync_completed`` with ``{synced_count, school_partition}``
 - ``ad_sync_failed`` with ``{reason}`` if the AD pool is exhausted or the search throws
