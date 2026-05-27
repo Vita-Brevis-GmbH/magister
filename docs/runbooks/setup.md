@@ -163,16 +163,15 @@ curl -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
 # { "synced_count": 1234, "school_partition": {"1": 800, "2": 434} }
 ```
 
-Periodischer Sync via Cron / systemd-timer:
+Periodischer Sync läuft **app-intern automatisch**: ein vom API-Lifespan
+gestarteter Hintergrund-Task synct im Intervall `MAGISTER_AD_SYNC_INTERVAL_MINUTES`
+(Default 15, GUI-editierbar unter Administration → Systemeinstellungen — greift
+ohne Container-Restart). Ein externer Cron / systemd-Timer ist **nicht** nötig;
+der manuelle Trigger oben bleibt für On-Demand-Syncs. Solange AD noch nicht
+konfiguriert ist, werden die Ticks still übersprungen.
 
-```bash
-*/15 * * * *  curl -fsSL -X POST https://magister.<schultraeger>.ch/admin/ad-sync \
-  -H "Cookie: magister_session=<service-session>" \
-  -H "X-CSRF-Token: <service-csrf>" >/dev/null
-```
-
-In M2 wandert der Trigger in einen App-internen Lifespan-Task; bis dahin reicht
-ein externer Scheduler.
+Die automatischen Läufe erscheinen im Audit-Log unter dem Actor
+`system:ad-sync-scheduler` (Action `ad_sync_completed` bzw. `ad_sync_failed`).
 
 Listing prüfen (Schulleitung oder Admin):
 

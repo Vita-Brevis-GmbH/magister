@@ -363,6 +363,23 @@ curl -X POST https://magister.schule.example.ch/api/admin/ad-sync \
 Erfolgreich = User erscheinen in **`/users`**, "Letzter AD-Sync" im
 Header zeigt den Zeitstempel.
 
+Danach läuft der Sync **automatisch** im Intervall aus §6.2 (Sync-Intervall,
+Default 15 min) — ein App-interner Hintergrund-Task erledigt das ohne
+Container-Restart und ohne externen Cron. Der manuelle Trigger bleibt für
+On-Demand-Syncs (z. B. direkt nach einer AD-Änderung). Im Betrieb prüfbar via:
+
+```bash
+# Scheduler-Lebenszeichen in den Logs:
+docker compose logs magister-api | grep -i "ad-sync scheduler"
+# Letzte automatische Läufe (Actor system:ad-sync-scheduler):
+docker compose exec postgres psql -U magister -d magister -c \
+  "SELECT ts, action FROM audit_events \
+   WHERE actor_upn='system:ad-sync-scheduler' ORDER BY ts DESC LIMIT 5;"
+```
+
+Das Intervall lässt sich jederzeit unter **Administration → Systemeinstellungen**
+ändern; der nächste Tick übernimmt den neuen Wert ohne Neustart.
+
 ### 6.7 SMI-Rollen vergeben (Schulträger-IT)
 
 SMI ist die per-school Schulträger-IT-Rolle (cross-school User-Edit +
@@ -462,6 +479,7 @@ Vor jedem Update: `docker compose exec postgres pg_dump -U magister magister > /
 |---|---|---|
 | Caddy bekommt kein Cert | DNS zeigt nicht auf VM, oder Port 80 blockiert | DNS prüfen (`dig`), `ufw allow 80/tcp` |
 | `/users` ist leer | Kein AD-Sync gelaufen oder `ad_users_search_base` falsch | `docker compose logs magister-api`, in `/admin/settings` Such-Basis prüfen |
+| Automatischer Sync läuft scheinbar nicht | AD noch nicht konfiguriert (Ticks werden übersprungen) oder Intervall zu hoch | `docker compose logs magister-api \| grep -i ad-sync`; Audit-Log auf Actor `system:ad-sync-scheduler` prüfen; Intervall in `/admin/settings` |
 | OIDC-Callback → `user_not_synced` | Erster Login eines Nicht-Bootstrap-UPN bevor Sync gelaufen ist | Erst Sync starten ODER UPN in Bootstrap-Admins setzen |
 | `503 ad_unavailable` bei PW-Reset | LDAPS-Pool down (alle DCs nicht erreichbar) oder Cert-Validation fehlgeschlagen | `openssl s_client -connect dc1:636` zum Cert prüfen; ggf. `MAGISTER_AD_CA_BUNDLE_PATH` setzen |
 | `422 domain_not_allowed` beim User-Edit | UPN/Mail-Domain steht nicht in `mail_domains` | Admin → Systemeinstellungen → Mail-Domains ergänzen |

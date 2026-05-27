@@ -22,7 +22,8 @@ Admin-GUI editierbar.
 - **Admin-GUI** für OIDC- + AD-Konfiguration; Secrets pgcrypto-verschlüsselt
   in der DB, Reload ohne Neustart
 - **AD-Sync** aller Schul-User (LDAPS · ServerPool · sealed/signed bind);
-  per-Schule-Scope aus dem OU-Pfad abgeleitet
+  per-Schule-Scope aus dem OU-Pfad abgeleitet — periodisch automatisch
+  (Intervall im Admin-GUI editierbar) plus manueller On-Demand-Trigger
 - **Klassenverwaltung**: anlegen, umbenennen, archivieren (Soft-Delete);
   KL/Co-KL/Stellvertretung mit Gültigkeitsfenstern
 - **Schüler-Memberships** mit Mid-Year-Wechsel (alte Mitgliedschaft klammert
