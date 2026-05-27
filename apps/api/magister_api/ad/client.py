@@ -338,9 +338,7 @@ class AdClient:
                 except LDAPException:
                     pass
 
-    async def search_managed_computers(
-        self, *, search_base: str | None = None
-    ) -> dict[str, str]:
+    async def search_managed_computers(self, *, search_base: str | None = None) -> dict[str, str]:
         """Return ``{user_dn_lowercase: device_name}`` for every ``Computer``
         object whose ``managedBy`` points at a user.
 
@@ -504,9 +502,7 @@ class AdClient:
         """
         await run_in_threadpool(self._sync_modify_attributes, user_dn, dict(attributes))
 
-    def _sync_modify_attributes(
-        self, user_dn: str, attributes: dict[str, str | None]
-    ) -> None:
+    def _sync_modify_attributes(self, user_dn: str, attributes: dict[str, str | None]) -> None:
         if not attributes:
             return
         changes: dict[str, list[tuple[str, list[str]]]] = {}

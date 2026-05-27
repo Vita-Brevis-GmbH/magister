@@ -26,6 +26,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.services.ad_sync import AdSyncService
 
 if TYPE_CHECKING:
+    from ldap3 import Connection
     from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.postgres
@@ -41,7 +42,7 @@ def _le(g: str) -> bytes:
     return uuid.UUID(g).bytes_le
 
 
-def _seed_user(conn, *, guid: str, dn: str, upn: str) -> None:
+def _seed_user(conn: Connection, *, guid: str, dn: str, upn: str) -> None:
     conn.strategy.add_entry(
         dn,
         {
@@ -53,7 +54,7 @@ def _seed_user(conn, *, guid: str, dn: str, upn: str) -> None:
     )
 
 
-def _seed_computer(conn, *, cn: str, dn: str, managed_by: str) -> None:
+def _seed_computer(conn: Connection, *, cn: str, dn: str, managed_by: str) -> None:
     conn.strategy.add_entry(
         dn,
         {
@@ -107,17 +108,13 @@ async def mock_ad_no_computer_base(app_settings: Settings):
 
 class TestSearchManagedComputers:
     @pytest.mark.asyncio
-    async def test_returns_dn_to_device_name_map(
-        self, mock_ad_with_devices: AdClient
-    ) -> None:
+    async def test_returns_dn_to_device_name_map(self, mock_ad_with_devices: AdClient) -> None:
         m = await mock_ad_with_devices.search_managed_computers()
         # Keys are lowercased DNs.
         assert m == {ANNA_DN.lower(): "LAPTOP-ANNA01"}
 
     @pytest.mark.asyncio
-    async def test_empty_base_returns_empty_map(
-        self, mock_ad_no_computer_base: AdClient
-    ) -> None:
+    async def test_empty_base_returns_empty_map(self, mock_ad_no_computer_base: AdClient) -> None:
         m = await mock_ad_no_computer_base.search_managed_computers()
         assert m == {}
 
