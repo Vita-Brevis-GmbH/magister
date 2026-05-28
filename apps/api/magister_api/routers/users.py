@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
-from magister_api.auth.class_perm import require_user_writer
+from magister_api.auth.class_perm import require_user_lifecycle_writer, require_user_writer
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_role
 from magister_api.config import Settings, get_settings
@@ -18,6 +18,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.ad_users import AdUserListResponse, AdUserOut
 from magister_api.schemas.user_attrs import UserAttributesUpdate
+from magister_api.schemas.user_lifecycle import UserStatusUpdate
 from magister_api.services.ad_users import AdUsersService
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.user_attrs import (
@@ -27,6 +28,10 @@ from magister_api.services.user_attrs import (
     UpnConflictError,
     UserAttributesService,
     UserNotInAdError,
+)
+from magister_api.services.user_lifecycle import (
+    CannotDisableSelfError,
+    UserLifecycleService,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -179,6 +184,44 @@ async def patch_user_attributes(
         raise HTTPException(status_code=503, detail="ad_unavailable") from exc
 
     # Re-fetch so the response shows the merged row.
+    refreshed = await session.get(AdUserCache, target.ad_object_guid)
+    assert refreshed is not None
+    return AdUserOut.model_validate(refreshed)
+
+
+@router.patch("/{ad_object_guid}/status", response_model=AdUserOut)
+async def patch_user_status(
+    request: Request,
+    payload: UserStatusUpdate,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_lifecycle_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> AdUserOut:
+    """Enable or disable an AD user account (M2 US-6).
+
+    Schulleitung of the user's school, SMI of the user's school, or Admin
+    may call this. Idempotent: if AD already reports the target state, no
+    MODIFY and no audit event. Self-disable is refused with 400.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    try:
+        await UserLifecycleService(session, settings, ad).set_enabled(
+            target,
+            enabled=payload.enabled,
+            reason=payload.reason,
+            actor=actor,
+            ip=ip,
+            request_id=request_id,
+        )
+    except CannotDisableSelfError as exc:
+        raise HTTPException(status_code=400, detail="cannot_disable_self") from exc
+    except UserNotInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_not_in_ad") from exc
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+
     refreshed = await session.get(AdUserCache, target.ad_object_guid)
     assert refreshed is not None
     return AdUserOut.model_validate(refreshed)

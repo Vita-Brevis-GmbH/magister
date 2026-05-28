@@ -172,9 +172,46 @@ async def require_user_writer(
     raise HTTPException(status_code=404, detail="user_not_found")
 
 
+async def require_user_lifecycle_writer(
+    ad_object_guid: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> tuple[AuthenticatedUser, AdUserCache]:
+    """Ensure the caller may enable/disable ``ad_object_guid`` (M2).
+
+    Wider than :func:`require_user_writer`: enable/disable is an operational
+    Schulleitung task per ROADMAP M2, so Schulleitung of the user's school is
+    admitted alongside Admin and SMI of the user's school. KL does not qualify.
+    Cross-school admin users (``school_id=NULL``) are only togglable by Admin.
+
+    Returns ``(user, ad_user_cache_row)``. Outsiders get 404
+    ``user_not_found`` to avoid leaking existence.
+    """
+    # scope-bypass: the AD-cache lookup itself must succeed before the
+    # school-scope gate can decide.
+    target = await session.get(AdUserCache, ad_object_guid)
+    if target is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    if user.is_admin:
+        return user, target
+
+    if target.school_id is None:
+        # Cross-school admin users are only togglable by Admin.
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    if target.school_id in user.school_scope and (
+        "schulleitung" in user.roles or "smi" in user.roles
+    ):
+        return user, target
+
+    raise HTTPException(status_code=404, detail="user_not_found")
+
+
 __all__ = [
     "require_class_writer",
     "require_student_writer",
     "require_teacher_writer",
+    "require_user_lifecycle_writer",
     "require_user_writer",
 ]

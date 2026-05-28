@@ -94,6 +94,24 @@ Magister stellt eine sichere, auditierbare und mehrsprachige Web-Anwendung berei
 - Audit-Event `student_password_reset` mit `{actor_upn, target_object_guid, mode, force_change, ip, ts, request_id}` — **Klartext-PW wird niemals geloggt**
 - AD-Operation muss erfolgreich sein, sonst Rollback und User-Fehlermeldung in der Sprache des Lehrers
 
+## 4a. User-Stories (M2 — in Entwicklung)
+
+### US-6 · AD User Enable/Disable durch Schulleitung
+
+> Als **Schulleitung** möchte ich einen User meiner Schule deaktivieren können (Off-Boarding beim Schulaustritt) und bei Bedarf wieder aktivieren — ohne die Schul-IT zu kontaktieren.
+
+**Akzeptanzkriterien:**
+- Endpoint `PATCH /users/{ad_object_guid}/status` mit Body `{enabled: bool, reason?: string (max 500)}`
+- RBAC: Admin (alle Schulen) · Schulleitung der Schule des Users · SMI der Schule des Users. KL und Schulleitung **anderer** Schulen sehen 404 `user_not_found` (kein Existenz-Leak)
+- AD-Schreibweg: `userAccountControl` **frisch aus AD lesen** (Cache zählt nicht), Bit `0x0002` (`ACCOUNTDISABLE`) flippen, via LDAPS-MODIFY zurückschreiben. Andere UAC-Bits bleiben unverändert
+- `ad_user_cache.enabled` wird im selben Request mitgezogen — kein Warten auf den nächsten Sync-Tick
+- **Idempotent:** ist der User bereits im Ziel-Zustand, kein AD-MODIFY, kein Audit-Event, Response 200 mit aktuellem Stand
+- **Self-Disable blockiert:** wer sich selbst deaktivieren will, bekommt 400 `cannot_disable_self`
+- **Cross-school-Admin-User** (`school_id=NULL` in `ad_user_cache`) sind für Schulleitung/SMI nicht togglebar — nur Admin
+- Audit-Event `user_enabled` bzw. `user_disabled` mit Payload `{previous_enabled, new_enabled, reason}`. `reason` ist optional, max 500 Zeichen — niemals Klartext-Credentials darin
+- Bei AD-Ausfall: 503 `ad_unavailable`, kein Cache-Update. Ein `user_status_change_failed`-Event wird emittiert; dass es auf der Request-Session emittiert wird, heisst aber, dass es mit dem Rollback der gescheiterten Anfrage entfallen kann — gleiches Best-Effort-Verhalten wie bei `student_password_reset_failed` / `teacher_password_reset_failed`. Für robuste Ops-Sichtbarkeit dieser Failed-Audits siehe Roadmap-Folgetask „separate Session für Failed-Audit-Persistenz"
+- UI (separater Folge-PR): User-Detail-Seite zeigt einen Status-Toggle mit Bestätigungsdialog. Deaktivierte User behalten Klassen-Memberships und Audit-Historie, können sich aber nicht anmelden und sind nicht Ziel von PW-Resets (siehe §7 — AD-Account deaktiviert)
+
 ## 5. Datenmodell-Skizze
 
 ```

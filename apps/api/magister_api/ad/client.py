@@ -528,6 +528,65 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def set_account_enabled(self, *, user_dn: str, enabled: bool) -> tuple[bool, bool]:
+        """Toggle the ``ACCOUNTDISABLE`` bit on ``userAccountControl``.
+
+        Reads the current UAC fresh from AD (the cache is not authoritative —
+        a value from `ad_user_cache.enabled` would lose other UAC bits), flips
+        bit ``0x0002`` and writes the new int back. Returns
+        ``(previous_enabled, new_enabled)`` — equal when the target state
+        already matched (no MODIFY performed).
+        """
+        return await run_in_threadpool(self._sync_set_account_enabled, user_dn, enabled)
+
+    def _sync_set_account_enabled(self, user_dn: str, enabled: bool) -> tuple[bool, bool]:
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.search(
+                search_base=user_dn,
+                search_filter="(objectClass=user)",
+                search_scope=BASE,
+                attributes=["userAccountControl"],
+            )
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_read_uac_failed")
+            current_uac: int | None = None
+            for entry in conn.response or []:
+                if entry.get("type") != "searchResEntry":
+                    continue
+                attrs = entry.get("attributes") or {}
+                raw = attrs.get("userAccountControl")
+                if isinstance(raw, list):
+                    raw = raw[0] if raw else None
+                if raw is not None:
+                    current_uac = int(raw)
+                break
+            if current_uac is None:
+                raise AdUnavailableError("ldap_user_not_found")
+            previous_enabled = not (current_uac & UAC_ACCOUNTDISABLE)
+            if previous_enabled == enabled:
+                return previous_enabled, enabled
+            new_uac = (
+                current_uac & ~UAC_ACCOUNTDISABLE if enabled else current_uac | UAC_ACCOUNTDISABLE
+            )
+            changes = {"userAccountControl": [(MODIFY_REPLACE, [str(new_uac)])]}
+            ok = conn.modify(user_dn, changes)
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_modify_failed")
+            return previous_enabled, enabled
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     def mock_connection(self) -> Connection:
         """Return the persistent MOCK_SYNC connection so tests can seed entries."""
         if not self._settings.ad_use_mock:
