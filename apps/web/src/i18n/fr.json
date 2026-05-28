@@ -252,5 +252,22 @@
     "retry": "Réessayer",
     "cancel": "Annuler",
     "close": "Fermer"
+  },
+  "user_status": {
+    "button_disable": "Désactiver",
+    "button_enable": "Activer",
+    "title_disable": "Désactiver le compte",
+    "title_enable": "Activer le compte",
+    "consequence_disable": "Le compte AD sera désactivé. L'utilisateur ne pourra plus se connecter et les réinitialisations de mot de passe sont bloquées. Les affectations de classe sont conservées.",
+    "consequence_enable": "Le compte AD sera réactivé. L'utilisateur pourra à nouveau se connecter.",
+    "reason_label": "Motif (facultatif)",
+    "reason_placeholder": "par ex. départ de l'école 2026 / réinscription",
+    "reason_hint": "Enregistré dans le journal d'audit. Max 500 caractères — ne jamais y coller de mot de passe.",
+    "confirm_disable": "Désactiver",
+    "confirm_enable": "Activer",
+    "submitting": "Enregistrement …",
+    "error_cannot_disable_self": "Vous ne pouvez pas désactiver votre propre compte.",
+    "error_not_found": "Utilisateur introuvable ou hors de votre périmètre.",
+    "error_user_not_in_ad": "Le compte n'existe plus dans l'AD."
   }
 }
