@@ -137,6 +137,12 @@ export interface UserAttributesUpdate {
   temp_device_name?: string | null;
 }
 
+/** PATCH /users/{guid}/status — enable/disable an AD account. */
+export interface UserStatusUpdate {
+  enabled: boolean;
+  reason?: string | null;
+}
+
 export interface MailDomainsOut {
   domains: string[];
 }

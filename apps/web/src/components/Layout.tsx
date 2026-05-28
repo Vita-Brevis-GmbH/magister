@@ -24,10 +24,18 @@ export function Layout() {
           </Link>
 
           <nav className="flex items-center gap-1 text-sm font-medium">
-            <Link to="/classes" activeProps={{ className: navActive }} inactiveProps={{ className: navIdle }}>
+            <Link
+              to="/classes"
+              activeProps={{ className: navActive }}
+              inactiveProps={{ className: navIdle }}
+            >
               {t("nav.classes")}
             </Link>
-            <Link to="/users" activeProps={{ className: navActive }} inactiveProps={{ className: navIdle }}>
+            <Link
+              to="/users"
+              activeProps={{ className: navActive }}
+              inactiveProps={{ className: navIdle }}
+            >
               {t("nav.users")}
             </Link>
             {me.data?.is_admin ? (

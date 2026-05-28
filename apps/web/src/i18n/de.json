@@ -251,5 +251,22 @@
     "retry": "Erneut versuchen",
     "cancel": "Abbrechen",
     "close": "Schliessen"
+  },
+  "user_status": {
+    "button_disable": "Deaktivieren",
+    "button_enable": "Aktivieren",
+    "title_disable": "Account deaktivieren",
+    "title_enable": "Account aktivieren",
+    "consequence_disable": "Der Account wird im AD deaktiviert. Die Person kann sich nicht mehr anmelden, und Passwort-Resets sind für diesen Account blockiert. Klassen-Mitgliedschaften bleiben erhalten.",
+    "consequence_enable": "Der Account wird im AD wieder aktiviert. Die Person kann sich künftig wieder anmelden.",
+    "reason_label": "Begründung (optional)",
+    "reason_placeholder": "z. B. Schulaustritt 2026 / Wiedereintritt",
+    "reason_hint": "Wird im Audit-Log festgehalten. Max. 500 Zeichen, keine Passwörter eintragen.",
+    "confirm_disable": "Deaktivieren",
+    "confirm_enable": "Aktivieren",
+    "submitting": "Wird gespeichert …",
+    "error_cannot_disable_self": "Sie können Ihren eigenen Account nicht deaktivieren.",
+    "error_not_found": "Benutzer nicht gefunden oder ausserhalb Ihres Zugriffs.",
+    "error_user_not_in_ad": "Der Account existiert nicht mehr im AD."
   }
 }

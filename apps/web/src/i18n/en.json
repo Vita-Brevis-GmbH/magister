@@ -251,5 +251,22 @@
     "retry": "Retry",
     "cancel": "Cancel",
     "close": "Close"
+  },
+  "user_status": {
+    "button_disable": "Disable",
+    "button_enable": "Enable",
+    "title_disable": "Disable account",
+    "title_enable": "Enable account",
+    "consequence_disable": "The AD account will be disabled. The user can no longer sign in, and password resets are blocked. Class memberships are kept.",
+    "consequence_enable": "The AD account will be re-enabled. The user will be able to sign in again.",
+    "reason_label": "Reason (optional)",
+    "reason_placeholder": "e.g. left school 2026 / re-enrolled",
+    "reason_hint": "Recorded in the audit log. Max 500 characters — never paste passwords.",
+    "confirm_disable": "Disable",
+    "confirm_enable": "Enable",
+    "submitting": "Saving …",
+    "error_cannot_disable_self": "You cannot disable your own account.",
+    "error_not_found": "User not found or outside your access.",
+    "error_user_not_in_ad": "The account no longer exists in AD."
   }
 }

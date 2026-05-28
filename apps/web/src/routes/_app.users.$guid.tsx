@@ -3,12 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import {
-  useCurrentUser,
-  useMailDomains,
-  useUpdateUser,
-  useUser,
-} from "@/api/hooks";
+import { useCurrentUser, useMailDomains, useUpdateUser, useUser } from "@/api/hooks";
 import type { UserAttributesUpdate } from "@/api/types";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
@@ -475,8 +470,10 @@ function renderPatchError(err: ApiError, t: (k: string) => string): string {
   if (err.status === 403 && err.code.startsWith("admin_only_field:"))
     return t("users.detail.error_admin_only");
   if (err.status === 404) return t("users.detail.error_not_found");
-  if (err.status === 409 && err.code.startsWith("upn_conflict")) return t("users.detail.error_upn_conflict");
-  if (err.status === 409 && err.code === "user_not_in_ad") return t("users.detail.error_user_not_in_ad");
+  if (err.status === 409 && err.code.startsWith("upn_conflict"))
+    return t("users.detail.error_upn_conflict");
+  if (err.status === 409 && err.code === "user_not_in_ad")
+    return t("users.detail.error_user_not_in_ad");
   if (err.status === 422 && err.code.startsWith("mail_domains_not_configured"))
     return t("users.detail.error_mail_domains_missing");
   if (err.status === 422 && err.code.startsWith("domain_not_allowed"))

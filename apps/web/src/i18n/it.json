@@ -252,5 +252,22 @@
     "retry": "Riprova",
     "cancel": "Annulla",
     "close": "Chiudi"
+  },
+  "user_status": {
+    "button_disable": "Disattiva",
+    "button_enable": "Attiva",
+    "title_disable": "Disattiva account",
+    "title_enable": "Attiva account",
+    "consequence_disable": "L'account AD verrà disattivato. L'utente non potrà più accedere e i reset delle password sono bloccati. Le appartenenze alle classi vengono mantenute.",
+    "consequence_enable": "L'account AD verrà riattivato. L'utente potrà accedere di nuovo.",
+    "reason_label": "Motivo (facoltativo)",
+    "reason_placeholder": "es. ritiro 2026 / reiscrizione",
+    "reason_hint": "Registrato nel log di audit. Max 500 caratteri — non incollare mai password.",
+    "confirm_disable": "Disattiva",
+    "confirm_enable": "Attiva",
+    "submitting": "Salvataggio …",
+    "error_cannot_disable_self": "Non puoi disattivare il tuo account.",
+    "error_not_found": "Utente non trovato o fuori dal tuo perimetro.",
+    "error_user_not_in_ad": "L'account non esiste più in AD."
   }
 }

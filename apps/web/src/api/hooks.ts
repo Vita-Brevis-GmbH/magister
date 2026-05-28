@@ -24,6 +24,7 @@ import type {
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
   UserAttributesUpdate,
+  UserStatusUpdate,
 } from "./types";
 
 export const queryKeys = {
@@ -215,8 +216,19 @@ export function useUser(guid: string) {
 export function useUpdateUser(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
-    mutationFn: (body) =>
-      apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.user(guid), data);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+/** PATCH /users/{guid}/status — enable or disable an AD account (M2 US-6). */
+export function useSetUserStatus(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<AdUserOut, ApiError, UserStatusUpdate>({
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}/status`, { method: "PATCH", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
       qc.invalidateQueries({ queryKey: ["users"] });

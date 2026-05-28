@@ -8,6 +8,7 @@ import { ResetPasswordModal } from "@/components/ResetPasswordModal";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { UserAvatar } from "@/components/UserAvatar";
+import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -33,9 +34,15 @@ function UsersPage(): JSX.Element {
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
   const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
+  const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const me = useCurrentUser();
-  const canEditUsers =
-    me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
+  const canEditUsers = me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
+  // Listing is scoped to the caller's school(s); anyone who sees the list
+  // is also allowed to toggle status of users in it (Admin / Schulleitung /
+  // SMI — backend enforces the final gate via require_user_lifecycle_writer).
+  // We hide the action for the caller's own row to avoid the 400 self-disable.
+  const canToggleStatus = (u: AdUserOut): boolean =>
+    !!me.data && u.ad_object_guid !== me.data.ad_object_guid;
 
   const params: UseUsersParams = {
     limit: 50,
@@ -50,9 +57,7 @@ function UsersPage(): JSX.Element {
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">
-            {t("users.title")}
-          </h1>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("users.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("users.intro")}</p>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -146,16 +151,30 @@ function UsersPage(): JSX.Element {
                         )}
                       </TableCell>
                       <TableCell className="text-right">
-                        {u.kind === "student" && u.enabled ? (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setResetTarget(u)}
-                          >
-                            {t("password_reset.button")}
-                          </Button>
-                        ) : null}
+                        <div className="flex justify-end gap-2">
+                          {u.kind === "student" && u.enabled ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setResetTarget(u)}
+                            >
+                              {t("password_reset.button")}
+                            </Button>
+                          ) : null}
+                          {canToggleStatus(u) ? (
+                            <Button
+                              type="button"
+                              variant={u.enabled ? "outline" : "default"}
+                              size="sm"
+                              onClick={() => setStatusTarget(u)}
+                            >
+                              {u.enabled
+                                ? t("user_status.button_disable")
+                                : t("user_status.button_enable")}
+                            </Button>
+                          ) : null}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -165,6 +184,7 @@ function UsersPage(): JSX.Element {
       )}
 
       <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
+      <UserStatusModal user={statusTarget} onClose={() => setStatusTarget(null)} />
     </div>
   );
 }
