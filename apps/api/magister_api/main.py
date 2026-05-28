@@ -22,6 +22,7 @@ from magister_api.logging_config import configure_logging
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_settings import router as admin_settings_router
 from magister_api.routers.admin_sync import router as admin_sync_router
+from magister_api.routers.audit import router as audit_router
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.routers.auth import router as auth_router
 from magister_api.routers.class_memberships import router as class_memberships_router
@@ -96,6 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_sync_router)
     app.include_router(admin_local_admin_router)
     app.include_router(admin_settings_router)
+    app.include_router(audit_router)
     app.include_router(student_pw_reset_router)
     app.include_router(teacher_pw_reset_router)
 

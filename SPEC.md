@@ -112,6 +112,20 @@ Magister stellt eine sichere, auditierbare und mehrsprachige Web-Anwendung berei
 - Bei AD-Ausfall: 503 `ad_unavailable`, kein Cache-Update. Ein `user_status_change_failed`-Event wird emittiert; dass es auf der Request-Session emittiert wird, heisst aber, dass es mit dem Rollback der gescheiterten Anfrage entfallen kann — gleiches Best-Effort-Verhalten wie bei `student_password_reset_failed` / `teacher_password_reset_failed`. Für robuste Ops-Sichtbarkeit dieser Failed-Audits siehe Roadmap-Folgetask „separate Session für Failed-Audit-Persistenz"
 - UI (separater Folge-PR): User-Detail-Seite zeigt einen Status-Toggle mit Bestätigungsdialog. Deaktivierte User behalten Klassen-Memberships und Audit-Historie, können sich aber nicht anmelden und sind nicht Ziel von PW-Resets (siehe §7 — AD-Account deaktiviert)
 
+### US-7 · Audit-Listing UI
+
+> Als **Schulleitung** möchte ich nachvollziehen können, wer wann welche schreibenden Aktionen in Magister ausgeführt hat — ohne im DB-Zugriff zu sein.
+
+**Akzeptanzkriterien:**
+- Endpoint `GET /audit/events` mit Query-Filtern `action`, `target_kind`, `target_id`, `actor_upn` (substring, case-insensitive), `from_ts`, `to_ts`, `school_id` (admin-only), `offset`, `limit` (max 200, default 50). Sortierung: `ts DESC` (jüngste zuerst)
+- RBAC: Admin · Schulleitung · SMI. KL bekommt **403** — Audit-Lesezugriff ist explizit kein KL-Recht
+- Schul-Scope:
+  - Admin: kein impliziter Schul-Filter (kann optional via `school_id` einschränken). Sieht auch Events mit `school_id=NULL` (cross-school Admin-Aktionen)
+  - Schulleitung/SMI: harte Einschränkung auf `audit_events.school_id IN user.school_scope`. Events mit `school_id=NULL` werden **nicht** ausgeliefert (kein Existenz-Leak cross-school)
+- Payload wird **immer** via `AuditService.read`-Helper entschlüsselt (CLAUDE.md „Immer"-Regel — kein raw `SELECT payload`). Allowlist garantiert, dass keine Klartext-Credentials darin landen
+- Response: `{items: [{id, ts, actor_upn, actor_object_guid, action, target_kind, target_id, school_id, ip, request_id, payload: object}], total, offset, limit}`
+- UI (separater Folge-PR): Filter-Form + Tabelle, action-spezifische Payload-Renderer (`user_disabled` zeigt `reason`, `student_password_reset` zeigt `mode`/`force_change`, etc.)
+
 ## 5. Datenmodell-Skizze
 
 ```
