@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import ColumnElement, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.allowlist import validate_audit_payload
@@ -119,3 +120,94 @@ class AuditService:
             request_id=row.request_id,
             payload=json.loads(row.payload_text),
         )
+
+    async def list(
+        self,
+        *,
+        filter: AuditFilter,
+        offset: int = 0,
+        limit: int = 50,
+    ) -> AuditListing:
+        """Filtered, paginated, decrypted listing for the audit-UI (M2 US-7).
+
+        ``filter.school_ids`` semantics:
+        - ``None``  → no school filter (admin view: includes ``school_id=NULL``)
+        - ``[]``    → caller has empty school scope ⇒ always-empty result
+        - ``[..]``  → restrict to ``school_id IN ids`` (excludes NULLs)
+        """
+        where: list[ColumnElement[bool]] = []
+        if filter.action is not None:
+            where.append(AuditEvent.action == filter.action)
+        if filter.target_kind is not None:
+            where.append(AuditEvent.target_kind == filter.target_kind)
+        if filter.target_id is not None:
+            where.append(AuditEvent.target_id == filter.target_id)
+        if filter.actor_upn is not None:
+            where.append(func.lower(AuditEvent.actor_upn).contains(filter.actor_upn.lower()))
+        if filter.from_ts is not None:
+            where.append(AuditEvent.ts >= filter.from_ts)
+        if filter.to_ts is not None:
+            where.append(AuditEvent.ts <= filter.to_ts)
+        if filter.school_ids is not None:
+            if not filter.school_ids:
+                return AuditListing(items=[], total=0)
+            where.append(AuditEvent.school_id.in_(filter.school_ids))
+
+        count_stmt = select(func.count()).select_from(AuditEvent).where(*where)
+        total = int((await self.session.execute(count_stmt)).scalar_one())
+
+        stmt = (
+            select(
+                AuditEvent.id,
+                AuditEvent.ts,
+                AuditEvent.actor_upn,
+                AuditEvent.actor_object_guid,
+                AuditEvent.action,
+                AuditEvent.target_kind,
+                AuditEvent.target_id,
+                AuditEvent.school_id,
+                AuditEvent.ip,
+                AuditEvent.request_id,
+                func.pgp_sym_decrypt(AuditEvent.payload, self._key).label("payload_text"),
+            )
+            .where(*where)
+            .order_by(AuditEvent.ts.desc(), AuditEvent.id.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+        result = await self.session.execute(stmt)
+        items = [
+            AuditEventRecord(
+                id=row.id,
+                ts=row.ts,
+                actor_upn=row.actor_upn,
+                actor_object_guid=row.actor_object_guid,
+                action=row.action,
+                target_kind=row.target_kind,
+                target_id=row.target_id,
+                school_id=row.school_id,
+                ip=row.ip,
+                request_id=row.request_id,
+                payload=json.loads(row.payload_text),
+            )
+            for row in result.all()
+        ]
+        return AuditListing(items=items, total=total)
+
+
+@dataclass(frozen=True)
+class AuditFilter:
+    action: str | None = None
+    target_kind: str | None = None
+    target_id: str | None = None
+    actor_upn: str | None = None  # substring, case-insensitive
+    from_ts: datetime | None = None
+    to_ts: datetime | None = None
+    # ``None`` = no filter (admin). Empty list = empty scope ⇒ empty result.
+    school_ids: Sequence[int] | None = None
+
+
+@dataclass(frozen=True)
+class AuditListing:
+    items: list[AuditEventRecord] = field(default_factory=list)
+    total: int = 0
