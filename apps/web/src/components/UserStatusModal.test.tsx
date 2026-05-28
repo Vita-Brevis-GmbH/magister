@@ -80,9 +80,7 @@ describe("UserStatusModal", () => {
     await user.click(screen.getByRole("button", { name: /^Deaktivieren$/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    expect(fetchMock.mock.calls[0]![0]).toBe(
-      `/api/users/${ENABLED_USER.ad_object_guid}/status`,
-    );
+    expect(fetchMock.mock.calls[0]![0]).toBe(`/api/users/${ENABLED_USER.ad_object_guid}/status`);
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect(init.method).toBe("PATCH");
     expect(JSON.parse(init.body as string)).toEqual({
@@ -114,39 +112,29 @@ describe("UserStatusModal", () => {
     await user.click(screen.getByRole("button", { name: /^Deaktivieren$/ }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
-    const body = JSON.parse(
-      (fetchMock.mock.calls[0]![1] as RequestInit).body as string,
-    );
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
     expect(body).toEqual({ enabled: false });
     expect(body).not.toHaveProperty("reason");
   });
 
   it("shows the cannot-disable-self message when the backend returns 400", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ detail: "cannot_disable_self" }, { status: 400 }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "cannot_disable_self" }, { status: 400 }));
 
     const { onClose } = renderModal({});
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Deaktivieren$/ }));
 
-    expect(
-      await screen.findByText(/eigenen Account nicht deaktivieren/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/eigenen Account nicht deaktivieren/i)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("shows the ad-unavailable message on 503", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ detail: "ad_unavailable" }, { status: 503 }),
-    );
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "ad_unavailable" }, { status: 503 }));
 
     renderModal({});
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: /^Deaktivieren$/ }));
 
-    expect(
-      await screen.findByText(/Active Directory ist nicht erreichbar/i),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/Active Directory ist nicht erreichbar/i)).toBeInTheDocument();
   });
 });

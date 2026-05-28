@@ -216,8 +216,7 @@ export function useUser(guid: string) {
 export function useUpdateUser(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
-    mutationFn: (body) =>
-      apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
       qc.invalidateQueries({ queryKey: ["users"] });
@@ -229,8 +228,7 @@ export function useUpdateUser(guid: string) {
 export function useSetUserStatus(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserStatusUpdate>({
-    mutationFn: (body) =>
-      apiFetch<AdUserOut>(`/users/${guid}/status`, { method: "PATCH", body }),
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}/status`, { method: "PATCH", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
       qc.invalidateQueries({ queryKey: ["users"] });

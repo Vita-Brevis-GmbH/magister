@@ -36,8 +36,7 @@ function UsersPage(): JSX.Element {
   const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const me = useCurrentUser();
-  const canEditUsers =
-    me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
+  const canEditUsers = me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
   // Listing is scoped to the caller's school(s); anyone who sees the list
   // is also allowed to toggle status of users in it (Admin / Schulleitung /
   // SMI — backend enforces the final gate via require_user_lifecycle_writer).
@@ -58,9 +57,7 @@ function UsersPage(): JSX.Element {
     <div className="space-y-6">
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h1 className="font-serif text-3xl font-semibold tracking-tight">
-            {t("users.title")}
-          </h1>
+          <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("users.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("users.intro")}</p>
         </div>
         <p className="text-xs text-muted-foreground">

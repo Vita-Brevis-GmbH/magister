@@ -113,7 +113,12 @@ export function UserStatusModal({ user, onClose }: Props): JSX.Element {
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={setStatus.isPending}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={setStatus.isPending}
+            >
               {t("common.cancel")}
             </Button>
             <Button
