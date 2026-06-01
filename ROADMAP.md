@@ -5,7 +5,7 @@
 
 Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sektion.
 
-## M1 — Foundation (in Entwicklung)
+## M1 — Foundation (abgeschlossen)
 
 **Ziel:** Magister liefert die Kern-Workflows für Klassenlehrer:innen + Schulleitung. Schulträger können produktiv mit Klassen arbeiten und Passwörter zurücksetzen.
 
@@ -22,17 +22,23 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - Docker-Compose-Stack reproduzierbar, Caddy-Auto-TLS
 - E2E-Test gegen ldap3-MockServer und Test-Postgres
 
-## M2 — Lifecycle & Schulleitung-Power
+## M2 — Lifecycle & Schulleitung-Power (abgeschlossen)
 
 **Ziel:** Schul-Operations-Aufgaben (Off-Boarding, Schuljahres-Übergänge) werden in Magister abgebildet, statt in der Schul-IT.
 
-- AD User Enable/Disable durch Schulleitung (Off-Boarding bei Schulaustritt)
-- Bulk-Class-Actions (mehrere Schüler in eine Klasse, Klassen-Move)
-- Schuljahres-Übergangs-Helfer (Klasse 3a → 4a Promotion mit Bestätigungs-Dialog)
-- Schulleitung-Dashboard: alle Klassen der Schule, KL-Übersicht, offene Resets
-- Stellvertretungs-UI mit zeitlich begrenzten Berechtigungen
-- Audit-Listing-UI (read-only Filter-Tabelle für Admin/Schulleitung)
-- Self-Service-PW-Change für Lehrer (gegen AD)
+**Akzeptanz (alle ✓):**
+- ✅ AD User Enable/Disable durch Schulleitung (Off-Boarding bei Schulaustritt)
+- ✅ Bulk-Class-Actions (mehrere Schüler in eine Klasse, Klassen-Move) — `POST /classes/{id}/students/bulk` mit Savepoint-Partial-Success
+- ✅ Schuljahres-Übergangs-Helfer (3a → 4a Promotion mit 3-Stufen-Bestätigungs-Dialog) — `POST /classes/{id}/promote`, optionales Archivieren der Quellklasse
+- ✅ Schulleitung-Dashboard: Kennzahlkarten, Klassen-Übersicht, Off-Boarding-Queue (deaktivierte Accounts)
+- ✅ Stellvertretungs-UI: cross-class Listenansicht mit Status-Tabs, Schnell-Widerruf — `GET/DELETE /substitutions`
+- ✅ Audit-Listing-UI: gefilterte, dekryptierte Tabelle für Admin/Schulleitung — `GET /audit/events` (Backend PR #29)
+- ✅ Self-Service-PW-Change für Lehrer (gegen AD)
+
+**Ausstehend vor Produktiveinsatz:**
+- PR #29 (Audit-Backend) muss gemergt werden
+- FR/IT/EN Übersetzungen durch native Reviewer validieren
+- Runbook `upgrade-to-m2.md` erstellen (Operations-Doku Schulträger-IT)
 
 ## M3 — Process & Communication
 
@@ -59,4 +65,4 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 
 - Sicherheits-Updates der Dependencies (renovate)
 - Übersetzungsqualität FR/IT durch native Reviewer
-- Operations-Dokumentation für Schulträger-IT (M2 Final-Pass)
+- Operations-Dokumentation für Schulträger-IT

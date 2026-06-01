@@ -47,6 +47,26 @@ export function Layout() {
                 {t("nav.admin")}
               </Link>
             ) : null}
+            {me.data?.is_admin ||
+            me.data?.roles.includes("schulleitung") ||
+            me.data?.roles.includes("smi") ? (
+              <>
+                <Link
+                  to="/admin/substitutions"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.substitutions")}
+                </Link>
+                <Link
+                  to="/admin/audit"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.audit")}
+                </Link>
+              </>
+            ) : null}
           </nav>
 
           <div className="flex items-center gap-3">

@@ -8,11 +8,16 @@ import type {
   AdUserOut,
   AppSettingsOut,
   AppSettingsUpdate,
+  AuditEventListResponse,
   AuthCapabilities,
+  BulkClassMembershipCreate,
+  BulkClassMembershipResult,
   ClassCreate,
   ClassMembershipCreate,
   ClassMembershipOut,
   ClassOut,
+  ClassPromotionRequest,
+  ClassPromotionResult,
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
@@ -23,6 +28,7 @@ import type {
   MailDomainsOut,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
+  SubstitutionOut,
   UserAttributesUpdate,
   UserStatusUpdate,
 } from "./types";
@@ -39,6 +45,7 @@ export const queryKeys = {
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
+  auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -178,6 +185,51 @@ export function useRemoveClassMembership(classId: number) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export function useBulkAddClassMemberships(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<BulkClassMembershipResult, ApiError, BulkClassMembershipCreate>({
+    mutationFn: (body) =>
+      apiFetch<BulkClassMembershipResult>(`/classes/${classId}/students/bulk`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export const substitutionsKey = ["substitutions"] as const;
+
+export function useSubstitutions() {
+  return useQuery<SubstitutionOut[]>({
+    queryKey: substitutionsKey,
+    queryFn: () => apiFetch<SubstitutionOut[]>("/substitutions"),
+  });
+}
+
+export function useRevokeSubstitution() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) => apiFetch<void>(`/substitutions/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: substitutionsKey });
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+export function usePromoteClass(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassPromotionResult, ApiError, ClassPromotionRequest>({
+    mutationFn: (body) =>
+      apiFetch<ClassPromotionResult>(`/classes/${classId}/promote`, { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
     },
   });
 }
@@ -324,5 +376,31 @@ export function useResetStudentPassword(adObjectGuid: string) {
         method: "POST",
         body,
       }),
+  });
+}
+
+// --- Audit events (M2 US-7) -----------------------------------------------
+
+export interface UseAuditEventsParams {
+  action?: string;
+  target_kind?: string;
+  target_id?: string;
+  actor_upn?: string;
+  from_ts?: string;
+  to_ts?: string;
+  school_id?: number;
+  offset?: number;
+  limit?: number;
+}
+
+export function useAuditEvents(params: UseAuditEventsParams = {}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const path = qs.toString() ? `/audit/events?${qs.toString()}` : "/audit/events";
+  return useQuery<AuditEventListResponse>({
+    queryKey: queryKeys.auditEvents(params),
+    queryFn: () => apiFetch<AuditEventListResponse>(path),
   });
 }

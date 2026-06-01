@@ -6,13 +6,22 @@ repo trusts that the caller already verified the class belongs to the user's sco
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.base import utcnow
-from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.class_teacher_role import KL_ROLE_STELLVERTRETUNG, ClassTeacherRole
+from magister_api.models.school_class import SchoolClass
+
+
+@dataclass(frozen=True)
+class SubstitutionRow:
+    role: ClassTeacherRole
+    class_name: str
+    school_id: int | None
 
 
 def _active_window_predicate(now: datetime):
@@ -99,3 +108,19 @@ class ClassTeacherRoleRepository:
             row.valid_to = now
             await self.session.flush()
         return row
+
+    async def list_substitutions(self, school_ids: list[int] | None) -> list[SubstitutionRow]:
+        """Return all stellvertretung roles joined with their class, scoped to school_ids.
+
+        Admin passes school_ids=None to see all schools.
+        """
+        stmt = (
+            select(ClassTeacherRole, SchoolClass.name, SchoolClass.school_id)
+            .join(SchoolClass, SchoolClass.id == ClassTeacherRole.class_id)
+            .where(ClassTeacherRole.role == KL_ROLE_STELLVERTRETUNG)
+            .order_by(ClassTeacherRole.valid_from.desc(), ClassTeacherRole.id.desc())
+        )
+        if school_ids is not None:
+            stmt = stmt.where(SchoolClass.school_id.in_(school_ids))
+        rows = (await self.session.execute(stmt)).all()
+        return [SubstitutionRow(role=r, class_name=name, school_id=sid) for r, name, sid in rows]

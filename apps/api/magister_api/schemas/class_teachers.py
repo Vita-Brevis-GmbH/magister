@@ -45,4 +45,11 @@ class ClassTeacherOut(BaseModel):
     upn: str | None = None
 
 
-__all__ = ["ClassTeacherCreate", "ClassTeacherOut"]
+class SubstitutionOut(ClassTeacherOut):
+    """ClassTeacherOut enriched with cross-class context fields."""
+
+    class_name: str
+    school_id: int | None = None
+
+
+__all__ = ["ClassTeacherCreate", "ClassTeacherOut", "SubstitutionOut"]
