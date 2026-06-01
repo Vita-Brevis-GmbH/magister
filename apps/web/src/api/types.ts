@@ -249,6 +249,37 @@ export interface AuditEventListResponse {
   limit: number;
 }
 
+export type ImportKind = "classes" | "class_memberships" | "class_teachers";
+export type ImportStatus = "staged" | "applied" | "cancelled";
+export type ImportAction = "create" | "update" | "skip" | "error";
+
+export interface ImportStagedRowOut {
+  id: number;
+  row_num: number;
+  raw_data: Record<string, string>;
+  action: ImportAction;
+  errors: string[];
+  applied_at: string | null;
+  applied_error: string | null;
+}
+
+export interface ImportJobOut {
+  id: number;
+  school_id: number;
+  kind: ImportKind;
+  status: ImportStatus;
+  filename: string | null;
+  created_by_upn: string | null;
+  created_at: string;
+  applied_at: string | null;
+  summary: Record<string, unknown>;
+}
+
+export interface ImportJobDetailOut extends ImportJobOut {
+  rows: ImportStagedRowOut[];
+  counts: Record<ImportAction, number>;
+}
+
 export interface AppSettingsUpdate {
   oidc_issuer?: string | null;
   oidc_client_id?: string | null;

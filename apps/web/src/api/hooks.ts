@@ -22,6 +22,9 @@ import type {
   ClassTeacherOut,
   ClassUpdate,
   CurrentUserOut,
+  ImportJobDetailOut,
+  ImportJobOut,
+  ImportKind,
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
@@ -402,5 +405,70 @@ export function useAuditEvents(params: UseAuditEventsParams = {}) {
   return useQuery<AuditEventListResponse>({
     queryKey: queryKeys.auditEvents(params),
     queryFn: () => apiFetch<AuditEventListResponse>(path),
+  });
+}
+
+// --- CSV imports (M3 US-2) -------------------------------------------------
+
+export const importsKey = ["imports"] as const;
+
+export function useImportJobs() {
+  return useQuery<ImportJobOut[]>({
+    queryKey: importsKey,
+    queryFn: () => apiFetch<ImportJobOut[]>("/imports"),
+  });
+}
+
+export function useImportJob(jobId: number | null) {
+  return useQuery<ImportJobDetailOut>({
+    queryKey: ["imports", jobId],
+    queryFn: () => apiFetch<ImportJobDetailOut>(`/imports/${jobId}`),
+    enabled: jobId !== null,
+  });
+}
+
+export function useStageImport() {
+  const qc = useQueryClient();
+  return useMutation<
+    ImportJobDetailOut,
+    ApiError,
+    { kind: ImportKind; file: File; schoolId?: number }
+  >({
+    mutationFn: async ({ kind, file, schoolId }) => {
+      const form = new FormData();
+      form.append("file", file);
+      const qs = new URLSearchParams({ kind });
+      if (schoolId !== undefined) qs.set("school_id", String(schoolId));
+      return apiFetch<ImportJobDetailOut>(`/imports?${qs.toString()}`, {
+        method: "POST",
+        body: form,
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: importsKey });
+    },
+  });
+}
+
+export function useApplyImport() {
+  const qc = useQueryClient();
+  return useMutation<ImportJobDetailOut, ApiError, number>({
+    mutationFn: (jobId) =>
+      apiFetch<ImportJobDetailOut>(`/imports/${jobId}/apply`, { method: "POST" }),
+    onSuccess: (_data, jobId) => {
+      qc.invalidateQueries({ queryKey: importsKey });
+      qc.invalidateQueries({ queryKey: ["imports", jobId] });
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+export function useCancelImport() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (jobId) => apiFetch<void>(`/imports/${jobId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: importsKey });
+    },
   });
 }

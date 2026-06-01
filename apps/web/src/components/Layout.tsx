@@ -59,6 +59,13 @@ export function Layout() {
                   {t("nav.substitutions")}
                 </Link>
                 <Link
+                  to="/admin/imports"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.imports")}
+                </Link>
+                <Link
                   to="/admin/audit"
                   activeProps={{ className: navActive }}
                   inactiveProps={{ className: navIdle }}
