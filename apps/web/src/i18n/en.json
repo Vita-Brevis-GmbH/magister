@@ -8,7 +8,8 @@
     "classes": "Classes",
     "users": "Users",
     "admin": "Admin",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "audit": "Audit Log"
   },
   "auth": {
     "login_title": "Sign in",
@@ -245,6 +246,28 @@
       "error_invalid_current": "Current password is wrong.",
       "error_not_configured": "Local admin account is not configured."
     }
+  },
+  "audit": {
+    "title": "Audit Log",
+    "intro": "Read-only log of all mutations, scoped to your schools.",
+    "actor_upn": "User (UPN)",
+    "actor_upn_placeholder": "Search…",
+    "action": "Action",
+    "action_placeholder": "e.g. user_disabled",
+    "target_kind": "Object type",
+    "target_kind_placeholder": "e.g. user",
+    "from_ts": "From",
+    "to_ts": "To",
+    "reset_filters": "Reset filters",
+    "col_timestamp": "Timestamp",
+    "col_actor": "User",
+    "col_action": "Action",
+    "col_target": "Object",
+    "col_ip": "IP",
+    "empty": "No audit events found.",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entries)",
+    "prev": "Previous",
+    "next": "Next"
   },
   "common": {
     "loading": "Loading…",

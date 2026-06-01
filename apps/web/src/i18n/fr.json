@@ -11,7 +11,8 @@
     "classes": "Classes",
     "users": "Utilisateurs",
     "admin": "Administration",
-    "logout": "Se déconnecter"
+    "logout": "Se déconnecter",
+    "audit": "Journal d'audit"
   },
   "auth": {
     "login_title": "Connexion",
@@ -246,6 +247,28 @@
       "error_invalid_current": "Le mot de passe actuel est incorrect.",
       "error_not_configured": "Le compte administrateur local n'est pas configuré."
     }
+  },
+  "audit": {
+    "title": "Journal d'audit",
+    "intro": "Journal en lecture seule de toutes les mutations, limité à vos écoles.",
+    "actor_upn": "Utilisateur (UPN)",
+    "actor_upn_placeholder": "Rechercher…",
+    "action": "Action",
+    "action_placeholder": "p. ex. user_disabled",
+    "target_kind": "Type d'objet",
+    "target_kind_placeholder": "p. ex. user",
+    "from_ts": "Du",
+    "to_ts": "Au",
+    "reset_filters": "Réinitialiser les filtres",
+    "col_timestamp": "Horodatage",
+    "col_actor": "Utilisateur",
+    "col_action": "Action",
+    "col_target": "Objet",
+    "col_ip": "IP",
+    "empty": "Aucun événement d'audit trouvé.",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entrées)",
+    "prev": "Précédent",
+    "next": "Suivant"
   },
   "common": {
     "loading": "Chargement…",

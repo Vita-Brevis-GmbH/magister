@@ -191,6 +191,27 @@ export interface AppSettingsOut {
 
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
+export interface AuditEventOut {
+  id: number;
+  ts: string;
+  actor_upn: string | null;
+  actor_object_guid: string | null;
+  action: string;
+  target_kind: string;
+  target_id: string;
+  school_id: number | null;
+  ip: string | null;
+  request_id: string;
+  payload: Record<string, unknown>;
+}
+
+export interface AuditEventListResponse {
+  items: AuditEventOut[];
+  total: number;
+  offset: number;
+  limit: number;
+}
+
 export interface AppSettingsUpdate {
   oidc_issuer?: string | null;
   oidc_client_id?: string | null;

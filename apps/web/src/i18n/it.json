@@ -11,7 +11,8 @@
     "classes": "Classi",
     "users": "Utenti",
     "admin": "Amministrazione",
-    "logout": "Esci"
+    "logout": "Esci",
+    "audit": "Registro di audit"
   },
   "auth": {
     "login_title": "Accedi",
@@ -246,6 +247,28 @@
       "error_invalid_current": "Password attuale errata.",
       "error_not_configured": "Account amministratore locale non configurato."
     }
+  },
+  "audit": {
+    "title": "Registro di audit",
+    "intro": "Registro di sola lettura di tutte le mutazioni, limitato alle proprie scuole.",
+    "actor_upn": "Utente (UPN)",
+    "actor_upn_placeholder": "Cerca…",
+    "action": "Azione",
+    "action_placeholder": "es. user_disabled",
+    "target_kind": "Tipo oggetto",
+    "target_kind_placeholder": "es. user",
+    "from_ts": "Dal",
+    "to_ts": "Al",
+    "reset_filters": "Reimposta filtri",
+    "col_timestamp": "Timestamp",
+    "col_actor": "Utente",
+    "col_action": "Azione",
+    "col_target": "Oggetto",
+    "col_ip": "IP",
+    "empty": "Nessun evento di audit trovato.",
+    "pagination_info": "Pagina {{page}} / {{total}} ({{count}} voci)",
+    "prev": "Precedente",
+    "next": "Successivo"
   },
   "common": {
     "loading": "Caricamento…",

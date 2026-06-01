@@ -8,6 +8,7 @@ import type {
   AdUserOut,
   AppSettingsOut,
   AppSettingsUpdate,
+  AuditEventListResponse,
   AuthCapabilities,
   ClassCreate,
   ClassMembershipCreate,
@@ -39,6 +40,7 @@ export const queryKeys = {
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
+  auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -324,5 +326,31 @@ export function useResetStudentPassword(adObjectGuid: string) {
         method: "POST",
         body,
       }),
+  });
+}
+
+// --- Audit events (M2 US-7) -----------------------------------------------
+
+export interface UseAuditEventsParams {
+  action?: string;
+  target_kind?: string;
+  target_id?: string;
+  actor_upn?: string;
+  from_ts?: string;
+  to_ts?: string;
+  school_id?: number;
+  offset?: number;
+  limit?: number;
+}
+
+export function useAuditEvents(params: UseAuditEventsParams = {}) {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  const path = qs.toString() ? `/audit/events?${qs.toString()}` : "/audit/events";
+  return useQuery<AuditEventListResponse>({
+    queryKey: queryKeys.auditEvents(params),
+    queryFn: () => apiFetch<AuditEventListResponse>(path),
   });
 }

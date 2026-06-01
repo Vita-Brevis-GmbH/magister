@@ -8,6 +8,7 @@
     "classes": "Klassen",
     "users": "User",
     "admin": "Administration",
+    "audit": "Audit-Log",
     "logout": "Abmelden"
   },
   "auth": {
@@ -245,6 +246,28 @@
       "error_invalid_current": "Aktuelles Passwort ist falsch.",
       "error_not_configured": "Lokales Admin-Konto ist nicht konfiguriert."
     }
+  },
+  "audit": {
+    "title": "Audit-Log",
+    "intro": "Protokoll aller Mutationen. Nur lesbar — gefiltert nach Schul-Scope.",
+    "actor_upn": "Benutzer (UPN)",
+    "actor_upn_placeholder": "Teilbegriff suchen…",
+    "action": "Aktion",
+    "action_placeholder": "z. B. user_disabled",
+    "target_kind": "Objekt-Typ",
+    "target_kind_placeholder": "z. B. user",
+    "from_ts": "Von",
+    "to_ts": "Bis",
+    "reset_filters": "Filter zurücksetzen",
+    "col_timestamp": "Zeitstempel",
+    "col_actor": "Benutzer",
+    "col_action": "Aktion",
+    "col_target": "Objekt",
+    "col_ip": "IP",
+    "empty": "Keine Audit-Events gefunden.",
+    "pagination_info": "Seite {{page}} / {{total}} ({{count}} Einträge)",
+    "prev": "Zurück",
+    "next": "Weiter"
   },
   "common": {
     "loading": "Lädt…",
