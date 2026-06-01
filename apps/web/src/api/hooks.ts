@@ -28,6 +28,7 @@ import type {
   MailDomainsOut,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
+  SubstitutionOut,
   UserAttributesUpdate,
   UserStatusUpdate,
 } from "./types";
@@ -198,6 +199,26 @@ export function useBulkAddClassMemberships(classId: number) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export const substitutionsKey = ["substitutions"] as const;
+
+export function useSubstitutions() {
+  return useQuery<SubstitutionOut[]>({
+    queryKey: substitutionsKey,
+    queryFn: () => apiFetch<SubstitutionOut[]>("/substitutions"),
+  });
+}
+
+export function useRevokeSubstitution() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) => apiFetch<void>(`/substitutions/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: substitutionsKey });
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
     },
   });
 }

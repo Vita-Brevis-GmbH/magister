@@ -12,6 +12,7 @@
     "users": "Utilisateurs",
     "admin": "Administration",
     "logout": "Se déconnecter",
+    "substitutions": "Suppléances",
     "audit": "Journal d'audit"
   },
   "auth": {
@@ -276,6 +277,26 @@
       "error_invalid_current": "Le mot de passe actuel est incorrect.",
       "error_not_configured": "Le compte administrateur local n'est pas configuré."
     }
+  },
+  "substitutions": {
+    "title": "Suppléances",
+    "intro": "Attributions de suppléance à durée limitée dans toutes les classes.",
+    "filter_active": "Actif",
+    "filter_expiring": "Expire bientôt",
+    "filter_all": "Tous",
+    "count": "{{count}} entrées",
+    "col_teacher": "Enseignant·e",
+    "col_class": "Classe",
+    "col_valid_from": "Valide dès",
+    "col_valid_to": "Valide jusqu'au",
+    "col_status": "Statut",
+    "status_active": "Actif",
+    "status_expiring": "Expire bientôt",
+    "status_expired": "Expiré",
+    "revoke_button": "Révoquer",
+    "revoke_confirm": "Confirmer",
+    "empty": "Aucune suppléance trouvée.",
+    "create_hint": "Pour créer une nouvelle suppléance, ouvrez une classe sous"
   },
   "dashboard": {
     "title": "Tableau de bord",

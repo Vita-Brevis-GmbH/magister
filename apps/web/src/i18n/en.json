@@ -9,6 +9,7 @@
     "users": "Users",
     "admin": "Admin",
     "logout": "Sign out",
+    "substitutions": "Substitutions",
     "audit": "Audit Log"
   },
   "auth": {
@@ -275,6 +276,26 @@
       "error_invalid_current": "Current password is wrong.",
       "error_not_configured": "Local admin account is not configured."
     }
+  },
+  "substitutions": {
+    "title": "Substitutions",
+    "intro": "Time-limited substitution assignments across all classes.",
+    "filter_active": "Active",
+    "filter_expiring": "Expiring soon",
+    "filter_all": "All",
+    "count": "{{count}} entries",
+    "col_teacher": "Teacher",
+    "col_class": "Class",
+    "col_valid_from": "Valid from",
+    "col_valid_to": "Valid to",
+    "col_status": "Status",
+    "status_active": "Active",
+    "status_expiring": "Expiring soon",
+    "status_expired": "Expired",
+    "revoke_button": "Revoke",
+    "revoke_confirm": "Confirm",
+    "empty": "No substitutions found.",
+    "create_hint": "To create a new substitution, open a class under"
   },
   "dashboard": {
     "title": "Dashboard",

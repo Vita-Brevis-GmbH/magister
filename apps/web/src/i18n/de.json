@@ -8,6 +8,7 @@
     "classes": "Klassen",
     "users": "User",
     "admin": "Administration",
+    "substitutions": "Stellvertretungen",
     "audit": "Audit-Log",
     "logout": "Abmelden"
   },
@@ -275,6 +276,26 @@
       "error_invalid_current": "Aktuelles Passwort ist falsch.",
       "error_not_configured": "Lokales Admin-Konto ist nicht konfiguriert."
     }
+  },
+  "substitutions": {
+    "title": "Stellvertretungen",
+    "intro": "Zeitlich begrenzte Stellvertretungs-Zuteilungen über alle Klassen.",
+    "filter_active": "Aktiv",
+    "filter_expiring": "Läuft bald ab",
+    "filter_all": "Alle",
+    "count": "{{count}} Einträge",
+    "col_teacher": "Lehrperson",
+    "col_class": "Klasse",
+    "col_valid_from": "Gültig ab",
+    "col_valid_to": "Gültig bis",
+    "col_status": "Status",
+    "status_active": "Aktiv",
+    "status_expiring": "Läuft bald ab",
+    "status_expired": "Abgelaufen",
+    "revoke_button": "Widerrufen",
+    "revoke_confirm": "Bestätigen",
+    "empty": "Keine Stellvertretungen gefunden.",
+    "create_hint": "Neue Stellvertretung zuweisen unter"
   },
   "dashboard": {
     "title": "Übersicht",

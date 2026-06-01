@@ -12,6 +12,7 @@
     "users": "Utenti",
     "admin": "Amministrazione",
     "logout": "Esci",
+    "substitutions": "Supplenze",
     "audit": "Registro di audit"
   },
   "auth": {
@@ -276,6 +277,26 @@
       "error_invalid_current": "Password attuale errata.",
       "error_not_configured": "Account amministratore locale non configurato."
     }
+  },
+  "substitutions": {
+    "title": "Supplenze",
+    "intro": "Assegnazioni di supplenza a tempo determinato in tutte le classi.",
+    "filter_active": "Attivo",
+    "filter_expiring": "In scadenza",
+    "filter_all": "Tutti",
+    "count": "{{count}} voci",
+    "col_teacher": "Docente",
+    "col_class": "Classe",
+    "col_valid_from": "Valido dal",
+    "col_valid_to": "Valido fino al",
+    "col_status": "Stato",
+    "status_active": "Attivo",
+    "status_expiring": "In scadenza",
+    "status_expired": "Scaduto",
+    "revoke_button": "Revocare",
+    "revoke_confirm": "Confermare",
+    "empty": "Nessuna supplenza trovata.",
+    "create_hint": "Per creare una nuova supplenza, aprire una classe sotto"
   },
   "dashboard": {
     "title": "Panoramica",

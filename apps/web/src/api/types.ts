@@ -191,6 +191,11 @@ export interface AppSettingsOut {
 
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
+export interface SubstitutionOut extends ClassTeacherOut {
+  class_name: string;
+  school_id: number | null;
+}
+
 export interface ClassPromotionRequest {
   target_class_id: number;
   archive_source: boolean;
