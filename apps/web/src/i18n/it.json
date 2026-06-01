@@ -89,7 +89,19 @@
     "add_student_submit": "Aggiungi",
     "remove_student": "Rimuovi",
     "search_student": "Cerca studente",
-    "mid_year_hint": "I trasferimenti a metà anno chiudono automaticamente l'appartenenza precedente."
+    "mid_year_hint": "I trasferimenti a metà anno chiudono automaticamente l'appartenenza precedente.",
+    "bulk_add_button": "Aggiungi più",
+    "bulk_add_title": "Aggiungere più alunni/e",
+    "bulk_add_description": "Cerca e seleziona più alunni/e contemporaneamente.",
+    "bulk_add_submit": "Aggiungere {{count}}",
+    "bulk_add_partial_error": "Alcuni alunni/e non hanno potuto essere aggiunti:",
+    "move_class_button": "Sposta classe",
+    "move_class_title": "Sposta alunni/e in un'altra classe",
+    "move_class_description": "{{count}} alunni/e attivi verranno spostati nella classe di destinazione. Le appartenenze esistenti vengono terminate automaticamente.",
+    "move_class_empty": "Nessun alunno/a attivo in questa classe.",
+    "move_class_target": "Classe di destinazione",
+    "move_class_select_placeholder": "Seleziona classe…",
+    "move_class_submit": "Sposta"
   },
   "users": {
     "title": "Utenti",

@@ -10,6 +10,8 @@ import type {
   AppSettingsUpdate,
   AuditEventListResponse,
   AuthCapabilities,
+  BulkClassMembershipCreate,
+  BulkClassMembershipResult,
   ClassCreate,
   ClassMembershipCreate,
   ClassMembershipOut,
@@ -177,6 +179,20 @@ export function useRemoveClassMembership(classId: number) {
     mutationFn: (membershipId) =>
       apiFetch<void>(`/classes/${classId}/students/${membershipId}`, {
         method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export function useBulkAddClassMemberships(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<BulkClassMembershipResult, ApiError, BulkClassMembershipCreate>({
+    mutationFn: (body) =>
+      apiFetch<BulkClassMembershipResult>(`/classes/${classId}/students/bulk`, {
+        method: "POST",
+        body,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });

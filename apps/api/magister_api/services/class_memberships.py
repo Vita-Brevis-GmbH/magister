@@ -128,6 +128,40 @@ class ClassMembershipService:
         )
         return AddResult(membership=row, closed_previous=[r.id for r in closed])
 
+    async def bulk_add_students(
+        self,
+        *,
+        class_id: int,
+        students: list[tuple[str, object | None, object | None]],
+        ip: str | None,
+        request_id: str,
+    ) -> list[tuple[AddResult | None, str | None]]:
+        """Add multiple students to a class.
+
+        Returns one tuple per input student: (AddResult | None, error_detail | None).
+        Each student is attempted inside a savepoint so partial failures don't
+        roll back the entire batch.
+        """
+        await self._class_or_404(class_id)
+        results: list[tuple[AddResult | None, str | None]] = []
+        for guid, valid_from, valid_to in students:
+            sp = await self.session.begin_nested()
+            try:
+                result = await self.add_student(
+                    class_id=class_id,
+                    ad_object_guid=guid,
+                    valid_from=valid_from,  # type: ignore[arg-type]
+                    valid_to=valid_to,  # type: ignore[arg-type]
+                    ip=ip,
+                    request_id=request_id,
+                )
+                await sp.commit()
+                results.append((result, None))
+            except OverlapError:
+                await sp.rollback()
+                results.append((None, "overlapping_membership"))
+        return results
+
     async def remove_student(
         self,
         *,

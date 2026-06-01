@@ -89,7 +89,19 @@
     "add_student_submit": "Ajouter",
     "remove_student": "Retirer",
     "search_student": "Rechercher un·e élève",
-    "mid_year_hint": "Un transfert en cours d'année clôt automatiquement l'appartenance précédente."
+    "mid_year_hint": "Un transfert en cours d'année clôt automatiquement l'appartenance précédente.",
+    "bulk_add_button": "Ajouter plusieurs",
+    "bulk_add_title": "Ajouter plusieurs élèves",
+    "bulk_add_description": "Recherchez et sélectionnez plusieurs élèves en même temps.",
+    "bulk_add_submit": "Ajouter {{count}}",
+    "bulk_add_partial_error": "Certains élèves n'ont pas pu être ajoutés :",
+    "move_class_button": "Déplacer la classe",
+    "move_class_title": "Déplacer des élèves vers une autre classe",
+    "move_class_description": "{{count}} élèves actifs seront déplacés vers la classe cible. Les appartenances existantes sont terminées automatiquement.",
+    "move_class_empty": "Aucun élève actif dans cette classe.",
+    "move_class_target": "Classe cible",
+    "move_class_select_placeholder": "Sélectionner une classe…",
+    "move_class_submit": "Déplacer"
   },
   "users": {
     "title": "Utilisateurs",

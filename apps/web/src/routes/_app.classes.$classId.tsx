@@ -1,20 +1,29 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/api/client";
+import { ApiError, apiFetch } from "@/api/client";
 import {
   useAddClassMembership,
   useAssignClassTeacher,
+  useBulkAddClassMemberships,
   useClass,
   useClassMemberships,
   useClassTeachers,
+  useClasses,
   useCurrentUser,
   useRemoveClassMembership,
   useRevokeClassTeacher,
   useUsers,
 } from "@/api/hooks";
-import type { AdUserOut, ClassMembershipOut, ClassTeacherOut, ClassTeacherRole } from "@/api/types";
+import type {
+  AdUserOut,
+  BulkClassMembershipResult,
+  ClassMembershipOut,
+  ClassTeacherOut,
+  ClassTeacherRole,
+} from "@/api/types";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -368,9 +377,15 @@ function AssignTeacherModal({
 
 function StudentsSection({ classId }: { classId: number }): JSX.Element {
   const { t } = useTranslation();
+  const me = useCurrentUser();
   const q = useClassMemberships(classId);
   const remove = useRemoveClassMembership(classId);
   const [addOpen, setAddOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
+
+  const canBulkManage =
+    me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
 
   return (
     <Card>
@@ -379,9 +394,21 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
           <CardTitle className="text-base">{t("classes.students_title")}</CardTitle>
           <CardDescription>{t("classes.students_description")}</CardDescription>
         </div>
-        <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
-          {t("classes.add_student_button")}
-        </Button>
+        <div className="flex gap-2">
+          {canBulkManage ? (
+            <>
+              <Button type="button" size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
+                {t("classes.move_class_button")}
+              </Button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+                {t("classes.bulk_add_button")}
+              </Button>
+            </>
+          ) : null}
+          <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
+            {t("classes.add_student_button")}
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {q.isLoading ? (
@@ -430,6 +457,13 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
         )}
       </CardContent>
       <AddStudentModal classId={classId} open={addOpen} onClose={() => setAddOpen(false)} />
+      <BulkAddStudentsModal classId={classId} open={bulkOpen} onClose={() => setBulkOpen(false)} />
+      <MoveClassModal
+        classId={classId}
+        students={q.data ?? []}
+        open={moveOpen}
+        onClose={() => setMoveOpen(false)}
+      />
     </Card>
   );
 }
@@ -569,6 +603,317 @@ function AddStudentModal({
             <Button type="submit" disabled={!picked || add.isPending}>
               {add.isPending ? t("common.loading") : t("classes.add_student_submit")}
             </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BulkAddStudentsModal({
+  classId,
+  open,
+  onClose,
+}: {
+  classId: number;
+  open: boolean;
+  onClose: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<AdUserOut[]>([]);
+  const [validFrom, setValidFrom] = useState(today());
+  const [result, setResult] = useState<BulkClassMembershipResult | null>(null);
+
+  const users = useUsers(
+    search.length >= 2 ? { kind: "student", search, limit: 10 } : { kind: "student", limit: 0 },
+  );
+  const bulk = useBulkAddClassMemberships(classId);
+
+  function toggle(u: AdUserOut): void {
+    setPicked((prev) =>
+      prev.some((p) => p.ad_object_guid === u.ad_object_guid)
+        ? prev.filter((p) => p.ad_object_guid !== u.ad_object_guid)
+        : [...prev, u],
+    );
+  }
+
+  function reset(): void {
+    setSearch("");
+    setPicked([]);
+    setValidFrom(today());
+    setResult(null);
+    bulk.reset();
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    if (picked.length === 0) return;
+    bulk.mutate(
+      {
+        students: picked.map((u) => ({
+          ad_object_guid: u.ad_object_guid,
+          valid_from: new Date(validFrom).toISOString(),
+        })),
+      },
+      {
+        onSuccess: (res) => {
+          setResult(res);
+          if (res.errors.length === 0) {
+            reset();
+            onClose();
+          }
+        },
+      },
+    );
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t("classes.bulk_add_title")}</DialogTitle>
+          <DialogDescription>{t("classes.bulk_add_description")}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {result && result.errors.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              <p className="font-medium">{t("classes.bulk_add_partial_error")}</p>
+              <ul className="mt-1 list-inside list-disc">
+                {result.errors.map((err) => (
+                  <li key={err.ad_object_guid} className="text-xs">
+                    {err.ad_object_guid}: {err.detail}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {bulk.isError && !result && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {t("errors.generic")}
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label htmlFor="bulk-student-search">{t("classes.search_student")}</Label>
+            <Input
+              id="bulk-student-search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={t("users.search_placeholder")}
+            />
+            {search.length >= 2 && users.data ? (
+              <ul className="max-h-36 overflow-y-auto rounded-md border bg-background text-sm">
+                {users.data.items.length === 0 ? (
+                  <li className="px-3 py-2 text-muted-foreground">{t("users.empty")}</li>
+                ) : (
+                  users.data.items.map((u) => {
+                    const isSelected = picked.some((p) => p.ad_object_guid === u.ad_object_guid);
+                    return (
+                      <li key={u.ad_object_guid}>
+                        <button
+                          type="button"
+                          onClick={() => toggle(u)}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent ${isSelected ? "bg-accent/50" : ""}`}
+                        >
+                          <span className="text-xs">{isSelected ? "✓" : " "}</span>
+                          <span>
+                            {u.upn}
+                            {u.given_name || u.surname
+                              ? ` — ${[u.given_name, u.surname].filter(Boolean).join(" ")}`
+                              : ""}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            ) : null}
+          </div>
+          {picked.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {picked.map((u) => (
+                <span
+                  key={u.ad_object_guid}
+                  className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium"
+                >
+                  {u.given_name ?? u.upn}
+                  <button
+                    type="button"
+                    onClick={() => toggle(u)}
+                    className="ml-0.5 text-muted-foreground hover:text-foreground"
+                    aria-label={`Remove ${u.upn}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="space-y-1">
+            <Label htmlFor="bulk-valid-from">{t("classes.valid_from")}</Label>
+            <Input
+              id="bulk-valid-from"
+              type="date"
+              value={validFrom}
+              onChange={(e) => setValidFrom(e.target.value)}
+              required
+            />
+            <p className="text-xs text-muted-foreground">{t("classes.mid_year_hint")}</p>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={picked.length === 0 || bulk.isPending}>
+              {bulk.isPending
+                ? t("common.loading")
+                : t("classes.bulk_add_submit", { count: picked.length })}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function MoveClassModal({
+  classId,
+  students,
+  open,
+  onClose,
+}: {
+  classId: number;
+  students: ClassMembershipOut[];
+  open: boolean;
+  onClose: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [targetClassId, setTargetClassId] = useState<number | "">("");
+  const classes = useClasses();
+  const qc = useQueryClient();
+  const activeStudents = students.filter((s) => s.valid_to === null);
+
+  const move = useMutation<BulkClassMembershipResult, Error, number>({
+    mutationFn: (tClassId) =>
+      apiFetch<BulkClassMembershipResult>(`/classes/${tClassId}/students/bulk`, {
+        method: "POST",
+        body: {
+          students: activeStudents.map((s) => ({
+            ad_object_guid: s.ad_object_guid,
+            valid_from: new Date().toISOString(),
+          })),
+        },
+      }),
+    onSuccess: (_res, tClassId) => {
+      qc.invalidateQueries({ queryKey: ["classes", classId, "students"] });
+      qc.invalidateQueries({ queryKey: ["classes", tClassId, "students"] });
+      reset();
+      onClose();
+    },
+  });
+
+  function reset(): void {
+    setTargetClassId("");
+    move.reset();
+  }
+
+  const availableClasses = (classes.data ?? []).filter(
+    (c) => c.id !== classId && c.status === "active",
+  );
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    if (!targetClassId) return;
+    move.mutate(Number(targetClassId));
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("classes.move_class_title")}</DialogTitle>
+          <DialogDescription>
+            {t("classes.move_class_description", { count: activeStudents.length })}
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {move.isError && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {t("errors.generic")}
+            </div>
+          )}
+          {activeStudents.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("classes.move_class_empty")}</p>
+          ) : (
+            <div className="space-y-1">
+              <Label htmlFor="target-class">{t("classes.move_class_target")}</Label>
+              <select
+                id="target-class"
+                value={targetClassId}
+                onChange={(e) => setTargetClassId(e.target.value ? Number(e.target.value) : "")}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                required
+              >
+                <option value="">{t("classes.move_class_select_placeholder")}</option>
+                {availableClasses.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                    {c.kuerzel ? ` (${c.kuerzel})` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">{t("classes.mid_year_hint")}</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            {activeStudents.length > 0 && (
+              <Button type="submit" disabled={!targetClassId || move.isPending}>
+                {move.isPending ? t("common.loading") : t("classes.move_class_submit")}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

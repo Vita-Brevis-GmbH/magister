@@ -191,6 +191,21 @@ export interface AppSettingsOut {
 
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
+export interface BulkClassMembershipCreate {
+  students: ClassMembershipCreate[];
+}
+
+export interface BulkClassMembershipError {
+  ad_object_guid: string;
+  detail: string;
+}
+
+export interface BulkClassMembershipResult {
+  added: number;
+  memberships: ClassMembershipOut[];
+  errors: BulkClassMembershipError[];
+}
+
 export interface AuditEventOut {
   id: number;
   ts: string;

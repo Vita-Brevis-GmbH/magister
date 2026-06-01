@@ -41,4 +41,28 @@ class ClassMembershipOut(BaseModel):
     upn: str | None = None
 
 
-__all__ = ["ClassMembershipCreate", "ClassMembershipOut"]
+class BulkClassMembershipCreate(BaseModel):
+    """Add multiple students to a class in a single atomic operation."""
+
+    students: list[ClassMembershipCreate]
+
+
+class BulkClassMembershipError(BaseModel):
+    ad_object_guid: str
+    detail: str
+
+
+class BulkClassMembershipResult(BaseModel):
+    added: int
+    memberships: list[ClassMembershipOut]
+    errors: list[BulkClassMembershipError]
+
+
+__all__ = [
+    "BulkClassMembershipCreate",
+    "BulkClassMembershipError",
+    "BulkClassMembershipResult",
+    "ClassMembershipCreate",
+    "ClassMembershipOut",
+]
+

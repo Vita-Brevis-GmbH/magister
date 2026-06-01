@@ -88,7 +88,19 @@
     "add_student_submit": "Add",
     "remove_student": "Remove",
     "search_student": "Search student",
-    "mid_year_hint": "Mid-year transfers automatically close the previous active membership."
+    "mid_year_hint": "Mid-year transfers automatically close the previous active membership.",
+    "bulk_add_button": "Add multiple",
+    "bulk_add_title": "Add multiple students",
+    "bulk_add_description": "Search and select multiple students at once.",
+    "bulk_add_submit": "Add {{count}}",
+    "bulk_add_partial_error": "Some students could not be added:",
+    "move_class_button": "Move class",
+    "move_class_title": "Move students to another class",
+    "move_class_description": "{{count}} active students will be moved to the target class. Existing memberships are ended automatically.",
+    "move_class_empty": "No active students in this class.",
+    "move_class_target": "Target class",
+    "move_class_select_placeholder": "Select class…",
+    "move_class_submit": "Move"
   },
   "users": {
     "title": "Users",

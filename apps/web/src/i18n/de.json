@@ -88,7 +88,19 @@
     "add_student_submit": "Hinzufügen",
     "remove_student": "Entfernen",
     "search_student": "Schüler:in suchen",
-    "mid_year_hint": "Bei Klassenwechsel mitten im Jahr wird die alte Mitgliedschaft automatisch beendet."
+    "mid_year_hint": "Bei Klassenwechsel mitten im Jahr wird die alte Mitgliedschaft automatisch beendet.",
+    "bulk_add_button": "Mehrere hinzufügen",
+    "bulk_add_title": "Mehrere Schüler:innen hinzufügen",
+    "bulk_add_description": "Suche und wähle mehrere Schüler:innen gleichzeitig aus.",
+    "bulk_add_submit": "{{count}} hinzufügen",
+    "bulk_add_partial_error": "Einige Schüler:innen konnten nicht hinzugefügt werden:",
+    "move_class_button": "Klasse verschieben",
+    "move_class_title": "Schüler:innen in andere Klasse verschieben",
+    "move_class_description": "{{count}} aktive Schüler:innen werden in die Zielklasse verschoben. Bestehende Mitgliedschaften werden automatisch beendet.",
+    "move_class_empty": "Keine aktiven Schüler:innen in dieser Klasse.",
+    "move_class_target": "Zielklasse",
+    "move_class_select_placeholder": "Klasse auswählen…",
+    "move_class_submit": "Verschieben"
   },
   "users": {
     "title": "User",
