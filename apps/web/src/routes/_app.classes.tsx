@@ -460,9 +460,7 @@ function PromoteClassWizard({
   const memberships = useClassMemberships(source?.id ?? 0);
   const activeStudents = (memberships.data ?? []).filter((m) => m.valid_to === null);
 
-  const candidates = allClasses.filter(
-    (c) => c.id !== source?.id && c.status === "active",
-  );
+  const candidates = allClasses.filter((c) => c.id !== source?.id && c.status === "active");
   const target = candidates.find((c) => c.id === Number(targetId)) ?? null;
 
   function reset(): void {
@@ -540,7 +538,14 @@ function PromoteClassWizard({
               </label>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  reset();
+                  onClose();
+                }}
+              >
                 {t("common.cancel")}
               </Button>
               <Button
@@ -588,7 +593,9 @@ function PromoteClassWizard({
               )}
             </div>
             {archiveSource && (
-              <p className="text-xs text-amber-600">{t("classes.promote_archive_warning", { name: source?.name })}</p>
+              <p className="text-xs text-amber-600">
+                {t("classes.promote_archive_warning", { name: source?.name })}
+              </p>
             )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setStep("pick")}>
@@ -607,9 +614,7 @@ function PromoteClassWizard({
               <DialogTitle>{t("classes.promote_done_title")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-2 text-sm">
-              <p>
-                ✓ {t("classes.promote_done_moved", { count: result.students_moved })}
-              </p>
+              <p>✓ {t("classes.promote_done_moved", { count: result.students_moved })}</p>
               {result.students_failed > 0 && (
                 <p className="text-amber-600">
                   ⚠ {t("classes.promote_done_failed", { count: result.students_failed })}
@@ -622,7 +627,13 @@ function PromoteClassWizard({
               )}
             </div>
             <DialogFooter>
-              <Button type="button" onClick={() => { reset(); onClose(); }}>
+              <Button
+                type="button"
+                onClick={() => {
+                  reset();
+                  onClose();
+                }}
+              >
                 {t("common.close")}
               </Button>
             </DialogFooter>

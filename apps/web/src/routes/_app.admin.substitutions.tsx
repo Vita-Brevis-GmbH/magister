@@ -176,7 +176,11 @@ function SubstitutionRow({
       </TableCell>
       <TableCell className="text-sm">{sub.valid_from.slice(0, 10)}</TableCell>
       <TableCell className="text-sm">
-        {sub.valid_to ? sub.valid_to.slice(0, 10) : <span className="text-muted-foreground">—</span>}
+        {sub.valid_to ? (
+          sub.valid_to.slice(0, 10)
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </TableCell>
       <TableCell>
         {status === "expired" ? (

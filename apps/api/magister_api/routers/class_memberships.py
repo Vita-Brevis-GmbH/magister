@@ -149,9 +149,7 @@ async def bulk_add_students_to_class(
     try:
         raw = await svc.bulk_add_students(
             class_id=class_id,
-            students=[
-                (s.ad_object_guid, s.valid_from, s.valid_to) for s in payload.students
-            ],
+            students=[(s.ad_object_guid, s.valid_from, s.valid_to) for s in payload.students],
             ip=ip,
             request_id=request_id,
         )

@@ -67,7 +67,10 @@ function AuditPage(): JSX.Element {
           <input
             type="search"
             value={actorUpn}
-            onChange={(e) => { setActorUpn(e.target.value); setOffset(0); }}
+            onChange={(e) => {
+              setActorUpn(e.target.value);
+              setOffset(0);
+            }}
             placeholder={t("audit.actor_upn_placeholder")}
             className="h-8 w-48 rounded-md border border-input bg-background px-3 text-sm"
           />
@@ -77,17 +80,25 @@ function AuditPage(): JSX.Element {
           <input
             type="search"
             value={action}
-            onChange={(e) => { setAction(e.target.value); setOffset(0); }}
+            onChange={(e) => {
+              setAction(e.target.value);
+              setOffset(0);
+            }}
             placeholder={t("audit.action_placeholder")}
             className="h-8 w-44 rounded-md border border-input bg-background px-3 text-sm"
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("audit.target_kind")}</span>
+          <span className="text-xs font-medium text-muted-foreground">
+            {t("audit.target_kind")}
+          </span>
           <input
             type="search"
             value={targetKind}
-            onChange={(e) => { setTargetKind(e.target.value); setOffset(0); }}
+            onChange={(e) => {
+              setTargetKind(e.target.value);
+              setOffset(0);
+            }}
             placeholder={t("audit.target_kind_placeholder")}
             className="h-8 w-36 rounded-md border border-input bg-background px-3 text-sm"
           />
@@ -97,7 +108,10 @@ function AuditPage(): JSX.Element {
           <input
             type="date"
             value={fromTs}
-            onChange={(e) => { setFromTs(e.target.value); setOffset(0); }}
+            onChange={(e) => {
+              setFromTs(e.target.value);
+              setOffset(0);
+            }}
             className="h-8 rounded-md border border-input bg-background px-3 text-sm"
           />
         </label>
@@ -106,7 +120,10 @@ function AuditPage(): JSX.Element {
           <input
             type="date"
             value={toTs}
-            onChange={(e) => { setToTs(e.target.value); setOffset(0); }}
+            onChange={(e) => {
+              setToTs(e.target.value);
+              setOffset(0);
+            }}
             className="h-8 rounded-md border border-input bg-background px-3 text-sm"
           />
         </label>
@@ -179,10 +196,7 @@ function AuditRow({ event: ev }: { event: AuditEventOut }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
   return (
     <>
-      <TableRow
-        className="cursor-pointer"
-        onClick={() => setExpanded((x) => !x)}
-      >
+      <TableRow className="cursor-pointer" onClick={() => setExpanded((x) => !x)}>
         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
           {new Date(ev.ts).toLocaleString()}
         </TableCell>
@@ -196,9 +210,7 @@ function AuditRow({ event: ev }: { event: AuditEventOut }): JSX.Element {
           <span className="text-muted-foreground">{ev.target_kind}/</span>
           {ev.target_id}
         </TableCell>
-        <TableCell className="text-xs text-muted-foreground">
-          {ev.ip ?? "—"}
-        </TableCell>
+        <TableCell className="text-xs text-muted-foreground">{ev.ip ?? "—"}</TableCell>
       </TableRow>
       {expanded && (
         <TableRow>

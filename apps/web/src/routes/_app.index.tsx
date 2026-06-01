@@ -5,7 +5,6 @@ import { useClasses, useCurrentUser, useUsers } from "@/api/hooks";
 import type { AdUserOut, ClassOut } from "@/api/types";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -24,8 +23,7 @@ export const Route = createFileRoute("/_app/")({
 function DashboardPage(): JSX.Element {
   const me = useCurrentUser();
   const isSchulleitung =
-    me.data?.is_admin ||
-    (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
+    me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
 
   if (!isSchulleitung) {
     return <KlassenlehrerDashboard />;
@@ -50,9 +48,7 @@ function SchulleitungDashboard(): JSX.Element {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="font-serif text-3xl font-semibold tracking-tight">
-          {t("dashboard.title")}
-        </h1>
+        <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("dashboard.intro")}</p>
       </header>
 
@@ -81,9 +77,7 @@ function SchulleitungDashboard(): JSX.Element {
         <StatCard
           label={t("dashboard.stat_disabled")}
           value={disabledUsers.isLoading ? null : (disabledUsers.data?.total ?? null)}
-          tone={
-            !disabledUsers.isLoading && (disabledUsers.data?.total ?? 0) > 0 ? "warn" : "ok"
-          }
+          tone={!disabledUsers.isLoading && (disabledUsers.data?.total ?? 0) > 0 ? "warn" : "ok"}
           href="/users"
         />
       </div>
@@ -112,9 +106,7 @@ function SchulleitungDashboard(): JSX.Element {
               </TableHeader>
               <TableBody>
                 {classes.isLoading
-                  ? Array.from({ length: 5 }).map((_, i) => (
-                      <SkeletonRow key={i} columns={4} />
-                    ))
+                  ? Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} columns={4} />)
                   : activeClasses.map((c) => <ClassRow key={c.id} cls={c} />)}
               </TableBody>
             </Table>
@@ -138,9 +130,7 @@ function SchulleitungDashboard(): JSX.Element {
               </TableHeader>
               <TableBody>
                 {disabledUsers.isLoading
-                  ? Array.from({ length: 3 }).map((_, i) => (
-                      <SkeletonRow key={i} columns={3} />
-                    ))
+                  ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} columns={3} />)
                   : disabledUsers.data?.items.map((u) => (
                       <DisabledUserRow key={u.ad_object_guid} user={u} />
                     ))}
@@ -288,11 +278,13 @@ function DisabledUserRow({ user: u }: { user: AdUserOut }): JSX.Element {
         </StatusPill>
       </TableCell>
       <TableCell className="text-right">
-        <Button variant="outline" size="sm" asChild>
-          <Link to="/users/$guid" params={{ guid: u.ad_object_guid }}>
-            {t("dashboard.disabled_manage")}
-          </Link>
-        </Button>
+        <Link
+          to="/users/$guid"
+          params={{ guid: u.ad_object_guid }}
+          className="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
+        >
+          {t("dashboard.disabled_manage")}
+        </Link>
       </TableCell>
     </TableRow>
   );

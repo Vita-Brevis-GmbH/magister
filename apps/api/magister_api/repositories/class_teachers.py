@@ -109,9 +109,7 @@ class ClassTeacherRoleRepository:
             await self.session.flush()
         return row
 
-    async def list_substitutions(
-        self, school_ids: list[int] | None
-    ) -> list[SubstitutionRow]:
+    async def list_substitutions(self, school_ids: list[int] | None) -> list[SubstitutionRow]:
         """Return all stellvertretung roles joined with their class, scoped to school_ids.
 
         Admin passes school_ids=None to see all schools.
