@@ -191,6 +191,23 @@ export interface AppSettingsOut {
 
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
+export interface ClassPromotionRequest {
+  target_class_id: number;
+  archive_source: boolean;
+}
+
+export interface ClassPromotionError {
+  ad_object_guid: string;
+  detail: string;
+}
+
+export interface ClassPromotionResult {
+  students_moved: number;
+  students_failed: number;
+  errors: ClassPromotionError[];
+  source_archived: boolean;
+}
+
 export interface BulkClassMembershipCreate {
   students: ClassMembershipCreate[];
 }

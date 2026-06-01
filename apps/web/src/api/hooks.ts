@@ -16,6 +16,8 @@ import type {
   ClassMembershipCreate,
   ClassMembershipOut,
   ClassOut,
+  ClassPromotionRequest,
+  ClassPromotionResult,
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
@@ -196,6 +198,17 @@ export function useBulkAddClassMemberships(classId: number) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classMemberships(classId) });
+    },
+  });
+}
+
+export function usePromoteClass(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassPromotionResult, ApiError, ClassPromotionRequest>({
+    mutationFn: (body) =>
+      apiFetch<ClassPromotionResult>(`/classes/${classId}/promote`, { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
     },
   });
 }

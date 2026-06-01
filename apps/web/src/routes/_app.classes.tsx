@@ -5,12 +5,14 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import {
   useArchiveClass,
+  useClassMemberships,
   useClasses,
   useCreateClass,
   useCurrentUser,
+  usePromoteClass,
   useUpdateClass,
 } from "@/api/hooks";
-import type { ClassOut } from "@/api/types";
+import type { ClassOut, ClassPromotionResult } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,6 +49,7 @@ function ClassesPage(): JSX.Element {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
+  const [promoteSource, setPromoteSource] = useState<ClassOut | null>(null);
 
   if (childMatches.length > 0) return <Outlet />;
 
@@ -108,6 +111,16 @@ function ClassesPage(): JSX.Element {
                 {canWrite ? (
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {c.status === "active" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setPromoteSource(c)}
+                        >
+                          {t("classes.promote_button")}
+                        </Button>
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -141,6 +154,11 @@ function ClassesPage(): JSX.Element {
       />
       <RenameClassModal target={editTarget} onClose={() => setEditTarget(null)} />
       <ArchiveClassDialog target={archiveTarget} onClose={() => setArchiveTarget(null)} />
+      <PromoteClassWizard
+        source={promoteSource}
+        allClasses={q.data ?? []}
+        onClose={() => setPromoteSource(null)}
+      />
     </div>
   );
 }
@@ -416,6 +434,200 @@ export function ArchiveClassDialog({ target, onClose }: ArchiveProps): JSX.Eleme
             {archive.isPending ? t("common.loading") : t("classes.archive_submit")}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+type PromoteStep = "pick" | "confirm" | "done";
+
+function PromoteClassWizard({
+  source,
+  allClasses,
+  onClose,
+}: {
+  source: ClassOut | null;
+  allClasses: ClassOut[];
+  onClose: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [step, setStep] = useState<PromoteStep>("pick");
+  const [targetId, setTargetId] = useState<number | "">("");
+  const [archiveSource, setArchiveSource] = useState(false);
+  const [result, setResult] = useState<ClassPromotionResult | null>(null);
+
+  const promote = usePromoteClass(source?.id ?? 0);
+  const memberships = useClassMemberships(source?.id ?? 0);
+  const activeStudents = (memberships.data ?? []).filter((m) => m.valid_to === null);
+
+  const candidates = allClasses.filter(
+    (c) => c.id !== source?.id && c.status === "active",
+  );
+  const target = candidates.find((c) => c.id === Number(targetId)) ?? null;
+
+  function reset(): void {
+    setStep("pick");
+    setTargetId("");
+    setArchiveSource(false);
+    setResult(null);
+    promote.reset();
+  }
+
+  function handleConfirm(): void {
+    if (!source || !targetId) return;
+    promote.mutate(
+      { target_class_id: Number(targetId), archive_source: archiveSource },
+      {
+        onSuccess: (res) => {
+          setResult(res);
+          setStep("done");
+        },
+      },
+    );
+  }
+
+  return (
+    <Dialog
+      open={source !== null}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent className="max-w-lg">
+        {step === "pick" && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("classes.promote_title")}</DialogTitle>
+              <DialogDescription>
+                {t("classes.promote_source_label")}: <strong>{source?.name}</strong>
+                {" · "}
+                {t("classes.promote_active_students", { count: activeStudents.length })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label htmlFor="promote-target" className="text-sm font-medium">
+                  {t("classes.promote_target_label")}
+                </label>
+                <select
+                  id="promote-target"
+                  value={targetId}
+                  onChange={(e) => setTargetId(e.target.value ? Number(e.target.value) : "")}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                >
+                  <option value="">{t("classes.move_class_select_placeholder")}</option>
+                  {candidates.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                      {c.kuerzel ? ` (${c.kuerzel})` : ""}
+                      {" · "}
+                      {t("classes.jahrgangsstufe")} {c.jahrgangsstufe}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={archiveSource}
+                  onChange={(e) => setArchiveSource(e.target.checked)}
+                  className="h-4 w-4 rounded border-input"
+                />
+                {t("classes.promote_archive_source")}
+              </label>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => { reset(); onClose(); }}>
+                {t("common.cancel")}
+              </Button>
+              <Button
+                type="button"
+                disabled={!targetId || activeStudents.length === 0}
+                onClick={() => setStep("confirm")}
+              >
+                {t("classes.promote_preview_button")}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {step === "confirm" && target && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("classes.promote_confirm_title")}</DialogTitle>
+              <DialogDescription>
+                {t("classes.promote_confirm_desc", {
+                  source: source?.name,
+                  target: target.name,
+                  count: activeStudents.length,
+                })}
+              </DialogDescription>
+            </DialogHeader>
+            {promote.isError && (
+              <div
+                role="alert"
+                className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+              >
+                {t("errors.generic")}
+              </div>
+            )}
+            <div className="max-h-48 overflow-y-auto rounded-md border bg-muted/30 p-2 text-sm">
+              {activeStudents.length === 0 ? (
+                <p className="text-muted-foreground">{t("classes.promote_no_students")}</p>
+              ) : (
+                <ul className="space-y-0.5">
+                  {activeStudents.map((m) => (
+                    <li key={m.id} className="truncate text-xs text-muted-foreground">
+                      {m.display_name ?? m.upn ?? m.ad_object_guid}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {archiveSource && (
+              <p className="text-xs text-amber-600">{t("classes.promote_archive_warning", { name: source?.name })}</p>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setStep("pick")}>
+                {t("classes.promote_back")}
+              </Button>
+              <Button type="button" onClick={handleConfirm} disabled={promote.isPending}>
+                {promote.isPending ? t("common.loading") : t("classes.promote_confirm_submit")}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
+
+        {step === "done" && result && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{t("classes.promote_done_title")}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 text-sm">
+              <p>
+                ✓ {t("classes.promote_done_moved", { count: result.students_moved })}
+              </p>
+              {result.students_failed > 0 && (
+                <p className="text-amber-600">
+                  ⚠ {t("classes.promote_done_failed", { count: result.students_failed })}
+                </p>
+              )}
+              {result.source_archived && (
+                <p className="text-muted-foreground">
+                  {t("classes.promote_done_archived", { name: source?.name })}
+                </p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" onClick={() => { reset(); onClose(); }}>
+                {t("common.close")}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   );

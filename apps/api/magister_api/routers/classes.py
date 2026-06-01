@@ -16,7 +16,14 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
-from magister_api.schemas.classes import ClassCreate, ClassOut, ClassUpdate
+from magister_api.schemas.classes import (
+    ClassCreate,
+    ClassOut,
+    ClassPromotionRequest,
+    ClassPromotionResult,
+    ClassUpdate,
+)
+from magister_api.schemas.classes import ClassPromotionError as ClassPromotionErrorSchema
 from magister_api.services.classes import (
     ClassNotFoundError,
     ClassPermissionError,
@@ -138,6 +145,45 @@ async def archive_class(
     except ClassNotFoundError as exc:
         raise HTTPException(status_code=404, detail="class_not_found") from exc
     return None
+
+
+@router.post("/{class_id}/promote", response_model=ClassPromotionResult)
+async def promote_class(
+    class_id: int,
+    payload: ClassPromotionRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> ClassPromotionResult:
+    """Move all active students from this class to ``target_class_id``.
+
+    Optionally archives the source class afterwards. Each student is attempted
+    atomically; overlap failures are reported in ``errors`` while the rest are
+    committed.
+    """
+    if payload.target_class_id == class_id:
+        raise HTTPException(status_code=422, detail="source_and_target_must_differ")
+
+    svc = ClassService(session, settings, user.to_scope())
+    ip, request_id = _ip_request_id(request)
+    try:
+        result = await svc.promote(
+            source_class_id=class_id,
+            target_class_id=payload.target_class_id,
+            archive_source=payload.archive_source,
+            ip=ip,
+            request_id=request_id,
+        )
+    except ClassNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="class_not_found") from exc
+
+    return ClassPromotionResult(
+        students_moved=result.students_moved,
+        students_failed=result.students_failed,
+        errors=[ClassPromotionErrorSchema(ad_object_guid=g, detail=d) for g, d in result.errors],
+        source_archived=result.source_archived,
+    )
 
 
 __all__ = ["router"]

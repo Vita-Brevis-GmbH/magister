@@ -42,10 +42,33 @@ class ClassOut(BaseModel):
     updated_at: datetime
 
 
+class ClassPromotionRequest(BaseModel):
+    """Promote all active students from this class to a target class."""
+
+    target_class_id: int
+    archive_source: bool = False
+
+
+class ClassPromotionError(BaseModel):
+    ad_object_guid: str
+    detail: str
+
+
+class ClassPromotionResult(BaseModel):
+    students_moved: int
+    students_failed: int
+    errors: list[ClassPromotionError]
+    source_archived: bool
+
+
 __all__ = [
     "CLASS_STATUS_ACTIVE",
     "CLASS_STATUS_ARCHIVED",
     "ClassCreate",
     "ClassOut",
+    "ClassPromotionError",
+    "ClassPromotionRequest",
+    "ClassPromotionResult",
     "ClassUpdate",
 ]
+
