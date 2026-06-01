@@ -247,6 +247,21 @@
       "error_not_configured": "Lokales Admin-Konto ist nicht konfiguriert."
     }
   },
+  "dashboard": {
+    "title": "Übersicht",
+    "intro": "Aktuelle Kennzahlen für deine Schule.",
+    "stat_active_classes": "Aktive Klassen",
+    "stat_archived_classes": "{{count}} archiviert",
+    "stat_teachers": "Lehrpersonen",
+    "stat_students": "Schüler:innen",
+    "stat_disabled": "Deaktivierte Accounts",
+    "classes_section": "Klassen",
+    "classes_all": "Alle anzeigen →",
+    "disabled_section": "Deaktivierte Accounts",
+    "disabled_intro": "Diese Accounts sind im AD deaktiviert und können sich nicht anmelden.",
+    "disabled_more": "Und {{count}} weitere — vollständige Liste unter User.",
+    "disabled_manage": "Verwalten"
+  },
   "audit": {
     "title": "Audit-Log",
     "intro": "Protokoll aller Mutationen. Nur lesbar — gefiltert nach Schul-Scope.",

@@ -248,6 +248,21 @@
       "error_not_configured": "Le compte administrateur local n'est pas configuré."
     }
   },
+  "dashboard": {
+    "title": "Tableau de bord",
+    "intro": "Chiffres actuels pour votre école.",
+    "stat_active_classes": "Classes actives",
+    "stat_archived_classes": "{{count}} archivées",
+    "stat_teachers": "Enseignant·e·s",
+    "stat_students": "Élèves",
+    "stat_disabled": "Comptes désactivés",
+    "classes_section": "Classes",
+    "classes_all": "Tout afficher →",
+    "disabled_section": "Comptes désactivés",
+    "disabled_intro": "Ces comptes sont désactivés dans l'AD et ne peuvent pas se connecter.",
+    "disabled_more": "Et {{count}} de plus — liste complète sous Utilisateurs.",
+    "disabled_manage": "Gérer"
+  },
   "audit": {
     "title": "Journal d'audit",
     "intro": "Journal en lecture seule de toutes les mutations, limité à vos écoles.",

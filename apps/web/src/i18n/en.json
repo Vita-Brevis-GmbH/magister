@@ -247,6 +247,21 @@
       "error_not_configured": "Local admin account is not configured."
     }
   },
+  "dashboard": {
+    "title": "Dashboard",
+    "intro": "Current figures for your school.",
+    "stat_active_classes": "Active classes",
+    "stat_archived_classes": "{{count}} archived",
+    "stat_teachers": "Teachers",
+    "stat_students": "Students",
+    "stat_disabled": "Disabled accounts",
+    "classes_section": "Classes",
+    "classes_all": "View all →",
+    "disabled_section": "Disabled accounts",
+    "disabled_intro": "These accounts are disabled in AD and cannot sign in.",
+    "disabled_more": "And {{count}} more — full list under Users.",
+    "disabled_manage": "Manage"
+  },
   "audit": {
     "title": "Audit Log",
     "intro": "Read-only log of all mutations, scoped to your schools.",

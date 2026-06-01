@@ -248,6 +248,21 @@
       "error_not_configured": "Account amministratore locale non configurato."
     }
   },
+  "dashboard": {
+    "title": "Panoramica",
+    "intro": "Dati attuali della tua scuola.",
+    "stat_active_classes": "Classi attive",
+    "stat_archived_classes": "{{count}} archiviate",
+    "stat_teachers": "Docenti",
+    "stat_students": "Alunni/e",
+    "stat_disabled": "Account disabilitati",
+    "classes_section": "Classi",
+    "classes_all": "Visualizza tutto →",
+    "disabled_section": "Account disabilitati",
+    "disabled_intro": "Questi account sono disabilitati in AD e non possono accedere.",
+    "disabled_more": "E altri {{count}} — lista completa sotto Utenti.",
+    "disabled_manage": "Gestisci"
+  },
   "audit": {
     "title": "Registro di audit",
     "intro": "Registro di sola lettura di tutte le mutazioni, limitato alle proprie scuole.",
