@@ -66,6 +66,13 @@ export function Layout() {
                   {t("nav.imports")}
                 </Link>
                 <Link
+                  to="/admin/reports"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.reports")}
+                </Link>
+                <Link
                   to="/admin/audit"
                   activeProps={{ className: navActive }}
                   inactiveProps={{ className: navIdle }}

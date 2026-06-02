@@ -10,6 +10,7 @@
     "admin": "Administration",
     "substitutions": "Stellvertretungen",
     "imports": "Importe",
+    "reports": "Reports",
     "audit": "Audit-Log",
     "logout": "Abmelden"
   },
@@ -352,6 +353,23 @@
     "error_invalid_header": "CSV-Header passt nicht zum gewählten Typ. Lade das Template herunter und vergleiche die Spalten.",
     "error_not_utf8": "Datei ist nicht UTF-8 kodiert. Speichere die CSV als UTF-8.",
     "error_unknown_kind": "Unbekannter Import-Typ."
+  },
+  "reports": {
+    "title": "Reports",
+    "intro": "Aggregierte Kennzahlen — read-only, schulgefiltert.",
+    "students_title": "Schüler:innen pro Klasse",
+    "students_total": "Total: {{students}} Schüler:innen in {{classes}} Klassen",
+    "col_class": "Klasse",
+    "col_jahrgang": "Jahrgangsstufe",
+    "col_students": "Anzahl",
+    "workload_title": "KL-Auslastung",
+    "workload_intro": "Aktive Klassenlehrer-Rollen pro Lehrperson, aufgeschlüsselt nach Rolle.",
+    "col_teacher": "Lehrperson",
+    "col_total": "Total",
+    "activity_title": "Aktivitäts-Übersicht",
+    "last_n_days": "{{count}} Tage",
+    "col_action": "Aktion",
+    "col_count": "Anzahl"
   },
   "letters": {
     "button": "Brief",
