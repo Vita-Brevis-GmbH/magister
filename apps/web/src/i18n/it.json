@@ -354,6 +354,24 @@
     "error_not_utf8": "Il file non è codificato in UTF-8. Salva il CSV come UTF-8.",
     "error_unknown_kind": "Tipo di importazione sconosciuto."
   },
+  "letters": {
+    "button": "Lettera",
+    "title": "Genera lettera per i genitori",
+    "template_label": "Modello",
+    "template_enrollment": "Iscrizione / inizio classe",
+    "template_class_change": "Cambio di classe",
+    "template_password_handout": "Consegna della password ai genitori",
+    "template_enrollment_desc": "Lettera di benvenuto a inizio anno scolastico con docente di classe ed elenco degli allegati.",
+    "template_class_change_desc": "Comunicazione di passaggio da una classe all'altra — l'account rimane invariato.",
+    "template_password_handout_desc": "Lettera per consegnare la password temporanea ai genitori.",
+    "school_year": "Anno scolastico",
+    "first_day": "Primo giorno",
+    "old_class": "Classe precedente",
+    "effective_date": "Decorrenza",
+    "temp_password": "Password temporanea",
+    "temp_password_hint": "Non salvata — inserire subito dopo un reset manuale della password.",
+    "generate_button": "Genera PDF"
+  },
   "audit": {
     "title": "Registro di audit",
     "intro": "Registro di sola lettura di tutte le mutazioni, limitato alle proprie scuole.",

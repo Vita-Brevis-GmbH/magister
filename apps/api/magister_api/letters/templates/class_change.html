@@ -1,0 +1,12 @@
+{% extends "_base.html" %}
+{% block body %}
+<p>{{ t.class_change.intro | format(student_name=student.display_name, old_class=old_class_name, new_class=class_.name, effective_date=effective_date) }}</p>
+
+{% if class_teacher %}
+<p>{{ t.class_change.kl | format(kl_name=class_teacher) }}</p>
+{% endif %}
+
+<p>{{ t.class_change.continuity }}</p>
+
+<p>{{ t.class_change.questions }}</p>
+{% endblock %}

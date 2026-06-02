@@ -353,6 +353,24 @@
     "error_not_utf8": "File is not UTF-8 encoded. Save the CSV as UTF-8.",
     "error_unknown_kind": "Unknown import kind."
   },
+  "letters": {
+    "button": "Letter",
+    "title": "Generate parent letter",
+    "template_label": "Template",
+    "template_enrollment": "Enrollment / class start",
+    "template_class_change": "Class change",
+    "template_password_handout": "Password handout to parents",
+    "template_enrollment_desc": "Welcome letter at the start of the school year with class teacher and list of enclosures.",
+    "template_class_change_desc": "Notice about a transfer from one class to another — the account stays unchanged.",
+    "template_password_handout_desc": "Hand the temporary password to the parents (printed letter).",
+    "school_year": "School year",
+    "first_day": "First day",
+    "old_class": "Previous class",
+    "effective_date": "Effective from",
+    "temp_password": "Temporary password",
+    "temp_password_hint": "Not stored — enter right after a manual password reset.",
+    "generate_button": "Generate PDF"
+  },
   "audit": {
     "title": "Audit Log",
     "intro": "Read-only log of all mutations, scoped to your schools.",

@@ -1,0 +1,101 @@
+/* Shared print styles for all letter PDFs. */
+
+@page {
+  size: A4;
+  margin: 25mm 20mm 20mm 25mm;
+}
+
+* {
+  font-family: "DejaVu Sans", "Liberation Sans", Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  line-height: 1.45;
+  color: #1a1a1a;
+  box-sizing: border-box;
+}
+
+.letterhead {
+  border-bottom: 0.5pt solid #444;
+  padding-bottom: 6mm;
+  margin-bottom: 8mm;
+}
+.letterhead .school-name {
+  font-size: 16pt;
+  font-weight: bold;
+  margin: 0 0 2mm 0;
+}
+.letterhead .school-meta {
+  font-size: 9pt;
+  color: #555;
+  margin: 0;
+}
+
+.address-block {
+  margin-bottom: 14mm;
+}
+.address-block .label {
+  font-size: 7.5pt;
+  color: #666;
+  margin-bottom: 1mm;
+  letter-spacing: 0.5pt;
+  text-transform: uppercase;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8mm;
+}
+.meta-row .place-date {
+  font-size: 10pt;
+}
+
+h1.subject {
+  font-size: 13pt;
+  margin: 0 0 6mm 0;
+}
+
+p.salutation {
+  margin: 0 0 4mm 0;
+}
+
+.body p {
+  margin: 0 0 3mm 0;
+  text-align: justify;
+}
+
+.body .password-box {
+  border: 1pt dashed #444;
+  padding: 4mm 6mm;
+  margin: 4mm 0 4mm 0;
+  text-align: center;
+  font-family: "DejaVu Sans Mono", "Courier New", monospace;
+  font-size: 14pt;
+  font-weight: bold;
+  letter-spacing: 1pt;
+}
+
+.body .note {
+  font-size: 9pt;
+  color: #555;
+  font-style: italic;
+}
+
+.signature {
+  margin-top: 14mm;
+}
+.signature .name {
+  margin-top: 12mm;
+}
+
+footer.print-footer {
+  position: running(footer);
+  font-size: 7.5pt;
+  color: #888;
+  border-top: 0.3pt solid #ccc;
+  padding-top: 2mm;
+}
+@page {
+  @bottom-center {
+    content: element(footer);
+  }
+}

@@ -1,0 +1,19 @@
+{% extends "_base.html" %}
+{% block body %}
+<p>{{ t.enrollment.intro | format(student_name=student.display_name, class_name=class_.name, school_year=school_year) }}</p>
+
+<p>{{ t.enrollment.start | format(first_day=first_day) }}</p>
+
+{% if class_teacher %}
+<p>{{ t.enrollment.kl | format(kl_name=class_teacher) }}</p>
+{% endif %}
+
+<p>{{ t.enrollment.documents }}</p>
+<ul>
+  <li>{{ t.enrollment.doc_passwords }}</li>
+  <li>{{ t.enrollment.doc_devices }}</li>
+  <li>{{ t.enrollment.doc_emergency }}</li>
+</ul>
+
+<p>{{ t.enrollment.questions }}</p>
+{% endblock %}

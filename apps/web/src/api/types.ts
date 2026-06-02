@@ -249,6 +249,17 @@ export interface AuditEventListResponse {
   limit: number;
 }
 
+export type LetterTemplate = "enrollment" | "class_change" | "password_handout";
+
+export interface LetterRequest {
+  student_guid: string;
+  school_year?: string | null;
+  first_day?: string | null;
+  old_class_name?: string | null;
+  effective_date?: string | null;
+  temp_password?: string | null;
+}
+
 export type ImportKind = "classes" | "class_memberships" | "class_teachers";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";

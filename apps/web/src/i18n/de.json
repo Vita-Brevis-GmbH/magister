@@ -353,6 +353,24 @@
     "error_not_utf8": "Datei ist nicht UTF-8 kodiert. Speichere die CSV als UTF-8.",
     "error_unknown_kind": "Unbekannter Import-Typ."
   },
+  "letters": {
+    "button": "Brief",
+    "title": "Eltern-Brief generieren",
+    "template_label": "Vorlage",
+    "template_enrollment": "Anmeldung / Klassen-Eintritt",
+    "template_class_change": "Klassenwechsel",
+    "template_password_handout": "Passwort-Übergabe an Eltern",
+    "template_enrollment_desc": "Begrüssungsschreiben zum Schuljahresbeginn mit Klassenlehrperson und Liste der Beilagen.",
+    "template_class_change_desc": "Mitteilung über Wechsel von einer Klasse in eine andere — der Account bleibt unverändert.",
+    "template_password_handout_desc": "Übergabe des temporären Passworts an die Eltern (Brief zum Aushändigen).",
+    "school_year": "Schuljahr",
+    "first_day": "Erster Schultag",
+    "old_class": "Bisherige Klasse",
+    "effective_date": "Wirksam ab",
+    "temp_password": "Temporäres Passwort",
+    "temp_password_hint": "Wird nicht gespeichert — bitte direkt nach einem manuellen Passwort-Reset hier eintragen.",
+    "generate_button": "PDF generieren"
+  },
   "audit": {
     "title": "Audit-Log",
     "intro": "Protokoll aller Mutationen. Nur lesbar — gefiltert nach Schul-Scope.",
