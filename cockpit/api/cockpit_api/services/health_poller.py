@@ -15,18 +15,18 @@ logger = logging.getLogger(__name__)
 
 
 async def poll_instance(client: httpx.AsyncClient, instance: Instance) -> None:
-    health_url = instance.base_url.rstrip("/") + "/api/health"
-    version_url = instance.base_url.rstrip("/") + "/api/version"
+    health_url = instance.base_url.rstrip("/") + "/api/healthz"
     try:
         h = await client.get(health_url, timeout=settings.http_timeout_s)
-        instance.last_health_status = "ok" if h.status_code == 200 else f"http_{h.status_code}"
-        instance.last_error = None
-        try:
-            v = await client.get(version_url, timeout=settings.http_timeout_s)
-            if v.status_code == 200:
-                instance.deployed_version = v.json().get("version")
-        except httpx.HTTPError:
-            pass
+        if h.status_code == 200:
+            instance.last_health_status = "ok"
+            instance.last_error = None
+            data = h.json()
+            if isinstance(data, dict) and "version" in data:
+                instance.deployed_version = str(data["version"])
+        else:
+            instance.last_health_status = f"http_{h.status_code}"
+            instance.last_error = h.text[:1000]
     except httpx.HTTPError as e:
         instance.last_health_status = "unreachable"
         instance.last_error = str(e)[:1000]

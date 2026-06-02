@@ -28,6 +28,7 @@ class InstanceOut(BaseModel):
     base_url: str
     channel: InstanceChannel
     deployed_version: str | None
+    latest_available_version: str | None
     last_health_status: str | None
     last_health_at: datetime | None
     last_error: str | None

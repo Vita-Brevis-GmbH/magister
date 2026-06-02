@@ -27,6 +27,7 @@ class Instance(Base):
         Enum(InstanceChannel, name="instance_channel"), default=InstanceChannel.stable
     )
     deployed_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    latest_available_version: Mapped[str | None] = mapped_column(String(64), default=None)
     last_health_status: Mapped[str | None] = mapped_column(String(32), default=None)
     last_health_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     last_error: Mapped[str | None] = mapped_column(String(1000), default=None)
