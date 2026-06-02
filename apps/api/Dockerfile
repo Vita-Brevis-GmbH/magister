@@ -37,9 +37,14 @@ ENV PYTHONUNBUFFERED=1 \
 RUN groupadd --system --gid 1000 magister \
  && useradd  --system --uid 1000 --gid magister --create-home --home-dir /app magister
 
-# Minimal runtime libs: libldap is needed by ldap3 only when using GSSAPI; we
-# stay on plain SIMPLE+TLS so no extra system packages required. Keep the
-# image small.
+# Runtime libs:
+# - libldap is needed by ldap3 only when using GSSAPI; we stay on plain
+#   SIMPLE+TLS so it's not required.
+# - WeasyPrint (parent-letter PDFs, M3 US-1) needs Pango/Cairo/GDK-PixBuf.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 libgdk-pixbuf-2.0-0 \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder --chown=magister:magister /app /app

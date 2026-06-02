@@ -354,6 +354,24 @@
     "error_not_utf8": "Le fichier n'est pas encodé en UTF-8. Enregistrez le CSV en UTF-8.",
     "error_unknown_kind": "Type d'import inconnu."
   },
+  "letters": {
+    "button": "Lettre",
+    "title": "Générer une lettre pour les parents",
+    "template_label": "Modèle",
+    "template_enrollment": "Inscription / entrée en classe",
+    "template_class_change": "Changement de classe",
+    "template_password_handout": "Remise du mot de passe aux parents",
+    "template_enrollment_desc": "Lettre de bienvenue en début d'année scolaire avec enseignant de classe et liste des annexes.",
+    "template_class_change_desc": "Notification d'un changement de classe — le compte reste inchangé.",
+    "template_password_handout_desc": "Lettre de remise du mot de passe temporaire aux parents.",
+    "school_year": "Année scolaire",
+    "first_day": "Premier jour",
+    "old_class": "Classe précédente",
+    "effective_date": "Effet au",
+    "temp_password": "Mot de passe temporaire",
+    "temp_password_hint": "Non enregistré — à saisir juste après une réinitialisation manuelle.",
+    "generate_button": "Générer le PDF"
+  },
   "audit": {
     "title": "Journal d'audit",
     "intro": "Journal en lecture seule de toutes les mutations, limité à vos écoles.",

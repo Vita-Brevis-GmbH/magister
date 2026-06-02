@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { apiFetch, type ApiError } from "./client";
+import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
   AdUserListResponse,
   AdUserOut,
@@ -25,6 +25,8 @@ import type {
   ImportJobDetailOut,
   ImportJobOut,
   ImportKind,
+  LetterRequest,
+  LetterTemplate,
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
@@ -471,4 +473,51 @@ export function useCancelImport() {
       qc.invalidateQueries({ queryKey: importsKey });
     },
   });
+}
+
+// --- Letters (M3 US-1): server returns a PDF stream ------------------------
+
+export async function downloadLetter(
+  template: LetterTemplate,
+  body: LetterRequest,
+): Promise<{ blob: Blob; filename: string }> {
+  const csrf = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("magister_csrf="))
+    ?.slice("magister_csrf=".length);
+  const res = await fetch(`${API_BASE}/letters/${template}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf",
+      ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j.detail || j.code || "";
+    } catch {
+      /* leave empty */
+    }
+    throw new ApiError(res.status, detail || String(res.status), "");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob, filename: match?.[1] ?? `${template}.pdf` };
+}
+
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }

@@ -24,6 +24,7 @@ import type {
   ClassTeacherOut,
   ClassTeacherRole,
 } from "@/api/types";
+import { LetterModal, type LetterTarget } from "@/components/LetterModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,7 +94,7 @@ function ClassDetailPage(): JSX.Element {
           </Card>
 
           <TeachersSection classId={classId} canManage={!!canManageTeachers} />
-          <StudentsSection classId={classId} />
+          <StudentsSection classId={classId} className={klass.data.name} />
         </>
       ) : null}
     </div>
@@ -375,7 +376,13 @@ function AssignTeacherModal({
 
 // --- Students --------------------------------------------------------------
 
-function StudentsSection({ classId }: { classId: number }): JSX.Element {
+function StudentsSection({
+  classId,
+  className,
+}: {
+  classId: number;
+  className: string | null;
+}): JSX.Element {
   const { t } = useTranslation();
   const me = useCurrentUser();
   const q = useClassMemberships(classId);
@@ -383,6 +390,7 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [letterTarget, setLetterTarget] = useState<LetterTarget | null>(null);
 
   const canBulkManage =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
@@ -440,15 +448,31 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
                   <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
                   <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => remove.mutate(row.id)}
-                      disabled={remove.isPending || row.valid_to !== null}
-                    >
-                      {t("classes.remove_student")}
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          setLetterTarget({
+                            ad_object_guid: row.ad_object_guid,
+                            display_name: row.display_name,
+                            upn: row.upn,
+                          })
+                        }
+                      >
+                        {t("letters.button")}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => remove.mutate(row.id)}
+                        disabled={remove.isPending || row.valid_to !== null}
+                      >
+                        {t("classes.remove_student")}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -463,6 +487,11 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
         students={q.data ?? []}
         open={moveOpen}
         onClose={() => setMoveOpen(false)}
+      />
+      <LetterModal
+        target={letterTarget}
+        currentClassName={className}
+        onClose={() => setLetterTarget(null)}
       />
     </Card>
   );

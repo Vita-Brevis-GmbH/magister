@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="{{ lang }}">
+  <head>
+    <meta charset="utf-8" />
+    <title>{{ subject }}</title>
+    <style>{{ base_css | safe }}</style>
+  </head>
+  <body>
+    <header class="letterhead">
+      <p class="school-name">{{ school.name }}</p>
+      <p class="school-meta">
+        {% if school.address_line %}{{ school.address_line }} · {% endif %}
+        {% if school.contact %}{{ school.contact }}{% endif %}
+      </p>
+    </header>
+
+    {% if recipient %}
+    <div class="address-block">
+      <p class="label">{{ t.address_label }}</p>
+      {% for line in recipient %}<p>{{ line }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="meta-row">
+      <span></span>
+      <span class="place-date">{{ school.locality or "" }}, {{ today }}</span>
+    </div>
+
+    <h1 class="subject">{{ subject }}</h1>
+
+    <p class="salutation">{{ salutation }}</p>
+
+    <div class="body">{% block body %}{% endblock %}</div>
+
+    <div class="signature">
+      <p>{{ t.kind_regards }}</p>
+      <p class="name">{{ signed_by }}</p>
+    </div>
+
+    <footer class="print-footer">
+      {{ school.name }} · {{ school.locality or "" }} · {{ today }}
+    </footer>
+  </body>
+</html>
