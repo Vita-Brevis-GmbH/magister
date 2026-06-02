@@ -5,7 +5,9 @@ from the app lifespan, interval from ``app_settings.ad_sync_interval_minutes``).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
@@ -42,6 +44,7 @@ def get_ad_client(
 @router.post("/ad-sync", response_model=AdSyncResultOut, status_code=status.HTTP_200_OK)
 async def trigger_ad_sync(
     request: Request,
+    mode: Literal["full", "incremental"] = Query(default="full"),
     user: AuthenticatedUser = Depends(require_admin),
     settings: Settings = Depends(get_effective_settings),
     session: AsyncSession = Depends(get_session),
@@ -56,6 +59,7 @@ async def trigger_ad_sync(
             actor_object_guid=user.ad_object_guid,
             ip=client_ip,
             request_id=request_id,
+            mode=mode,
         )
     except AdUnavailableError as exc:
         raise HTTPException(status_code=503, detail="ad_unavailable") from exc

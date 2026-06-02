@@ -63,7 +63,8 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
 - ✅ **M4.2 Update-Tracking** — Release-Manifest-Poller, `update_requests`-Tabelle, "Update einplanen"-UI
 - 🚧 **M4.3 Update-Runner** — atomic claim/complete/fail-Endpoints, Python-Runner mit SSH + pg_dump-Snapshot + Smoke-Test, systemd-Service, Runbook `cockpit-update-runner.md`
-- ⏳ Performance: AD-Diff-Sync (inkrementell statt Full-Pull), Read-Cache für Klassen/User
+- 🚧 **Performance: AD-Diff-Sync** — inkrementeller Sync via `whenChanged`-Cursor (ADR-0004), `ad_sync_state`-Singleton, `?mode=incremental` Query-Param. Full-Sync bleibt Default und Wochenpflicht (Deletion-Reconciliation).
+- ⏳ Performance: Read-Cache für Klassen/User
 - ⏳ Härtungs-Audit + externer Penetration-Test
 - ⏳ Erweiterte Runbooks (Disaster-Recovery, Key-Rotation, Multi-Region-Failover)
 
