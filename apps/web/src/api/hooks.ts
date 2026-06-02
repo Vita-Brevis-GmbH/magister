@@ -22,11 +22,14 @@ import type {
   ClassTeacherOut,
   ClassUpdate,
   CurrentUserOut,
+  ActivityReport,
   ImportJobDetailOut,
   ImportJobOut,
   ImportKind,
   LetterRequest,
   LetterTemplate,
+  StudentsByClassReport,
+  TeacherWorkloadReport,
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
@@ -520,4 +523,27 @@ export function saveBlob(blob: Blob, filename: string): void {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+// --- Reports (M3 US-3) -----------------------------------------------------
+
+export function useStudentsByClass() {
+  return useQuery<StudentsByClassReport>({
+    queryKey: ["reports", "students-by-class"],
+    queryFn: () => apiFetch<StudentsByClassReport>("/reports/students-by-class"),
+  });
+}
+
+export function useTeacherWorkload() {
+  return useQuery<TeacherWorkloadReport>({
+    queryKey: ["reports", "teacher-workload"],
+    queryFn: () => apiFetch<TeacherWorkloadReport>("/reports/teacher-workload"),
+  });
+}
+
+export function useActivityReport(days: number = 30) {
+  return useQuery<ActivityReport>({
+    queryKey: ["reports", "activity", days],
+    queryFn: () => apiFetch<ActivityReport>(`/reports/activity?days=${days}`),
+  });
 }

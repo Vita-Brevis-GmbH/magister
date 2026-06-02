@@ -249,6 +249,42 @@ export interface AuditEventListResponse {
   limit: number;
 }
 
+export interface StudentsByClassRow {
+  class_id: number;
+  school_id: number;
+  name: string;
+  kuerzel: string | null;
+  jahrgangsstufe: number;
+  student_count: number;
+}
+export interface StudentsByClassReport {
+  rows: StudentsByClassRow[];
+  total_students: number;
+  total_classes: number;
+}
+
+export interface TeacherWorkloadRow {
+  ad_object_guid: string;
+  upn: string | null;
+  display_name: string | null;
+  haupt_count: number;
+  co_count: number;
+  stellvertretung_count: number;
+  total: number;
+}
+export interface TeacherWorkloadReport {
+  rows: TeacherWorkloadRow[];
+}
+
+export interface ActivityRow {
+  action: string;
+  count: number;
+}
+export interface ActivityReport {
+  since: string;
+  rows: ActivityRow[];
+}
+
 export type LetterTemplate = "enrollment" | "class_change" | "password_handout";
 
 export interface LetterRequest {

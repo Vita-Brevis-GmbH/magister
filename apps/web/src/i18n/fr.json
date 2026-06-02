@@ -14,6 +14,7 @@
     "logout": "Se déconnecter",
     "substitutions": "Suppléances",
     "imports": "Imports",
+    "reports": "Rapports",
     "audit": "Journal d'audit"
   },
   "auth": {
@@ -353,6 +354,23 @@
     "error_invalid_header": "L'en-tête CSV ne correspond pas au type sélectionné. Téléchargez le modèle et comparez les colonnes.",
     "error_not_utf8": "Le fichier n'est pas encodé en UTF-8. Enregistrez le CSV en UTF-8.",
     "error_unknown_kind": "Type d'import inconnu."
+  },
+  "reports": {
+    "title": "Rapports",
+    "intro": "Indicateurs agrégés — lecture seule, limités à votre périmètre.",
+    "students_title": "Élèves par classe",
+    "students_total": "Total : {{students}} élèves dans {{classes}} classes",
+    "col_class": "Classe",
+    "col_jahrgang": "Niveau",
+    "col_students": "Nombre",
+    "workload_title": "Charge des titulaires de classe",
+    "workload_intro": "Rôles actifs de titulaire par enseignant, par type de rôle.",
+    "col_teacher": "Enseignant·e",
+    "col_total": "Total",
+    "activity_title": "Vue d'ensemble de l'activité",
+    "last_n_days": "{{count}} jours",
+    "col_action": "Action",
+    "col_count": "Nombre"
   },
   "letters": {
     "button": "Lettre",

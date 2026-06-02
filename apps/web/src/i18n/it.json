@@ -14,6 +14,7 @@
     "logout": "Esci",
     "substitutions": "Supplenze",
     "imports": "Importazioni",
+    "reports": "Rapporti",
     "audit": "Registro di audit"
   },
   "auth": {
@@ -353,6 +354,23 @@
     "error_invalid_header": "L'intestazione CSV non corrisponde al tipo selezionato. Scarica il modello e confronta le colonne.",
     "error_not_utf8": "Il file non è codificato in UTF-8. Salva il CSV come UTF-8.",
     "error_unknown_kind": "Tipo di importazione sconosciuto."
+  },
+  "reports": {
+    "title": "Rapporti",
+    "intro": "Indicatori aggregati — sola lettura, limitati alle proprie scuole.",
+    "students_title": "Alunni/e per classe",
+    "students_total": "Totale: {{students}} alunni/e in {{classes}} classi",
+    "col_class": "Classe",
+    "col_jahrgang": "Anno",
+    "col_students": "Numero",
+    "workload_title": "Carico dei docenti di classe",
+    "workload_intro": "Ruoli attivi di docente di classe per insegnante, suddivisi per ruolo.",
+    "col_teacher": "Docente",
+    "col_total": "Totale",
+    "activity_title": "Panoramica dell'attività",
+    "last_n_days": "{{count}} giorni",
+    "col_action": "Azione",
+    "col_count": "Numero"
   },
   "letters": {
     "button": "Lettera",

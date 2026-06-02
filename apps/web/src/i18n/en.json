@@ -11,6 +11,7 @@
     "logout": "Sign out",
     "substitutions": "Substitutions",
     "imports": "Imports",
+    "reports": "Reports",
     "audit": "Audit Log"
   },
   "auth": {
@@ -352,6 +353,23 @@
     "error_invalid_header": "CSV header doesn't match the selected kind. Download the template and compare columns.",
     "error_not_utf8": "File is not UTF-8 encoded. Save the CSV as UTF-8.",
     "error_unknown_kind": "Unknown import kind."
+  },
+  "reports": {
+    "title": "Reports",
+    "intro": "Aggregated metrics — read-only, school-scoped.",
+    "students_title": "Students per class",
+    "students_total": "Total: {{students}} students across {{classes}} classes",
+    "col_class": "Class",
+    "col_jahrgang": "Grade",
+    "col_students": "Count",
+    "workload_title": "Class-teacher workload",
+    "workload_intro": "Active class-teacher roles per teacher, broken down by role.",
+    "col_teacher": "Teacher",
+    "col_total": "Total",
+    "activity_title": "Activity overview",
+    "last_n_days": "{{count}} days",
+    "col_action": "Action",
+    "col_count": "Count"
   },
   "letters": {
     "button": "Letter",
