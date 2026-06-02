@@ -5,6 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.cache import bump_kind, cache_key_for_scope, get_cache
 from magister_api.models.school_class import (
     CLASS_STATUS_ACTIVE,
     CLASS_STATUS_ARCHIVED,
@@ -12,17 +13,28 @@ from magister_api.models.school_class import (
 )
 from magister_api.repositories.base import BaseRepository, ScopeContext
 
+CACHE_KIND = "classes_active"
+CACHE_TTL_S = 30.0
+
 
 class ClassRepository(BaseRepository):
     def __init__(self, session: AsyncSession, scope: ScopeContext) -> None:
         super().__init__(session, scope)
 
     async def list_active(self) -> list[SchoolClass]:
+        cache = get_cache()
+        scope_ids = None if self.scope.is_admin else self.scope.school_scope
+        key = cache_key_for_scope(CACHE_KIND, scope_ids)
+        cached = cache.get(key)
+        if cached is not None:
+            return list(cached)
         stmt = self.apply_scope(
             select(SchoolClass).where(SchoolClass.status == CLASS_STATUS_ACTIVE),
             SchoolClass.school_id,
         ).order_by(SchoolClass.school_id, SchoolClass.jahrgangsstufe, SchoolClass.name)
-        return list((await self.session.execute(stmt)).scalars().all())
+        rows = list((await self.session.execute(stmt)).scalars().all())
+        cache.set(key, rows, ttl_s=CACHE_TTL_S)
+        return rows
 
     async def get(self, class_id: int) -> SchoolClass | None:
         stmt = self.apply_scope(
@@ -45,6 +57,7 @@ class ClassRepository(BaseRepository):
         )
         self.session.add(row)
         await self.session.flush()
+        bump_kind(CACHE_KIND)
         return row
 
     async def update(
@@ -62,9 +75,12 @@ class ClassRepository(BaseRepository):
         if kuerzel is not None and kuerzel != cls.kuerzel:
             cls.kuerzel = kuerzel
         await self.session.flush()
+        if name_changed:
+            bump_kind(CACHE_KIND)
         return cls, name_changed
 
     async def archive(self, cls: SchoolClass) -> SchoolClass:
         cls.status = CLASS_STATUS_ARCHIVED
         await self.session.flush()
+        bump_kind(CACHE_KIND)
         return cls
