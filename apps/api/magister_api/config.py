@@ -33,6 +33,14 @@ class Settings(BaseSettings):
         default=SecretStr(""),
         description="Symmetric key for pgcrypto pgp_sym_encrypt of audit_events.payload.",
     )
+    audit_key_id: str = Field(
+        default="v1",
+        description=(
+            "Identifier for the currently active audit_key. Stored alongside "
+            "each event so multi-key rotation (M-03 hardening) can decrypt "
+            "old rows with the previous key while new writes use the current."
+        ),
+    )
 
     oidc_issuer: str = Field(default="")
     oidc_client_id: str = Field(default="")

@@ -80,6 +80,7 @@ class AuditService:
                 ip=ip,
                 request_id=request_id,
                 payload=func.pgp_sym_encrypt(plaintext, self._key),
+                key_id=self._settings.audit_key_id,
             )
             .returning(AuditEvent.id)
         )

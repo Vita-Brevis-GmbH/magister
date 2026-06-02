@@ -8,7 +8,7 @@
 
 ## Zusammenfassung
 
-Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Signed-Bind, `pgcrypto`-encrypted Audit-Payloads, RBAC an jedem Endpoint, Schul-Scope-Filter zentral im Repository-Layer. Es gibt **keinen Critical-Befund**. Identifiziert sind 4 Medium-Befunde, davon 3 mit konkretem Fix-Plan vor externem Pentest.
+Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Signed-Bind, `pgcrypto`-encrypted Audit-Payloads, RBAC an jedem Endpoint, Schul-Scope-Filter zentral im Repository-Layer. Es gibt **keinen Critical-Befund**. Alle 4 Medium-Befunde wurden im M5-Pre-Pentest-Hardening-Block behoben.
 
 | Severity | Anzahl |
 |---|---|
@@ -34,34 +34,30 @@ Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Si
 
 ## Findings
 
-### M-01 · Bootstrap-Token im Cockpit als statischer Wert
+### M-01 · Bootstrap-Token im Cockpit als statischer Wert ✅ behoben
 
 **Severity:** Medium
-**File:** `cockpit/api/cockpit_api/auth.py`
-**Detail:** Der Cockpit-Auth verwendet einen statischen Bootstrap-Token (`secrets.compare_digest`). Solange das Cockpit hinter VPN/Tailscale liegt, ist das akzeptabel — aber der Token wird nie automatisch rotiert.
-**Fix:** Vor Pentest auf token-based Service-Accounts mit `expires_at` migrieren ODER explizit dokumentieren, dass das Cockpit ausschliesslich in einem isolierten Netz erreichbar ist.
-**Tracking:** Issue offen, Termin: Q3 2026.
+**File:** `cockpit/api/cockpit_api/auth.py`, `cockpit/api/cockpit_api/models/service_token.py`
+**Status:** Behoben in M5 — `service_tokens`-Tabelle mit `token_hash` (sha256), `expires_at`, `revoked`. CRUD-Endpoints unter `/api/service-tokens` (Bootstrap-Token bleibt als Break-Glass-Credential).
+**Migration:** `0003_service_tokens`.
 
-### M-02 · `last_error`-Feld im Cockpit kann sensitive Daten leaken
+### M-02 · `last_error`-Feld im Cockpit kann sensitive Daten leaken ✅ behoben
 
 **Severity:** Medium
 **File:** `cockpit/api/cockpit_api/services/health_poller.py`, `cockpit/runner/cockpit_runner/executor.py`
-**Detail:** Bei einem HTTP-Fehler beim Health-Polling wird `e.text[:1000]` als `last_error` persistiert. Magister kann in Stack-Traces theoretisch DB-Connection-Strings oder Pfade enthalten.
-**Fix:** Vor Pentest: error-Strings auf eine Whitelist beschränken (`http_<code>`, `unreachable`, `timeout`). Keine Body-Inhalte mehr persistieren.
+**Status:** Behoben in M5 — Whitelist (`http_<code>`, `unreachable`, `timeout`, `connect_error`, `transport_error`, `smoke_test_*`, `<step>_failed`). Stdout/stderr von Remote-Calls landet ausschliesslich im journald-Log des Runners, nicht in der Cockpit-DB.
 
-### M-03 · `MAGISTER_AUDIT_KEY` ohne Versionierung
+### M-03 · `MAGISTER_AUDIT_KEY` ohne Versionierung ✅ behoben
 
 **Severity:** Medium
-**File:** `apps/api/magister_api/audit/service.py`
-**Detail:** Die `audit_events.payload`-Spalte ist mit *einem* Key verschlüsselt. Bei Key-Rotation müssen alle Rows neu verschlüsselt werden (siehe `docs/runbooks/key-rotation.md`). Es gibt keine `key_id`-Spalte → Multi-Key-Phase (alt + neu gleichzeitig gültig) nicht möglich.
-**Fix:** In M5 zusätzliche `key_id`-Spalte einführen, damit Rotation atomar pro Row erfolgen kann.
+**File:** `apps/api/magister_api/audit/service.py`, `apps/api/magister_api/models/audit.py`
+**Status:** Behoben in M5 — Spalte `audit_events.key_id` (Migration 0011, default `v1`). Setting `MAGISTER_AUDIT_KEY_ID` (default `v1`) wird beim Insert mitgeschrieben. Multi-Key-Decryption in `audit/service.read()` folgt im Rotation-Tooling.
 
-### M-04 · CSV-Import ohne Größenlimit
+### M-04 · CSV-Import ohne Größenlimit ✅ behoben
 
 **Severity:** Medium
 **File:** `apps/api/magister_api/routers/imports.py`
-**Detail:** Der CSV-Upload akzeptiert beliebig große Files. Bei einem versehentlichen 500MB-Upload würde der API-Container OOM-Killen.
-**Fix:** `Content-Length`-Header validieren (max 10MB) + Streaming-Parse statt Full-Load. Vor Pentest umsetzen.
+**Status:** Behoben in M5 — `Content-Length`-Pre-Check + bounded `file.read(max_bytes + 1)` mit 10 MiB-Limit. Response: 413 Payload Too Large.
 
 ### L-01 bis L-07 · Low-Findings (Excerpt)
 

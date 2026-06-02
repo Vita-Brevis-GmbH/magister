@@ -14,6 +14,22 @@ from cockpit_api.models import Instance
 logger = logging.getLogger(__name__)
 
 
+def _classify_http_error(exc: httpx.HTTPError) -> str:
+    """Map ``httpx`` errors to a fixed whitelist token.
+
+    Avoids persisting upstream stack traces or response bodies that might
+    leak DB connection strings, file paths, or other operational detail
+    into the cockpit's ``last_error`` column (hardening-audit M-02).
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    if isinstance(exc, httpx.ConnectError):
+        return "connect_error"
+    if isinstance(exc, httpx.TooManyRedirects):
+        return "too_many_redirects"
+    return "transport_error"
+
+
 async def poll_instance(client: httpx.AsyncClient, instance: Instance) -> None:
     health_url = instance.base_url.rstrip("/") + "/api/healthz"
     try:
@@ -26,10 +42,10 @@ async def poll_instance(client: httpx.AsyncClient, instance: Instance) -> None:
                 instance.deployed_version = str(data["version"])
         else:
             instance.last_health_status = f"http_{h.status_code}"
-            instance.last_error = h.text[:1000]
-    except httpx.HTTPError as e:
+            instance.last_error = f"http_{h.status_code}"
+    except httpx.HTTPError as exc:
         instance.last_health_status = "unreachable"
-        instance.last_error = str(e)[:1000]
+        instance.last_error = _classify_http_error(exc)
     instance.last_health_at = datetime.now(UTC)
 
 

@@ -33,5 +33,10 @@ class AuditEvent(Base):
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_id: Mapped[str] = mapped_column(String(36), nullable=False)
     payload: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # Identifies the audit_key version that encrypted ``payload``.
+    # Enables multi-key rotation: new writes carry the current key id,
+    # old rows keep theirs so rotation can decrypt-then-re-encrypt one
+    # batch at a time (hardening-audit M-03).
+    key_id: Mapped[str] = mapped_column(String(32), nullable=False, server_default="v1")
 
     __table_args__ = (Index("ix_audit_events_target", "target_kind", "target_id"),)
