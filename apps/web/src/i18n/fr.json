@@ -355,6 +355,23 @@
     "error_not_utf8": "Le fichier n'est pas encodé en UTF-8. Enregistrez le CSV en UTF-8.",
     "error_unknown_kind": "Type d'import inconnu."
   },
+  "privacy": {
+    "section_title": "Export de données (LPD art. 25)",
+    "section_desc": "Tout ce que Magister sait sur cette personne — y compris le journal d'audit. La consultation est elle-même journalisée.",
+    "open_button": "Afficher l'export",
+    "title": "Export des données personnelles",
+    "description": "Aperçu complet des données stockées par Magister sur cette personne.",
+    "section_identity": "Identité (depuis le cache AD)",
+    "section_school": "École",
+    "section_memberships": "Appartenances à des classes ({{count}})",
+    "section_teacher_roles": "Rôles d'enseignant·e de classe ({{count}})",
+    "section_audit": "Journal d'audit ({{count}})",
+    "none": "Aucune entrée",
+    "role_actor": "a été acteur",
+    "role_target": "a été concerné·e",
+    "audit_truncated": "Aperçu limité à 100 entrées — liste complète dans l'export CSV (total : {{total}}).",
+    "download_csv": "Télécharger CSV"
+  },
   "reports": {
     "title": "Rapports",
     "intro": "Indicateurs agrégés — lecture seule, limités à votre périmètre.",
