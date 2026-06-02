@@ -29,6 +29,7 @@ import type {
   LetterRequest,
   LetterTemplate,
   StudentsByClassReport,
+  SubjectAccessReport,
   TeacherWorkloadReport,
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
@@ -546,4 +547,18 @@ export function useActivityReport(days: number = 30) {
     queryKey: ["reports", "activity", days],
     queryFn: () => apiFetch<ActivityReport>(`/reports/activity?days=${days}`),
   });
+}
+
+// --- Privacy / subject-access (M3 US-4 + US-5) -----------------------------
+
+export function useSubjectAccess(guid: string | null) {
+  return useQuery<SubjectAccessReport>({
+    queryKey: ["privacy", "subject-access", guid],
+    queryFn: () => apiFetch<SubjectAccessReport>(`/privacy/subject-access/${guid}`),
+    enabled: !!guid,
+  });
+}
+
+export function subjectAccessCsvUrl(guid: string): string {
+  return `${API_BASE}/privacy/subject-access/${guid}/export.csv`;
 }

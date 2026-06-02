@@ -355,6 +355,23 @@
     "error_not_utf8": "Il file non è codificato in UTF-8. Salva il CSV come UTF-8.",
     "error_unknown_kind": "Tipo di importazione sconosciuto."
   },
+  "privacy": {
+    "section_title": "Esportazione dati (revDSG art. 25)",
+    "section_desc": "Tutto ciò che Magister sa di questa persona — incluso il registro di audit. La consultazione viene a sua volta registrata.",
+    "open_button": "Mostra esportazione",
+    "title": "Esportazione dei dati personali",
+    "description": "Panoramica completa di tutti i dati che Magister conserva su questa persona.",
+    "section_identity": "Identità (dalla cache AD)",
+    "section_school": "Scuola",
+    "section_memberships": "Appartenenze di classe ({{count}})",
+    "section_teacher_roles": "Ruoli di docente di classe ({{count}})",
+    "section_audit": "Registro di audit ({{count}})",
+    "none": "Nessuna voce",
+    "role_actor": "è stato/a esecutore",
+    "role_target": "è stato/a interessato/a",
+    "audit_truncated": "Anteprima limitata a 100 voci — elenco completo nell'esportazione CSV (totale: {{total}}).",
+    "download_csv": "Esporta CSV"
+  },
   "reports": {
     "title": "Rapporti",
     "intro": "Indicatori aggregati — sola lettura, limitati alle proprie scuole.",

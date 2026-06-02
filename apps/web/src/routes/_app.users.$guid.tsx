@@ -7,6 +7,7 @@ import { useCurrentUser, useMailDomains, useUpdateUser, useUser } from "@/api/ho
 import type { UserAttributesUpdate } from "@/api/types";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
+import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +68,7 @@ function UserDetailPage(): JSX.Element {
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   // Re-hydrate the form when the loaded user (or available domains) change.
   useEffect(() => {
@@ -327,6 +329,18 @@ function UserDetailPage(): JSX.Element {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
+            <CardDescription>{t("privacy.section_desc")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button type="button" variant="outline" onClick={() => setPrivacyOpen(true)}>
+              {t("privacy.open_button")}
+            </Button>
+          </CardContent>
+        </Card>
+
         <div className="flex items-center justify-end gap-3">
           <BackToList />
           <Button type="submit" disabled={update.isPending}>
@@ -334,6 +348,8 @@ function UserDetailPage(): JSX.Element {
           </Button>
         </div>
       </form>
+
+      <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
     </div>
   );
 }

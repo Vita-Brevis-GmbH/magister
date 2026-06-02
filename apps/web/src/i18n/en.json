@@ -354,6 +354,23 @@
     "error_not_utf8": "File is not UTF-8 encoded. Save the CSV as UTF-8.",
     "error_unknown_kind": "Unknown import kind."
   },
+  "privacy": {
+    "section_title": "Data export (revDSG Art. 25)",
+    "section_desc": "Everything Magister knows about this person — incl. audit log. The fetch itself is audited.",
+    "open_button": "Show data export",
+    "title": "Subject-access export",
+    "description": "Full overview of all data Magister stores about this person.",
+    "section_identity": "Identity (from AD cache)",
+    "section_school": "School",
+    "section_memberships": "Class memberships ({{count}})",
+    "section_teacher_roles": "Class-teacher roles ({{count}})",
+    "section_audit": "Audit log ({{count}})",
+    "none": "No entries",
+    "role_actor": "was actor",
+    "role_target": "was target",
+    "audit_truncated": "Preview truncated at 100 entries — full list in CSV export (total: {{total}}).",
+    "download_csv": "Download CSV"
+  },
   "reports": {
     "title": "Reports",
     "intro": "Aggregated metrics — read-only, school-scoped.",

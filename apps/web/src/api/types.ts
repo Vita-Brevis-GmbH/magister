@@ -249,6 +249,27 @@ export interface AuditEventListResponse {
   limit: number;
 }
 
+export interface SubjectAccessReport {
+  user: Record<string, unknown>;
+  school: { id: number; name: string } | null;
+  memberships: Array<Record<string, unknown>>;
+  teacher_roles: Array<Record<string, unknown>>;
+  audit_events: Array<{
+    id: number;
+    ts: string;
+    action: string;
+    target_kind: string;
+    target_id: string;
+    actor_upn: string | null;
+    actor_object_guid: string | null;
+    school_id: number | null;
+    ip: string | null;
+    request_id: string;
+    payload: Record<string, unknown>;
+    role: "actor" | "target";
+  }>;
+}
+
 export interface StudentsByClassRow {
   class_id: number;
   school_id: number;

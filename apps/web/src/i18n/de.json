@@ -354,6 +354,23 @@
     "error_not_utf8": "Datei ist nicht UTF-8 kodiert. Speichere die CSV als UTF-8.",
     "error_unknown_kind": "Unbekannter Import-Typ."
   },
+  "privacy": {
+    "section_title": "Datenauskunft (revDSG Art. 25)",
+    "section_desc": "Alles, was Magister über diese Person weiss — inkl. Audit-Log. Wird beim Aufruf selbst protokolliert.",
+    "open_button": "Datenauskunft anzeigen",
+    "title": "Datenauskunft",
+    "description": "Vollständige Übersicht aller in Magister gespeicherten Daten zu dieser Person.",
+    "section_identity": "Identität (aus AD-Cache)",
+    "section_school": "Schule",
+    "section_memberships": "Klassen-Mitgliedschaften ({{count}})",
+    "section_teacher_roles": "Klassenlehrer-Rollen ({{count}})",
+    "section_audit": "Audit-Log ({{count}})",
+    "none": "Keine Einträge",
+    "role_actor": "war Ausführende:r",
+    "role_target": "war Betroffene:r",
+    "audit_truncated": "Vorschau auf 100 Einträge gekürzt — vollständige Liste im CSV-Export (Total: {{total}}).",
+    "download_csv": "CSV exportieren"
+  },
   "reports": {
     "title": "Reports",
     "intro": "Aggregierte Kennzahlen — read-only, schulgefiltert.",
