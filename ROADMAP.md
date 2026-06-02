@@ -55,15 +55,17 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - FR/IT/EN-Übersetzungen durch native Reviewer (Stub-Status entfernen)
 - Runbook `upgrade-to-m3.md` (siehe `docs/runbooks/`)
 
-## M4 — Scale & Operations Maturity
+## M4 — Scale & Operations Maturity (in Arbeit)
 
 **Ziel:** Vita Brevis kann viele Schulträger gleichzeitig betreiben, Schulträger können sich mehr selbst helfen.
 
-- Multi-Schulträger pro Operations-Team (Vita Brevis Cockpit)
-- Self-Service Update-Channels (`stable`, `latest`) mit Roll-Forward / Roll-Back
-- ADR-getriebene Architektur-Doku, ausführliche Runbooks
-- Performance-Optimierungen (Cache-Layer, AD-Diff-Sync)
-- Härtungs-Audit + Penetration-Test
+**Akzeptanz:**
+- 🚧 **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
+- ⏳ M4.2 Update-Trigger: Webhook-basierter Image-Pull pro Instanz
+- ⏳ M4.3 Update-Channels `stable` / `latest` mit Roll-Back-Snapshot
+- ⏳ Performance: AD-Diff-Sync (inkrementell statt Full-Pull), Read-Cache für Klassen/User
+- ⏳ Härtungs-Audit + externer Penetration-Test
+- ⏳ Erweiterte Runbooks (Disaster-Recovery, Key-Rotation, Multi-Region-Failover)
 
 ## Cross-Cutting (laufend)
 
