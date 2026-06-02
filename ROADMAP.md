@@ -46,14 +46,13 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 
 **Akzeptanz:**
 - ✅ Eltern-Briefe-Templates (PDF-Generator) für Anmeldungen, Klassenwechsel, Passwort-Übergabe — `POST /letters/{template}` mit WeasyPrint
-- ✅ CSV-Import mit Stage → Diff → Apply für Klassen, Schüler-Zuteilungen, KL-Rollen — `POST /imports` + Template-Download (Escola-Connector bleibt offen, wartet auf API-Doku)
+- ✅ CSV-Import mit Stage → Diff → Apply für Klassen, Schüler-Zuteilungen, KL-Rollen — `POST /imports` + Template-Download
 - ✅ Reporting-Endpoints: Schülerzahlen pro Klasse, KL-Auslastung, Audit-Activity — `GET /reports/*`
 - ✅ Datenexport für Betroffenenauskunft (revDSG Art. 25) als JSON + CSV — `GET /privacy/subject-access/{guid}` mit self-audit
 - ✅ Compliance-Activity-Log pro User (in Subject-Access-Endpoint integriert, `target` und `actor` getrennt)
 
 **Ausstehend vor Produktiveinsatz:**
 - FR/IT/EN-Übersetzungen durch native Reviewer (Stub-Status entfernen)
-- Escola-Connector — wartet auf Escola-API-Doku; CSV-Import deckt den Workflow bereits ab
 - Runbook `upgrade-to-m3.md` (siehe `docs/runbooks/`)
 
 ## M4 — Scale & Operations Maturity

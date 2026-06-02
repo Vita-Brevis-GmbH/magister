@@ -110,7 +110,6 @@ docker compose run --rm api alembic downgrade 0008_computers_search_base
 
 - **FR/IT/EN-Übersetzungen** sind als Stubs vollständig vorhanden, aber nicht durch native Reviewer geprüft (`_meta._status` in den Locale-Dateien). Vor dem Rollout an FR/IT-Schulen unbedingt reviewen lassen.
 - **Eltern-Briefe sind aktuell nur in Deutsch** verfügbar. Texte in `magister_api/letters/translations.py`.
-- **Escola-Connector** ist noch nicht implementiert — der CSV-Import deckt den Workflow heute ab.
 - **Audit-Decryption im Subject-Access** liest mit dem aktiven `MAGISTER_AUDIT_KEY` — bei Key-Rotation müssten alte Events vorher re-encryptet werden (Out-of-scope für M3).
 
 ---
