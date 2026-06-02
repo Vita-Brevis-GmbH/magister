@@ -60,8 +60,8 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 **Ziel:** Vita Brevis kann viele Schulträger gleichzeitig betreiben, Schulträger können sich mehr selbst helfen.
 
 **Akzeptanz:**
-- 🚧 **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
-- ⏳ M4.2 Update-Trigger: Webhook-basierter Image-Pull pro Instanz
+- ✅ **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
+- 🚧 **M4.2 Update-Tracking** — Release-Manifest-Poller, `update_requests`-Tabelle, "Update einplanen"-UI
 - ⏳ M4.3 Update-Channels `stable` / `latest` mit Roll-Back-Snapshot
 - ⏳ Performance: AD-Diff-Sync (inkrementell statt Full-Pull), Read-Cache für Klassen/User
 - ⏳ Härtungs-Audit + externer Penetration-Test
