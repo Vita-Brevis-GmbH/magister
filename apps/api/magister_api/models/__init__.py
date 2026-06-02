@@ -4,6 +4,7 @@ Importing this package registers all tables on ``Base.metadata``. Alembic's
 env.py imports it for autogeneration target metadata.
 """
 
+from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.audit import AuditEvent
 from magister_api.models.auth import AdUserCache, RoleAssignment, Session
@@ -16,6 +17,7 @@ from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 
 __all__ = [
+    "AdSyncState",
     "AdUserCache",
     "AppSettings",
     "AuditEvent",

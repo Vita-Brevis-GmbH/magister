@@ -15,6 +15,7 @@ import struct
 import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi.concurrency import run_in_threadpool
@@ -53,6 +54,8 @@ DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "memberOf",
     "mS-DS-ConsistencyGuid",
     "distinguishedName",
+    # Replicated change timestamp — drives incremental sync (M4).
+    "whenChanged",
     # Physical address (mirrored into ad_user_cache).
     "streetAddress",
     "l",
@@ -83,6 +86,8 @@ class AdUserRecord:
     # Populated by the Phase-4 device sync from the Computer-OU
     # (``managedBy=<user-dn>``). None until then.
     device_name: str | None = None
+    # AD replicated change timestamp; drives the incremental sync cursor.
+    when_changed: datetime | None = None
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -193,7 +198,30 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         locality=_first_value(entry_attrs.get("l")),
         postal_code=_first_value(entry_attrs.get("postalCode")),
         country=_first_value(entry_attrs.get("co")),
+        when_changed=_parse_generalized_time(_first_value(entry_attrs.get("whenChanged"))),
     )
+
+
+def _parse_generalized_time(raw: Any) -> datetime | None:
+    """Parse AD ``whenChanged`` (Generalized Time, e.g. ``20260601120000.0Z``).
+
+    ldap3 sometimes returns a parsed ``datetime`` directly. Both forms are
+    accepted; bad input returns ``None`` (caller treats missing cursor as
+    "unknown — full sync").
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return raw if raw.tzinfo else raw.replace(tzinfo=UTC)
+    if isinstance(raw, str):
+        s = raw.rstrip("Z").split(".", 1)[0]
+        if len(s) != 14:
+            return None
+        try:
+            return datetime.strptime(s, "%Y%m%d%H%M%S").replace(tzinfo=UTC)
+        except ValueError:
+            return None
+    return None
 
 
 # --- Pool / Connection construction --------------------------------------------------
@@ -288,12 +316,24 @@ class AdClient:
         *,
         search_base: str | None = None,
         attributes: Sequence[str] = DEFAULT_USER_ATTRIBUTES,
+        changed_since: datetime | None = None,
     ) -> list[AdUserRecord]:
-        """Return all users below ``search_base``. Defaults to the configured base."""
+        """Return users below ``search_base``.
+
+        When ``changed_since`` is provided, the LDAP filter is narrowed to
+        ``whenChanged >= <ts>`` to enable incremental (delta) sync.
+        Tombstoned entries are *not* returned by this filter — full sync
+        remains required to reconcile deletions.
+        """
         base = search_base or self._settings.ad_users_search_base
         if not base:
             raise AdUnavailableError("MAGISTER_AD_USERS_SEARCH_BASE is not configured")
-        return await run_in_threadpool(self._sync_search, base, list(attributes))
+        if changed_since is not None:
+            ts = changed_since.astimezone(UTC).strftime("%Y%m%d%H%M%S.0Z")
+            search_filter = f"(&(objectClass=user)(whenChanged>={ts}))"
+        else:
+            search_filter = "(objectClass=user)"
+        return await run_in_threadpool(self._sync_search, base, list(attributes), search_filter)
 
     def _acquire_connection(self) -> tuple[Connection, bool]:
         """Return ``(connection, owned)``. ``owned=True`` means caller must unbind."""
@@ -306,12 +346,17 @@ class AdClient:
         except LDAPException as exc:
             raise AdUnavailableError("ldap_bind_failed") from exc
 
-    def _sync_search(self, base: str, attributes: list[str]) -> list[AdUserRecord]:
+    def _sync_search(
+        self,
+        base: str,
+        attributes: list[str],
+        search_filter: str = "(objectClass=user)",
+    ) -> list[AdUserRecord]:
         conn, owned = self._acquire_connection()
         try:
             ok = conn.search(
                 search_base=base,
-                search_filter="(objectClass=user)",
+                search_filter=search_filter,
                 search_scope=SUBTREE,
                 attributes=attributes,
             )
