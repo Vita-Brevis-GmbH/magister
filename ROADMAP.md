@@ -69,6 +69,18 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ **Erweiterte Runbooks** — `disaster-recovery.md`, `key-rotation.md`
 - ⏳ Externer Pentest (Q4 2026 nach M5-Hardening)
 
+## M5 — Pre-Pentest Hardening (in Arbeit)
+
+**Ziel:** Alle Medium-Findings aus dem Hardening-Audit beheben, bevor externer Pentest gebucht wird.
+
+**Akzeptanz:**
+- ✅ M-01: Cockpit Service-Tokens (rotierbar, `expires_at`, `revoked`) — Tabelle `service_tokens`, CRUD unter `/api/service-tokens`
+- ✅ M-02: `last_error`-Whitelist in Cockpit-Poller + Runner
+- ✅ M-03: `audit_events.key_id`-Spalte (Migration 0011) für Multi-Key-Rotation
+- ✅ M-04: CSV-Upload bounded auf 10 MiB (413 statt OOM)
+- ⏳ L-01 bis L-07 (Low-Findings) als Backlog
+- ⏳ Externer Pentest beauftragen
+
 ## Cross-Cutting (laufend)
 
 - Sicherheits-Updates der Dependencies (renovate)

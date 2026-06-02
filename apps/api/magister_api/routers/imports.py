@@ -107,7 +107,16 @@ async def stage_import(
         raise HTTPException(status_code=400, detail="unknown_kind")
     target_school = _resolve_school_id(school_id, user)
 
-    raw = await file.read()
+    # Hardening-audit M-04: bound CSV uploads so a stray multi-GB upload
+    # can't OOM-kill the API container. 10 MiB covers the largest realistic
+    # student roster many times over.
+    max_bytes = 10 * 1024 * 1024
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > max_bytes:
+        raise HTTPException(status_code=413, detail="csv_too_large")
+    raw = await file.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise HTTPException(status_code=413, detail="csv_too_large")
     try:
         csv_text = raw.decode("utf-8-sig")
     except UnicodeDecodeError as exc:

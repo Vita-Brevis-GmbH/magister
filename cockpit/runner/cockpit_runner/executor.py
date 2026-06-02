@@ -34,9 +34,14 @@ def _ssh(host: str, command: str) -> tuple[int, str, str]:
 
 
 def _run(host: str, command: str, *, step: str) -> None:
-    rc, out, err = _ssh(host, command)
+    rc, _out, _err = _ssh(host, command)
     if rc != 0:
-        raise UpdateFailed(f"{step} failed (rc={rc}): {err.strip() or out.strip()}")
+        # Only the step name and rc are persisted via UpdateFailed → cockpit
+        # last_error. Stdout/stderr can contain operational secrets
+        # (paths, env values) and stays in the runner's journald log only
+        # (hardening-audit M-02).
+        logger.error("%s failed on %s (rc=%d): %s", step, host, rc, _err.strip() or _out.strip())
+        raise UpdateFailed(f"{step}_failed (rc={rc})")
 
 
 def execute_update(req: ClaimedRequest) -> None:
@@ -69,8 +74,7 @@ def execute_update(req: ClaimedRequest) -> None:
         r.raise_for_status()
         deployed = r.json().get("version")
         if deployed != req.target_version:
-            raise UpdateFailed(
-                f"smoke-test: deployed version is {deployed}, expected {req.target_version}"
-            )
+            raise UpdateFailed("smoke_test_version_mismatch")
     except httpx.HTTPError as e:
-        raise UpdateFailed(f"smoke-test http error: {e}") from e
+        logger.error("smoke-test http error: %s", e)
+        raise UpdateFailed("smoke_test_http_error") from e

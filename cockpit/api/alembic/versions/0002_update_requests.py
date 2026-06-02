@@ -9,8 +9,9 @@ Create Date: 2026-06-02
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision: str = "0002_update_requests"
 down_revision: str | None = "0001_initial"
