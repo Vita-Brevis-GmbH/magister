@@ -1,0 +1,17 @@
+[Unit]
+Description=Vita Brevis Cockpit Update Runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cockpit-runner
+EnvironmentFile=/etc/cockpit-runner/cockpit-runner.env
+ExecStart=/opt/cockpit-runner/.venv/bin/cockpit-runner
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
