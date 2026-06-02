@@ -1,0 +1,31 @@
+[project]
+name = "cockpit-runner"
+version = "0.1.0"
+description = "Update-runner for Vita Brevis Cockpit — drains pending update requests"
+requires-python = ">=3.12"
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.3", "ruff>=0.7", "pyright>=1.1"]
+
+[project.scripts]
+cockpit-runner = "cockpit_runner.main:run"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "B", "UP", "S", "RUF"]
+ignore = ["S101", "S603", "S607"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["cockpit_runner"]
