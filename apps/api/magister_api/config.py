@@ -7,10 +7,10 @@ All Magister settings use the ``MAGISTER_`` prefix. Secrets are wrapped in
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -46,7 +46,9 @@ class Settings(BaseSettings):
     oidc_client_id: str = Field(default="")
     oidc_client_secret: SecretStr = Field(default=SecretStr(""))
     oidc_redirect_uri: str = Field(default="http://localhost:8000/auth/callback")
-    oidc_scopes: list[str] = Field(default_factory=lambda: ["openid", "profile", "email"])
+    oidc_scopes: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["openid", "profile", "email"]
+    )
 
     session_secret: SecretStr = Field(default=SecretStr(""))
     session_lifetime_minutes: int = Field(default=480)
@@ -57,7 +59,7 @@ class Settings(BaseSettings):
     csrf_cookie_name: str = Field(default="magister_csrf")
     csrf_header_name: str = Field(default="X-CSRF-Token")
 
-    bootstrap_admins: list[str] = Field(default_factory=list)
+    bootstrap_admins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
     # Local-admin (break-glass) — only consulted on first boot when the
     # `local_admins` table is empty. Always pass a pre-computed argon2id
@@ -65,7 +67,7 @@ class Settings(BaseSettings):
     local_admin_username: str = Field(default="admin")
     local_admin_password_hash: SecretStr | None = Field(default=None)
 
-    ad_dcs: list[str] = Field(default_factory=list)
+    ad_dcs: Annotated[list[str], NoDecode] = Field(default_factory=list)
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None
     ad_users_search_base: str | None = Field(
