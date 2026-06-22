@@ -1,0 +1,36 @@
+# Magister DEV/demo reverse proxy — plain HTTP, no TLS, no ACME.
+#
+# For local or dev-server demos reached by IP, e.g. http://172.25.8.27 — no
+# DNS, no Let's-Encrypt, no cert warnings. Loaded ONLY via
+# docker-compose.dev.yml; production keeps ../caddy/Caddyfile with auto-TLS.
+#
+# Deliberately omits HSTS and the CSP `upgrade-insecure-requests` directive:
+# both force the browser onto HTTPS and would break plain-HTTP access. Do not
+# use this config on a public/production host.
+{
+	# Never try to provision certificates or redirect to HTTPS.
+	auto_https off
+}
+
+:80 {
+	encode zstd gzip
+
+	# Health-probe — answered by the API directly, no /api/ prefix.
+	handle /healthz {
+		reverse_proxy magister-api:8000
+	}
+
+	# API + auth surface; handle_path strips the /api/ prefix before
+	# forwarding, mirroring the production Caddyfile.
+	handle_path /api/* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Everything else is the SPA (magister-web).
+	handle {
+		reverse_proxy magister-web:80
+	}
+}
