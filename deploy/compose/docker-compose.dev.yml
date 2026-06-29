@@ -16,7 +16,9 @@
 services:
   caddy:
     # Point Caddy at the plain-HTTP dev config instead of the TLS one.
-    # (entrypoint stays "caddy"; this overrides only the CMD args.)
+    # Set entrypoint + command explicitly so the invocation is "caddy run …"
+    # regardless of how the base image splits ENTRYPOINT vs CMD.
+    entrypoint: ["caddy"]
     command: ["run", "--config", "/etc/caddy/Caddyfile.dev", "--adapter", "caddyfile"]
     volumes:
       - ../caddy/Caddyfile.dev:/etc/caddy/Caddyfile.dev:ro
