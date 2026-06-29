@@ -14,6 +14,14 @@
 # because the base compose file marks ACME_EMAIL as required.
 
 services:
+  magister-api:
+    # Over plain HTTP the browser silently drops Secure cookies, so the
+    # session + CSRF cookies never come back and every login bounces straight
+    # to the login mask. Disable the Secure flag for the dev/HTTP path only;
+    # production (docker-compose.yml alone) keeps it "true" over HTTPS.
+    environment:
+      MAGISTER_SESSION_COOKIE_SECURE: "false"
+
   caddy:
     # Point Caddy at the plain-HTTP dev config instead of the TLS one.
     # Set entrypoint + command explicitly so the invocation is "caddy run …"
