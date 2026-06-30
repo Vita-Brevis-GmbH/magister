@@ -406,7 +406,15 @@
     "temp_password": "Temporäres Passwort",
     "temp_password_placeholder": "z.B. Apfel-Berg-7",
     "temp_password_hint": "Wird nicht gespeichert — bitte direkt nach einem manuellen Passwort-Reset hier eintragen.",
-    "generate_button": "PDF generieren"
+    "generate_button": "PDF generieren",
+    "errors": {
+      "student_not_found": "Schüler:in nicht gefunden.",
+      "unknown_template": "Unbekannte Vorlage.",
+      "missing_active_class": "Schüler:in hat keine aktive Klasse.",
+      "missing_school_year_or_first_day": "Schuljahr und erster Schultag sind erforderlich.",
+      "missing_old_class_or_effective_date": "Bisherige Klasse und Wirksam-ab-Datum sind erforderlich.",
+      "missing_temp_password": "Temporäres Passwort ist erforderlich."
+    }
   },
   "audit": {
     "title": "Audit-Log",

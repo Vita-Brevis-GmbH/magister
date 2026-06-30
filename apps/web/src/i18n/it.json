@@ -407,7 +407,15 @@
     "temp_password": "Password temporanea",
     "temp_password_placeholder": "es. Mela-Monte-7",
     "temp_password_hint": "Non salvata — inserire subito dopo un reset manuale della password.",
-    "generate_button": "Genera PDF"
+    "generate_button": "Genera PDF",
+    "errors": {
+      "student_not_found": "Studente non trovato.",
+      "unknown_template": "Modello sconosciuto.",
+      "missing_active_class": "Lo studente non ha una classe attiva.",
+      "missing_school_year_or_first_day": "Anno scolastico e primo giorno sono obbligatori.",
+      "missing_old_class_or_effective_date": "Classe precedente e data di decorrenza sono obbligatorie.",
+      "missing_temp_password": "La password temporanea è obbligatoria."
+    }
   },
   "audit": {
     "title": "Registro di audit",

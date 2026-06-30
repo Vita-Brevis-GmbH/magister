@@ -381,7 +381,7 @@ class ImportService:
         if job is None:
             raise ImportJobNotFoundError(str(job_id))
         if job.status != IMPORT_STATUS_STAGED:
-            raise ImportJobBadStateError(f"job is {job.status}, expected staged")
+            raise ImportJobBadStateError("import_job_not_staged")
 
         rows = (
             (
@@ -548,7 +548,7 @@ class ImportService:
         if job is None:
             raise ImportJobNotFoundError(str(job_id))
         if job.status != IMPORT_STATUS_STAGED:
-            raise ImportJobBadStateError(f"job is {job.status}, expected staged")
+            raise ImportJobBadStateError("import_job_not_staged")
         job.status = IMPORT_STATUS_CANCELLED
         await self.session.flush()
         await self.audit.emit(

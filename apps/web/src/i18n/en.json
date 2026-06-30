@@ -406,7 +406,15 @@
     "temp_password": "Temporary password",
     "temp_password_placeholder": "e.g. Apple-Hill-7",
     "temp_password_hint": "Not stored — enter right after a manual password reset.",
-    "generate_button": "Generate PDF"
+    "generate_button": "Generate PDF",
+    "errors": {
+      "student_not_found": "Student not found.",
+      "unknown_template": "Unknown template.",
+      "missing_active_class": "The student has no active class.",
+      "missing_school_year_or_first_day": "School year and first day are required.",
+      "missing_old_class_or_effective_date": "Previous class and effective date are required.",
+      "missing_temp_password": "Temporary password is required."
+    }
   },
   "audit": {
     "title": "Audit Log",

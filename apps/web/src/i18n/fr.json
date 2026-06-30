@@ -407,7 +407,15 @@
     "temp_password": "Mot de passe temporaire",
     "temp_password_placeholder": "p.ex. Pomme-Mont-7",
     "temp_password_hint": "Non enregistré — à saisir juste après une réinitialisation manuelle.",
-    "generate_button": "Générer le PDF"
+    "generate_button": "Générer le PDF",
+    "errors": {
+      "student_not_found": "Élève introuvable.",
+      "unknown_template": "Modèle inconnu.",
+      "missing_active_class": "L'élève n'a pas de classe active.",
+      "missing_school_year_or_first_day": "L'année scolaire et le premier jour sont requis.",
+      "missing_old_class_or_effective_date": "La classe précédente et la date d'effet sont requises.",
+      "missing_temp_password": "Le mot de passe temporaire est requis."
+    }
   },
   "audit": {
     "title": "Journal d'audit",
