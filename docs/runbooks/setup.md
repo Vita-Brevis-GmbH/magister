@@ -19,7 +19,7 @@ in den Folge-Issues.
 
 1. Azure-Portal → **Microsoft Entra ID → App registrations → New registration**
 2. Name: `Magister-<Schulträger>`
-3. Redirect URI (Web): `https://magister.<schultraeger>.ch/auth/callback`
+3. Redirect URI (Web): `https://magister.<schultraeger>.ch/api/auth/callback`
 4. Nach dem Anlegen:
    - **Application (client) ID** → `MAGISTER_OIDC_CLIENT_ID`
    - **Directory (tenant) ID** → wird Teil von `MAGISTER_OIDC_ISSUER`
@@ -67,7 +67,7 @@ MAGISTER_CSRF_SECRET=<urlsafe-base64-32-bytes>
 MAGISTER_OIDC_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0
 MAGISTER_OIDC_CLIENT_ID=<app-client-id>
 MAGISTER_OIDC_CLIENT_SECRET=<app-client-secret>
-MAGISTER_OIDC_REDIRECT_URI=https://magister.<schultraeger>.ch/auth/callback
+MAGISTER_OIDC_REDIRECT_URI=https://magister.<schultraeger>.ch/api/auth/callback
 
 # Bootstrap admin(s) — comma-separated UPNs that get role=admin on first login.
 # Remove from .env once the first admin has actually logged in (role is then
@@ -137,9 +137,9 @@ uv run uvicorn magister_api.main:app --host 0.0.0.0 --port 8000
 
 ## 7. Bootstrap-Login durchspielen
 
-1. Browser auf `https://magister.<schultraeger>.ch/auth/login`
+1. Browser auf `https://magister.<schultraeger>.ch/api/auth/login`
 2. Entra-Login mit dem in `MAGISTER_BOOTSTRAP_ADMINS` gelisteten UPN
-3. Redirect zurück nach `/auth/callback?code=...` → API tauscht den Code,
+3. Redirect zurück nach `/api/auth/callback?code=...` → API tauscht den Code,
    erkennt Bootstrap-UPN, setzt Session-Cookie (`magister_session`) und
    CSRF-Cookie (`magister_csrf`).
 4. `GET /auth/me` antwortet mit `is_admin: true, roles: ["admin"]`.
@@ -279,7 +279,7 @@ curl https://magister.<schultraeger>.ch/healthz
 | Problem | Symptom | Fix |
 |---------|---------|-----|
 | `audit_events` schreiben schlägt mit `function pgp_sym_encrypt does not exist` fehl | `pgcrypto` nicht installiert | `CREATE EXTENSION pgcrypto;` als Superuser im DB-Schema |
-| `/auth/callback` → 403 `user_not_synced` | UPN ist nicht in `MAGISTER_BOOTSTRAP_ADMINS` und der periodische AD-Sync (#3) hat den User noch nicht erfasst | Erst `MAGISTER_BOOTSTRAP_ADMINS` benutzen oder den Sync abwarten |
+| `/api/auth/callback` → 403 `user_not_synced` | UPN ist nicht in `MAGISTER_BOOTSTRAP_ADMINS` und der periodische AD-Sync (#3) hat den User noch nicht erfasst | Erst `MAGISTER_BOOTSTRAP_ADMINS` benutzen oder den Sync abwarten |
 | `RuntimeError: Missing required runtime secrets` beim Container-Start | Eine der Required-Vars (`MAGISTER_AUDIT_KEY`, `MAGISTER_SESSION_SECRET`, `MAGISTER_CSRF_SECRET`) fehlt | `.env` ergänzen, Container neu starten |
 | Audit-Logs lassen sich nicht lesen | `MAGISTER_AUDIT_KEY` wurde rotiert | Keine Lösung ausser Restore: existierende Audit-Rows sind mit dem alten Key verschlüsselt — Schlüssel aus Backup wiederherstellen |
 | `PATCH /users/{guid}` schlägt mit `503 ad_unavailable` fehl | Service-Account hat keine Write-Permission auf das Attribut | Delegation auf der Schüler/Lehrer-OU ergänzen (siehe §7b) |
