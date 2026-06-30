@@ -76,6 +76,19 @@ class ClassTeacherRoleRepository:
         )
         return (await self.session.execute(stmt)).scalar_one_or_none() is not None
 
+    async def active_class_ids_for_teacher(
+        self, ad_object_guid: str, *, now: datetime | None = None
+    ) -> list[int]:
+        """Class ids where the teacher is an active KL (any sub-role)."""
+        ts = now or utcnow()
+        stmt = (
+            select(ClassTeacherRole.class_id)
+            .where(ClassTeacherRole.ad_object_guid == ad_object_guid)
+            .where(_active_window_predicate(ts))
+            .distinct()
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get(self, role_id: int) -> ClassTeacherRole | None:
         return await self.session.get(ClassTeacherRole, role_id)
 

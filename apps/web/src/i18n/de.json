@@ -12,7 +12,8 @@
     "imports": "Importe",
     "reports": "Reports",
     "audit": "Audit-Log",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "my_students": "Meine Schüler:innen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -91,6 +92,15 @@
     "assign_teacher_description": "Lehrperson suchen, Rolle und Zeitfenster wählen.",
     "assign_teacher_submit": "Zuweisen",
     "revoke_teacher": "Beenden",
+    "subject": "Fach",
+    "subject_placeholder": "z.B. Mathematik",
+    "subject_teachers_title": "Fachlehrpersonen",
+    "subject_teachers_description": "Fachlehrpersonen mit Fach und Zeitfenster.",
+    "subject_teachers_empty": "Noch keine Fachlehrpersonen.",
+    "assign_subject_teacher_button": "Fachlehrperson zuweisen",
+    "assign_subject_teacher_title": "Fachlehrperson zuweisen",
+    "assign_subject_teacher_description": "Lehrperson suchen, Fach und Zeitfenster wählen.",
+    "assign_subject_teacher_submit": "Zuweisen",
     "search_teacher": "Lehrperson suchen",
     "picked": "Ausgewählt",
     "students_title": "Schüler:innen",
@@ -484,5 +494,12 @@
     "error_cannot_disable_self": "Sie können Ihren eigenen Account nicht deaktivieren.",
     "error_not_found": "Benutzer nicht gefunden oder ausserhalb Ihres Zugriffs.",
     "error_user_not_in_ad": "Der Account existiert nicht mehr im AD."
+  },
+  "my_students": {
+    "title": "Meine Schüler:innen",
+    "intro": "Alle Schüler:innen der Klassen, in denen du KL oder Fachlehrperson bist.",
+    "empty": "Du bist aktuell keiner Klasse als KL oder Fachlehrperson zugewiesen.",
+    "empty_class": "Keine aktiven Schüler:innen.",
+    "count": "{{count}} Schüler:innen"
   }
 }

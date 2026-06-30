@@ -12,7 +12,8 @@
     "substitutions": "Substitutions",
     "imports": "Imports",
     "reports": "Reports",
-    "audit": "Audit Log"
+    "audit": "Audit Log",
+    "my_students": "My students"
   },
   "auth": {
     "login_title": "Sign in",
@@ -91,6 +92,15 @@
     "assign_teacher_description": "Pick a teacher, role and date range.",
     "assign_teacher_submit": "Assign",
     "revoke_teacher": "End",
+    "subject": "Subject",
+    "subject_placeholder": "e.g. Mathematics",
+    "subject_teachers_title": "Subject teachers",
+    "subject_teachers_description": "Subject teachers with subject and date range.",
+    "subject_teachers_empty": "No subject teachers yet.",
+    "assign_subject_teacher_button": "Assign subject teacher",
+    "assign_subject_teacher_title": "Assign subject teacher",
+    "assign_subject_teacher_description": "Pick a teacher, subject and date range.",
+    "assign_subject_teacher_submit": "Assign",
     "search_teacher": "Search teacher",
     "picked": "Picked",
     "students_title": "Students",
@@ -484,5 +494,12 @@
     "error_cannot_disable_self": "You cannot disable your own account.",
     "error_not_found": "User not found or outside your access.",
     "error_user_not_in_ad": "The account no longer exists in AD."
+  },
+  "my_students": {
+    "title": "My students",
+    "intro": "All students of the classes where you are KL or a subject teacher.",
+    "empty": "You are currently not assigned to any class as KL or subject teacher.",
+    "empty_class": "No active students.",
+    "count": "{{count}} students"
   }
 }

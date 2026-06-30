@@ -15,6 +15,7 @@ from magister_api.models.import_job import ImportJob, ImportStagedRow
 from magister_api.models.local_admin import LocalAdmin
 from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
+from magister_api.models.subject_teacher_role import SubjectTeacherRole
 from magister_api.models.user_preferences import UserPreference
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "School",
     "SchoolClass",
     "Session",
+    "SubjectTeacherRole",
     "UserPreference",
 ]

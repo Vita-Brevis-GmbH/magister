@@ -15,7 +15,8 @@
     "substitutions": "Supplenze",
     "imports": "Importazioni",
     "reports": "Rapporti",
-    "audit": "Registro di audit"
+    "audit": "Registro di audit",
+    "my_students": "I miei studenti"
   },
   "auth": {
     "login_title": "Accedi",
@@ -94,6 +95,15 @@
     "assign_teacher_description": "Scegli insegnante, ruolo e intervallo di date.",
     "assign_teacher_submit": "Assegna",
     "revoke_teacher": "Termina",
+    "subject": "Materia",
+    "subject_placeholder": "es. Matematica",
+    "subject_teachers_title": "Docenti di materia",
+    "subject_teachers_description": "Docenti di materia con materia e periodo.",
+    "subject_teachers_empty": "Nessun docente di materia.",
+    "assign_subject_teacher_button": "Assegna docente di materia",
+    "assign_subject_teacher_title": "Assegna docente di materia",
+    "assign_subject_teacher_description": "Scegli docente, materia e periodo.",
+    "assign_subject_teacher_submit": "Assegna",
     "search_teacher": "Cerca insegnante",
     "picked": "Selezionato",
     "students_title": "Studenti",
@@ -487,5 +497,12 @@
     "error_cannot_disable_self": "Non puoi disattivare il tuo account.",
     "error_not_found": "Utente non trovato o fuori dal tuo perimetro.",
     "error_user_not_in_ad": "L'account non esiste più in AD."
+  },
+  "my_students": {
+    "title": "I miei studenti",
+    "intro": "Tutti gli studenti delle classi in cui sei KL o docente di materia.",
+    "empty": "Attualmente non sei assegnato a nessuna classe come KL o docente di materia.",
+    "empty_class": "Nessuno studente attivo.",
+    "count": "{{count}} studenti"
   }
 }

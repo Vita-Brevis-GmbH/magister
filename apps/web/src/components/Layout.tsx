@@ -48,6 +48,13 @@ export function Layout() {
             >
               {t("nav.users")}
             </Link>
+            <Link
+              to="/my-students"
+              activeProps={{ className: navActive }}
+              inactiveProps={{ className: navIdle }}
+            >
+              {t("nav.my_students")}
+            </Link>
             {me.data?.is_admin ? (
               <Link
                 to="/admin/settings"

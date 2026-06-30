@@ -7,6 +7,7 @@ import { ApiError, apiFetch } from "@/api/client";
 import {
   useAddClassMembership,
   useAssignClassTeacher,
+  useAssignSubjectTeacher,
   useBulkAddClassMemberships,
   useClass,
   useClassMemberships,
@@ -15,6 +16,8 @@ import {
   useCurrentUser,
   useRemoveClassMembership,
   useRevokeClassTeacher,
+  useRevokeSubjectTeacher,
+  useSubjectTeachers,
   useUsers,
 } from "@/api/hooks";
 import type {
@@ -100,6 +103,7 @@ function ClassDetailPage(): JSX.Element {
           </Card>
 
           <TeachersSection classId={classId} canManage={!!canManageTeachers} />
+          <SubjectTeachersSection classId={classId} canManage={!!canManageTeachers} />
           <StudentsSection classId={classId} className={klass.data.name} />
         </>
       ) : null}
@@ -184,6 +188,257 @@ function TeachersSection({
       </CardContent>
       <AssignTeacherModal classId={classId} open={addOpen} onClose={() => setAddOpen(false)} />
     </Card>
+  );
+}
+
+// --- Subject teachers (Fachlehrer) -----------------------------------------
+
+function SubjectTeachersSection({
+  classId,
+  canManage,
+}: {
+  classId: number;
+  canManage: boolean;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const q = useSubjectTeachers(classId);
+  const revoke = useRevokeSubjectTeacher(classId);
+  const [addOpen, setAddOpen] = useState(false);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <div>
+          <CardTitle className="text-base">{t("classes.subject_teachers_title")}</CardTitle>
+          <CardDescription>{t("classes.subject_teachers_description")}</CardDescription>
+        </div>
+        {canManage ? (
+          <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
+            {t("classes.assign_subject_teacher_button")}
+          </Button>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        {q.isLoading ? (
+          <p>{t("common.loading")}</p>
+        ) : q.isError ? (
+          <p className="text-destructive">{t("errors.generic")}</p>
+        ) : (q.data ?? []).length === 0 ? (
+          <p className="text-muted-foreground">{t("classes.subject_teachers_empty")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("classes.teacher_guid")}</TableHead>
+                <TableHead>{t("classes.subject")}</TableHead>
+                <TableHead>{t("classes.valid_from")}</TableHead>
+                <TableHead>{t("classes.valid_to")}</TableHead>
+                {canManage ? (
+                  <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
+                ) : null}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(q.data ?? []).map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell>
+                    <PersonCell row={row} />
+                  </TableCell>
+                  <TableCell>{row.subject}</TableCell>
+                  <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
+                  <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
+                  {canManage ? (
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => revoke.mutate(row.id)}
+                        disabled={revoke.isPending || row.valid_to !== null}
+                      >
+                        {t("classes.revoke_teacher")}
+                      </Button>
+                    </TableCell>
+                  ) : null}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+      <AssignSubjectTeacherModal
+        classId={classId}
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+      />
+    </Card>
+  );
+}
+
+function AssignSubjectTeacherModal({
+  classId,
+  open,
+  onClose,
+}: {
+  classId: number;
+  open: boolean;
+  onClose: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const [picked, setPicked] = useState<AdUserOut | null>(null);
+  const [subject, setSubject] = useState("");
+  const [validFrom, setValidFrom] = useState(today());
+  const [validTo, setValidTo] = useState("");
+
+  const users = useUsers(
+    search.length >= 2 ? { kind: "teacher", search, limit: 10 } : { kind: "teacher", limit: 0 },
+  );
+  const assign = useAssignSubjectTeacher(classId);
+
+  function reset(): void {
+    setSearch("");
+    setPicked(null);
+    setSubject("");
+    setValidFrom(today());
+    setValidTo("");
+    assign.reset();
+  }
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    if (!picked || !subject.trim()) return;
+    assign.mutate(
+      {
+        ad_object_guid: picked.ad_object_guid,
+        subject: subject.trim(),
+        valid_from: new Date(validFrom).toISOString(),
+        valid_to: validTo ? new Date(validTo).toISOString() : null,
+      },
+      {
+        onSuccess: () => {
+          reset();
+          onClose();
+        },
+      },
+    );
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          reset();
+          onClose();
+        }
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("classes.assign_subject_teacher_title")}</DialogTitle>
+          <DialogDescription>{t("classes.assign_subject_teacher_description")}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {assign.isError ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {t("errors.generic")}
+            </div>
+          ) : null}
+          <div className="space-y-1">
+            <Label htmlFor="subject-teacher-search">{t("classes.search_teacher")}</Label>
+            <Input
+              id="subject-teacher-search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPicked(null);
+              }}
+              placeholder={t("users.search_placeholder")}
+            />
+            {search.length >= 2 && users.data ? (
+              <ul className="max-h-40 overflow-y-auto rounded-md border bg-background text-sm">
+                {users.data.items.length === 0 ? (
+                  <li className="px-3 py-2 text-muted-foreground">{t("users.empty")}</li>
+                ) : (
+                  users.data.items.map((u) => (
+                    <li key={u.ad_object_guid}>
+                      <button
+                        type="button"
+                        onClick={() => setPicked(u)}
+                        className={`block w-full px-3 py-2 text-left hover:bg-accent ${
+                          picked?.ad_object_guid === u.ad_object_guid ? "bg-accent" : ""
+                        }`}
+                      >
+                        {u.upn}
+                        {u.given_name || u.surname
+                          ? ` — ${[u.given_name, u.surname].filter(Boolean).join(" ")}`
+                          : ""}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            ) : null}
+            {picked ? (
+              <p className="text-xs text-muted-foreground">
+                {t("classes.picked")}: <span className="font-mono">{picked.upn}</span>
+              </p>
+            ) : null}
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="subject-teacher-subject">{t("classes.subject")}</Label>
+            <Input
+              id="subject-teacher-subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              maxLength={100}
+              required
+              placeholder={t("classes.subject_placeholder")}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="subject-teacher-valid-from">{t("classes.valid_from")}</Label>
+              <Input
+                id="subject-teacher-valid-from"
+                type="date"
+                value={validFrom}
+                onChange={(e) => setValidFrom(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="subject-teacher-valid-to">{t("classes.valid_to_optional")}</Label>
+              <Input
+                id="subject-teacher-valid-to"
+                type="date"
+                value={validTo}
+                onChange={(e) => setValidTo(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                reset();
+                onClose();
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={assign.isPending || !picked || !subject.trim()}>
+              {assign.isPending ? t("common.loading") : t("classes.assign_subject_teacher_submit")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

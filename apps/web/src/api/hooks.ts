@@ -22,6 +22,9 @@ import type {
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
+  MyStudentsOut,
+  SubjectTeacherCreate,
+  SubjectTeacherOut,
   CurrentUserOut,
   ActivityReport,
   ImportJobDetailOut,
@@ -53,6 +56,8 @@ export const queryKeys = {
   schools: ["schools"] as const,
   classDetail: (classId: number) => ["classes", classId] as const,
   classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
+  subjectTeachers: (classId: number) => ["classes", classId, "subject-teachers"] as const,
+  myStudents: ["me", "students"] as const,
   classMemberships: (classId: number) => ["classes", classId, "students"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
   user: (guid: string) => ["user", guid] as const,
@@ -175,6 +180,47 @@ export function useRevokeClassTeacher(classId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classTeachers(classId) });
     },
+  });
+}
+
+// --- Subject teachers (Fachlehrer) -----------------------------------------
+
+export function useSubjectTeachers(classId: number) {
+  return useQuery<SubjectTeacherOut[]>({
+    queryKey: queryKeys.subjectTeachers(classId),
+    queryFn: () => apiFetch<SubjectTeacherOut[]>(`/classes/${classId}/subject-teachers`),
+  });
+}
+
+export function useAssignSubjectTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<SubjectTeacherOut, ApiError, SubjectTeacherCreate>({
+    mutationFn: (body) =>
+      apiFetch<SubjectTeacherOut>(`/classes/${classId}/subject-teachers`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.subjectTeachers(classId) });
+    },
+  });
+}
+
+export function useRevokeSubjectTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) =>
+      apiFetch<void>(`/classes/${classId}/subject-teachers/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.subjectTeachers(classId) });
+    },
+  });
+}
+
+export function useMyStudents() {
+  return useQuery<MyStudentsOut>({
+    queryKey: queryKeys.myStudents,
+    queryFn: () => apiFetch<MyStudentsOut>("/me/students"),
   });
 }
 

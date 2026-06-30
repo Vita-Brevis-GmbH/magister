@@ -93,6 +93,44 @@ export interface ClassTeacherCreate {
   valid_to?: string | null;
 }
 
+export interface SubjectTeacherOut {
+  id: number;
+  class_id: number;
+  ad_object_guid: string;
+  subject: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}
+
+export interface SubjectTeacherCreate {
+  ad_object_guid: string;
+  subject: string;
+  valid_from: string;
+  valid_to?: string | null;
+}
+
+export interface MyStudentBrief {
+  ad_object_guid: string;
+  display_name: string | null;
+  upn: string | null;
+}
+
+export interface MyClassStudents {
+  class_id: number;
+  name: string;
+  kuerzel: string | null;
+  students: MyStudentBrief[];
+}
+
+export interface MyStudentsOut {
+  classes: MyClassStudents[];
+}
+
 export interface ClassMembershipOut {
   id: number;
   class_id: number;

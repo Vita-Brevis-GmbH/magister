@@ -15,7 +15,8 @@
     "substitutions": "Suppléances",
     "imports": "Imports",
     "reports": "Rapports",
-    "audit": "Journal d'audit"
+    "audit": "Journal d'audit",
+    "my_students": "Mes élèves"
   },
   "auth": {
     "login_title": "Connexion",
@@ -94,6 +95,15 @@
     "assign_teacher_description": "Sélectionnez enseignant, rôle et plage de dates.",
     "assign_teacher_submit": "Assigner",
     "revoke_teacher": "Terminer",
+    "subject": "Matière",
+    "subject_placeholder": "p.ex. Mathématiques",
+    "subject_teachers_title": "Enseignants de matière",
+    "subject_teachers_description": "Enseignants de matière avec matière et période.",
+    "subject_teachers_empty": "Aucun enseignant de matière.",
+    "assign_subject_teacher_button": "Attribuer un enseignant de matière",
+    "assign_subject_teacher_title": "Attribuer un enseignant de matière",
+    "assign_subject_teacher_description": "Choisir un enseignant, une matière et une période.",
+    "assign_subject_teacher_submit": "Attribuer",
     "search_teacher": "Rechercher un enseignant",
     "picked": "Sélectionné",
     "students_title": "Élèves",
@@ -487,5 +497,12 @@
     "error_cannot_disable_self": "Vous ne pouvez pas désactiver votre propre compte.",
     "error_not_found": "Utilisateur introuvable ou hors de votre périmètre.",
     "error_user_not_in_ad": "Le compte n'existe plus dans l'AD."
+  },
+  "my_students": {
+    "title": "Mes élèves",
+    "intro": "Tous les élèves des classes où vous êtes KL ou enseignant de matière.",
+    "empty": "Vous n'êtes actuellement attribué à aucune classe comme KL ou enseignant de matière.",
+    "empty_class": "Aucun élève actif.",
+    "count": "{{count}} élèves"
   }
 }
