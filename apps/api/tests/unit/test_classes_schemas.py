@@ -60,6 +60,7 @@ class TestClassOut:
             name = "4a"
             kuerzel = "K4A"
             jahrgangsstufe = 4
+            details = None
             status = "active"
             created_at = datetime.now(UTC)
             updated_at = datetime.now(UTC)
