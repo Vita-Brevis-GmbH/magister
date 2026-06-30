@@ -23,6 +23,7 @@ from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.import_job import ALLOWED_IMPORT_KINDS
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.imports import (
     ImportJobDetailOut,
     ImportJobOut,
@@ -37,13 +38,6 @@ from magister_api.services.imports import (
 )
 
 router = APIRouter(prefix="/imports", tags=["imports"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 def _resolve_school_id(payload_school_id: int | None, user: AuthenticatedUser) -> int:

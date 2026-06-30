@@ -16,6 +16,7 @@ from magister_api.auth.rbac import require_admin
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.repositories.local_admin import LocalAdminRepository
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.local_admin import (
     LocalAdminEnabledUpdate,
     LocalAdminOut,
@@ -24,13 +25,6 @@ from magister_api.schemas.local_admin import (
 from magister_api.services.local_admin import LocalAdminService
 
 router = APIRouter(prefix="/admin/local-admin", tags=["admin"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 @router.get("", response_model=LocalAdminOut)

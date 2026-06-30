@@ -15,6 +15,7 @@ from magister_api.auth.rbac import require_role
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.ad_users import AdUserListResponse, AdUserOut
 from magister_api.schemas.user_attrs import UserAttributesUpdate
@@ -104,13 +105,6 @@ async def mail_domains(
     """
     eff = await AppSettingsService(session, settings).get_effective()
     return {"domains": list(eff.mail_domains)}
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 @router.get("/{ad_object_guid}", response_model=AdUserOut)

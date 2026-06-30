@@ -15,6 +15,7 @@ from magister_api.auth.class_perm import require_class_writer
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.class_memberships import (
     BulkClassMembershipCreate,
     BulkClassMembershipError,
@@ -31,13 +32,6 @@ from magister_api.services.class_memberships import (
 )
 
 router = APIRouter(prefix="/classes/{class_id}/students", tags=["class-memberships"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 @router.get("", response_model=list[ClassMembershipOut])

@@ -12,6 +12,7 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.routers.auth import limiter
 from magister_api.schemas.password_reset import (
@@ -26,13 +27,6 @@ from magister_api.services.student_password_reset import (
 )
 
 router = APIRouter(prefix="/students", tags=["student-password-reset"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 @router.post(
