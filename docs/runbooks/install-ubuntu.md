@@ -201,29 +201,31 @@ Diese Werte ins `.env` übernehmen.
 
 ### 5.2 Lokales Break-Glass-Admin-Konto erzeugen
 
+Den Hash direkt mit dem produktiven API-Image erzeugen — das nutzt exakt
+die getunten argon2id-Parameter, die der Login-Pfad erwartet (kein
+Checkout, kein `pip install` nötig; Plaintext geht nirgends auf Disk):
+
 ```bash
-cd /opt/magister
-# Im venv der API hashen (Plaintext geht nirgends auf Disk)
-docker run --rm -it \
-    -v "$PWD":/repo \
-    -w /repo/apps/api \
-    python:3.12-slim \
-    bash -c "pip install -q 'argon2-cffi>=23' && \
-             python -c 'from getpass import getpass; from argon2 import PasswordHasher; \
-                        pw=getpass(\"Password (mind. 12 Zeichen): \"); \
-                        print(PasswordHasher().hash(pw))'"
+printf '%s' 'DEIN_PASSWORT' | docker run --rm -i --entrypoint python \
+    ghcr.io/vita-brevis-gmbh/magister-api:latest \
+    -m magister_api.cli.hash_password
 # → $argon2id$v=19$m=65536,t=3,p=4$...
 ```
 
-Den Hash + Username ins `.env`:
+Den Hash + Username ins `.env`. **Wichtig — `$` verdoppeln:** docker compose
+interpoliert `$` in `.env`-Werten; ein roher argon2-Hash kommt sonst korrupt
+am Container an und der Login scheitert kommentarlos. Jedes `$` als `$$`
+schreiben:
 
 ```env
 MAGISTER_LOCAL_ADMIN_USERNAME=admin
-MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$argon2id$v=19$m=65536,t=3,p=4$...
+MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$...
 ```
 
 > Das Plaintext-PW wird **nicht** auf Disk geschrieben. Du brauchst es
 > später beim ersten Login — also kurz notieren und nach §6.4 sicher löschen.
+> Noch einfacher als der manuelle Weg: `scripts/install-magister.sh` erledigt
+> Hashing + Escaping automatisch.
 
 ### 5.3 `.env` Minimal-Set
 
@@ -242,9 +244,9 @@ MAGISTER_AUDIT_KEY=<48-byte url-safe>
 MAGISTER_SESSION_SECRET=<48-byte url-safe>
 MAGISTER_CSRF_SECRET=<48-byte url-safe>
 
-# --- Break-Glass-Admin (aus 5.2) ---
+# --- Break-Glass-Admin (aus 5.2; $ im Hash zu $$ verdoppeln!) ---
 MAGISTER_LOCAL_ADMIN_USERNAME=admin
-MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$argon2id$v=19$m=65536,t=3,p=4$...
+MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$...
 
 # --- Bootstrap-Admins (optional, kann auch via GUI nachgepflegt werden) ---
 # Lehrpersonen-UPNs, die beim ersten OIDC-Login admin-Rechte bekommen

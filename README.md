@@ -104,6 +104,17 @@ Auf Debian 12: ersetze `ubuntu` durch `debian` in den beiden URL-Zeilen.
 
 ### 3 — Repo + Konfiguration
 
+> **Schnellster Weg — der Installer.** Statt `.env` von Hand zu pflegen,
+> erledigt `scripts/install-magister.sh` alles (Secrets erzeugen, Admin-Passwort
+> argon2id-hashen, `.env` korrekt schreiben, Stack starten, Smoke-Test):
+> ```bash
+> git clone https://github.com/vita-brevis-gmbh/magister.git && cd magister
+> sudo ./scripts/install-magister.sh --mode prod   # HTTPS/FQDN/ACME
+> #   oder: --mode dev   für eine LAN/IP-Demo über HTTP (kein DNS/Cert nötig)
+> ```
+> Die manuellen Schritte unten bleiben als Referenz; wer den Installer nutzt,
+> springt direkt zu Schritt 5 (erste Anmeldung).
+
 ```bash
 git clone https://github.com/vita-brevis-gmbh/magister.git
 cd magister/deploy/compose
@@ -129,18 +140,22 @@ Plaintext-Passwort landet nirgends auf der Disk; nur der argon2id-Hash
 liegt im `.env`:
 
 ```bash
-# Aus einem Checkout heraus mit uv installiert:
+# Aus einem Checkout heraus mit uv:
 cd ../../apps/api && uv run ../../scripts/magister-cli hash-password
-# Password: ********
-# Confirm:  ********
-# $argon2id$v=19$m=65536,t=3,p=4$...
+# ODER nur mit dem Image (kein Checkout/uv nötig):
+printf '%s' 'DEIN_PASSWORT' | docker run --rm -i --entrypoint python \
+  ghcr.io/vita-brevis-gmbh/magister-api:latest -m magister_api.cli.hash_password
+# -> $argon2id$v=19$m=65536,t=3,p=4$...
 ```
 
-Den Hash + Username ins `.env`:
+Den Hash + Username ins `.env`. **Wichtig:** jedes `$` im Hash zu `$$`
+verdoppeln — docker compose interpoliert `$` in `.env`-Werten, ein roher
+argon2-Hash kommt sonst korrupt am Container an und der Login scheitert
+kommentarlos (der Installer macht das automatisch):
 
 ```env
 MAGISTER_LOCAL_ADMIN_USERNAME=admin
-MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$argon2id$v=19$...
+MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$$argon2id$$v=19$$m=65536,t=3,p=4$$...
 ```
 
 **OIDC- und AD-Konfiguration sind in M1.5 nicht mehr nötig im `.env`** —

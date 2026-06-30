@@ -6,58 +6,47 @@ data so every screen has something to show.
 ## Prerequisites
 
 - A Linux host with Docker + Docker Compose v2.
-- A DNS name pointing at the host (Caddy wants one for auto-TLS — for
-  pure-LAN demos you can either point a hostname at the LAN IP or
-  uncomment the `acme_ca` staging line in `deploy/caddy/Caddyfile`).
 - One pre-built `v0.1.0-demo` (or later) tag on the repo, which triggered
   the `release.yml` workflow and produced `ghcr.io/vita-brevis-gmbh/magister-{api,web}:latest`
   on GHCR. (Without a tag, `docker compose pull` finds nothing.)
+- For a LAN/IP demo you do **not** need DNS or a public cert — use the
+  installer's `--mode dev` (plain HTTP, reachable by IP). Only a public
+  production demo needs a DNS name for Caddy's auto-TLS.
 
-## 1 — Generate the local admin password
+## 1 — Install (one command)
 
-The local admin is a break-glass account that lets you sign in on Day 1
-before OIDC is configured. The CLI ships argon2id hashing so plaintext
-never lands on disk.
-
-```bash
-cd apps/api
-uv run ../../scripts/magister-cli hash-password
-# Password: ********
-# Confirm:  ********
-# $argon2id$v=19$m=65536,t=3,p=4$...
-```
-
-Copy the hash into `deploy/compose/.env`:
-
-```env
-MAGISTER_LOCAL_ADMIN_USERNAME=admin
-MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$argon2id$v=19$...
-```
-
-## 2 — Fill in the rest of `.env`
+The installer prompts for the few values it needs, generates the secrets,
+hashes the break-glass admin password (argon2id, plaintext never hits
+disk), writes a correct `deploy/compose/.env`, and brings the stack up.
 
 ```bash
-cd deploy/compose
-cp .env.example .env
-# Edit:
-#   MAGISTER_PUBLIC_HOSTNAME=demo.example.ch
-#   MAGISTER_ACME_EMAIL=ops@example.ch
-#   POSTGRES_PASSWORD=<choose>
-#   MAGISTER_AUDIT_KEY=$(python -c "import secrets;print(secrets.token_urlsafe(48))")
-#   MAGISTER_SESSION_SECRET=$(python -c "import secrets;print(secrets.token_urlsafe(48))")
-#   MAGISTER_CSRF_SECRET=$(python -c "import secrets;print(secrets.token_urlsafe(48))")
-# OIDC / AD env vars: leave empty for the demo — they'll be set in the GUI later.
+# LAN/IP demo over plain HTTP (no DNS, no cert warnings):
+sudo ./scripts/install-magister.sh --mode dev
+#   Hostname  -> the host's LAN IP (e.g. 172.25.8.27) or localhost
+#   ACME mail -> any address (ignored in dev mode)
+#   Admin pw  -> chosen interactively, min 12 chars
+
+# Public demo with a real DNS name + auto-TLS:
+sudo ./scripts/install-magister.sh --mode prod
 ```
 
-## 3 — Bring up the stack
+When it finishes, the API logs
+`Local admin seeded from MAGISTER_LOCAL_ADMIN_PASSWORD_HASH …` and the
+URL is printed. Skip to step 2 (seed demo data).
 
-```bash
-docker compose up -d
-docker compose logs -f magister-api  # watch for "Application startup complete"
-```
-
-The lifespan-seed creates the local admin row from the env vars and
-logs `Local admin seeded from MAGISTER_LOCAL_ADMIN_PASSWORD_HASH …`.
+> **Manual alternative.** If you'd rather write `.env` by hand:
+> generate the four secrets with
+> `python -c "import secrets; print(secrets.token_urlsafe(48))"`, then hash
+> the admin password with the image (no checkout needed):
+> ```bash
+> printf '%s' 'YOUR_PASSWORD' | docker run --rm -i --entrypoint python \
+>   ghcr.io/vita-brevis-gmbh/magister-api:latest -m magister_api.cli.hash_password
+> ```
+> **Double every `$` to `$$`** when pasting the hash into `.env` — docker
+> compose interpolates `$`, and an unescaped argon2 hash arrives corrupted
+> (login then fails silently). Bring the stack up with
+> `docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`
+> (dev) or `docker compose up -d` (prod).
 
 ## 4 — Seed demo data
 
@@ -91,8 +80,11 @@ pass `--force` to override.
 
 ## 5 — Sign in + walk through
 
-1. **Open `https://<your-host>/login`.** Only the local form is visible
-   (OIDC isn't configured yet).
+1. **Open the printed URL + `/login`** — `http://<host-ip>/login` in dev
+   mode, `https://<your-host>/login` in prod. Only the local form is
+   visible (OIDC isn't configured yet). In dev, use `http://` explicitly
+   and clear any stale cookies for the host if a previous HTTPS attempt
+   left some.
 2. **Sign in** with the username + password from step 1.
 3. **`/classes`** shows `4a` and `4b` with their KL.
 4. **Click `4a`** → KL section + student list. Schulleitung / admin can
@@ -132,10 +124,13 @@ docker compose down --volumes  # nuke postgres + caddy data
   expected with the seed. The students are in `ad_user_cache` but the
   reset writes to a real LDAPS — without one, AdClient bails. Either
   point at a real AD, or skip step 5 of the walkthrough.
-- **Caddy can't get a cert**: for a LAN demo, uncomment the
-  `acme_ca https://acme-staging-v02.api.letsencrypt.org/directory` line
-  in `deploy/caddy/Caddyfile` to use Let's-Encrypt staging certs, or
-  add a self-signed cert via `tls internal`.
+- **Caddy can't get a cert / `ERR_SSL_PROTOCOL_ERROR` on an IP**: you're
+  running the prod stack against a non-resolvable host or a bare IP —
+  Let's Encrypt can't issue for those. Use `--mode dev` (plain HTTP via
+  `docker-compose.dev.yml`) for LAN/IP demos instead.
+- **Login bounces back to the form with no error (dev)**: a stale
+  `Secure` session cookie from an earlier HTTPS attempt. `--mode dev`
+  already disables `Secure`; clear the host's cookies and use `http://`.
 
 ## What the demo proves
 

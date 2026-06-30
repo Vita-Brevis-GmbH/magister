@@ -9,7 +9,7 @@ Vollständige Dokumentation für **Magister** und das interne **Vita Brevis Cock
 | Du willst… | Lies… |
 |---|---|
 | Magister verstehen | [`README.md`](../README.md) → [`SPEC.md`](../SPEC.md) → [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| Magister auf einem Schulträger-Host installieren | [`runbooks/install-ubuntu.md`](runbooks/install-ubuntu.md) ODER [`scripts/install-magister.sh`](../scripts/install-magister.sh) |
+| Magister auf einem Schulträger-Host installieren | [`scripts/install-magister.sh`](../scripts/install-magister.sh) (`--mode prod\|dev`, empfohlen) ODER [`runbooks/install-ubuntu.md`](runbooks/install-ubuntu.md) (manuell) |
 | Das Cockpit (intern) installieren | [`runbooks/install-cockpit.md`](runbooks/install-cockpit.md) ODER [`scripts/install-cockpit.sh`](../scripts/install-cockpit.sh) |
 | Eine bestehende Magister-Instanz upgraden | [`runbooks/upgrade-to-mX.md`](runbooks/) |
 | Verstehen wie wir entscheiden | [`adr/`](adr/) |
@@ -87,7 +87,7 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 
 | Script | Was tut es? |
 |---|---|
-| [`scripts/install-magister.sh`](../scripts/install-magister.sh) | Idempotenter Magister-Installer für Ubuntu/Debian |
+| [`scripts/install-magister.sh`](../scripts/install-magister.sh) | Interaktiver End-to-End-Installer (Ubuntu/Debian): erzeugt Secrets + argon2-Hash, schreibt `.env`, startet den Stack. `--mode prod` (HTTPS/FQDN) oder `--mode dev` (HTTP/IP). Idempotent (bewahrt Secrets). |
 | [`scripts/install-cockpit.sh`](../scripts/install-cockpit.sh) | Idempotenter Cockpit-Installer (Compose-Stack) |
 | [`scripts/bootstrap-cockpit-token.sh`](../scripts/bootstrap-cockpit-token.sh) | Ersten Service-Token via Bootstrap-Token erzeugen |
 | [`scripts/magister-cli`](../scripts/magister-cli) | Kleine Ops-CLI (z.B. Password-Hashing) |

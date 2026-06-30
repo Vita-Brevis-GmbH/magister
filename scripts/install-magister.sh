@@ -1,74 +1,130 @@
 #!/usr/bin/env bash
-# install-magister.sh
+# install-magister.sh — interaktiver End-to-End-Installer für einen
+# Magister-Schulträger-Host (Ubuntu 24.04 / Debian 12).
 #
-# Idempotenter End-to-End-Installer für einen Magister-Schulträger-Host
-# (Ubuntu 24.04 / Debian 12).
+# Bringt eine Instanz von einem nackten Docker-Host bis zur laufenden,
+# einlogbaren App: erzeugt die Secrets, hasht das Break-Glass-Admin-Passwort,
+# schreibt eine korrekte .env (chmod 600) und startet den Compose-Stack.
 #
-# Was es tut:
-#   1. Docker + Compose installieren (falls fehlend)
-#   2. Repo nach /opt/magister klonen / fast-forwarden
-#   3. .env aus Template generieren (mit zufälligem MAGISTER_AUDIT_KEY)
-#   4. Compose-Stack starten
-#   5. Alembic-Migrationen ausführen
-#   6. Smoke-Test
-#
-# Nicht enthalten (manuell):
-#   - DNS für den FQDN setzen
-#   - Entra-App-Registrierung (siehe docs/runbooks/install-ubuntu.md §3)
-#   - AD-Bind-User in AD anlegen (§4)
-#   - .env mit OIDC- und AD-Credentials befüllen
+# Was NICHT automatisierbar ist (extern, wird am Ende als Anleitung gedruckt):
+#   - DNS-A/AAAA-Record für den FQDN (Prod: Caddy braucht ihn für ACME)
+#   - Entra-App-Registrierung (OIDC) und AD-Bind-User
+#   - Schulen + SMI-Rollen (bis zur M2-UI noch manuelles SQL)
 #
 # Usage:
-#   sudo ./scripts/install-magister.sh \
-#       --fqdn magister.schule-x.ch \
-#       --branch main
+#   sudo ./scripts/install-magister.sh --mode prod
+#   sudo ./scripts/install-magister.sh --mode dev            # HTTP, per IP erreichbar
+#   ./scripts/install-magister.sh --mode dev --config-only   # nur .env schreiben
+#
+# Flags:
+#   --mode prod|dev   prod = HTTPS/FQDN/ACME; dev = HTTP/IP/localhost   [default: prod]
+#   --config-only     nur .env erzeugen, weder pullen noch starten
+#   --no-up           .env (+ ggf. Docker/Repo) vorbereiten, aber nicht starten
+#   --with-oidc       OIDC-Werte (Entra) abfragen und als First-Boot-Seed setzen
+#   --with-ad         AD-Bind-Werte abfragen und als First-Boot-Seed setzen
+#   --image-tag TAG   API- und Web-Image auf diesen Release-Tag pinnen (z.B. v0.1.1)
+#   --force           bestehende NICHT-Secret-Felder in .env überschreiben
+#                     (Secrets werden NIE überschrieben)
+#   -h, --help        diese Hilfe
 
 set -euo pipefail
 
-FQDN=""
-BRANCH="main"
-INSTALL_DIR="/opt/magister"
+# --- defaults --------------------------------------------------------------
+MODE="prod"
+CONFIG_ONLY=0
+NO_UP=0
+WITH_OIDC=0
+WITH_AD=0
+FORCE=0
+IMAGE_TAG=""
+DEFAULT_API_IMAGE="ghcr.io/vita-brevis-gmbh/magister-api:latest"
+DEFAULT_WEB_IMAGE="ghcr.io/vita-brevis-gmbh/magister-web:latest"
 
 usage() {
-    cat <<EOF
-Usage: $0 --fqdn <hostname> [--branch <git-branch>] [--dir <path>]
+    cat <<'EOF'
+install-magister.sh — interaktiver End-to-End-Installer für eine Magister-Instanz.
 
-Options:
-  --fqdn      Public DNS name (e.g. magister.schule-x.ch)  [required]
-  --branch    Git branch to deploy                          [default: main]
-  --dir       Install directory                             [default: /opt/magister]
-  -h, --help  Show this help
+Usage:
+  sudo ./scripts/install-magister.sh --mode prod
+  sudo ./scripts/install-magister.sh --mode dev
+       ./scripts/install-magister.sh --mode dev --config-only
+
+Flags:
+  --mode prod|dev   prod = HTTPS/FQDN/ACME; dev = HTTP/IP/localhost   [default: prod]
+  --config-only     nur .env erzeugen, weder pullen noch starten
+  --no-up           vorbereiten + Images ziehen, aber nicht starten
+  --with-oidc       OIDC-Werte (Entra) abfragen (First-Boot-Seed)
+  --with-ad         AD-Bind-Werte abfragen (First-Boot-Seed)
+  --image-tag TAG   API- und Web-Image auf einen Release-Tag pinnen
+  --force           bestehende NICHT-Secret-Felder überschreiben (Secrets nie)
+  -h, --help        diese Hilfe
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --fqdn) FQDN="$2"; shift 2 ;;
-        --branch) BRANCH="$2"; shift 2 ;;
-        --dir) INSTALL_DIR="$2"; shift 2 ;;
+        --mode) MODE="${2:-}"; shift 2 ;;
+        --config-only) CONFIG_ONLY=1; shift ;;
+        --no-up) NO_UP=1; shift ;;
+        --with-oidc) WITH_OIDC=1; shift ;;
+        --with-ad) WITH_AD=1; shift ;;
+        --image-tag) IMAGE_TAG="${2:-}"; shift 2 ;;
+        --force) FORCE=1; shift ;;
         -h|--help) usage; exit 0 ;;
-        *) echo "Unknown arg: $1"; usage; exit 1 ;;
+        *) echo "Unbekanntes Argument: $1" >&2; usage; exit 1 ;;
     esac
 done
 
-if [[ -z "$FQDN" ]]; then
-    echo "ERROR: --fqdn is required"
-    usage
+if [[ "$MODE" != "prod" && "$MODE" != "dev" ]]; then
+    echo "ERROR: --mode muss 'prod' oder 'dev' sein (war: '$MODE')" >&2
     exit 1
 fi
 
-if [[ $EUID -ne 0 ]]; then
-    echo "ERROR: run as root (sudo)"
-    exit 1
+# --- pretty output ---------------------------------------------------------
+log()  { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
+ok()   { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
+warn() { printf '\033[1;33m⚠ %s\033[0m\n' "$*" >&2; }
+die()  { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
+
+# --- locate the repo we live in -------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
+    :
+else
+    die "Dieses Script muss aus einem Magister-Repo-Checkout laufen (git clone … && cd magister)."
+fi
+COMPOSE_DIR="$REPO_ROOT/deploy/compose"
+ENV_FILE="$COMPOSE_DIR/.env"
+[[ -f "$COMPOSE_DIR/docker-compose.yml" ]] || die "docker-compose.yml nicht gefunden unter $COMPOSE_DIR"
+
+# compose-Datei-Set je Modus (relative Namen; alle compose-Aufrufe laufen aus
+# $COMPOSE_DIR, wo auch die .env liegt und automatisch gelesen wird).
+COMPOSE_ARGS=(-f docker-compose.yml)
+if [[ "$MODE" == "dev" ]]; then
+    [[ -f "$COMPOSE_DIR/docker-compose.dev.yml" ]] || die "docker-compose.dev.yml fehlt — Branch zu alt?"
+    COMPOSE_ARGS+=(-f docker-compose.dev.yml)
+fi
+dc() { ( cd "$COMPOSE_DIR" && docker compose "${COMPOSE_ARGS[@]}" "$@" ); }
+
+API_IMAGE="$DEFAULT_API_IMAGE"
+WEB_IMAGE="$DEFAULT_WEB_IMAGE"
+if [[ -n "$IMAGE_TAG" ]]; then
+    API_IMAGE="ghcr.io/vita-brevis-gmbh/magister-api:${IMAGE_TAG}"
+    WEB_IMAGE="ghcr.io/vita-brevis-gmbh/magister-web:${IMAGE_TAG}"
 fi
 
-log() { printf '\n\033[1;34m▶ %s\033[0m\n' "$*"; }
-ok()  { printf '\033[1;32m✓ %s\033[0m\n' "$*"; }
-
-# ---- 1. Docker -----------------------------------------------------------
-log "Checking Docker installation"
-if ! command -v docker >/dev/null 2>&1; then
-    log "Installing Docker"
+# --- preflight: Docker -----------------------------------------------------
+ensure_docker() {
+    if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+        ok "Docker vorhanden: $(docker --version)"
+        return
+    fi
+    if [[ $CONFIG_ONLY -eq 1 ]]; then
+        warn "Docker/Compose fehlt — bei --config-only ok (zum Hashen wird es aber gebraucht)."
+        return
+    fi
+    [[ $EUID -eq 0 ]] || die "Docker fehlt und Installation braucht root. Mit sudo erneut starten."
+    log "Installiere Docker + Compose-Plugin"
     apt-get update -qq
     apt-get install -y -qq ca-certificates curl gnupg git ufw chrony
     install -m 0755 -d /etc/apt/keyrings
@@ -81,102 +137,277 @@ https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_C
     apt-get update -qq
     apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable --now docker
-    ok "Docker installed"
-else
-    ok "Docker already present: $(docker --version)"
-fi
+    ok "Docker installiert"
+}
 
-# ---- 2. Firewall ---------------------------------------------------------
-log "Configuring firewall"
-ufw allow 22/tcp >/dev/null
-ufw allow 80/tcp >/dev/null
-ufw allow 443/tcp >/dev/null
-ufw --force enable >/dev/null
-ok "ufw active: 22/tcp, 80/tcp, 443/tcp open"
+ensure_firewall() {
+    [[ $EUID -eq 0 ]] || return 0
+    command -v ufw >/dev/null 2>&1 || return 0
+    log "Firewall (ufw): 22/80/443 öffnen"
+    ufw allow 22/tcp  >/dev/null 2>&1 || true
+    ufw allow 80/tcp  >/dev/null 2>&1 || true
+    ufw allow 443/tcp >/dev/null 2>&1 || true
+    ufw --force enable >/dev/null 2>&1 || true
+    ok "ufw aktiv: 22, 80, 443 offen"
+}
 
-# ---- 3. Repo -------------------------------------------------------------
-log "Fetching repo to $INSTALL_DIR"
-if [[ -d "$INSTALL_DIR/.git" ]]; then
-    git -C "$INSTALL_DIR" fetch origin "$BRANCH"
-    git -C "$INSTALL_DIR" checkout "$BRANCH"
-    git -C "$INSTALL_DIR" pull --ff-only origin "$BRANCH"
-else
-    mkdir -p "$INSTALL_DIR"
-    git clone --branch "$BRANCH" https://github.com/vita-brevis-gmbh/magister.git "$INSTALL_DIR"
-fi
-ok "Repo at $(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
-
-# ---- 4. .env -------------------------------------------------------------
-ENV_FILE="$INSTALL_DIR/deploy/compose/.env"
-if [[ -f "$ENV_FILE" ]]; then
-    ok ".env already present at $ENV_FILE — leaving untouched"
-else
-    log "Generating .env"
-    AUDIT_KEY=$(openssl rand -base64 48 | tr -d '\n')
-    BOOTSTRAP_ADMIN_GUID=$(uuidgen)
-    cat > "$ENV_FILE" <<EOF
-# --- generated $(date -Iseconds) by install-magister.sh ---
-MAGISTER_DATABASE_URL=postgresql+asyncpg://magister:magister@postgres:5432/magister
-MAGISTER_AUDIT_KEY=$AUDIT_KEY
-MAGISTER_AUDIT_KEY_ID=v1
-MAGISTER_BOOTSTRAP_ADMIN_GUID=$BOOTSTRAP_ADMIN_GUID
-MAGISTER_FQDN=$FQDN
-
-# --- TO BE FILLED IN MANUALLY ---
-MAGISTER_OIDC_ISSUER=
-MAGISTER_OIDC_CLIENT_ID=
-MAGISTER_OIDC_CLIENT_SECRET=
-MAGISTER_OIDC_REDIRECT_URI=https://$FQDN/auth/callback
-
-MAGISTER_AD_USE_MOCK=true
-MAGISTER_AD_BIND_DN=
-MAGISTER_AD_BIND_PASSWORD=
-MAGISTER_AD_USERS_SEARCH_BASE=
-EOF
-    chmod 600 "$ENV_FILE"
-    ok "Wrote $ENV_FILE — Audit-Key generated, OIDC/AD MUST be filled in before login works"
-    echo ""
-    echo "  ⚠ Audit-Key ist im .env. Sofort in 1Password sichern!"
-    echo ""
-fi
-
-# ---- 5. Compose ----------------------------------------------------------
-log "Starting Compose stack"
-cd "$INSTALL_DIR/deploy/compose"
-docker compose pull
-docker compose up -d
-sleep 5
-
-# ---- 6. Migrations -------------------------------------------------------
-log "Running Alembic migrations"
-docker compose exec -T api alembic upgrade head
-
-# ---- 7. Smoke ------------------------------------------------------------
-log "Smoke-testing"
-for i in {1..10}; do
-    if curl -sf http://localhost:8000/healthz >/dev/null 2>&1; then
-        ok "API responding"
-        break
+# --- helpers: secrets + hash ----------------------------------------------
+# URL-safe Token (keine + / = die .env-Parsing oder sed brechen würden).
+gen_secret() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import secrets; print(secrets.token_urlsafe(48))'
+    else
+        docker run --rm --entrypoint python "$API_IMAGE" \
+            -c 'import secrets; print(secrets.token_urlsafe(48))'
     fi
-    sleep 2
-done
-curl -sf http://localhost:8000/healthz | tee /dev/null
+}
 
+# Docker Compose interpoliert $ in .env-Werten. Ein literales $ (v.a. im
+# argon2-Hash $argon2id$v=19$...) MUSS als $$ geschrieben werden, sonst frisst
+# compose die $-Sequenzen als Variablen und der Hash kommt korrupt am Container
+# an (Login schlägt dann ohne Fehlermeldung fehl). esc verdoppelt, unesc kehrt
+# das beim Wiedereinlesen einer bestehenden .env um (Kanonform im Speicher).
+esc()   { printf '%s' "${1//\$/\$\$}"; }
+unesc() { printf '%s' "${1//\$\$/\$}"; }
+
+# Liest einen Wert aus einer .env-Datei (erste Zeile ^KEY=...), ohne sie zu sourcen.
+read_env_value() {
+    local key="$1" file="$2"
+    [[ -f "$file" ]] || return 1
+    local line
+    line="$(grep -E "^${key}=" "$file" | head -n1)" || return 1
+    [[ -n "$line" ]] || return 1
+    printf '%s' "${line#*=}"
+}
+
+# Liefert einen vorhandenen, „echten" Secret-Wert aus der alten .env zurück,
+# sonst ein frisch generiertes — so wird MAGISTER_AUDIT_KEY nie regeneriert.
+secret_preserve_or_gen() {
+    local key="$1" old
+    if old="$(read_env_value "$key" "$ENV_FILE" 2>/dev/null)" \
+        && [[ -n "$old" && "$old" != CHANGE_ME* ]]; then
+        printf '%s' "$old"
+    else
+        gen_secret
+    fi
+}
+
+# Hasht ein Passwort (stdin) via API-Image zu argon2id. --entrypoint python
+# umgeht den `alembic upgrade head`-Entrypoint.
+hash_password_via_image() {
+    local pw="$1"
+    printf '%s' "$pw" | docker run --rm -i --entrypoint python "$API_IMAGE" \
+        -m magister_api.cli.hash_password
+}
+
+prompt_default() {  # prompt_default "Frage" "default" -> echo Antwort
+    local q="$1" def="${2:-}" ans
+    if [[ -n "$def" ]]; then read -rp "$q [$def]: " ans; else read -rp "$q: " ans; fi
+    printf '%s' "${ans:-$def}"
+}
+
+# --- run -------------------------------------------------------------------
+log "Magister-Installer — Modus: $MODE"
+ensure_docker
+[[ $CONFIG_ONLY -eq 0 ]] && ensure_firewall
+
+# Idempotenz: vorhandene .env respektieren.
+[[ -f "$ENV_FILE" ]] && ok "Bestehende .env gefunden — Secrets werden bewahrt."
+
+# 1) Hostname
+DEF_HOST="$(read_env_value MAGISTER_PUBLIC_HOSTNAME "$ENV_FILE" 2>/dev/null || true)"
+[[ -z "$DEF_HOST" || "$DEF_HOST" == magister.example.ch ]] && DEF_HOST=""
+if [[ "$MODE" == "dev" && -z "$DEF_HOST" ]]; then DEF_HOST="localhost"; fi
+HOSTNAME_VALUE="$(prompt_default "Öffentlicher Hostname (Prod: FQDN; Dev: IP/localhost)" "$DEF_HOST")"
+[[ -n "$HOSTNAME_VALUE" ]] || die "Hostname ist erforderlich."
+
+# Prod: warnen wenn der Hostname nicht auflöst / eine IP ist (ACME scheitert dann).
+if [[ "$MODE" == "prod" ]]; then
+    if [[ "$HOSTNAME_VALUE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$HOSTNAME_VALUE" == "localhost" ]]; then
+        warn "Im Prod-Modus brauchst du einen DNS-Namen — Let's Encrypt stellt für IP/localhost kein Zertifikat aus. Für Demo per IP: --mode dev."
+    elif command -v getent >/dev/null 2>&1 && ! getent hosts "$HOSTNAME_VALUE" >/dev/null 2>&1; then
+        warn "$HOSTNAME_VALUE löst aktuell nicht auf — ACME schlägt fehl, bis der DNS-A/AAAA-Record gesetzt ist."
+    fi
+fi
+
+# 2) ACME-Mail (compose verlangt sie via :? auch im Dev-Modus)
+DEF_MAIL="$(read_env_value MAGISTER_ACME_EMAIL "$ENV_FILE" 2>/dev/null || true)"
+[[ -z "$DEF_MAIL" || "$DEF_MAIL" == ops@example.ch ]] && DEF_MAIL=""
+ACME_EMAIL="$(prompt_default "ACME-Kontakt-Mail (Let's Encrypt; im Dev-Modus ungenutzt, aber erforderlich)" "$DEF_MAIL")"
+[[ -n "$ACME_EMAIL" ]] || die "ACME-Mail ist erforderlich (compose-Pflichtfeld)."
+
+# 3) Local-Admin
+ADMIN_USER="$(prompt_default "Local-Admin-Benutzername" "$(read_env_value MAGISTER_LOCAL_ADMIN_USERNAME "$ENV_FILE" 2>/dev/null || echo admin)")"
+
+# Auf Platte ist der Hash $$-escaped; in die Kanonform ($argon2…) zurückholen.
+EXISTING_HASH="$(unesc "$(read_env_value MAGISTER_LOCAL_ADMIN_PASSWORD_HASH "$ENV_FILE" 2>/dev/null || true)")"
+ADMIN_HASH=""
+if [[ -n "$EXISTING_HASH" && "$EXISTING_HASH" == \$argon2* && $FORCE -eq 0 ]]; then
+    ok "Bestehender Admin-Hash bleibt erhalten (mit --force neu setzen)."
+    ADMIN_HASH="$EXISTING_HASH"
+else
+    if ! command -v docker >/dev/null 2>&1; then
+        die "Zum Hashen wird Docker + das API-Image gebraucht. Ohne Docker: --config-only ist hier nicht möglich."
+    fi
+    while :; do
+        read -rsp "Passwort für '$ADMIN_USER' (min. 12 Zeichen): " PW1; echo
+        read -rsp "Passwort bestätigen: " PW2; echo
+        [[ "$PW1" == "$PW2" ]]            || { warn "Passwörter stimmen nicht überein."; continue; }
+        [[ "${#PW1}" -ge 12 ]]           || { warn "Mindestens 12 Zeichen."; continue; }
+        break
+    done
+    log "Hashe Passwort via API-Image ($API_IMAGE) …"
+    if ! ADMIN_HASH="$(hash_password_via_image "$PW1")"; then
+        unset PW1 PW2
+        die "Hashing fehlgeschlagen — ist das API-Image pullbar? ($API_IMAGE)"
+    fi
+    unset PW1 PW2
+    [[ "$ADMIN_HASH" == \$argon2* ]] || die "Unerwartete Hash-Ausgabe — Abbruch."
+    ok "Admin-Hash erzeugt."
+fi
+
+# 4) Secrets (bewahren falls vorhanden, sonst generieren)
+log "Erzeuge/übernehme Secrets …"
+POSTGRES_PASSWORD="$(secret_preserve_or_gen POSTGRES_PASSWORD)"
+AUDIT_KEY="$(secret_preserve_or_gen MAGISTER_AUDIT_KEY)"
+SESSION_SECRET="$(secret_preserve_or_gen MAGISTER_SESSION_SECRET)"
+CSRF_SECRET="$(secret_preserve_or_gen MAGISTER_CSRF_SECRET)"
+ok "Secrets bereit."
+
+# 5) Optionale First-Boot-Seeds (OIDC / AD)
+OIDC_ISSUER=""; OIDC_CLIENT_ID=""; OIDC_CLIENT_SECRET=""; BOOTSTRAP_ADMINS=""
+if [[ $WITH_OIDC -eq 1 ]]; then
+    log "OIDC (Entra) — wird nur beim allerersten Boot in die DB geseedet"
+    OIDC_ISSUER="$(prompt_default "OIDC Issuer (https://login.microsoftonline.com/<tenant>/v2.0)" "")"
+    OIDC_CLIENT_ID="$(prompt_default "OIDC Client-ID" "")"
+    read -rsp "OIDC Client-Secret: " OIDC_CLIENT_SECRET; echo
+    BOOTSTRAP_ADMINS="$(prompt_default "Bootstrap-Admin-UPNs (Komma-separiert)" "")"
+fi
+AD_DCS=""; AD_BIND_DN=""; AD_BIND_PASSWORD=""; AD_SEARCH_BASE=""
+if [[ $WITH_AD -eq 1 ]]; then
+    log "AD-Sync — wird nur beim allerersten Boot in die DB geseedet"
+    AD_DCS="$(prompt_default "AD-DCs (Komma-separiert, z.B. dc1.example.local,dc2.example.local)" "")"
+    AD_BIND_DN="$(prompt_default "AD-Bind-DN" "")"
+    read -rsp "AD-Bind-Passwort: " AD_BIND_PASSWORD; echo
+    AD_SEARCH_BASE="$(prompt_default "AD-Users-Search-Base (z.B. OU=Users,DC=example,DC=local)" "")"
+fi
+
+# 6) .env schreiben
+log "Schreibe $ENV_FILE"
+umask 077
+# Jeder Wert wird durch esc geschützt ($ -> $$), damit compose ihn literal
+# durchreicht (kritisch für den argon2-Hash und etwaige $-haltige Passwörter).
+{
+    echo "# --- generated $(date -Iseconds) by install-magister.sh (mode=$MODE) ---"
+    echo "MAGISTER_PUBLIC_HOSTNAME=$(esc "$HOSTNAME_VALUE")"
+    echo "MAGISTER_ACME_EMAIL=$(esc "$ACME_EMAIL")"
+    echo "MAGISTER_LOG_LEVEL=INFO"
+    if [[ -n "$IMAGE_TAG" ]]; then
+        echo "MAGISTER_API_IMAGE=$(esc "$API_IMAGE")"
+        echo "MAGISTER_WEB_IMAGE=$(esc "$WEB_IMAGE")"
+    fi
+    echo ""
+    echo "# Database"
+    echo "POSTGRES_USER=magister"
+    echo "POSTGRES_PASSWORD=$(esc "$POSTGRES_PASSWORD")"
+    echo "POSTGRES_DB=magister"
+    echo ""
+    echo "# Crypto / sessions — AUDIT_KEY ist ein One-Way-Door: separat sichern, NIE rotieren."
+    echo "MAGISTER_AUDIT_KEY=$(esc "$AUDIT_KEY")"
+    echo "MAGISTER_SESSION_SECRET=$(esc "$SESSION_SECRET")"
+    echo "MAGISTER_CSRF_SECRET=$(esc "$CSRF_SECRET")"
+    echo ""
+    echo "# Local break-glass admin (argon2id-Hash; nur beim ersten Boot konsultiert)"
+    echo "MAGISTER_LOCAL_ADMIN_USERNAME=$(esc "$ADMIN_USER")"
+    echo "MAGISTER_LOCAL_ADMIN_PASSWORD_HASH=$(esc "$ADMIN_HASH")"
+    if [[ $WITH_OIDC -eq 1 ]]; then
+        echo ""
+        echo "# OIDC (First-Boot-Seed; danach ist die DB/das GUI maßgeblich)"
+        echo "MAGISTER_OIDC_ISSUER=$(esc "$OIDC_ISSUER")"
+        echo "MAGISTER_OIDC_CLIENT_ID=$(esc "$OIDC_CLIENT_ID")"
+        echo "MAGISTER_OIDC_CLIENT_SECRET=$(esc "$OIDC_CLIENT_SECRET")"
+        echo "MAGISTER_BOOTSTRAP_ADMINS=$(esc "$BOOTSTRAP_ADMINS")"
+    fi
+    if [[ $WITH_AD -eq 1 ]]; then
+        echo ""
+        echo "# AD-Sync (First-Boot-Seed; danach ist die DB/das GUI maßgeblich)"
+        echo "MAGISTER_AD_DCS=$(esc "$AD_DCS")"
+        echo "MAGISTER_AD_BIND_DN=$(esc "$AD_BIND_DN")"
+        echo "MAGISTER_AD_BIND_PASSWORD=$(esc "$AD_BIND_PASSWORD")"
+        echo "MAGISTER_AD_USERS_SEARCH_BASE=$(esc "$AD_SEARCH_BASE")"
+        echo "MAGISTER_AD_SYNC_INTERVAL_MINUTES=15"
+    fi
+} > "$ENV_FILE"
+chmod 600 "$ENV_FILE"
+ok "$ENV_FILE geschrieben (chmod 600)."
+
+printf '\n\033[1;33m'
+cat <<'BANNER'
+╔══════════════════════════════════════════════════════════════════════╗
+║  MAGISTER_AUDIT_KEY ist jetzt in der .env. SICHERE IHN SEPARAT         ║
+║  (Passwort-Manager), GETRENNT vom DB-Backup, und ROTIERE IHN NIE —     ║
+║  sonst werden alle verschlüsselten audit_events.payload unlesbar.      ║
+╚══════════════════════════════════════════════════════════════════════╝
+BANNER
+printf '\033[0m\n'
+
+# 7) Validierung
+log "Validiere Compose-Konfiguration"
+dc config -q || die "docker compose config fehlgeschlagen — .env prüfen."
+ok "Compose-Konfiguration valide."
+
+COMPOSE_HINT="cd $COMPOSE_DIR && docker compose ${COMPOSE_ARGS[*]}"
+
+if [[ $CONFIG_ONLY -eq 1 ]]; then
+    log "--config-only: .env geschrieben, Stack nicht gestartet."
+    echo "Start später mit:  $COMPOSE_HINT up -d"
+    exit 0
+fi
+
+# 8) Pull + Start
+log "Ziehe Images"
+dc pull
+
+if [[ $NO_UP -eq 1 ]]; then
+    log "--no-up: Images gezogen, Stack nicht gestartet."
+    echo "Start mit:  $COMPOSE_HINT up -d"
+    exit 0
+fi
+
+log "Starte Stack"
+dc up -d
+
+# 9) Smoke-Test gegen magister-api (image-unabhängig via python stdlib)
+log "Smoke-Test (/healthz)"
+HEALTHY=0
+for _ in $(seq 1 20); do
+    if dc exec -T magister-api \
+        python -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen("http://localhost:8000/healthz",timeout=2).status==200 else 1)' \
+        >/dev/null 2>&1; then
+        HEALTHY=1; break
+    fi
+    sleep 3
+done
+if [[ $HEALTHY -eq 1 ]]; then ok "API antwortet (/healthz)."; else warn "API antwortete im Zeitfenster nicht — '$COMPOSE_HINT logs magister-api' prüfen."; fi
+
+# 10) Next steps
+if [[ "$MODE" == "dev" ]]; then URL="http://$HOSTNAME_VALUE"; else URL="https://$HOSTNAME_VALUE"; fi
 cat <<EOF
 
 ────────────────────────────────────────────────────────────
-✓ Magister-Foundation läuft.
-  FQDN:        $FQDN
-  Install-Dir: $INSTALL_DIR
-  Compose:     $INSTALL_DIR/deploy/compose
+✓ Magister läuft ($MODE).
+  URL:     $URL
+  Compose: $COMPOSE_DIR
 
 Nächste Schritte:
-  1. .env editieren ($ENV_FILE):
-     - MAGISTER_OIDC_* aus Entra-App-Registrierung
-     - MAGISTER_AD_* aus AD-Bind-User (oder ad_use_mock=true für Demo)
-  2. docker compose up -d  → restart mit neuen Secrets
-  3. https://$FQDN aufrufen (Caddy macht TLS via ACME)
-  4. Im Cockpit registrieren:
-     POST /api/instances { "slug": "...", "base_url": "https://$FQDN" }
+  1. $URL öffnen, als Local-Admin '$ADMIN_USER' einloggen.
+$( [[ "$MODE" == "dev" ]] && echo "     (Dev: zwingend http://, ggf. alte Cookies für den Host löschen.)" )
+  2. Im Admin-GUI OIDC (Entra), AD-Sync und Mail-Domains konfigurieren.
+  3. Per Entra (SSO) re-login; Bootstrap-Admin-UPNs greifen beim ersten OIDC-Login.
+  4. Schulen + SMI-Rollen anlegen (bis zur M2-UI noch via SQL — siehe Runbook).
+
+Demo-Daten (optional):
+  docker compose ${COMPOSE_ARGS[*]} exec magister-api \\
+    python -m magister_api.cli.seed_demo
 ────────────────────────────────────────────────────────────
 EOF
