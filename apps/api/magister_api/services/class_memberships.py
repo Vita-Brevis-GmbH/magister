@@ -132,7 +132,7 @@ class ClassMembershipService:
         self,
         *,
         class_id: int,
-        students: list[tuple[str, object | None, object | None]],
+        students: list[tuple[str, datetime | None, datetime | None]],
         ip: str | None,
         request_id: str,
     ) -> list[tuple[AddResult | None, str | None]]:
@@ -150,8 +150,8 @@ class ClassMembershipService:
                 result = await self.add_student(
                     class_id=class_id,
                     ad_object_guid=guid,
-                    valid_from=valid_from,  # type: ignore[arg-type]
-                    valid_to=valid_to,  # type: ignore[arg-type]
+                    valid_from=valid_from,
+                    valid_to=valid_to,
                     ip=ip,
                     request_id=request_id,
                 )
