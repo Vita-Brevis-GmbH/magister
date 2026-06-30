@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  AdConnectionTestOut,
   AdUserListResponse,
   AdUserOut,
   AppSettingsOut,
@@ -393,6 +394,12 @@ export function useUpdateAppSettings() {
       // Capabilities may flip when oidc_issuer/client_id change.
       qc.invalidateQueries({ queryKey: queryKeys.authCapabilities });
     },
+  });
+}
+
+export function useTestAdConnection() {
+  return useMutation<AdConnectionTestOut, ApiError, void>({
+    mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
   });
 }
 

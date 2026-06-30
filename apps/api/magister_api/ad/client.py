@@ -503,6 +503,28 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def probe_service_connection(self) -> bool:
+        """Validate the configured service-account bind against AD (read-only).
+
+        Returns True if a sealed LDAPS bind with the configured service account
+        succeeds, False otherwise. Never raises and never logs credentials.
+        """
+        return await run_in_threadpool(self._sync_probe_service_connection)
+
+    def _sync_probe_service_connection(self) -> bool:
+        if self._settings.ad_use_mock:
+            return True
+        try:
+            conn, owned = self._acquire_connection()
+        except AdUnavailableError:
+            return False
+        if owned:
+            try:
+                conn.unbind()
+            except LDAPException:
+                pass
+        return True
+
     async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
         """Try a SIMPLE bind as ``user_dn`` to validate the password against AD policy."""
         return await run_in_threadpool(self._sync_probe_bind, user_dn, password)

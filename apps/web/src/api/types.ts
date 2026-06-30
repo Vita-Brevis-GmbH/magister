@@ -218,6 +218,11 @@ export interface AppSettingsOut {
   updated_by_upn: string | null;
 }
 
+export interface AdConnectionTestOut {
+  ok: boolean;
+  detail: string;
+}
+
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
 export interface SubstitutionOut extends ClassTeacherOut {

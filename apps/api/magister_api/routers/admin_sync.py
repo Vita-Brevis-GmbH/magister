@@ -12,12 +12,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.effective_settings import get_effective_settings
 from magister_api.auth.rbac import require_admin
 from magister_api.config import Settings
 from magister_api.db import get_session
-from magister_api.schemas.ad_users import AdSyncResultOut
+from magister_api.schemas.ad_users import AdConnectionTestOut, AdSyncResultOut
 from magister_api.services.ad_sync import AdSyncService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -67,6 +68,35 @@ async def trigger_ad_sync(
         synced_count=result.synced_count,
         school_partition={str(k): v for k, v in result.school_partition.items()},
     )
+
+
+@router.post("/ad-test", response_model=AdConnectionTestOut, status_code=status.HTTP_200_OK)
+async def test_ad_connection(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_effective_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> AdConnectionTestOut:
+    """Validate the configured AD service-account bind (read-only probe).
+
+    Never echoes or logs credentials; the audit event records only the boolean
+    outcome so operators can see that a test was run.
+    """
+    ok = await ad.probe_service_connection()
+    audit = AuditService(session, settings)
+    await audit.emit(
+        action="ad_connection_tested",
+        target_kind="ad",
+        target_id="service_account",
+        actor_upn=user.upn,
+        actor_object_guid=user.ad_object_guid,
+        school_id=None,
+        ip=getattr(request.state, "client_ip", None),
+        request_id=getattr(request.state, "request_id", ""),
+        payload={"ok": ok},
+    )
+    return AdConnectionTestOut(ok=ok, detail="ad_ok" if ok else "ad_bind_failed")
 
 
 __all__ = ["router", "get_ad_client"]
