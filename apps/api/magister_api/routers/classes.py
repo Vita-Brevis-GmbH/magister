@@ -66,6 +66,7 @@ async def create_class(
             name=payload.name,
             kuerzel=payload.kuerzel,
             jahrgangsstufe=payload.jahrgangsstufe,
+            details=payload.details,
             ip=ip,
             request_id=request_id,
         )
@@ -116,6 +117,7 @@ async def patch_class(
             class_id=class_id,
             new_name=payload.name,
             new_kuerzel=payload.kuerzel,
+            new_details=payload.details,
             ip=ip,
             request_id=request_id,
         )

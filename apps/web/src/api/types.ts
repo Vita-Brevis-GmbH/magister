@@ -43,6 +43,7 @@ export interface ClassOut {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  details: string | null;
   status: SchoolClassStatus;
   created_at: string;
   updated_at: string;
@@ -52,12 +53,14 @@ export interface ClassCreate {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  details?: string | null;
   school_id?: number;
 }
 
 export interface ClassUpdate {
   name?: string | null;
   kuerzel?: string | null;
+  details?: string | null;
 }
 
 export interface SchoolOut {

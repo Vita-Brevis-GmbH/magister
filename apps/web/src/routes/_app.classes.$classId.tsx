@@ -90,6 +90,11 @@ function ClassDetailPage(): JSX.Element {
                   ? t("classes.status_active")
                   : t("classes.status_archived")}
               </CardDescription>
+              {klass.data.details ? (
+                <p className="whitespace-pre-line text-sm text-muted-foreground">
+                  {klass.data.details}
+                </p>
+              ) : null}
             </CardHeader>
           </Card>
 

@@ -16,6 +16,7 @@ class ClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     kuerzel: str | None = Field(default=None, max_length=32)
     jahrgangsstufe: int = Field(ge=1, le=13)
+    details: str | None = Field(default=None, max_length=2000)
     school_id: int = Field(
         description="Schulträger-Admin must set this; Schulleitung gets it derived from scope.",
         default=0,
@@ -27,6 +28,7 @@ class ClassUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=64)
     kuerzel: str | None = Field(default=None, max_length=32)
+    details: str | None = Field(default=None, max_length=2000)
 
 
 class ClassOut(BaseModel):
@@ -37,6 +39,7 @@ class ClassOut(BaseModel):
     name: str
     kuerzel: str | None
     jahrgangsstufe: int
+    details: str | None
     status: str
     created_at: datetime
     updated_at: datetime

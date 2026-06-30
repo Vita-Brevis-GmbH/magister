@@ -131,7 +131,7 @@ function ClassesPage(): JSX.Element {
                         size="sm"
                         onClick={() => setEditTarget(c)}
                       >
-                        {t("classes.rename_button")}
+                        {t("classes.edit_button")}
                       </Button>
                       <Button
                         type="button"
@@ -156,7 +156,7 @@ function ClassesPage(): JSX.Element {
         defaultSchoolId={me.data?.school_scope[0] ?? null}
         isAdmin={me.data?.is_admin ?? false}
       />
-      <RenameClassModal target={editTarget} onClose={() => setEditTarget(null)} />
+      <EditClassModal target={editTarget} onClose={() => setEditTarget(null)} />
       <ArchiveClassDialog target={archiveTarget} onClose={() => setArchiveTarget(null)} />
       <PromoteClassWizard
         source={promoteSource}
@@ -184,6 +184,7 @@ export function CreateClassModal({
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
   const [jahrgangsstufe, setJahrgangsstufe] = useState("");
+  const [details, setDetails] = useState("");
   const [schoolId, setSchoolId] = useState(defaultSchoolId !== null ? String(defaultSchoolId) : "");
   const schools = useSchools();
   const create = useCreateClass();
@@ -192,6 +193,7 @@ export function CreateClassModal({
     setName("");
     setKuerzel("");
     setJahrgangsstufe("");
+    setDetails("");
     setSchoolId(defaultSchoolId !== null ? String(defaultSchoolId) : "");
     create.reset();
   }
@@ -203,6 +205,7 @@ export function CreateClassModal({
         name,
         kuerzel: kuerzel || null,
         jahrgangsstufe: Number(jahrgangsstufe),
+        details: details || null,
         ...(isAdmin && { school_id: Number(schoolId) }),
       },
       {
@@ -269,6 +272,17 @@ export function CreateClassModal({
               required
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="class-details">{t("classes.details")}</Label>
+            <textarea
+              id="class-details"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
           {isAdmin ? (
             <div className="space-y-1">
               <Label htmlFor="class-school-id">{t("classes.school")}</Label>
@@ -315,16 +329,12 @@ interface RenameProps {
   onClose: () => void;
 }
 
-export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element {
+export function EditClassModal({ target, onClose }: RenameProps): JSX.Element {
   const { t } = useTranslation();
   const [name, setName] = useState(target?.name ?? "");
   const [kuerzel, setKuerzel] = useState(target?.kuerzel ?? "");
+  const [details, setDetails] = useState(target?.details ?? "");
   const update = useUpdateClass(target?.id ?? 0);
-
-  // Reset form when the modal switches between targets.
-  if (target && (name === "" || name !== target.name)) {
-    // No-op: state synced via the controlled inputs after the user types.
-  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
@@ -333,6 +343,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
       {
         ...(name !== target.name && { name }),
         ...(kuerzel !== (target.kuerzel ?? "") && { kuerzel: kuerzel || null }),
+        ...(details !== (target.details ?? "") && { details }),
       },
       {
         onSuccess: () => onClose(),
@@ -349,7 +360,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("classes.rename_title")}</DialogTitle>
+          <DialogTitle>{t("classes.edit_title")}</DialogTitle>
           <DialogDescription>{target?.name}</DialogDescription>
         </DialogHeader>
         <form key={target?.id ?? "none"} onSubmit={handleSubmit} className="space-y-4">
@@ -362,9 +373,9 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label htmlFor="rename-name">{t("classes.name")}</Label>
+            <Label htmlFor="edit-name">{t("classes.name")}</Label>
             <Input
-              id="rename-name"
+              id="edit-name"
               defaultValue={target?.name ?? ""}
               onChange={(e) => setName(e.target.value)}
               required
@@ -372,12 +383,23 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="rename-kuerzel">{t("classes.kuerzel")}</Label>
+            <Label htmlFor="edit-kuerzel">{t("classes.kuerzel")}</Label>
             <Input
-              id="rename-kuerzel"
+              id="edit-kuerzel"
               defaultValue={target?.kuerzel ?? ""}
               onChange={(e) => setKuerzel(e.target.value)}
               maxLength={32}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-details">{t("classes.details")}</Label>
+            <textarea
+              id="edit-details"
+              defaultValue={target?.details ?? ""}
+              onChange={(e) => setDetails(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
           <DialogFooter>
@@ -385,7 +407,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? t("common.loading") : t("classes.rename_submit")}
+              {update.isPending ? t("common.loading") : t("classes.edit_submit")}
             </Button>
           </DialogFooter>
         </form>

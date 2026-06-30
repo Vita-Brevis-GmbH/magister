@@ -57,6 +57,7 @@ class ClassService:
         name: str,
         kuerzel: str | None,
         jahrgangsstufe: int,
+        details: str | None = None,
         ip: str | None,
         request_id: str,
     ) -> SchoolClass:
@@ -66,6 +67,7 @@ class ClassService:
                 name=name,
                 kuerzel=kuerzel,
                 jahrgangsstufe=jahrgangsstufe,
+                details=details,
             )
         except PermissionError as exc:
             raise ClassPermissionError("school_out_of_scope") from exc
@@ -92,14 +94,20 @@ class ClassService:
         class_id: int,
         new_name: str | None,
         new_kuerzel: str | None,
+        new_details: str | None = None,
         ip: str | None,
         request_id: str,
     ) -> SchoolClass:
         row = await self.get(class_id)
         old_name = row.name
         old_kuerzel = row.kuerzel
-        row, name_changed = await self.repo.update(row, name=new_name, kuerzel=new_kuerzel)
-        if name_changed or (new_kuerzel is not None and new_kuerzel != old_kuerzel):
+        old_details = row.details
+        row, name_changed = await self.repo.update(
+            row, name=new_name, kuerzel=new_kuerzel, details=new_details
+        )
+        kuerzel_changed = new_kuerzel is not None and new_kuerzel != old_kuerzel
+        details_changed = new_details is not None and new_details != old_details
+        if name_changed or kuerzel_changed or details_changed:
             await self.audit.emit(
                 action="class_renamed",
                 target_kind="class",
@@ -114,6 +122,7 @@ class ClassService:
                     "new_name": row.name,
                     "old_kuerzel": old_kuerzel,
                     "new_kuerzel": row.kuerzel,
+                    "details_changed": details_changed,
                 },
             )
         return row

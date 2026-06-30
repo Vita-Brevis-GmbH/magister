@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -28,6 +28,7 @@ class SchoolClass(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     kuerzel: Mapped[str | None] = mapped_column(String(32), nullable=True)
     jahrgangsstufe: Mapped[int] = mapped_column(Integer, nullable=False)
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=CLASS_STATUS_ACTIVE)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False

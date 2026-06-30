@@ -81,7 +81,7 @@ describe("CreateClassModal", () => {
       expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/classes")).toBe(true);
     });
     const body = classPostBody();
-    expect(body).toEqual({ name: "4a", kuerzel: "4A", jahrgangsstufe: 4 });
+    expect(body).toEqual({ name: "4a", kuerzel: "4A", jahrgangsstufe: 4, details: null });
     expect(body).not.toHaveProperty("school_id");
   });
 
