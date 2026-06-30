@@ -488,10 +488,12 @@ function PromoteClassWizard({
   const [targetId, setTargetId] = useState<number | "">("");
   const [archiveSource, setArchiveSource] = useState(false);
   const [result, setResult] = useState<ClassPromotionResult | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const promote = usePromoteClass(source?.id ?? 0);
   const memberships = useClassMemberships(source?.id ?? 0);
   const activeStudents = (memberships.data ?? []).filter((m) => m.valid_to === null);
+  const allSelected = activeStudents.length > 0 && selected.size === activeStudents.length;
 
   const candidates = allClasses.filter((c) => c.id !== source?.id && c.status === "active");
   const target = candidates.find((c) => c.id === Number(targetId)) ?? null;
@@ -501,13 +503,34 @@ function PromoteClassWizard({
     setTargetId("");
     setArchiveSource(false);
     setResult(null);
+    setSelected(new Set());
     promote.reset();
+  }
+
+  function toggle(guid: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(guid)) next.delete(guid);
+      else next.add(guid);
+      return next;
+    });
+  }
+
+  function goToConfirm(): void {
+    // Default to all active students selected; the user can deselect.
+    setSelected(new Set(activeStudents.map((m) => m.ad_object_guid)));
+    setStep("confirm");
   }
 
   function handleConfirm(): void {
     if (!source || !targetId) return;
     promote.mutate(
-      { target_class_id: Number(targetId), archive_source: archiveSource },
+      {
+        target_class_id: Number(targetId),
+        archive_source: archiveSource,
+        // Move all when every student is selected; otherwise the chosen subset.
+        ...(allSelected ? {} : { student_guids: [...selected] }),
+      },
       {
         onSuccess: (res) => {
           setResult(res);
@@ -584,7 +607,7 @@ function PromoteClassWizard({
               <Button
                 type="button"
                 disabled={!targetId || activeStudents.length === 0}
-                onClick={() => setStep("confirm")}
+                onClick={goToConfirm}
               >
                 {t("classes.promote_preview_button")}
               </Button>
@@ -600,7 +623,7 @@ function PromoteClassWizard({
                 {t("classes.promote_confirm_desc", {
                   source: source?.name,
                   target: target.name,
-                  count: activeStudents.length,
+                  count: selected.size,
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -618,8 +641,18 @@ function PromoteClassWizard({
               ) : (
                 <ul className="space-y-0.5">
                   {activeStudents.map((m) => (
-                    <li key={m.id} className="truncate text-xs text-muted-foreground">
-                      {m.display_name ?? m.upn ?? m.ad_object_guid}
+                    <li key={m.id}>
+                      <label className="flex cursor-pointer items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(m.ad_object_guid)}
+                          onChange={() => toggle(m.ad_object_guid)}
+                          className="h-3.5 w-3.5 rounded border-input"
+                        />
+                        <span className="truncate">
+                          {m.display_name ?? m.upn ?? m.ad_object_guid}
+                        </span>
+                      </label>
                     </li>
                   ))}
                 </ul>
@@ -634,7 +667,11 @@ function PromoteClassWizard({
               <Button type="button" variant="outline" onClick={() => setStep("pick")}>
                 {t("classes.promote_back")}
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={promote.isPending}>
+              <Button
+                type="button"
+                onClick={handleConfirm}
+                disabled={promote.isPending || selected.size === 0}
+              >
                 {promote.isPending ? t("common.loading") : t("classes.promote_confirm_submit")}
               </Button>
             </DialogFooter>

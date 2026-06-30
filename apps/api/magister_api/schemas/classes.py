@@ -46,10 +46,14 @@ class ClassOut(BaseModel):
 
 
 class ClassPromotionRequest(BaseModel):
-    """Promote all active students from this class to a target class."""
+    """Promote active students from this class to a target class.
+
+    ``student_guids`` selects a subset; omit (null) to move all active students.
+    """
 
     target_class_id: int
     archive_source: bool = False
+    student_guids: list[str] | None = None
 
 
 class ClassPromotionError(BaseModel):

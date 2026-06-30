@@ -233,6 +233,8 @@ export interface SubstitutionOut extends ClassTeacherOut {
 export interface ClassPromotionRequest {
   target_class_id: number;
   archive_source: boolean;
+  /** Subset of student GUIDs to move; omit to move all active students. */
+  student_guids?: string[] | null;
 }
 
 export interface ClassPromotionError {

@@ -155,19 +155,25 @@ class ClassService:
         source_class_id: int,
         target_class_id: int,
         archive_source: bool,
+        student_guids: list[str] | None = None,
         ip: str | None,
         request_id: str,
     ) -> PromotionResult:
-        """Move all active students from source to target class.
+        """Move active students from source to target class.
 
-        Uses savepoints per student (same as bulk_add) so partial failures
-        don't roll back the whole batch. After the move an optional archive
-        of the source class is performed and a single audit event is emitted.
+        With ``student_guids`` only those (active) students are moved; None
+        moves all active students. Uses savepoints per student (same as
+        bulk_add) so partial failures don't roll back the whole batch. After
+        the move an optional archive of the source class is performed and a
+        single audit event is emitted.
         """
         source = await self.get(source_class_id)
         target = await self.get(target_class_id)
         membership_repo = ClassMembershipRepository(self.session)
         active = await membership_repo.list_for_class(source_class_id, only_active=True)
+        if student_guids is not None:
+            wanted = set(student_guids)
+            active = [m for m in active if m.ad_object_guid in wanted]
 
         moved: list[int] = []
         errors: list[tuple[str, str]] = []
@@ -240,6 +246,7 @@ class ClassService:
                 "students_moved": len(moved),
                 "students_failed": len(errors),
                 "source_archived": source_archived,
+                "selected_subset": student_guids is not None,
             },
         )
         return PromotionResult(
