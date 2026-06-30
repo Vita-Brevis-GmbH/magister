@@ -26,7 +26,7 @@ import type {
 } from "@/api/types";
 import { LetterModal, type LetterTarget } from "@/components/LetterModal";
 import { UserAvatar } from "@/components/UserAvatar";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -454,6 +454,15 @@ function StudentsSection({
                   <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
+                      {canBulkManage ? (
+                        <Link
+                          to="/users/$guid"
+                          params={{ guid: row.ad_object_guid }}
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                          {t("classes.show_user_details")}
+                        </Link>
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"

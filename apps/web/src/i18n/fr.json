@@ -96,6 +96,7 @@
     "add_student_description": "Sélectionnez l'élève et indiquez la date de début.",
     "add_student_submit": "Ajouter",
     "remove_student": "Retirer",
+    "show_user_details": "Voir les détails",
     "search_student": "Rechercher un·e élève",
     "mid_year_hint": "Un transfert en cours d'année clôt automatiquement l'appartenance précédente.",
     "bulk_add_button": "Ajouter plusieurs",

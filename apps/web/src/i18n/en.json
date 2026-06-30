@@ -95,6 +95,7 @@
     "add_student_description": "Pick a student and set the start date.",
     "add_student_submit": "Add",
     "remove_student": "Remove",
+    "show_user_details": "Show details",
     "search_student": "Search student",
     "mid_year_hint": "Mid-year transfers automatically close the previous active membership.",
     "bulk_add_button": "Add multiple",

@@ -95,6 +95,7 @@
     "add_student_description": "Schüler:in suchen und das Startdatum setzen.",
     "add_student_submit": "Hinzufügen",
     "remove_student": "Entfernen",
+    "show_user_details": "Details anzeigen",
     "search_student": "Schüler:in suchen",
     "mid_year_hint": "Bei Klassenwechsel mitten im Jahr wird die alte Mitgliedschaft automatisch beendet.",
     "bulk_add_button": "Mehrere hinzufügen",

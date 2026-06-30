@@ -96,6 +96,7 @@
     "add_student_description": "Scegli lo studente e imposta la data di inizio.",
     "add_student_submit": "Aggiungi",
     "remove_student": "Rimuovi",
+    "show_user_details": "Mostra dettagli",
     "search_student": "Cerca studente",
     "mid_year_hint": "I trasferimenti a metà anno chiudono automaticamente l'appartenenza precedente.",
     "bulk_add_button": "Aggiungi più",
