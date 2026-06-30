@@ -36,7 +36,17 @@
       "local_login_disabled": "La connexion locale est désactivée."
     }
   },
-  "me": { "title": "Mon profil" },
+  "me": {
+    "title": "Mon profil",
+    "preferences_title": "Paramètres",
+    "preferences_desc": "Langue, région et formats pour votre compte.",
+    "preferences_save": "Enregistrer",
+    "preferences_saved": "Paramètres enregistrés.",
+    "pref_language": "Langue",
+    "pref_region": "Région",
+    "pref_date_format": "Format de date",
+    "pref_time_format": "Format d'heure"
+  },
   "classes": {
     "title": "Classes",
     "name": "Nom",

@@ -42,6 +42,8 @@ import type {
   SubstitutionOut,
   UserAttributesUpdate,
   UserDashboardOut,
+  UserPreferencesOut,
+  UserPreferencesUpdate,
   UserStatusUpdate,
 } from "./types";
 
@@ -59,6 +61,7 @@ export const queryKeys = {
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
+  myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
 };
 
@@ -400,6 +403,24 @@ export function useUpdateAppSettings() {
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
     mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+  });
+}
+
+// --- Per-user preferences --------------------------------------------------
+
+export function useMyPreferences() {
+  return useQuery<UserPreferencesOut>({
+    queryKey: queryKeys.myPreferences,
+    queryFn: () => apiFetch<UserPreferencesOut>("/me/preferences"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUpdateMyPreferences() {
+  const qc = useQueryClient();
+  return useMutation<UserPreferencesOut, ApiError, UserPreferencesUpdate>({
+    mutationFn: (body) => apiFetch<UserPreferencesOut>("/me/preferences", { method: "PUT", body }),
+    onSuccess: (data) => qc.setQueryData(queryKeys.myPreferences, data),
   });
 }
 

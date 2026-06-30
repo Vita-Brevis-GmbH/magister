@@ -36,7 +36,17 @@
       "local_login_disabled": "L'accesso locale è disabilitato."
     }
   },
-  "me": { "title": "Il mio profilo" },
+  "me": {
+    "title": "Il mio profilo",
+    "preferences_title": "Impostazioni",
+    "preferences_desc": "Lingua, regione e formati per il tuo account.",
+    "preferences_save": "Salva",
+    "preferences_saved": "Impostazioni salvate.",
+    "pref_language": "Lingua",
+    "pref_region": "Regione",
+    "pref_date_format": "Formato data",
+    "pref_time_format": "Formato ora"
+  },
   "classes": {
     "title": "Classi",
     "name": "Nome",

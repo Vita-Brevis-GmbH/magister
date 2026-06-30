@@ -34,7 +34,15 @@
     }
   },
   "me": {
-    "title": "My profile"
+    "title": "My profile",
+    "preferences_title": "Settings",
+    "preferences_desc": "Language, region and formats for your account.",
+    "preferences_save": "Save",
+    "preferences_saved": "Settings saved.",
+    "pref_language": "Language",
+    "pref_region": "Region",
+    "pref_date_format": "Date format",
+    "pref_time_format": "Time format"
   },
   "classes": {
     "title": "Classes",

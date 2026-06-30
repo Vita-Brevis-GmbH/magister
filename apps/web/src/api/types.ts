@@ -223,6 +223,19 @@ export interface AdConnectionTestOut {
   detail: string;
 }
 
+export type PrefLanguage = "de" | "fr" | "it" | "en";
+export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
+export type PrefTimeFormat = "24h" | "12h";
+
+export interface UserPreferencesOut {
+  language: PrefLanguage;
+  region: string;
+  date_format: PrefDateFormat;
+  time_format: PrefTimeFormat;
+}
+
+export type UserPreferencesUpdate = UserPreferencesOut;
+
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
 export interface SubstitutionOut extends ClassTeacherOut {
