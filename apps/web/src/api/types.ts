@@ -60,6 +60,13 @@ export interface ClassUpdate {
   kuerzel?: string | null;
 }
 
+export interface SchoolOut {
+  id: number;
+  name: string;
+  kuerzel: string;
+  scope_short: string;
+}
+
 export type ClassTeacherRole = "haupt" | "co" | "stellvertretung";
 
 export interface ClassTeacherOut {

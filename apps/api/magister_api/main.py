@@ -31,6 +31,7 @@ from magister_api.routers.imports import router as imports_router
 from magister_api.routers.letters import router as letters_router
 from magister_api.routers.privacy import router as privacy_router
 from magister_api.routers.reports import router as reports_router
+from magister_api.routers.schools import router as schools_router
 from magister_api.routers.student_password_reset import router as student_pw_reset_router
 from magister_api.routers.substitutions import router as substitutions_router
 from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
@@ -95,6 +96,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(classes_router)
+    app.include_router(schools_router)
     app.include_router(class_teachers_router)
     app.include_router(class_memberships_router)
     app.include_router(users_router)

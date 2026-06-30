@@ -10,6 +10,7 @@ import {
   useCreateClass,
   useCurrentUser,
   usePromoteClass,
+  useSchools,
   useUpdateClass,
 } from "@/api/hooks";
 import type { ClassOut, ClassPromotionResult } from "@/api/types";
@@ -46,6 +47,9 @@ function ClassesPage(): JSX.Element {
   const { t } = useTranslation();
   const q = useClasses();
   const me = useCurrentUser();
+  const schools = useSchools();
+  const schoolName = (id: number): string =>
+    schools.data?.find((s) => s.id === id)?.name ?? String(id);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
@@ -102,7 +106,7 @@ function ClassesPage(): JSX.Element {
                 </TableCell>
                 <TableCell>{c.kuerzel ?? "–"}</TableCell>
                 <TableCell>{c.jahrgangsstufe}</TableCell>
-                <TableCell>{c.school_id}</TableCell>
+                <TableCell>{schoolName(c.school_id)}</TableCell>
                 <TableCell>
                   {c.status === "active"
                     ? t("classes.status_active")
@@ -181,6 +185,7 @@ export function CreateClassModal({
   const [kuerzel, setKuerzel] = useState("");
   const [jahrgangsstufe, setJahrgangsstufe] = useState("");
   const [schoolId, setSchoolId] = useState(defaultSchoolId !== null ? String(defaultSchoolId) : "");
+  const schools = useSchools();
   const create = useCreateClass();
 
   function reset(): void {
@@ -266,15 +271,21 @@ export function CreateClassModal({
           </div>
           {isAdmin ? (
             <div className="space-y-1">
-              <Label htmlFor="class-school-id">{t("classes.school_id_label")}</Label>
-              <Input
+              <Label htmlFor="class-school-id">{t("classes.school")}</Label>
+              <select
                 id="class-school-id"
-                type="number"
-                min={1}
                 value={schoolId}
                 onChange={(e) => setSchoolId(e.target.value)}
                 required
-              />
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">{t("classes.school_select_placeholder")}</option>
+                {(schools.data ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.kuerzel})
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-muted-foreground">{t("classes.school_id_admin_hint")}</p>
             </div>
           ) : null}

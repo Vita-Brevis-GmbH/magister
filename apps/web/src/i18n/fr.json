@@ -44,6 +44,7 @@
     "jahrgangsstufe": "Année",
     "school": "École",
     "school_id_label": "ID école",
+    "school_select_placeholder": "Choisir l'école …",
     "school_id_admin_hint": "L'admin doit indiquer l'école explicitement.",
     "status": "Statut",
     "status_active": "actif",

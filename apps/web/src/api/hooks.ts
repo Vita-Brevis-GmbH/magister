@@ -35,6 +35,7 @@ import type {
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
   MailDomainsOut,
+  SchoolOut,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
   SubstitutionOut,
@@ -45,6 +46,7 @@ import type {
 export const queryKeys = {
   me: ["me"] as const,
   classes: ["classes"] as const,
+  schools: ["schools"] as const,
   classDetail: (classId: number) => ["classes", classId] as const,
   classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
   classMemberships: (classId: number) => ["classes", classId, "students"] as const,
@@ -85,6 +87,14 @@ export function useClasses() {
   return useQuery<ClassOut[]>({
     queryKey: queryKeys.classes,
     queryFn: () => apiFetch<ClassOut[]>("/classes"),
+  });
+}
+
+export function useSchools() {
+  return useQuery<SchoolOut[]>({
+    queryKey: queryKeys.schools,
+    queryFn: () => apiFetch<SchoolOut[]>("/schools"),
+    staleTime: 5 * 60_000,
   });
 }
 

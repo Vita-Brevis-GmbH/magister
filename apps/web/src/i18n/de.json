@@ -43,6 +43,7 @@
     "jahrgangsstufe": "Jahrgangsstufe",
     "school": "Schule",
     "school_id_label": "School ID",
+    "school_select_placeholder": "Schule wählen …",
     "school_id_admin_hint": "Admins müssen die Schule explizit angeben.",
     "status": "Status",
     "status_active": "aktiv",
