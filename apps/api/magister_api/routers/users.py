@@ -179,7 +179,10 @@ async def patch_user_attributes(
 
     # Re-fetch so the response shows the merged row.
     refreshed = await session.get(AdUserCache, target.ad_object_guid)
-    assert refreshed is not None
+    if refreshed is None:
+        # The row was just written in this transaction; a miss means a
+        # consistency problem rather than a client error.
+        raise HTTPException(status_code=500, detail="data_consistency_error")
     return AdUserOut.model_validate(refreshed)
 
 
@@ -217,7 +220,10 @@ async def patch_user_status(
         raise HTTPException(status_code=503, detail="ad_unavailable") from exc
 
     refreshed = await session.get(AdUserCache, target.ad_object_guid)
-    assert refreshed is not None
+    if refreshed is None:
+        # The row was just written in this transaction; a miss means a
+        # consistency problem rather than a client error.
+        raise HTTPException(status_code=500, detail="data_consistency_error")
     return AdUserOut.model_validate(refreshed)
 
 
