@@ -50,6 +50,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useFormatters } from "@/lib/useFormatters";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/classes/$classId")({
@@ -121,6 +122,7 @@ function TeachersSection({
   canManage: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const q = useClassTeachers(classId);
   const revoke = useRevokeClassTeacher(classId);
   const [addOpen, setAddOpen] = useState(false);
@@ -165,8 +167,8 @@ function TeachersSection({
                     <PersonCell row={row} />
                   </TableCell>
                   <TableCell>{teacherRoleLabel(row.role, t)}</TableCell>
-                  <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
-                  <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
+                  <TableCell>{fmt.formatDate(row.valid_from)}</TableCell>
+                  <TableCell>{row.valid_to ? fmt.formatDate(row.valid_to) : "–"}</TableCell>
                   {canManage ? (
                     <TableCell className="text-right">
                       <Button
@@ -201,6 +203,7 @@ function SubjectTeachersSection({
   canManage: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const q = useSubjectTeachers(classId);
   const revoke = useRevokeSubjectTeacher(classId);
   const [addOpen, setAddOpen] = useState(false);
@@ -245,8 +248,8 @@ function SubjectTeachersSection({
                     <PersonCell row={row} />
                   </TableCell>
                   <TableCell>{row.subject}</TableCell>
-                  <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
-                  <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
+                  <TableCell>{fmt.formatDate(row.valid_from)}</TableCell>
+                  <TableCell>{row.valid_to ? fmt.formatDate(row.valid_to) : "–"}</TableCell>
                   {canManage ? (
                     <TableCell className="text-right">
                       <Button
@@ -645,6 +648,7 @@ function StudentsSection({
   className: string | null;
 }): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const me = useCurrentUser();
   const q = useClassMemberships(classId);
   const remove = useRemoveClassMembership(classId);
@@ -710,8 +714,8 @@ function StudentsSection({
                   <TableCell>
                     <PersonCell row={row} />
                   </TableCell>
-                  <TableCell>{formatIsoDate(row.valid_from)}</TableCell>
-                  <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
+                  <TableCell>{fmt.formatDate(row.valid_from)}</TableCell>
+                  <TableCell>{row.valid_to ? fmt.formatDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       {canViewUserDetail ? (
@@ -1237,12 +1241,6 @@ function MoveClassModal({
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function formatIsoDate(iso: string): string {
-  // The API returns ISO datetime strings; show date only in the table to
-  // keep rows tight.
-  return iso.slice(0, 10);
 }
 
 function teacherRoleLabel(role: ClassTeacherRole, t: (k: string) => string): string {

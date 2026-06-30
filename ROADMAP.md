@@ -93,7 +93,7 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ **PW-Reset in der Klassenansicht** + Schüler-Klassenfilter (`?class_id` matcht Schüler)
 - ✅ **AD-Verbindungstest** (`POST /admin/ad-test`, nur LDAP; Entra-PW-Test verworfen — MFA-Modell)
 - ✅ **Einzelschüler-Übergang** — `student_guids`-Teilmenge im Promote
-- ✅ **Per-User-Einstellungen** (Sprache/Region/Formate, Migration 0013, `/me/preferences`)
+- ✅ **Per-User-Einstellungen** (Sprache/Region/Formate, Migration 0013, `/me/preferences`); Datums-/Zeit-/Zahlenformate werden über `lib/useFormatters` app-weit angewendet
 - ✅ **Rolle Fachlehrer** — eigene Tabelle (Migration 0014, ADR-0005), Zuweisung mit Fach, PW-Reset für eigene Schüler:innen, „Meine Schüler"-Sicht
 - ✅ **Test/CI** — Coverage-Gate (75 %), Router-Tests, Rename-Integritätstests, Pre-commit spiegelt Frontend-CI
 
@@ -102,4 +102,3 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - Sicherheits-Updates der Dependencies (renovate)
 - Übersetzungsqualität FR/IT durch native Reviewer
 - Operations-Dokumentation für Schulträger-IT
-- Per-User-Formate (Datum/Zahl) global auf alle Ausgaben anwenden (Folgearbeit zu den Einstellungen)

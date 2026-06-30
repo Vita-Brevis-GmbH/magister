@@ -94,7 +94,7 @@ ausgewählt) und sendet nur die gewählten.
 | **RBAC** | `get_current_user` (jede:r authentifizierte User für die eigenen Einstellungen; nur Staff loggt sich ein) |
 | **Audit** | `user_preferences_updated` |
 | **UI** | Einstellungs-Card auf `/me`; Speichern wendet die Sprache sofort an, das Layout wendet die gespeicherte Sprache nach dem Login an. |
-| **Hinweis** | Region/Datums-/Zeitformat werden gespeichert und sind wählbar; die globale Anwendung der Formate auf jede Datumsausgabe ist noch nicht überall verdrahtet (Folgearbeit). |
+| **Formate** | `lib/format.ts` + Hook `lib/useFormatters` (`formatDate`/`formatDateTime`/`formatNumber`) wenden die gewählten Datums-/Zeit-/Zahlenformate (Region-Locale) app-weit an — Klassendetail, User-Liste (last sync), Audit-Log, Importe, Subject-Access. Datumsmuster folgt der expliziten Wahl; Zeit folgt 12h/24h; Zahlen folgen `language-region`. |
 
 ---
 
