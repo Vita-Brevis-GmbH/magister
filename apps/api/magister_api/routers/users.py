@@ -19,6 +19,7 @@ from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.ad_users import AdUserListResponse, AdUserOut
 from magister_api.schemas.user_attrs import UserAttributesUpdate
+from magister_api.schemas.user_dashboard import UserDashboardOut
 from magister_api.schemas.user_lifecycle import UserStatusUpdate
 from magister_api.services.ad_users import AdUsersService
 from magister_api.services.app_settings import AppSettingsService
@@ -30,6 +31,7 @@ from magister_api.services.user_attrs import (
     UserAttributesService,
     UserNotInAdError,
 )
+from magister_api.services.user_dashboard import UserDashboardService
 from magister_api.services.user_lifecycle import (
     CannotDisableSelfError,
     UserLifecycleService,
@@ -119,6 +121,20 @@ async def get_user(
     """
     _, target = user_and_target
     return AdUserOut.model_validate(target)
+
+
+@router.get("/{ad_object_guid}/dashboard", response_model=UserDashboardOut)
+async def user_dashboard(
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    session: AsyncSession = Depends(get_session),
+) -> UserDashboardOut:
+    """Active classes of the user plus each class's active Klassenlehrer.
+
+    Same RBAC as the user detail (admin or SMI of the user's school).
+    """
+    actor, target = user_and_target
+    classes = await UserDashboardService(session, actor.to_scope()).for_user(target.ad_object_guid)
+    return UserDashboardOut(classes=classes)
 
 
 @router.patch("/{ad_object_guid}", response_model=AdUserOut)

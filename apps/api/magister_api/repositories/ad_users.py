@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.ad.client import AdUserRecord
 from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
+from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
 from magister_api.repositories.base import BaseRepository, ScopeContext
 
@@ -60,9 +61,9 @@ class AdUserListingRepository(BaseRepository):
             stmt = stmt.where(search_pred)
             count_stmt = count_stmt.where(search_pred)
         if class_id is not None:
-            # Limit to users that have an active class_teacher_roles row OR a
-            # class_memberships row for this class. class_memberships lands
-            # in #6 — until then, the class_id filter is teacher-only.
+            # Limit to users with an active class_teacher_roles row (teachers)
+            # OR an active class_memberships row (students) for this class, so
+            # the class filter surfaces both sides of the class.
             from magister_api.models.base import utcnow as _now
 
             ts = _now()
@@ -72,8 +73,18 @@ class AdUserListingRepository(BaseRepository):
                 .where(ClassTeacherRole.valid_from <= ts)
                 .where((ClassTeacherRole.valid_to.is_(None)) | (ClassTeacherRole.valid_to > ts))
             )
-            stmt = stmt.where(AdUserCache.ad_object_guid.in_(kl_subq))
-            count_stmt = count_stmt.where(AdUserCache.ad_object_guid.in_(kl_subq))
+            member_subq = (
+                select(ClassMembership.ad_object_guid)
+                .where(ClassMembership.class_id == class_id)
+                .where(ClassMembership.valid_from <= ts)
+                .where((ClassMembership.valid_to.is_(None)) | (ClassMembership.valid_to > ts))
+            )
+            class_pred = or_(
+                AdUserCache.ad_object_guid.in_(kl_subq),
+                AdUserCache.ad_object_guid.in_(member_subq),
+            )
+            stmt = stmt.where(class_pred)
+            count_stmt = count_stmt.where(class_pred)
         stmt = (
             stmt.order_by(AdUserCache.surname, AdUserCache.given_name, AdUserCache.upn)
             .offset(offset)

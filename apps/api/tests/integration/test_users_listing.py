@@ -6,6 +6,7 @@ see ad_user_cache rows from their own school(s); Admin sees everything.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -15,6 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.class_membership import ClassMembership
+from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.school_class import CLASS_STATUS_ACTIVE, SchoolClass
 from tests.integration._helpers import seed_user_with_session
 
 pytestmark = pytest.mark.postgres
@@ -203,6 +207,68 @@ class TestFilters:
         r = await as_schulleitung_a.get("/users", params={"search": "müll"})
         assert r.status_code == 200
         assert _upns(r.json()) == {"m@a.ch"}
+
+
+class TestClassFilter:
+    @pytest.mark.asyncio
+    async def test_class_id_filter_returns_students_and_teachers(
+        self, as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+    ) -> None:
+        now = datetime.now(UTC)
+        await _seed_user(
+            db_session,
+            guid="aaa10000-0000-0000-0000-0000000000s1",
+            school_id=school_a,
+            upn="pupil@a.ch",
+            kind="student",
+        )
+        await _seed_user(
+            db_session,
+            guid="aaa10000-0000-0000-0000-0000000000t1",
+            school_id=school_a,
+            upn="teach@a.ch",
+            kind="teacher",
+        )
+        await _seed_user(
+            db_session,
+            guid="aaa10000-0000-0000-0000-0000000000o1",
+            school_id=school_a,
+            upn="outsider@a.ch",
+            kind="student",
+        )
+        cls = SchoolClass(
+            school_id=school_a,
+            name="2b",
+            kuerzel="2B",
+            jahrgangsstufe=2,
+            status=CLASS_STATUS_ACTIVE,
+        )
+        db_session.add(cls)
+        await db_session.flush()
+        db_session.add(
+            ClassMembership(
+                class_id=cls.id,
+                ad_object_guid="aaa10000-0000-0000-0000-0000000000s1",
+                valid_from=now - timedelta(days=1),
+                valid_to=None,
+            )
+        )
+        db_session.add(
+            ClassTeacherRole(
+                class_id=cls.id,
+                ad_object_guid="aaa10000-0000-0000-0000-0000000000t1",
+                role="haupt",
+                valid_from=now - timedelta(days=1),
+                valid_to=None,
+            )
+        )
+        await db_session.commit()
+
+        r = await as_schulleitung_a.get("/users", params={"class_id": cls.id})
+        assert r.status_code == 200, r.text
+        upns = _upns(r.json())
+        # Both the student and the teacher of the class show up; the outsider does not.
+        assert upns == {"pupil@a.ch", "teach@a.ch"}
 
 
 class TestPagination:

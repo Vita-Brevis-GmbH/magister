@@ -25,6 +25,7 @@ import type {
   ClassTeacherRole,
 } from "@/api/types";
 import { LetterModal, type LetterTarget } from "@/components/LetterModal";
+import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -396,9 +397,13 @@ function StudentsSection({
   const [bulkOpen, setBulkOpen] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [letterTarget, setLetterTarget] = useState<LetterTarget | null>(null);
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
 
   const canBulkManage =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
+  // The user-detail view is admin/SMI only (Schulleitung gets 404 there), so
+  // only offer the "show details" link to those who can actually open it.
+  const canViewUserDetail = me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
 
   return (
     <Card>
@@ -454,7 +459,7 @@ function StudentsSection({
                   <TableCell>{row.valid_to ? formatIsoDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
-                      {canBulkManage ? (
+                      {canViewUserDetail ? (
                         <Link
                           to="/users/$guid"
                           params={{ guid: row.ad_object_guid }}
@@ -463,6 +468,14 @@ function StudentsSection({
                           {t("classes.show_user_details")}
                         </Link>
                       ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResetTarget(row)}
+                      >
+                        {t("classes.reset_password")}
+                      </Button>
                       <Button
                         type="button"
                         variant="outline"
@@ -507,6 +520,7 @@ function StudentsSection({
         currentClassName={className}
         onClose={() => setLetterTarget(null)}
       />
+      <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
     </Card>
   );
 }

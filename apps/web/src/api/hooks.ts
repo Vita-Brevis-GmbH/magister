@@ -40,6 +40,7 @@ import type {
   StudentPasswordResetResponse,
   SubstitutionOut,
   UserAttributesUpdate,
+  UserDashboardOut,
   UserStatusUpdate,
 } from "./types";
 
@@ -52,6 +53,7 @@ export const queryKeys = {
   classMemberships: (classId: number) => ["classes", classId, "students"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
   user: (guid: string) => ["user", guid] as const,
+  userDashboard: (guid: string) => ["user", guid, "dashboard"] as const,
   mailDomains: ["mail-domains"] as const,
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
@@ -280,6 +282,14 @@ export function useUser(guid: string) {
   return useQuery<AdUserOut>({
     queryKey: queryKeys.user(guid),
     queryFn: () => apiFetch<AdUserOut>(`/users/${guid}`),
+    enabled: !!guid,
+  });
+}
+
+export function useUserDashboard(guid: string) {
+  return useQuery<UserDashboardOut>({
+    queryKey: queryKeys.userDashboard(guid),
+    queryFn: () => apiFetch<UserDashboardOut>(`/users/${guid}/dashboard`),
     enabled: !!guid,
   });
 }

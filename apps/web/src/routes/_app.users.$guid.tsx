@@ -1,10 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useCurrentUser, useMailDomains, useUpdateUser, useUser } from "@/api/hooks";
-import type { UserAttributesUpdate } from "@/api/types";
+import {
+  useCurrentUser,
+  useMailDomains,
+  useUpdateUser,
+  useUser,
+  useUserDashboard,
+} from "@/api/hooks";
+import type { AdUserOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
@@ -59,6 +65,7 @@ function UserDetailPage(): JSX.Element {
   const { t } = useTranslation();
   const { guid } = Route.useParams();
   const userQ = useUser(guid);
+  const dashboardQ = useUserDashboard(guid);
   const mailDomainsQ = useMailDomains();
   const me = useCurrentUser();
   const update = useUpdateUser(guid);
@@ -69,9 +76,11 @@ function UserDetailPage(): JSX.Element {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [savedFlash, setSavedFlash] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
 
-  // Re-hydrate the form when the loaded user (or available domains) change.
-  useEffect(() => {
+  // Re-hydrate the form from the loaded user. Runs on load and whenever we
+  // (re-)enter edit mode, so Cancel + re-open always starts from server state.
+  const hydrateForm = useCallback(() => {
     if (!userQ.data) return;
     const upn = splitMail(userQ.data.upn);
     const mail = splitMail(userQ.data.mail);
@@ -89,6 +98,23 @@ function UserDetailPage(): JSX.Element {
       temp_device_name: userQ.data.temp_device_name ?? "",
     });
   }, [userQ.data]);
+
+  useEffect(() => {
+    hydrateForm();
+  }, [hydrateForm]);
+
+  function startEditing(): void {
+    hydrateForm();
+    setSavedFlash(false);
+    update.reset();
+    setEditing(true);
+  }
+
+  function cancelEditing(): void {
+    hydrateForm();
+    update.reset();
+    setEditing(false);
+  }
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -144,7 +170,10 @@ function UserDetailPage(): JSX.Element {
     const payload = buildPayload();
     if (Object.keys(payload).length === 0) return;
     update.mutate(payload, {
-      onSuccess: () => setSavedFlash(true),
+      onSuccess: () => {
+        setSavedFlash(true);
+        setEditing(false);
+      },
     });
   }
 
@@ -189,165 +218,191 @@ function UserDetailPage(): JSX.Element {
           ) : (
             <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>
           )}
+          {!editing ? (
+            <Button type="button" onClick={startEditing}>
+              {t("users.detail.edit")}
+            </Button>
+          ) : null}
         </CardHeader>
       </Card>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {errorDetail ? (
-          <div
-            role="alert"
-            className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            {errorDetail}
-          </div>
-        ) : savedFlash ? (
-          <div
-            role="status"
-            className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
-          >
-            {t("users.detail.saved")}
-          </div>
-        ) : null}
-
-        {/* Identität */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("users.detail.section_identity")}</CardTitle>
-            <CardDescription>{t("users.detail.section_identity_desc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field
-              id="display_name"
-              label={t("users.field.display_name")}
-              value={form.display_name}
-              onChange={(v) => setField("display_name", v)}
-              placeholder={t("users.field.display_name_placeholder")}
-            />
-            <UpnField
-              localValue={form.upn_local}
-              domainValue={form.upn_domain}
-              onLocal={(v) => setField("upn_local", v)}
-              onDomain={(v) => setField("upn_domain", v)}
-              domains={domains}
-              disabled={!canChangeLogin}
-              label={t("users.field.upn")}
-              disabledHint={t("users.field.login_admin_only")}
-            />
-            <Field
-              id="sam_account_name"
-              label={t("users.field.sam_account_name")}
-              value={form.sam_account_name}
-              onChange={(v) => setField("sam_account_name", v)}
-              maxLength={20}
-              disabled={!canChangeLogin}
-              hint={canChangeLogin ? t("users.field.sam_hint") : t("users.field.login_admin_only")}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Mail */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("users.detail.section_mail")}</CardTitle>
-            <CardDescription>{t("users.detail.section_mail_desc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <UpnField
-              localValue={form.mail_local}
-              domainValue={form.mail_domain}
-              onLocal={(v) => setField("mail_local", v)}
-              onDomain={(v) => setField("mail_domain", v)}
-              domains={domains}
-              disabled={false}
-              label={t("users.field.mail")}
-              allowEmpty
-            />
-          </CardContent>
-        </Card>
-
-        {/* Adresse */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("users.detail.section_address")}</CardTitle>
-            <CardDescription>{t("users.detail.section_address_desc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field
-              id="street_address"
-              label={t("users.field.street_address")}
-              value={form.street_address}
-              onChange={(v) => setField("street_address", v)}
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Field
-                id="postal_code"
-                label={t("users.field.postal_code")}
-                value={form.postal_code}
-                onChange={(v) => setField("postal_code", v)}
-                maxLength={16}
-                className="sm:col-span-1"
-              />
-              <Field
-                id="locality"
-                label={t("users.field.locality")}
-                value={form.locality}
-                onChange={(v) => setField("locality", v)}
-                className="sm:col-span-2"
-              />
-            </div>
-            <Field
-              id="country"
-              label={t("users.field.country")}
-              value={form.country}
-              onChange={(v) => setField("country", v)}
-            />
-          </CardContent>
-        </Card>
-
-        {/* Gerät */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("users.detail.section_device")}</CardTitle>
-            <CardDescription>{t("users.detail.section_device_desc")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Field
-              id="device_name"
-              label={t("users.field.device_name")}
-              value={user.device_name ?? ""}
-              onChange={() => {}}
-              readOnly
-              hint={t("users.field.device_name_hint")}
-            />
-            <Field
-              id="temp_device_name"
-              label={t("users.field.temp_device_name")}
-              value={form.temp_device_name}
-              onChange={(v) => setField("temp_device_name", v)}
-              hint={t("users.field.temp_device_name_hint")}
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
-            <CardDescription>{t("privacy.section_desc")}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button type="button" variant="outline" onClick={() => setPrivacyOpen(true)}>
-              {t("privacy.open_button")}
-            </Button>
-          </CardContent>
-        </Card>
-
-        <div className="flex items-center justify-end gap-3">
-          <BackToList />
-          <Button type="submit" disabled={update.isPending}>
-            {update.isPending ? t("common.loading") : t("users.detail.save")}
-          </Button>
+      {savedFlash && !editing ? (
+        <div
+          role="status"
+          className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+        >
+          {t("users.detail.saved")}
         </div>
-      </form>
+      ) : null}
+
+      {!editing ? (
+        <UserReadView
+          user={user}
+          dashboard={dashboardQ.data}
+          onOpenPrivacy={() => setPrivacyOpen(true)}
+        />
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {errorDetail ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+            >
+              {errorDetail}
+            </div>
+          ) : savedFlash ? (
+            <div
+              role="status"
+              className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+            >
+              {t("users.detail.saved")}
+            </div>
+          ) : null}
+
+          {/* Identität */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_identity")}</CardTitle>
+              <CardDescription>{t("users.detail.section_identity_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field
+                id="display_name"
+                label={t("users.field.display_name")}
+                value={form.display_name}
+                onChange={(v) => setField("display_name", v)}
+                placeholder={t("users.field.display_name_placeholder")}
+              />
+              <UpnField
+                localValue={form.upn_local}
+                domainValue={form.upn_domain}
+                onLocal={(v) => setField("upn_local", v)}
+                onDomain={(v) => setField("upn_domain", v)}
+                domains={domains}
+                disabled={!canChangeLogin}
+                label={t("users.field.upn")}
+                disabledHint={t("users.field.login_admin_only")}
+              />
+              <Field
+                id="sam_account_name"
+                label={t("users.field.sam_account_name")}
+                value={form.sam_account_name}
+                onChange={(v) => setField("sam_account_name", v)}
+                maxLength={20}
+                disabled={!canChangeLogin}
+                hint={
+                  canChangeLogin ? t("users.field.sam_hint") : t("users.field.login_admin_only")
+                }
+              />
+            </CardContent>
+          </Card>
+
+          {/* Mail */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_mail")}</CardTitle>
+              <CardDescription>{t("users.detail.section_mail_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <UpnField
+                localValue={form.mail_local}
+                domainValue={form.mail_domain}
+                onLocal={(v) => setField("mail_local", v)}
+                onDomain={(v) => setField("mail_domain", v)}
+                domains={domains}
+                disabled={false}
+                label={t("users.field.mail")}
+                allowEmpty
+              />
+            </CardContent>
+          </Card>
+
+          {/* Adresse */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_address")}</CardTitle>
+              <CardDescription>{t("users.detail.section_address_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field
+                id="street_address"
+                label={t("users.field.street_address")}
+                value={form.street_address}
+                onChange={(v) => setField("street_address", v)}
+              />
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <Field
+                  id="postal_code"
+                  label={t("users.field.postal_code")}
+                  value={form.postal_code}
+                  onChange={(v) => setField("postal_code", v)}
+                  maxLength={16}
+                  className="sm:col-span-1"
+                />
+                <Field
+                  id="locality"
+                  label={t("users.field.locality")}
+                  value={form.locality}
+                  onChange={(v) => setField("locality", v)}
+                  className="sm:col-span-2"
+                />
+              </div>
+              <Field
+                id="country"
+                label={t("users.field.country")}
+                value={form.country}
+                onChange={(v) => setField("country", v)}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Gerät */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_device")}</CardTitle>
+              <CardDescription>{t("users.detail.section_device_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Field
+                id="device_name"
+                label={t("users.field.device_name")}
+                value={user.device_name ?? ""}
+                onChange={() => {}}
+                readOnly
+                hint={t("users.field.device_name_hint")}
+              />
+              <Field
+                id="temp_device_name"
+                label={t("users.field.temp_device_name")}
+                value={form.temp_device_name}
+                onChange={(v) => setField("temp_device_name", v)}
+                hint={t("users.field.temp_device_name_hint")}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
+              <CardDescription>{t("privacy.section_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button type="button" variant="outline" onClick={() => setPrivacyOpen(true)}>
+                {t("privacy.open_button")}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button type="button" variant="outline" onClick={cancelEditing}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="submit" disabled={update.isPending}>
+              {update.isPending ? t("common.loading") : t("users.detail.save")}
+            </Button>
+          </div>
+        </form>
+      )}
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
     </div>
@@ -355,6 +410,107 @@ function UserDetailPage(): JSX.Element {
 }
 
 // --- Subcomponents --------------------------------------------------------
+
+function UserReadView({
+  user,
+  dashboard,
+  onOpenPrivacy,
+}: {
+  user: AdUserOut;
+  dashboard: UserDashboardOut | undefined;
+  onOpenPrivacy: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const address = [
+    user.street_address,
+    [user.postal_code, user.locality].filter(Boolean).join(" "),
+    user.country,
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("users.detail.section_classes")}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {dashboard && dashboard.classes.length > 0 ? (
+            <ul className="space-y-3">
+              {dashboard.classes.map((c) => (
+                <li key={c.class_id} className="text-sm">
+                  <span className="font-medium">
+                    {c.name}
+                    {c.kuerzel ? ` (${c.kuerzel})` : ""}
+                  </span>
+                  {" · "}
+                  {t("classes.jahrgangsstufe")} {c.jahrgangsstufe}
+                  {c.teachers.length > 0 ? (
+                    <div className="text-muted-foreground">
+                      {t("users.detail.class_teachers")}:{" "}
+                      {c.teachers
+                        .map(
+                          (tch) =>
+                            `${tch.display_name ?? tch.upn ?? tch.ad_object_guid} (${t(
+                              `classes.role_${tch.role}`,
+                            )})`,
+                        )
+                        .join(", ")}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t("users.detail.no_classes")}</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("users.detail.section_overview")}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <InfoRow label={t("users.field.display_name")} value={user.display_name} />
+          <InfoRow label={t("users.field.upn")} value={user.upn} />
+          <InfoRow label={t("users.field.mail")} value={user.mail} />
+          <InfoRow label={t("users.detail.section_address")} value={address || null} />
+          <InfoRow label={t("users.field.device_name")} value={user.device_name} />
+          <InfoRow label={t("users.field.temp_device_name")} value={user.temp_device_name} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
+          <CardDescription>{t("privacy.section_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button type="button" variant="outline" onClick={onOpenPrivacy}>
+            {t("privacy.open_button")}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}): JSX.Element {
+  return (
+    <div className="flex gap-2 text-sm">
+      <span className="w-40 shrink-0 text-muted-foreground">{label}</span>
+      <span className="font-medium">{value || "–"}</span>
+    </div>
+  );
+}
 
 function BackToList(): JSX.Element {
   const { t } = useTranslation();

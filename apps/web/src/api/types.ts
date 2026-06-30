@@ -112,6 +112,25 @@ export interface ClassMembershipCreate {
   valid_to?: string | null;
 }
 
+export interface ClassTeacherBrief {
+  ad_object_guid: string;
+  display_name: string | null;
+  upn: string | null;
+  role: ClassTeacherRole;
+}
+
+export interface UserClassOut {
+  class_id: number;
+  name: string;
+  kuerzel: string | null;
+  jahrgangsstufe: number;
+  teachers: ClassTeacherBrief[];
+}
+
+export interface UserDashboardOut {
+  classes: UserClassOut[];
+}
+
 export interface AdUserOut {
   ad_object_guid: string;
   school_id: number | null;
