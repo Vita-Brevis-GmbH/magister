@@ -6,6 +6,7 @@ import {
   type ElementRef,
   type HTMLAttributes,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import { cn } from "@/lib/utils";
 
@@ -31,27 +32,30 @@ DialogOverlay.displayName = "DialogOverlay";
 export const DialogContent = forwardRef<
   ElementRef<typeof DialogPrimitive.Content>,
   ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...rest }, ref) => (
-  <DialogPrimitive.Portal>
-    <DialogOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg",
-        className,
-      )}
-      {...rest}
-    >
-      {children}
-      <DialogPrimitive.Close
-        aria-label="Close"
-        className="absolute right-4 top-4 rounded-sm text-muted-foreground transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+>(({ className, children, ...rest }, ref) => {
+  const { t } = useTranslation();
+  return (
+    <DialogPrimitive.Portal>
+      <DialogOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg border bg-background p-6 shadow-lg",
+          className,
+        )}
+        {...rest}
       >
-        <X className="h-4 w-4" />
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-));
+        {children}
+        <DialogPrimitive.Close
+          aria-label={t("common.close")}
+          className="absolute right-4 top-4 rounded-sm text-muted-foreground transition-opacity hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <X className="h-4 w-4" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+});
 DialogContent.displayName = "DialogContent";
 
 export function DialogHeader({ className, ...rest }: HTMLAttributes<HTMLDivElement>): JSX.Element {

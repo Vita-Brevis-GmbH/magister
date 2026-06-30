@@ -399,10 +399,12 @@
     "template_class_change_desc": "Mitteilung über Wechsel von einer Klasse in eine andere — der Account bleibt unverändert.",
     "template_password_handout_desc": "Übergabe des temporären Passworts an die Eltern (Brief zum Aushändigen).",
     "school_year": "Schuljahr",
+    "school_year_placeholder": "2026/27",
     "first_day": "Erster Schultag",
     "old_class": "Bisherige Klasse",
     "effective_date": "Wirksam ab",
     "temp_password": "Temporäres Passwort",
+    "temp_password_placeholder": "z.B. Apfel-Berg-7",
     "temp_password_hint": "Wird nicht gespeichert — bitte direkt nach einem manuellen Passwort-Reset hier eintragen.",
     "generate_button": "PDF generieren"
   },

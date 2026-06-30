@@ -142,7 +142,7 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
                   id="letter-school-year"
                   value={schoolYear}
                   onChange={(e) => setSchoolYear(e.target.value)}
-                  placeholder="2026/27"
+                  placeholder={t("letters.school_year_placeholder")}
                   required
                 />
               </div>
@@ -191,7 +191,7 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
                 id="letter-temp-password"
                 value={tempPassword}
                 onChange={(e) => setTempPassword(e.target.value)}
-                placeholder="z.B. Apfel-Berg-7"
+                placeholder={t("letters.temp_password_placeholder")}
                 required
               />
               <p className="text-xs text-muted-foreground">{t("letters.temp_password_hint")}</p>

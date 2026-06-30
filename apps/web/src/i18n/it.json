@@ -400,10 +400,12 @@
     "template_class_change_desc": "Comunicazione di passaggio da una classe all'altra — l'account rimane invariato.",
     "template_password_handout_desc": "Lettera per consegnare la password temporanea ai genitori.",
     "school_year": "Anno scolastico",
+    "school_year_placeholder": "2026/27",
     "first_day": "Primo giorno",
     "old_class": "Classe precedente",
     "effective_date": "Decorrenza",
     "temp_password": "Password temporanea",
+    "temp_password_placeholder": "es. Mela-Monte-7",
     "temp_password_hint": "Non salvata — inserire subito dopo un reset manuale della password.",
     "generate_button": "Genera PDF"
   },

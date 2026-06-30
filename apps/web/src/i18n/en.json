@@ -399,10 +399,12 @@
     "template_class_change_desc": "Notice about a transfer from one class to another — the account stays unchanged.",
     "template_password_handout_desc": "Hand the temporary password to the parents (printed letter).",
     "school_year": "School year",
+    "school_year_placeholder": "2026/27",
     "first_day": "First day",
     "old_class": "Previous class",
     "effective_date": "Effective from",
     "temp_password": "Temporary password",
+    "temp_password_placeholder": "e.g. Apple-Hill-7",
     "temp_password_hint": "Not stored — enter right after a manual password reset.",
     "generate_button": "Generate PDF"
   },

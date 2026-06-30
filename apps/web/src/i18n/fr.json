@@ -400,10 +400,12 @@
     "template_class_change_desc": "Notification d'un changement de classe — le compte reste inchangé.",
     "template_password_handout_desc": "Lettre de remise du mot de passe temporaire aux parents.",
     "school_year": "Année scolaire",
+    "school_year_placeholder": "2026/27",
     "first_day": "Premier jour",
     "old_class": "Classe précédente",
     "effective_date": "Effet au",
     "temp_password": "Mot de passe temporaire",
+    "temp_password_placeholder": "p.ex. Pomme-Mont-7",
     "temp_password_hint": "Non enregistré — à saisir juste après une réinitialisation manuelle.",
     "generate_button": "Générer le PDF"
   },
