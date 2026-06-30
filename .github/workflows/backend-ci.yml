@@ -67,8 +67,8 @@ jobs:
       - name: Pyright (strict)
         run: uv run pyright
 
-      - name: Pytest (unit + integration)
-        run: uv run pytest -q
+      - name: Pytest (unit + integration) with coverage gate
+        run: uv run pytest -q --cov=magister_api --cov-report=term-missing --cov-fail-under=75
 
   docker-build:
     runs-on: ubuntu-latest
