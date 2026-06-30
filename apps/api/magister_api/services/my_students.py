@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.models.class_membership import ClassMembership
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.class_memberships import ClassMembershipRepository
 from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
@@ -24,7 +25,9 @@ class MyStudentsService:
         subject_ids = await self.subject.active_class_ids_for_teacher(ad_object_guid)
         class_ids = sorted(set(kl_ids) | set(subject_ids))
 
-        out: list[MyClassStudents] = []
+        # Collect (class, active members) first, then resolve every student
+        # label in a single round-trip instead of one fetch per class.
+        collected: list[tuple[SchoolClass, list[ClassMembership]]] = []
         for cid in class_ids:
             # scope-bypass: the caller's own active KL/Fachlehrer role on this
             # class IS the authorization; school_scope does not apply to teachers.
@@ -32,7 +35,14 @@ class MyStudentsService:
             if cls is None:
                 continue
             members = await self.memberships.list_for_class(cid, only_active=True)
-            labels = await fetch_user_labels(self.session, (m.ad_object_guid for m in members))
+            collected.append((cls, members))
+
+        labels = await fetch_user_labels(
+            self.session, (m.ad_object_guid for _, members in collected for m in members)
+        )
+
+        out: list[MyClassStudents] = []
+        for cls, members in collected:
             students: list[MyStudentBrief] = []
             for m in members:
                 label = labels.get(m.ad_object_guid)

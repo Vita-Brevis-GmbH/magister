@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.class_memberships import ClassMembershipRepository
 from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
@@ -27,13 +29,22 @@ class UserDashboardService:
         the caller is already scope-checked against the target user).
         """
         memberships = await self.memberships.list_for_student(ad_object_guid, only_active=True)
-        out: list[UserClassOut] = []
+        # Collect (class, active roles) first, then resolve all teacher labels in
+        # a single round-trip (fetch_user_labels is built for one batch/response).
+        collected: list[tuple[SchoolClass, list[ClassTeacherRole]]] = []
         for m in memberships:
             cls = await self.classes.get(m.class_id)
             if cls is None:
                 continue
             roles = await self.teachers.list_active_for_class(cls.id)
-            labels = await fetch_user_labels(self.session, (r.ad_object_guid for r in roles))
+            collected.append((cls, roles))
+
+        labels = await fetch_user_labels(
+            self.session, (r.ad_object_guid for _, roles in collected for r in roles)
+        )
+
+        out: list[UserClassOut] = []
+        for cls, roles in collected:
             teachers: list[ClassTeacherBrief] = []
             for r in roles:
                 label = labels.get(r.ad_object_guid)

@@ -46,19 +46,6 @@ class SubjectTeacherRoleRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
-    async def is_active_subject_teacher_of(
-        self, *, ad_object_guid: str, class_id: int, now: datetime | None = None
-    ) -> bool:
-        ts = now or utcnow()
-        stmt = (
-            select(SubjectTeacherRole.id)
-            .where(SubjectTeacherRole.class_id == class_id)
-            .where(SubjectTeacherRole.ad_object_guid == ad_object_guid)
-            .where(_active_window_predicate(ts))
-            .limit(1)
-        )
-        return (await self.session.execute(stmt)).scalar_one_or_none() is not None
-
     async def active_class_ids_for_teacher(
         self, ad_object_guid: str, *, now: datetime | None = None
     ) -> list[int]:
