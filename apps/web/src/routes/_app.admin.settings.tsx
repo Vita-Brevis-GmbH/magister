@@ -3,7 +3,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useAppSettings, useUpdateAppSettings } from "@/api/hooks";
+import { useAppSettings, useTestAdConnection, useUpdateAppSettings } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -126,6 +126,7 @@ function AppSettingsPage(): JSX.Element {
 function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
+  const testAd = useTestAdConnection();
   const [form, setForm] = useState<FormState>(() => fromOut(data));
   const [success, setSuccess] = useState(false);
 
@@ -280,6 +281,32 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               max={1440}
               {...field("ad_sync_interval_minutes")}
             />
+          </div>
+          <div className="space-y-2 border-t pt-4">
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => testAd.mutate()}
+                disabled={testAd.isPending}
+              >
+                {testAd.isPending ? t("common.loading") : t("admin.settings.test_ad_button")}
+              </Button>
+              {testAd.data ? (
+                <span
+                  className={
+                    testAd.data.ok ? "text-sm text-emerald-700" : "text-sm text-destructive"
+                  }
+                >
+                  {testAd.data.ok
+                    ? t("admin.settings.test_ad_ok")
+                    : t("admin.settings.test_ad_failed")}
+                </span>
+              ) : testAd.isError ? (
+                <span className="text-sm text-destructive">{t("errors.generic")}</span>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("admin.settings.test_ad_hint")}</p>
           </div>
         </CardContent>
       </Card>

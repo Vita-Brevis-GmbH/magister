@@ -35,10 +35,27 @@ function renderWithQuery(node: React.ReactNode): void {
   render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>);
 }
 
+/** Route the fetch mock by path: /schools returns a list, everything else the class. */
+function routeFetch(opts: { schools?: unknown; classResponse: unknown }): void {
+  fetchMock.mockImplementation((input: string) => {
+    const url = String(input);
+    if (url.endsWith("/schools")) {
+      return Promise.resolve(jsonResponse(opts.schools ?? []));
+    }
+    return Promise.resolve(jsonResponse(opts.classResponse));
+  });
+}
+
+function classPostBody(): Record<string, unknown> {
+  const call = fetchMock.mock.calls.find((c) => String(c[0]) === "/api/classes");
+  expect(call).toBeTruthy();
+  return JSON.parse((call![1] as RequestInit).body as string) as Record<string, unknown>;
+}
+
 describe("CreateClassModal", () => {
   it("submits name + kuerzel + jahrgangsstufe and omits school_id for schulleitung", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({
+    routeFetch({
+      classResponse: {
         id: 7,
         school_id: 1,
         name: "4a",
@@ -47,8 +64,8 @@ describe("CreateClassModal", () => {
         status: "active",
         created_at: "2026-05-08T12:00:00+00:00",
         updated_at: "2026-05-08T12:00:00+00:00",
-      }),
-    );
+      },
+    });
 
     renderWithQuery(
       <CreateClassModal open={true} onClose={() => {}} defaultSchoolId={1} isAdmin={false} />,
@@ -61,20 +78,20 @@ describe("CreateClassModal", () => {
     await user.click(screen.getByRole("button", { name: /anlegen/i }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/classes")).toBe(true);
     });
-    expect(fetchMock.mock.calls[0]![0]).toBe("/api/classes");
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as Record<
-      string,
-      unknown
-    >;
-    expect(body).toEqual({ name: "4a", kuerzel: "4A", jahrgangsstufe: 4 });
+    const body = classPostBody();
+    expect(body).toEqual({ name: "4a", kuerzel: "4A", jahrgangsstufe: 4, details: null });
     expect(body).not.toHaveProperty("school_id");
   });
 
-  it("requires + sends school_id when isAdmin", async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({
+  it("requires + sends school_id from the dropdown when isAdmin", async () => {
+    routeFetch({
+      schools: [
+        { id: 42, name: "Schule X", kuerzel: "X", scope_short: "X" },
+        { id: 7, name: "Schule Y", kuerzel: "Y", scope_short: "Y" },
+      ],
+      classResponse: {
         id: 8,
         school_id: 42,
         name: "5b",
@@ -83,8 +100,8 @@ describe("CreateClassModal", () => {
         status: "active",
         created_at: "2026-05-08T12:00:00+00:00",
         updated_at: "2026-05-08T12:00:00+00:00",
-      }),
-    );
+      },
+    });
 
     renderWithQuery(
       <CreateClassModal open={true} onClose={() => {}} defaultSchoolId={null} isAdmin={true} />,
@@ -93,16 +110,16 @@ describe("CreateClassModal", () => {
 
     await user.type(screen.getByLabelText(/^name$/i), "5b");
     await user.type(screen.getByLabelText(/jahrgangsstufe/i), "5");
-    await user.type(screen.getByLabelText(/school id/i), "42");
+    // The school dropdown is populated from GET /schools.
+    await waitFor(() => {
+      expect(screen.getByRole("option", { name: /Schule X/ })).toBeTruthy();
+    });
+    await user.selectOptions(screen.getByLabelText(/schule/i), "42");
     await user.click(screen.getByRole("button", { name: /anlegen/i }));
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/classes")).toBe(true);
     });
-    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as Record<
-      string,
-      unknown
-    >;
-    expect(body.school_id).toBe(42);
+    expect(classPostBody().school_id).toBe(42);
   });
 });

@@ -78,11 +78,7 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
       reset();
       onClose();
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.code || t("errors.generic"));
-      } else {
-        setError(t("errors.generic"));
-      }
+      setError(t(err instanceof ApiError ? letterErrorKey(err) : "errors.generic"));
     } finally {
       setPending(false);
     }
@@ -142,7 +138,7 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
                   id="letter-school-year"
                   value={schoolYear}
                   onChange={(e) => setSchoolYear(e.target.value)}
-                  placeholder="2026/27"
+                  placeholder={t("letters.school_year_placeholder")}
                   required
                 />
               </div>
@@ -191,7 +187,7 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
                 id="letter-temp-password"
                 value={tempPassword}
                 onChange={(e) => setTempPassword(e.target.value)}
-                placeholder="z.B. Apfel-Berg-7"
+                placeholder={t("letters.temp_password_placeholder")}
                 required
               />
               <p className="text-xs text-muted-foreground">{t("letters.temp_password_hint")}</p>
@@ -217,6 +213,26 @@ export function LetterModal({ target, currentClassName, onClose }: Props): JSX.E
       </DialogContent>
     </Dialog>
   );
+}
+
+/** Map a backend error code to a translatable i18n key. */
+function letterErrorKey(err: ApiError): string {
+  switch (err.code) {
+    case "student_not_found":
+      return "letters.errors.student_not_found";
+    case "unknown_template":
+      return "letters.errors.unknown_template";
+    case "letter_missing_active_class":
+      return "letters.errors.missing_active_class";
+    case "letter_missing_school_year_or_first_day":
+      return "letters.errors.missing_school_year_or_first_day";
+    case "letter_missing_old_class_or_effective_date":
+      return "letters.errors.missing_old_class_or_effective_date";
+    case "letter_missing_temp_password":
+      return "letters.errors.missing_temp_password";
+    default:
+      return "errors.generic";
+  }
 }
 
 function todayIso(): string {

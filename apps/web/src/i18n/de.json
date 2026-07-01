@@ -12,7 +12,8 @@
     "imports": "Importe",
     "reports": "Reports",
     "audit": "Audit-Log",
-    "logout": "Abmelden"
+    "logout": "Abmelden",
+    "my_students": "Meine Schüler:innen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -34,7 +35,15 @@
     }
   },
   "me": {
-    "title": "Mein Profil"
+    "title": "Mein Profil",
+    "preferences_title": "Einstellungen",
+    "preferences_desc": "Sprache, Region und Formate für dein Konto.",
+    "preferences_save": "Speichern",
+    "preferences_saved": "Einstellungen gespeichert.",
+    "pref_language": "Sprache",
+    "pref_region": "Region",
+    "pref_date_format": "Datumsformat",
+    "pref_time_format": "Zeitformat"
   },
   "classes": {
     "title": "Klassen",
@@ -43,6 +52,7 @@
     "jahrgangsstufe": "Jahrgangsstufe",
     "school": "Schule",
     "school_id_label": "School ID",
+    "school_select_placeholder": "Schule wählen …",
     "school_id_admin_hint": "Admins müssen die Schule explizit angeben.",
     "status": "Status",
     "status_active": "aktiv",
@@ -55,6 +65,10 @@
     "rename_button": "Umbenennen",
     "rename_title": "Klasse umbenennen",
     "rename_submit": "Speichern",
+    "edit_button": "Bearbeiten",
+    "edit_title": "Klasse bearbeiten",
+    "edit_submit": "Speichern",
+    "details": "Details",
     "archive_button": "Archivieren",
     "archive_title": "Klasse archivieren",
     "archive_confirm": "{{name}} archivieren? Die Klasse wird nicht gelöscht — du kannst sie über die DB reaktivieren.",
@@ -78,6 +92,15 @@
     "assign_teacher_description": "Lehrperson suchen, Rolle und Zeitfenster wählen.",
     "assign_teacher_submit": "Zuweisen",
     "revoke_teacher": "Beenden",
+    "subject": "Fach",
+    "subject_placeholder": "z.B. Mathematik",
+    "subject_teachers_title": "Fachlehrpersonen",
+    "subject_teachers_description": "Fachlehrpersonen mit Fach und Zeitfenster.",
+    "subject_teachers_empty": "Noch keine Fachlehrpersonen.",
+    "assign_subject_teacher_button": "Fachlehrperson zuweisen",
+    "assign_subject_teacher_title": "Fachlehrperson zuweisen",
+    "assign_subject_teacher_description": "Lehrperson suchen, Fach und Zeitfenster wählen.",
+    "assign_subject_teacher_submit": "Zuweisen",
     "search_teacher": "Lehrperson suchen",
     "picked": "Ausgewählt",
     "students_title": "Schüler:innen",
@@ -90,6 +113,8 @@
     "add_student_description": "Schüler:in suchen und das Startdatum setzen.",
     "add_student_submit": "Hinzufügen",
     "remove_student": "Entfernen",
+    "show_user_details": "Details anzeigen",
+    "reset_password": "Passwort zurücksetzen",
     "search_student": "Schüler:in suchen",
     "mid_year_hint": "Bei Klassenwechsel mitten im Jahr wird die alte Mitgliedschaft automatisch beendet.",
     "bulk_add_button": "Mehrere hinzufügen",
@@ -145,6 +170,11 @@
     "empty": "Keine User gefunden.",
     "actions": "Aktionen",
     "detail": {
+      "edit": "Bearbeiten",
+      "section_classes": "Klassen",
+      "class_teachers": "Klassenlehrpersonen",
+      "no_classes": "Keiner aktiven Klasse zugewiesen.",
+      "section_overview": "Stammdaten",
       "section_identity": "Identität",
       "section_identity_desc": "Anzeigename, Anmeldename und Login-Name.",
       "section_mail": "Mail-Adresse",
@@ -230,6 +260,10 @@
       "oidc_section_desc": "Issuer, Client-ID, Client-Secret und Redirect-URI für die Anmeldung von Lehrpersonen + Admins.",
       "ad_section": "Active Directory (LDAPS)",
       "ad_section_desc": "Domain-Controller, Bind-DN/Passwort und Such-Basis für den User-Sync.",
+      "test_ad_button": "Verbindung testen",
+      "test_ad_ok": "Verbindung erfolgreich.",
+      "test_ad_failed": "Verbindung fehlgeschlagen.",
+      "test_ad_hint": "Testet den gespeicherten Service-Account gegen das AD. Bitte zuerst speichern.",
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",
       "save": "Speichern",
@@ -399,12 +433,22 @@
     "template_class_change_desc": "Mitteilung über Wechsel von einer Klasse in eine andere — der Account bleibt unverändert.",
     "template_password_handout_desc": "Übergabe des temporären Passworts an die Eltern (Brief zum Aushändigen).",
     "school_year": "Schuljahr",
+    "school_year_placeholder": "2026/27",
     "first_day": "Erster Schultag",
     "old_class": "Bisherige Klasse",
     "effective_date": "Wirksam ab",
     "temp_password": "Temporäres Passwort",
+    "temp_password_placeholder": "z.B. Apfel-Berg-7",
     "temp_password_hint": "Wird nicht gespeichert — bitte direkt nach einem manuellen Passwort-Reset hier eintragen.",
-    "generate_button": "PDF generieren"
+    "generate_button": "PDF generieren",
+    "errors": {
+      "student_not_found": "Schüler:in nicht gefunden.",
+      "unknown_template": "Unbekannte Vorlage.",
+      "missing_active_class": "Schüler:in hat keine aktive Klasse.",
+      "missing_school_year_or_first_day": "Schuljahr und erster Schultag sind erforderlich.",
+      "missing_old_class_or_effective_date": "Bisherige Klasse und Wirksam-ab-Datum sind erforderlich.",
+      "missing_temp_password": "Temporäres Passwort ist erforderlich."
+    }
   },
   "audit": {
     "title": "Audit-Log",
@@ -450,5 +494,12 @@
     "error_cannot_disable_self": "Sie können Ihren eigenen Account nicht deaktivieren.",
     "error_not_found": "Benutzer nicht gefunden oder ausserhalb Ihres Zugriffs.",
     "error_user_not_in_ad": "Der Account existiert nicht mehr im AD."
+  },
+  "my_students": {
+    "title": "Meine Schüler:innen",
+    "intro": "Alle Schüler:innen der Klassen, in denen du KL oder Fachlehrperson bist.",
+    "empty": "Du bist aktuell keiner Klasse als KL oder Fachlehrperson zugewiesen.",
+    "empty_class": "Keine aktiven Schüler:innen.",
+    "count": "{{count}} Schüler:innen"
   }
 }

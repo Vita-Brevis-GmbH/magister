@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  AdConnectionTestOut,
   AdUserListResponse,
   AdUserOut,
   AppSettingsOut,
@@ -21,6 +22,9 @@ import type {
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
+  MyStudentsOut,
+  SubjectTeacherCreate,
+  SubjectTeacherOut,
   CurrentUserOut,
   ActivityReport,
   ImportJobDetailOut,
@@ -35,25 +39,34 @@ import type {
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
   MailDomainsOut,
+  SchoolOut,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
   SubstitutionOut,
   UserAttributesUpdate,
+  UserDashboardOut,
+  UserPreferencesOut,
+  UserPreferencesUpdate,
   UserStatusUpdate,
 } from "./types";
 
 export const queryKeys = {
   me: ["me"] as const,
   classes: ["classes"] as const,
+  schools: ["schools"] as const,
   classDetail: (classId: number) => ["classes", classId] as const,
   classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
+  subjectTeachers: (classId: number) => ["classes", classId, "subject-teachers"] as const,
+  myStudents: ["me", "students"] as const,
   classMemberships: (classId: number) => ["classes", classId, "students"] as const,
   users: (params: UseUsersParams) => ["users", params] as const,
   user: (guid: string) => ["user", guid] as const,
+  userDashboard: (guid: string) => ["user", guid, "dashboard"] as const,
   mailDomains: ["mail-domains"] as const,
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
+  myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
 };
 
@@ -85,6 +98,14 @@ export function useClasses() {
   return useQuery<ClassOut[]>({
     queryKey: queryKeys.classes,
     queryFn: () => apiFetch<ClassOut[]>("/classes"),
+  });
+}
+
+export function useSchools() {
+  return useQuery<SchoolOut[]>({
+    queryKey: queryKeys.schools,
+    queryFn: () => apiFetch<SchoolOut[]>("/schools"),
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -159,6 +180,47 @@ export function useRevokeClassTeacher(classId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classTeachers(classId) });
     },
+  });
+}
+
+// --- Subject teachers (Fachlehrer) -----------------------------------------
+
+export function useSubjectTeachers(classId: number) {
+  return useQuery<SubjectTeacherOut[]>({
+    queryKey: queryKeys.subjectTeachers(classId),
+    queryFn: () => apiFetch<SubjectTeacherOut[]>(`/classes/${classId}/subject-teachers`),
+  });
+}
+
+export function useAssignSubjectTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<SubjectTeacherOut, ApiError, SubjectTeacherCreate>({
+    mutationFn: (body) =>
+      apiFetch<SubjectTeacherOut>(`/classes/${classId}/subject-teachers`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.subjectTeachers(classId) });
+    },
+  });
+}
+
+export function useRevokeSubjectTeacher(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) =>
+      apiFetch<void>(`/classes/${classId}/subject-teachers/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.subjectTeachers(classId) });
+    },
+  });
+}
+
+export function useMyStudents() {
+  return useQuery<MyStudentsOut>({
+    queryKey: queryKeys.myStudents,
+    queryFn: () => apiFetch<MyStudentsOut>("/me/students"),
   });
 }
 
@@ -274,6 +336,14 @@ export function useUser(guid: string) {
   });
 }
 
+export function useUserDashboard(guid: string) {
+  return useQuery<UserDashboardOut>({
+    queryKey: queryKeys.userDashboard(guid),
+    queryFn: () => apiFetch<UserDashboardOut>(`/users/${guid}/dashboard`),
+    enabled: !!guid,
+  });
+}
+
 export function useUpdateUser(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
@@ -373,6 +443,30 @@ export function useUpdateAppSettings() {
       // Capabilities may flip when oidc_issuer/client_id change.
       qc.invalidateQueries({ queryKey: queryKeys.authCapabilities });
     },
+  });
+}
+
+export function useTestAdConnection() {
+  return useMutation<AdConnectionTestOut, ApiError, void>({
+    mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+  });
+}
+
+// --- Per-user preferences --------------------------------------------------
+
+export function useMyPreferences() {
+  return useQuery<UserPreferencesOut>({
+    queryKey: queryKeys.myPreferences,
+    queryFn: () => apiFetch<UserPreferencesOut>("/me/preferences"),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useUpdateMyPreferences() {
+  const qc = useQueryClient();
+  return useMutation<UserPreferencesOut, ApiError, UserPreferencesUpdate>({
+    mutationFn: (body) => apiFetch<UserPreferencesOut>("/me/preferences", { method: "PUT", body }),
+    onSuccess: (data) => qc.setQueryData(queryKeys.myPreferences, data),
   });
 }
 

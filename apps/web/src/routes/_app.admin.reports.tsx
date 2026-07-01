@@ -18,6 +18,18 @@ export const Route = createFileRoute("/_app/admin/reports")({
   component: ReportsPage,
 });
 
+/** Full-width error row shown inside a report table when its query fails. */
+function ErrorRow({ columns }: { columns: number }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <TableRow>
+      <TableCell colSpan={columns} className="py-6 text-center text-sm text-destructive">
+        {t("errors.generic")}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 function ReportsPage(): JSX.Element {
   const { t } = useTranslation();
   return (
@@ -60,20 +72,24 @@ function StudentsByClassSection(): JSX.Element {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {q.isLoading
-              ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={3} />)
-              : (q.data?.rows ?? []).map((row) => (
-                  <TableRow key={row.class_id}>
-                    <TableCell className="font-medium">
-                      {row.name}
-                      {row.kuerzel ? (
-                        <span className="ml-2 text-xs text-muted-foreground">({row.kuerzel})</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell>{row.jahrgangsstufe}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.student_count}</TableCell>
-                  </TableRow>
-                ))}
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={3} />)
+            ) : q.isError ? (
+              <ErrorRow columns={3} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.class_id}>
+                  <TableCell className="font-medium">
+                    {row.name}
+                    {row.kuerzel ? (
+                      <span className="ml-2 text-xs text-muted-foreground">({row.kuerzel})</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{row.jahrgangsstufe}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.student_count}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -100,30 +116,30 @@ function TeacherWorkloadSection(): JSX.Element {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {q.isLoading
-              ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={5} />)
-              : (q.data?.rows ?? []).map((row) => (
-                  <TableRow key={row.ad_object_guid}>
-                    <TableCell>
-                      <div className="flex flex-col leading-tight">
-                        <span className="font-medium">
-                          {row.display_name ?? row.upn ?? row.ad_object_guid}
-                        </span>
-                        {row.upn && (
-                          <span className="text-xs text-muted-foreground">{row.upn}</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.haupt_count}</TableCell>
-                    <TableCell className="text-right tabular-nums">{row.co_count}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {row.stellvertretung_count}
-                    </TableCell>
-                    <TableCell className="text-right font-medium tabular-nums">
-                      {row.total}
-                    </TableCell>
-                  </TableRow>
-                ))}
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={5} />)
+            ) : q.isError ? (
+              <ErrorRow columns={5} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.ad_object_guid}>
+                  <TableCell>
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-medium">
+                        {row.display_name ?? row.upn ?? row.ad_object_guid}
+                      </span>
+                      {row.upn && <span className="text-xs text-muted-foreground">{row.upn}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.haupt_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.co_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.stellvertretung_count}
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{row.total}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -170,16 +186,20 @@ function ActivitySection(): JSX.Element {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {q.isLoading
-              ? Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={2} />)
-              : (q.data?.rows ?? []).map((row) => (
-                  <TableRow key={row.action}>
-                    <TableCell>
-                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{row.action}</code>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.count}</TableCell>
-                  </TableRow>
-                ))}
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={2} />)
+            ) : q.isError ? (
+              <ErrorRow columns={2} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.action}>
+                  <TableCell>
+                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{row.action}</code>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.count}</TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>

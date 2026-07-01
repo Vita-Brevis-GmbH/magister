@@ -175,16 +175,16 @@ class LetterService:
 
     def _require_inputs(self, template: str, ctx: LetterContext, *, has_class: bool) -> None:
         if template in (TEMPLATE_ENROLLMENT, TEMPLATE_CLASS_CHANGE) and not has_class:
-            raise MissingTemplateInputError("student has no active class")
+            raise MissingTemplateInputError("letter_missing_active_class")
         if template == TEMPLATE_ENROLLMENT:
             if not ctx.school_year or not ctx.first_day:
-                raise MissingTemplateInputError("school_year and first_day are required")
+                raise MissingTemplateInputError("letter_missing_school_year_or_first_day")
         if template == TEMPLATE_CLASS_CHANGE:
             if not ctx.old_class_name or not ctx.effective_date:
-                raise MissingTemplateInputError("old_class_name and effective_date are required")
+                raise MissingTemplateInputError("letter_missing_old_class_or_effective_date")
         if template == TEMPLATE_PASSWORD:
             if not ctx.temp_password:
-                raise MissingTemplateInputError("temp_password is required")
+                raise MissingTemplateInputError("letter_missing_temp_password")
 
     async def _active_class(self, ad_object_guid: str) -> SchoolClass | None:
         from magister_api.models.base import utcnow

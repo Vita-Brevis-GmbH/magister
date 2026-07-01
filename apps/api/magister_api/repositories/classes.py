@@ -44,7 +44,13 @@ class ClassRepository(BaseRepository):
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
     async def create(
-        self, *, school_id: int, name: str, kuerzel: str | None, jahrgangsstufe: int
+        self,
+        *,
+        school_id: int,
+        name: str,
+        kuerzel: str | None,
+        jahrgangsstufe: int,
+        details: str | None = None,
     ) -> SchoolClass:
         if not self.scope.can_access_school(school_id):
             raise PermissionError("school_out_of_scope")
@@ -53,6 +59,7 @@ class ClassRepository(BaseRepository):
             name=name,
             kuerzel=kuerzel,
             jahrgangsstufe=jahrgangsstufe,
+            details=details,
             status=CLASS_STATUS_ACTIVE,
         )
         self.session.add(row)
@@ -66,14 +73,21 @@ class ClassRepository(BaseRepository):
         *,
         name: str | None = None,
         kuerzel: str | None = None,
+        details: str | None = None,
     ) -> tuple[SchoolClass, bool]:
-        """Apply non-None fields. Returns (row, name_changed)."""
+        """Apply non-None fields. Returns (row, name_changed).
+
+        ``name_changed`` drives the active-classes cache invalidation; kuerzel
+        and details are not part of that cached list, so they don't bump it.
+        """
         name_changed = False
         if name is not None and name != cls.name:
             cls.name = name
             name_changed = True
         if kuerzel is not None and kuerzel != cls.kuerzel:
             cls.kuerzel = kuerzel
+        if details is not None and details != cls.details:
+            cls.details = details
         await self.session.flush()
         if name_changed:
             bump_kind(CACHE_KIND)

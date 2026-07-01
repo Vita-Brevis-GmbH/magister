@@ -10,6 +10,7 @@ import {
   useCreateClass,
   useCurrentUser,
   usePromoteClass,
+  useSchools,
   useUpdateClass,
 } from "@/api/hooks";
 import type { ClassOut, ClassPromotionResult } from "@/api/types";
@@ -46,6 +47,9 @@ function ClassesPage(): JSX.Element {
   const { t } = useTranslation();
   const q = useClasses();
   const me = useCurrentUser();
+  const schools = useSchools();
+  const schoolName = (id: number): string =>
+    schools.data?.find((s) => s.id === id)?.name ?? String(id);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
@@ -102,7 +106,7 @@ function ClassesPage(): JSX.Element {
                 </TableCell>
                 <TableCell>{c.kuerzel ?? "–"}</TableCell>
                 <TableCell>{c.jahrgangsstufe}</TableCell>
-                <TableCell>{c.school_id}</TableCell>
+                <TableCell>{schoolName(c.school_id)}</TableCell>
                 <TableCell>
                   {c.status === "active"
                     ? t("classes.status_active")
@@ -127,7 +131,7 @@ function ClassesPage(): JSX.Element {
                         size="sm"
                         onClick={() => setEditTarget(c)}
                       >
-                        {t("classes.rename_button")}
+                        {t("classes.edit_button")}
                       </Button>
                       <Button
                         type="button"
@@ -152,7 +156,7 @@ function ClassesPage(): JSX.Element {
         defaultSchoolId={me.data?.school_scope[0] ?? null}
         isAdmin={me.data?.is_admin ?? false}
       />
-      <RenameClassModal target={editTarget} onClose={() => setEditTarget(null)} />
+      <EditClassModal target={editTarget} onClose={() => setEditTarget(null)} />
       <ArchiveClassDialog target={archiveTarget} onClose={() => setArchiveTarget(null)} />
       <PromoteClassWizard
         source={promoteSource}
@@ -180,13 +184,16 @@ export function CreateClassModal({
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
   const [jahrgangsstufe, setJahrgangsstufe] = useState("");
+  const [details, setDetails] = useState("");
   const [schoolId, setSchoolId] = useState(defaultSchoolId !== null ? String(defaultSchoolId) : "");
+  const schools = useSchools();
   const create = useCreateClass();
 
   function reset(): void {
     setName("");
     setKuerzel("");
     setJahrgangsstufe("");
+    setDetails("");
     setSchoolId(defaultSchoolId !== null ? String(defaultSchoolId) : "");
     create.reset();
   }
@@ -198,6 +205,7 @@ export function CreateClassModal({
         name,
         kuerzel: kuerzel || null,
         jahrgangsstufe: Number(jahrgangsstufe),
+        details: details || null,
         ...(isAdmin && { school_id: Number(schoolId) }),
       },
       {
@@ -264,17 +272,34 @@ export function CreateClassModal({
               required
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="class-details">{t("classes.details")}</Label>
+            <textarea
+              id="class-details"
+              value={details}
+              onChange={(e) => setDetails(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            />
+          </div>
           {isAdmin ? (
             <div className="space-y-1">
-              <Label htmlFor="class-school-id">{t("classes.school_id_label")}</Label>
-              <Input
+              <Label htmlFor="class-school-id">{t("classes.school")}</Label>
+              <select
                 id="class-school-id"
-                type="number"
-                min={1}
                 value={schoolId}
                 onChange={(e) => setSchoolId(e.target.value)}
                 required
-              />
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              >
+                <option value="">{t("classes.school_select_placeholder")}</option>
+                {(schools.data ?? []).map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.kuerzel})
+                  </option>
+                ))}
+              </select>
               <p className="text-xs text-muted-foreground">{t("classes.school_id_admin_hint")}</p>
             </div>
           ) : null}
@@ -304,16 +329,12 @@ interface RenameProps {
   onClose: () => void;
 }
 
-export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element {
+export function EditClassModal({ target, onClose }: RenameProps): JSX.Element {
   const { t } = useTranslation();
   const [name, setName] = useState(target?.name ?? "");
   const [kuerzel, setKuerzel] = useState(target?.kuerzel ?? "");
+  const [details, setDetails] = useState(target?.details ?? "");
   const update = useUpdateClass(target?.id ?? 0);
-
-  // Reset form when the modal switches between targets.
-  if (target && (name === "" || name !== target.name)) {
-    // No-op: state synced via the controlled inputs after the user types.
-  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
@@ -322,6 +343,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
       {
         ...(name !== target.name && { name }),
         ...(kuerzel !== (target.kuerzel ?? "") && { kuerzel: kuerzel || null }),
+        ...(details !== (target.details ?? "") && { details }),
       },
       {
         onSuccess: () => onClose(),
@@ -338,7 +360,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("classes.rename_title")}</DialogTitle>
+          <DialogTitle>{t("classes.edit_title")}</DialogTitle>
           <DialogDescription>{target?.name}</DialogDescription>
         </DialogHeader>
         <form key={target?.id ?? "none"} onSubmit={handleSubmit} className="space-y-4">
@@ -351,9 +373,9 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
             </div>
           ) : null}
           <div className="space-y-1">
-            <Label htmlFor="rename-name">{t("classes.name")}</Label>
+            <Label htmlFor="edit-name">{t("classes.name")}</Label>
             <Input
-              id="rename-name"
+              id="edit-name"
               defaultValue={target?.name ?? ""}
               onChange={(e) => setName(e.target.value)}
               required
@@ -361,12 +383,23 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="rename-kuerzel">{t("classes.kuerzel")}</Label>
+            <Label htmlFor="edit-kuerzel">{t("classes.kuerzel")}</Label>
             <Input
-              id="rename-kuerzel"
+              id="edit-kuerzel"
               defaultValue={target?.kuerzel ?? ""}
               onChange={(e) => setKuerzel(e.target.value)}
               maxLength={32}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="edit-details">{t("classes.details")}</Label>
+            <textarea
+              id="edit-details"
+              defaultValue={target?.details ?? ""}
+              onChange={(e) => setDetails(e.target.value)}
+              maxLength={2000}
+              rows={2}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             />
           </div>
           <DialogFooter>
@@ -374,7 +407,7 @@ export function RenameClassModal({ target, onClose }: RenameProps): JSX.Element 
               {t("common.cancel")}
             </Button>
             <Button type="submit" disabled={update.isPending}>
-              {update.isPending ? t("common.loading") : t("classes.rename_submit")}
+              {update.isPending ? t("common.loading") : t("classes.edit_submit")}
             </Button>
           </DialogFooter>
         </form>
@@ -455,10 +488,12 @@ function PromoteClassWizard({
   const [targetId, setTargetId] = useState<number | "">("");
   const [archiveSource, setArchiveSource] = useState(false);
   const [result, setResult] = useState<ClassPromotionResult | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const promote = usePromoteClass(source?.id ?? 0);
   const memberships = useClassMemberships(source?.id ?? 0);
   const activeStudents = (memberships.data ?? []).filter((m) => m.valid_to === null);
+  const allSelected = activeStudents.length > 0 && selected.size === activeStudents.length;
 
   const candidates = allClasses.filter((c) => c.id !== source?.id && c.status === "active");
   const target = candidates.find((c) => c.id === Number(targetId)) ?? null;
@@ -468,13 +503,34 @@ function PromoteClassWizard({
     setTargetId("");
     setArchiveSource(false);
     setResult(null);
+    setSelected(new Set());
     promote.reset();
+  }
+
+  function toggle(guid: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(guid)) next.delete(guid);
+      else next.add(guid);
+      return next;
+    });
+  }
+
+  function goToConfirm(): void {
+    // Default to all active students selected; the user can deselect.
+    setSelected(new Set(activeStudents.map((m) => m.ad_object_guid)));
+    setStep("confirm");
   }
 
   function handleConfirm(): void {
     if (!source || !targetId) return;
     promote.mutate(
-      { target_class_id: Number(targetId), archive_source: archiveSource },
+      {
+        target_class_id: Number(targetId),
+        archive_source: archiveSource,
+        // Move all when every student is selected; otherwise the chosen subset.
+        ...(allSelected ? {} : { student_guids: [...selected] }),
+      },
       {
         onSuccess: (res) => {
           setResult(res);
@@ -551,7 +607,7 @@ function PromoteClassWizard({
               <Button
                 type="button"
                 disabled={!targetId || activeStudents.length === 0}
-                onClick={() => setStep("confirm")}
+                onClick={goToConfirm}
               >
                 {t("classes.promote_preview_button")}
               </Button>
@@ -567,7 +623,7 @@ function PromoteClassWizard({
                 {t("classes.promote_confirm_desc", {
                   source: source?.name,
                   target: target.name,
-                  count: activeStudents.length,
+                  count: selected.size,
                 })}
               </DialogDescription>
             </DialogHeader>
@@ -585,8 +641,18 @@ function PromoteClassWizard({
               ) : (
                 <ul className="space-y-0.5">
                   {activeStudents.map((m) => (
-                    <li key={m.id} className="truncate text-xs text-muted-foreground">
-                      {m.display_name ?? m.upn ?? m.ad_object_guid}
+                    <li key={m.id}>
+                      <label className="flex cursor-pointer items-center gap-2 text-xs">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(m.ad_object_guid)}
+                          onChange={() => toggle(m.ad_object_guid)}
+                          className="h-3.5 w-3.5 rounded border-input"
+                        />
+                        <span className="truncate">
+                          {m.display_name ?? m.upn ?? m.ad_object_guid}
+                        </span>
+                      </label>
                     </li>
                   ))}
                 </ul>
@@ -601,7 +667,11 @@ function PromoteClassWizard({
               <Button type="button" variant="outline" onClick={() => setStep("pick")}>
                 {t("classes.promote_back")}
               </Button>
-              <Button type="button" onClick={handleConfirm} disabled={promote.isPending}>
+              <Button
+                type="button"
+                onClick={handleConfirm}
+                disabled={promote.isPending || selected.size === 0}
+              >
                 {promote.isPending ? t("common.loading") : t("classes.promote_confirm_submit")}
               </Button>
             </DialogFooter>

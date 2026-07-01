@@ -1,15 +1,25 @@
 import { Link, Outlet } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useCurrentUser, useLogout } from "@/api/hooks";
+import { useCurrentUser, useLogout, useMyPreferences } from "@/api/hooks";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
+import i18n from "@/i18n";
 import { displayLabel } from "@/lib/userDisplay";
 
 export function Layout() {
   const { t } = useTranslation();
   const me = useCurrentUser();
   const logout = useLogout();
+  const prefs = useMyPreferences();
+
+  // Apply the user's saved language once it loads (overrides browser default).
+  useEffect(() => {
+    if (prefs.data && i18n.language !== prefs.data.language) {
+      void i18n.changeLanguage(prefs.data.language);
+    }
+  }, [prefs.data]);
   const navActive = "rounded-md bg-accent px-3 py-1.5 text-foreground";
   const navIdle = "rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground";
 
@@ -37,6 +47,13 @@ export function Layout() {
               inactiveProps={{ className: navIdle }}
             >
               {t("nav.users")}
+            </Link>
+            <Link
+              to="/my-students"
+              activeProps={{ className: navActive }}
+              inactiveProps={{ className: navIdle }}
+            >
+              {t("nav.my_students")}
             </Link>
             {me.data?.is_admin ? (
               <Link

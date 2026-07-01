@@ -14,8 +14,9 @@ from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.class_teachers import SubstitutionOut
-from magister_api.services._user_enrich import fetch_user_labels
+from magister_api.services._user_enrich import fetch_user_labels, user_label_fields
 from magister_api.services.class_teachers import (
     ClassNotInScopeError,
     ClassTeacherNotFoundError,
@@ -23,13 +24,6 @@ from magister_api.services.class_teachers import (
 )
 
 router = APIRouter(prefix="/substitutions", tags=["substitutions"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 @router.get("", response_model=list[SubstitutionOut])
@@ -44,27 +38,21 @@ async def list_substitutions(
     rows = await repo.list_substitutions(school_ids)
 
     labels = await fetch_user_labels(session, (r.role.ad_object_guid for r in rows))
-    out: list[SubstitutionOut] = []
-    for sub in rows:
-        lbl = labels.get(sub.role.ad_object_guid)
-        out.append(
-            SubstitutionOut(
-                id=sub.role.id,
-                class_id=sub.role.class_id,
-                ad_object_guid=sub.role.ad_object_guid,
-                role=sub.role.role,
-                valid_from=sub.role.valid_from,
-                valid_to=sub.role.valid_to,
-                created_at=sub.role.created_at,
-                class_name=sub.class_name,
-                school_id=sub.school_id,
-                display_name=lbl.display_name if lbl else None,
-                given_name=lbl.given_name if lbl else None,
-                surname=lbl.surname if lbl else None,
-                upn=lbl.upn if lbl else None,
-            )
+    return [
+        SubstitutionOut(
+            id=sub.role.id,
+            class_id=sub.role.class_id,
+            ad_object_guid=sub.role.ad_object_guid,
+            role=sub.role.role,
+            valid_from=sub.role.valid_from,
+            valid_to=sub.role.valid_to,
+            created_at=sub.role.created_at,
+            class_name=sub.class_name,
+            school_id=sub.school_id,
+            **user_label_fields(labels.get(sub.role.ad_object_guid)),
         )
-    return out
+        for sub in rows
+    ]
 
 
 @router.delete("/{role_id}", status_code=status.HTTP_204_NO_CONTENT)

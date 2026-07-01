@@ -21,6 +21,7 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.routers._helpers import _ip_request_id
 from magister_api.services.privacy import (
     PrivacyService,
     SubjectAccessReport,
@@ -30,13 +31,6 @@ from magister_api.services.privacy import (
 )
 
 router = APIRouter(prefix="/privacy", tags=["privacy"])
-
-
-def _ip_request_id(request: Request) -> tuple[str | None, str]:
-    return (
-        getattr(request.state, "client_ip", None),
-        getattr(request.state, "request_id", ""),
-    )
 
 
 class SubjectAccessOut(BaseModel):

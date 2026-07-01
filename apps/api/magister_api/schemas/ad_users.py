@@ -43,3 +43,8 @@ class AdUserListResponse(BaseModel):
 class AdSyncResultOut(BaseModel):
     synced_count: int
     school_partition: dict[str, int]
+
+
+class AdConnectionTestOut(BaseModel):
+    ok: bool
+    detail: str

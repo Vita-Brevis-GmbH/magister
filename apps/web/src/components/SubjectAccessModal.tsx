@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useFormatters } from "@/lib/useFormatters";
 
 interface Props {
   guid: string | null;
@@ -18,6 +19,7 @@ interface Props {
 
 export function SubjectAccessModal({ guid, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const q = useSubjectAccess(guid);
 
   return (
@@ -79,7 +81,7 @@ export function SubjectAccessModal({ guid, onClose }: Props): JSX.Element {
                   {q.data.audit_events.slice(0, 100).map((ev) => (
                     <div key={ev.id} className="rounded-md border bg-muted/30 px-3 py-2 text-xs">
                       <div className="flex justify-between text-muted-foreground">
-                        <span>{new Date(ev.ts).toLocaleString()}</span>
+                        <span>{fmt.formatDateTime(ev.ts)}</span>
                         <span className="font-medium">
                           {ev.role === "actor" ? t("privacy.role_actor") : t("privacy.role_target")}
                         </span>

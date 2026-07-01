@@ -9,7 +9,7 @@ of how many rows are being enriched.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TypeVar
+from typing import TypedDict, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +17,29 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.models.auth import AdUserCache
 
 T = TypeVar("T")
+
+
+class UserLabelFields(TypedDict):
+    """The display fields every GUID-keyed ``*Out`` schema carries."""
+
+    display_name: str | None
+    given_name: str | None
+    surname: str | None
+    upn: str | None
+
+
+def user_label_fields(label: AdUserCache | None) -> UserLabelFields:
+    """Splat-ready label fields for a cached AD user (all None if unknown).
+
+    Use as ``SomeOut(..., **user_label_fields(labels.get(guid)))`` so the
+    four-field copy doesn't get repeated at every enrichment call site.
+    """
+    return UserLabelFields(
+        display_name=label.display_name if label else None,
+        given_name=label.given_name if label else None,
+        surname=label.surname if label else None,
+        upn=label.upn if label else None,
+    )
 
 
 async def fetch_user_labels(
@@ -37,4 +60,4 @@ async def fetch_user_labels(
     return {row.ad_object_guid: row for row in result.scalars().all()}
 
 
-__all__ = ["fetch_user_labels"]
+__all__ = ["UserLabelFields", "fetch_user_labels", "user_label_fields"]

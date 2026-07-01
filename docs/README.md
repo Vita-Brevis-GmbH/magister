@@ -31,7 +31,7 @@ Das Schul-Tool. Eine Instanz pro Schulträger. Wird auf einem Linux-Host beim Sc
 **Doku:**
 - Installation: [`runbooks/install-ubuntu.md`](runbooks/install-ubuntu.md) (manuell, sehr detailliert) — oder `scripts/install-magister.sh` (automatisch)
 - Backend-Setup (Phasen): [`runbooks/setup.md`](runbooks/setup.md)
-- Upgrades: [`runbooks/upgrade-to-m1.5.md`](runbooks/upgrade-to-m1.5.md), [`upgrade-to-m2.md`](runbooks/upgrade-to-m2.md), [`upgrade-to-m3.md`](runbooks/upgrade-to-m3.md)
+- Upgrades: [`runbooks/upgrade-to-m1.5.md`](runbooks/upgrade-to-m1.5.md), [`upgrade-to-m2.md`](runbooks/upgrade-to-m2.md), [`upgrade-to-m3.md`](runbooks/upgrade-to-m3.md), [`upgrade-to-extensions-2026-06.md`](runbooks/upgrade-to-extensions-2026-06.md)
 - Demo-Daten: [`runbooks/demo.md`](runbooks/demo.md)
 
 ### 2. Cockpit (`cockpit/api` + `cockpit/web`)
@@ -78,8 +78,17 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 |---|---|
 | [`0003`](adr/0003-vita-brevis-cockpit.md) | Cockpit als separates Ops-Tool |
 | [`0004`](adr/0004-ad-incremental-sync.md) | AD-Diff-Sync via `whenChanged`-Cursor |
+| [`0005`](adr/0005-fachlehrer-separate-table.md) | Fachlehrer als eigene Tabelle (nicht KL-Sub-Rolle) |
 
 (ADRs 0001/0002 wurden vor M4 vergeben.)
+
+---
+
+## Feature-Referenzen
+
+| Doc | Inhalt |
+|---|---|
+| [`features/extensions-2026-06.md`](features/extensions-2026-06.md) | Erweiterungen-Batch 2026-06: Schulen-Dropdown, Klassen-Details/Edit, User-Dashboard + Edit-Modus, Klassen-PW-Reset, AD-Verbindungstest, Einzelschüler-Übergang, Per-User-Einstellungen, Rolle Fachlehrer |
 
 ---
 

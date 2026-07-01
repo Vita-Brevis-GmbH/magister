@@ -30,6 +30,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.class_memberships import ClassMembershipRepository
 from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
+from magister_api.repositories.subject_teachers import SubjectTeacherRoleRepository
 
 
 async def require_class_writer(
@@ -89,17 +90,24 @@ async def require_student_writer(
     if student.school_id is not None and student.school_id in user.school_scope:
         return user, student
 
-    # Active KL of any class the student is currently an active member of?
+    # Active KL or Fachlehrer of any class the student is an active member of?
+    # Resolve the caller's active class set once per role type (two flat queries)
+    # and intersect with the student's classes, instead of probing per class.
     memberships = await ClassMembershipRepository(session).list_for_student(
         ad_object_guid, only_active=True
     )
     if memberships:
-        kl_repo = ClassTeacherRoleRepository(session)
-        for m in memberships:
-            if await kl_repo.is_active_kl_of(
-                ad_object_guid=user.ad_object_guid, class_id=m.class_id
-            ):
-                return user, student
+        member_class_ids = {m.class_id for m in memberships}
+        kl_class_ids = await ClassTeacherRoleRepository(session).active_class_ids_for_teacher(
+            user.ad_object_guid
+        )
+        if member_class_ids & set(kl_class_ids):
+            return user, student
+        subject_class_ids = await SubjectTeacherRoleRepository(
+            session
+        ).active_class_ids_for_teacher(user.ad_object_guid)
+        if member_class_ids & set(subject_class_ids):
+            return user, student
 
     raise HTTPException(status_code=404, detail="student_not_found")
 

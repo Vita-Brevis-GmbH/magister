@@ -57,6 +57,7 @@ class ClassService:
         name: str,
         kuerzel: str | None,
         jahrgangsstufe: int,
+        details: str | None = None,
         ip: str | None,
         request_id: str,
     ) -> SchoolClass:
@@ -66,6 +67,7 @@ class ClassService:
                 name=name,
                 kuerzel=kuerzel,
                 jahrgangsstufe=jahrgangsstufe,
+                details=details,
             )
         except PermissionError as exc:
             raise ClassPermissionError("school_out_of_scope") from exc
@@ -92,14 +94,20 @@ class ClassService:
         class_id: int,
         new_name: str | None,
         new_kuerzel: str | None,
+        new_details: str | None = None,
         ip: str | None,
         request_id: str,
     ) -> SchoolClass:
         row = await self.get(class_id)
         old_name = row.name
         old_kuerzel = row.kuerzel
-        row, name_changed = await self.repo.update(row, name=new_name, kuerzel=new_kuerzel)
-        if name_changed or (new_kuerzel is not None and new_kuerzel != old_kuerzel):
+        old_details = row.details
+        row, name_changed = await self.repo.update(
+            row, name=new_name, kuerzel=new_kuerzel, details=new_details
+        )
+        kuerzel_changed = new_kuerzel is not None and new_kuerzel != old_kuerzel
+        details_changed = new_details is not None and new_details != old_details
+        if name_changed or kuerzel_changed or details_changed:
             await self.audit.emit(
                 action="class_renamed",
                 target_kind="class",
@@ -114,6 +122,7 @@ class ClassService:
                     "new_name": row.name,
                     "old_kuerzel": old_kuerzel,
                     "new_kuerzel": row.kuerzel,
+                    "details_changed": details_changed,
                 },
             )
         return row
@@ -146,19 +155,25 @@ class ClassService:
         source_class_id: int,
         target_class_id: int,
         archive_source: bool,
+        student_guids: list[str] | None = None,
         ip: str | None,
         request_id: str,
     ) -> PromotionResult:
-        """Move all active students from source to target class.
+        """Move active students from source to target class.
 
-        Uses savepoints per student (same as bulk_add) so partial failures
-        don't roll back the whole batch. After the move an optional archive
-        of the source class is performed and a single audit event is emitted.
+        With ``student_guids`` only those (active) students are moved; None
+        moves all active students. Uses savepoints per student (same as
+        bulk_add) so partial failures don't roll back the whole batch. After
+        the move an optional archive of the source class is performed and a
+        single audit event is emitted.
         """
         source = await self.get(source_class_id)
         target = await self.get(target_class_id)
         membership_repo = ClassMembershipRepository(self.session)
         active = await membership_repo.list_for_class(source_class_id, only_active=True)
+        if student_guids is not None:
+            wanted = set(student_guids)
+            active = [m for m in active if m.ad_object_guid in wanted]
 
         moved: list[int] = []
         errors: list[tuple[str, str]] = []
@@ -231,6 +246,7 @@ class ClassService:
                 "students_moved": len(moved),
                 "students_failed": len(errors),
                 "source_archived": source_archived,
+                "selected_subset": student_guids is not None,
             },
         )
         return PromotionResult(

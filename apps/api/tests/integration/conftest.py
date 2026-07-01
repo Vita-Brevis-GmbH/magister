@@ -115,9 +115,9 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.exec_driver_sql(
             "TRUNCATE import_staged_rows, import_jobs, class_memberships, "
-            "class_teacher_roles, classes, audit_events, sessions, role_assignments, "
-            "ad_user_cache, schools, local_admins, app_settings "
-            "RESTART IDENTITY CASCADE"
+            "class_teacher_roles, subject_teacher_roles, classes, audit_events, sessions, "
+            "role_assignments, ad_user_cache, schools, local_admins, app_settings, "
+            "user_preferences RESTART IDENTITY CASCADE"
         )
         # The migration inserts the singleton; recreate it after each
         # truncate so reads keep returning a row.

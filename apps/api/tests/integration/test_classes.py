@@ -33,6 +33,43 @@ async def _get_actions(engine: AsyncEngine) -> list[str]:
         )
 
 
+class TestClassDetails:
+    @pytest.mark.asyncio
+    async def test_create_with_details_then_edit(
+        self, as_schulleitung_a: AsyncClient, engine: AsyncEngine
+    ) -> None:
+        resp = await as_schulleitung_a.post(
+            "/classes",
+            json={"name": "4a", "jahrgangsstufe": 4, "details": "Raum 12"},
+        )
+        assert resp.status_code == 201, resp.text
+        cid = resp.json()["id"]
+        assert resp.json()["details"] == "Raum 12"
+
+        # PATCH name + details together; relations (by id) stay intact.
+        resp = await as_schulleitung_a.patch(
+            f"/classes/{cid}",
+            json={"name": "4a*", "details": "Raum 12 · Fokus Musik"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["name"] == "4a*"
+        assert resp.json()["details"] == "Raum 12 · Fokus Musik"
+
+        # Audit recorded the edit, but never the free-text details content.
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            rows = (
+                (
+                    await s.execute(
+                        select(AuditEvent.action).where(AuditEvent.action == "class_renamed")
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        assert len(rows) == 1
+
+
 class TestSchulleitungCrud:
     @pytest.mark.asyncio
     async def test_create_lists_get_then_archive(

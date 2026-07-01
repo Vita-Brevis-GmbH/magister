@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useFormatters } from "@/lib/useFormatters";
 
 export const Route = createFileRoute("/_app/admin/audit")({
   component: AuditPage,
@@ -194,11 +195,12 @@ function AuditPage(): JSX.Element {
 
 function AuditRow({ event: ev }: { event: AuditEventOut }): JSX.Element {
   const [expanded, setExpanded] = useState(false);
+  const fmt = useFormatters();
   return (
     <>
       <TableRow className="cursor-pointer" onClick={() => setExpanded((x) => !x)}>
         <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-          {new Date(ev.ts).toLocaleString()}
+          {fmt.formatDateTime(ev.ts)}
         </TableCell>
         <TableCell className="max-w-[14rem] truncate text-sm">
           {ev.actor_upn ?? <span className="text-muted-foreground">—</span>}

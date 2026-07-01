@@ -1,9 +1,18 @@
-# Local-vs-CI drift guard. All hooks shell out to `uv run` inside apps/api so
-# they use the exact ruff/pyright versions pinned in uv.lock — the same ones
-# backend-ci runs. Install once with: uv run --project apps/api pre-commit install
+# Local-vs-CI drift guard. Hooks shell out to `uv run` (backend) / `pnpm`
+# (frontend) so they use the exact tool versions pinned in uv.lock /
+# pnpm-lock.yaml — the same ones backend-ci / frontend-ci run.
 #
-# ruff (lint + format) runs on commit; pyright (strict, whole project, slower)
-# runs on push to mirror CI without slowing every commit.
+# Install once with:  pre-commit install
+# `default_install_hook_types` below makes that single command wire up BOTH
+# the pre-commit and pre-push stages, so the slower pre-push hooks (pyright,
+# frontend) actually run — a plain `pre-commit install` only installs the
+# pre-commit stage otherwise.
+#
+# Fast checks (ruff lint + format) run on commit. The slower, whole-project
+# checks (pyright, frontend lint/format/typecheck) run on push to mirror CI
+# without taxing every commit. Tests are CI-only: the backend suite needs a
+# PostgreSQL service that isn't assumed locally.
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: local
     hooks:
@@ -26,5 +35,29 @@ repos:
         entry: bash -c 'cd apps/api && uv run pyright'
         language: system
         types_or: [python, pyi]
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: web-lint
+        name: web eslint
+        entry: bash -c 'cd apps/web && pnpm lint'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx)$
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: web-format
+        name: web prettier check
+        entry: bash -c 'cd apps/web && pnpm format:check'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx|css|json)$
+        pass_filenames: false
+        stages: [pre-push]
+
+      - id: web-typecheck
+        name: web typecheck
+        entry: bash -c 'cd apps/web && pnpm routes:generate && pnpm typecheck'
+        language: system
+        files: ^apps/web/.*\.(ts|tsx)$
         pass_filenames: false
         stages: [pre-push]

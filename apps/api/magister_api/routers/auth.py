@@ -34,7 +34,6 @@ from magister_api.services.local_admin import (
     LOCAL_ADMIN_GUID,
     LocalAdminService,
     LoginFailed,
-    LoginOk,
     LoginRefusal,
 )
 
@@ -298,7 +297,7 @@ async def login_local(
             content={"detail": result.reason.value},
         )
 
-    assert isinstance(result, LoginOk)
+    # result is narrowed to LoginOk here: the LoginFailed branch above returns.
     sid = new_session_id()
     sessions_repo = SessionRepository(session)
     await sessions_repo.create(

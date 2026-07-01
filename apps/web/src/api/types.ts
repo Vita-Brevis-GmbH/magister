@@ -43,6 +43,7 @@ export interface ClassOut {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  details: string | null;
   status: SchoolClassStatus;
   created_at: string;
   updated_at: string;
@@ -52,12 +53,21 @@ export interface ClassCreate {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  details?: string | null;
   school_id?: number;
 }
 
 export interface ClassUpdate {
   name?: string | null;
   kuerzel?: string | null;
+  details?: string | null;
+}
+
+export interface SchoolOut {
+  id: number;
+  name: string;
+  kuerzel: string;
+  scope_short: string;
 }
 
 export type ClassTeacherRole = "haupt" | "co" | "stellvertretung";
@@ -83,6 +93,44 @@ export interface ClassTeacherCreate {
   valid_to?: string | null;
 }
 
+export interface SubjectTeacherOut {
+  id: number;
+  class_id: number;
+  ad_object_guid: string;
+  subject: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}
+
+export interface SubjectTeacherCreate {
+  ad_object_guid: string;
+  subject: string;
+  valid_from: string;
+  valid_to?: string | null;
+}
+
+export interface MyStudentBrief {
+  ad_object_guid: string;
+  display_name: string | null;
+  upn: string | null;
+}
+
+export interface MyClassStudents {
+  class_id: number;
+  name: string;
+  kuerzel: string | null;
+  students: MyStudentBrief[];
+}
+
+export interface MyStudentsOut {
+  classes: MyClassStudents[];
+}
+
 export interface ClassMembershipOut {
   id: number;
   class_id: number;
@@ -100,6 +148,25 @@ export interface ClassMembershipCreate {
   ad_object_guid: string;
   valid_from?: string | null;
   valid_to?: string | null;
+}
+
+export interface ClassTeacherBrief {
+  ad_object_guid: string;
+  display_name: string | null;
+  upn: string | null;
+  role: ClassTeacherRole;
+}
+
+export interface UserClassOut {
+  class_id: number;
+  name: string;
+  kuerzel: string | null;
+  jahrgangsstufe: number;
+  teachers: ClassTeacherBrief[];
+}
+
+export interface UserDashboardOut {
+  classes: UserClassOut[];
 }
 
 export interface AdUserOut {
@@ -189,6 +256,24 @@ export interface AppSettingsOut {
   updated_by_upn: string | null;
 }
 
+export interface AdConnectionTestOut {
+  ok: boolean;
+  detail: string;
+}
+
+export type PrefLanguage = "de" | "fr" | "it" | "en";
+export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
+export type PrefTimeFormat = "24h" | "12h";
+
+export interface UserPreferencesOut {
+  language: PrefLanguage;
+  region: string;
+  date_format: PrefDateFormat;
+  time_format: PrefTimeFormat;
+}
+
+export type UserPreferencesUpdate = UserPreferencesOut;
+
 /** Send `null`/omitted to leave fields untouched. The two secret fields are
  *  only updated when a non-empty string is sent — empty string is a no-op. */
 export interface SubstitutionOut extends ClassTeacherOut {
@@ -199,6 +284,8 @@ export interface SubstitutionOut extends ClassTeacherOut {
 export interface ClassPromotionRequest {
   target_class_id: number;
   archive_source: boolean;
+  /** Subset of student GUIDs to move; omit to move all active students. */
+  student_guids?: string[] | null;
 }
 
 export interface ClassPromotionError {

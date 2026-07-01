@@ -12,7 +12,8 @@
     "substitutions": "Substitutions",
     "imports": "Imports",
     "reports": "Reports",
-    "audit": "Audit Log"
+    "audit": "Audit Log",
+    "my_students": "My students"
   },
   "auth": {
     "login_title": "Sign in",
@@ -34,7 +35,15 @@
     }
   },
   "me": {
-    "title": "My profile"
+    "title": "My profile",
+    "preferences_title": "Settings",
+    "preferences_desc": "Language, region and formats for your account.",
+    "preferences_save": "Save",
+    "preferences_saved": "Settings saved.",
+    "pref_language": "Language",
+    "pref_region": "Region",
+    "pref_date_format": "Date format",
+    "pref_time_format": "Time format"
   },
   "classes": {
     "title": "Classes",
@@ -43,6 +52,7 @@
     "jahrgangsstufe": "Year",
     "school": "School",
     "school_id_label": "School ID",
+    "school_select_placeholder": "Select school …",
     "school_id_admin_hint": "As admin you must set the school explicitly.",
     "status": "Status",
     "status_active": "active",
@@ -55,6 +65,10 @@
     "rename_button": "Rename",
     "rename_title": "Rename class",
     "rename_submit": "Save",
+    "edit_button": "Edit",
+    "edit_title": "Edit class",
+    "edit_submit": "Save",
+    "details": "Details",
     "archive_button": "Archive",
     "archive_title": "Archive class",
     "archive_confirm": "Archive {{name}}? The row is kept; you can restore via the DB.",
@@ -78,6 +92,15 @@
     "assign_teacher_description": "Pick a teacher, role and date range.",
     "assign_teacher_submit": "Assign",
     "revoke_teacher": "End",
+    "subject": "Subject",
+    "subject_placeholder": "e.g. Mathematics",
+    "subject_teachers_title": "Subject teachers",
+    "subject_teachers_description": "Subject teachers with subject and date range.",
+    "subject_teachers_empty": "No subject teachers yet.",
+    "assign_subject_teacher_button": "Assign subject teacher",
+    "assign_subject_teacher_title": "Assign subject teacher",
+    "assign_subject_teacher_description": "Pick a teacher, subject and date range.",
+    "assign_subject_teacher_submit": "Assign",
     "search_teacher": "Search teacher",
     "picked": "Picked",
     "students_title": "Students",
@@ -90,6 +113,8 @@
     "add_student_description": "Pick a student and set the start date.",
     "add_student_submit": "Add",
     "remove_student": "Remove",
+    "show_user_details": "Show details",
+    "reset_password": "Reset password",
     "search_student": "Search student",
     "mid_year_hint": "Mid-year transfers automatically close the previous active membership.",
     "bulk_add_button": "Add multiple",
@@ -145,6 +170,11 @@
     "empty": "No users.",
     "actions": "Actions",
     "detail": {
+      "edit": "Edit",
+      "section_classes": "Classes",
+      "class_teachers": "Class teachers",
+      "no_classes": "Not assigned to any active class.",
+      "section_overview": "Overview",
       "section_identity": "Identity",
       "section_identity_desc": "Display name and sign-in name.",
       "section_mail": "Mail address",
@@ -232,6 +262,10 @@
       "oidc_section_desc": "Issuer, client ID, client secret and redirect URI for teacher + admin sign-in.",
       "ad_section": "Active Directory (LDAPS)",
       "ad_section_desc": "Domain controllers, bind DN/password and search base for the user sync.",
+      "test_ad_button": "Test connection",
+      "test_ad_ok": "Connection successful.",
+      "test_ad_failed": "Connection failed.",
+      "test_ad_hint": "Tests the saved service account against AD. Save first.",
       "save": "Save",
       "success": "Settings saved.",
       "error_invalid": "Input is invalid. Please review.",
@@ -399,12 +433,22 @@
     "template_class_change_desc": "Notice about a transfer from one class to another — the account stays unchanged.",
     "template_password_handout_desc": "Hand the temporary password to the parents (printed letter).",
     "school_year": "School year",
+    "school_year_placeholder": "2026/27",
     "first_day": "First day",
     "old_class": "Previous class",
     "effective_date": "Effective from",
     "temp_password": "Temporary password",
+    "temp_password_placeholder": "e.g. Apple-Hill-7",
     "temp_password_hint": "Not stored — enter right after a manual password reset.",
-    "generate_button": "Generate PDF"
+    "generate_button": "Generate PDF",
+    "errors": {
+      "student_not_found": "Student not found.",
+      "unknown_template": "Unknown template.",
+      "missing_active_class": "The student has no active class.",
+      "missing_school_year_or_first_day": "School year and first day are required.",
+      "missing_old_class_or_effective_date": "Previous class and effective date are required.",
+      "missing_temp_password": "Temporary password is required."
+    }
   },
   "audit": {
     "title": "Audit Log",
@@ -450,5 +494,12 @@
     "error_cannot_disable_self": "You cannot disable your own account.",
     "error_not_found": "User not found or outside your access.",
     "error_user_not_in_ad": "The account no longer exists in AD."
+  },
+  "my_students": {
+    "title": "My students",
+    "intro": "All students of the classes where you are KL or a subject teacher.",
+    "empty": "You are currently not assigned to any class as KL or subject teacher.",
+    "empty_class": "No active students.",
+    "count": "{{count}} students"
   }
 }

@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useFormatters } from "@/lib/useFormatters";
 import { cn } from "@/lib/utils";
 import { displayLabel } from "@/lib/userDisplay";
 
@@ -31,6 +32,7 @@ function UsersPage(): JSX.Element {
   // /users/$guid is a child route; hand off when one is active.
   const childMatches = useChildMatches();
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
   const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
@@ -64,7 +66,7 @@ function UsersPage(): JSX.Element {
           {t("users.last_sync_at")}:{" "}
           <span className="font-medium text-foreground">
             {q.data?.last_sync_at
-              ? new Date(q.data.last_sync_at).toLocaleString()
+              ? fmt.formatDateTime(q.data.last_sync_at)
               : t("users.never_synced")}
           </span>
         </p>

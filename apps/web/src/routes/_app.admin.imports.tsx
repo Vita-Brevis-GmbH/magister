@@ -22,6 +22,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useFormatters } from "@/lib/useFormatters";
 
 export const Route = createFileRoute("/_app/admin/imports")({
   component: ImportsPage,
@@ -31,6 +32,7 @@ const ALL_KINDS: ImportKind[] = ["classes", "class_memberships", "class_teachers
 
 function ImportsPage(): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const jobs = useImportJobs();
   const [openJobId, setOpenJobId] = useState<number | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -69,7 +71,7 @@ function ImportsPage(): JSX.Element {
                 : (jobs.data ?? []).map((j) => (
                     <TableRow key={j.id}>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                        {new Date(j.created_at).toLocaleString()}
+                        {fmt.formatDateTime(j.created_at)}
                       </TableCell>
                       <TableCell>
                         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{j.kind}</code>
@@ -224,6 +226,7 @@ function NewImportWizard({
 
 function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void }): JSX.Element {
   const { t } = useTranslation();
+  const fmt = useFormatters();
   const q = useImportJob(jobId);
   const apply = useApplyImport();
   const cancel = useCancelImport();
@@ -255,7 +258,7 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
               {t("imports.created_by")}: {job.created_by_upn ?? "—"}
             </span>
             <span className="text-xs text-muted-foreground">
-              {new Date(job.created_at).toLocaleString()}
+              {fmt.formatDateTime(job.created_at)}
             </span>
           </div>
 

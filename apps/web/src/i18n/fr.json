@@ -15,7 +15,8 @@
     "substitutions": "Suppléances",
     "imports": "Imports",
     "reports": "Rapports",
-    "audit": "Journal d'audit"
+    "audit": "Journal d'audit",
+    "my_students": "Mes élèves"
   },
   "auth": {
     "login_title": "Connexion",
@@ -36,7 +37,17 @@
       "local_login_disabled": "La connexion locale est désactivée."
     }
   },
-  "me": { "title": "Mon profil" },
+  "me": {
+    "title": "Mon profil",
+    "preferences_title": "Paramètres",
+    "preferences_desc": "Langue, région et formats pour votre compte.",
+    "preferences_save": "Enregistrer",
+    "preferences_saved": "Paramètres enregistrés.",
+    "pref_language": "Langue",
+    "pref_region": "Région",
+    "pref_date_format": "Format de date",
+    "pref_time_format": "Format d'heure"
+  },
   "classes": {
     "title": "Classes",
     "name": "Nom",
@@ -44,6 +55,7 @@
     "jahrgangsstufe": "Année",
     "school": "École",
     "school_id_label": "ID école",
+    "school_select_placeholder": "Choisir l'école …",
     "school_id_admin_hint": "L'admin doit indiquer l'école explicitement.",
     "status": "Statut",
     "status_active": "actif",
@@ -56,6 +68,10 @@
     "rename_button": "Renommer",
     "rename_title": "Renommer la classe",
     "rename_submit": "Enregistrer",
+    "edit_button": "Modifier",
+    "edit_title": "Modifier la classe",
+    "edit_submit": "Enregistrer",
+    "details": "Détails",
     "archive_button": "Archiver",
     "archive_title": "Archiver la classe",
     "archive_confirm": "Archiver {{name}} ? L'entrée est conservée ; restaurez via la base de données.",
@@ -79,6 +95,15 @@
     "assign_teacher_description": "Sélectionnez enseignant, rôle et plage de dates.",
     "assign_teacher_submit": "Assigner",
     "revoke_teacher": "Terminer",
+    "subject": "Matière",
+    "subject_placeholder": "p.ex. Mathématiques",
+    "subject_teachers_title": "Enseignants de matière",
+    "subject_teachers_description": "Enseignants de matière avec matière et période.",
+    "subject_teachers_empty": "Aucun enseignant de matière.",
+    "assign_subject_teacher_button": "Attribuer un enseignant de matière",
+    "assign_subject_teacher_title": "Attribuer un enseignant de matière",
+    "assign_subject_teacher_description": "Choisir un enseignant, une matière et une période.",
+    "assign_subject_teacher_submit": "Attribuer",
     "search_teacher": "Rechercher un enseignant",
     "picked": "Sélectionné",
     "students_title": "Élèves",
@@ -91,6 +116,8 @@
     "add_student_description": "Sélectionnez l'élève et indiquez la date de début.",
     "add_student_submit": "Ajouter",
     "remove_student": "Retirer",
+    "show_user_details": "Voir les détails",
+    "reset_password": "Réinitialiser le mot de passe",
     "search_student": "Rechercher un·e élève",
     "mid_year_hint": "Un transfert en cours d'année clôt automatiquement l'appartenance précédente.",
     "bulk_add_button": "Ajouter plusieurs",
@@ -146,6 +173,11 @@
     "empty": "Aucun utilisateur.",
     "actions": "Actions",
     "detail": {
+      "edit": "Modifier",
+      "section_classes": "Classes",
+      "class_teachers": "Enseignants de classe",
+      "no_classes": "Aucune classe active attribuée.",
+      "section_overview": "Données de base",
       "section_identity": "Identité",
       "section_identity_desc": "Nom affiché et identifiants de connexion.",
       "section_mail": "Adresse e-mail",
@@ -233,6 +265,10 @@
       "oidc_section_desc": "Émetteur, client ID, client secret et URI de redirection pour la connexion des enseignants + admins.",
       "ad_section": "Active Directory (LDAPS)",
       "ad_section_desc": "Contrôleurs de domaine, DN/mot de passe de bind et base de recherche pour la synchronisation.",
+      "test_ad_button": "Tester la connexion",
+      "test_ad_ok": "Connexion réussie.",
+      "test_ad_failed": "Échec de la connexion.",
+      "test_ad_hint": "Teste le compte de service enregistré sur l'AD. Enregistrez d'abord.",
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",
       "error_invalid": "Entrée invalide. Veuillez vérifier.",
@@ -400,12 +436,22 @@
     "template_class_change_desc": "Notification d'un changement de classe — le compte reste inchangé.",
     "template_password_handout_desc": "Lettre de remise du mot de passe temporaire aux parents.",
     "school_year": "Année scolaire",
+    "school_year_placeholder": "2026/27",
     "first_day": "Premier jour",
     "old_class": "Classe précédente",
     "effective_date": "Effet au",
     "temp_password": "Mot de passe temporaire",
+    "temp_password_placeholder": "p.ex. Pomme-Mont-7",
     "temp_password_hint": "Non enregistré — à saisir juste après une réinitialisation manuelle.",
-    "generate_button": "Générer le PDF"
+    "generate_button": "Générer le PDF",
+    "errors": {
+      "student_not_found": "Élève introuvable.",
+      "unknown_template": "Modèle inconnu.",
+      "missing_active_class": "L'élève n'a pas de classe active.",
+      "missing_school_year_or_first_day": "L'année scolaire et le premier jour sont requis.",
+      "missing_old_class_or_effective_date": "La classe précédente et la date d'effet sont requises.",
+      "missing_temp_password": "Le mot de passe temporaire est requis."
+    }
   },
   "audit": {
     "title": "Journal d'audit",
@@ -451,5 +497,12 @@
     "error_cannot_disable_self": "Vous ne pouvez pas désactiver votre propre compte.",
     "error_not_found": "Utilisateur introuvable ou hors de votre périmètre.",
     "error_user_not_in_ad": "Le compte n'existe plus dans l'AD."
+  },
+  "my_students": {
+    "title": "Mes élèves",
+    "intro": "Tous les élèves des classes où vous êtes KL ou enseignant de matière.",
+    "empty": "Vous n'êtes actuellement attribué à aucune classe comme KL ou enseignant de matière.",
+    "empty_class": "Aucun élève actif.",
+    "count": "{{count}} élèves"
   }
 }

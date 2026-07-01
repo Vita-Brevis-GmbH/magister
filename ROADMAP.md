@@ -81,6 +81,22 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ⏳ L-01 bis L-07 (Low-Findings) als Backlog
 - ⏳ Externer Pentest beauftragen
 
+## Erweiterungen 2026-06 (post-Rollout, abgeschlossen)
+
+**Ziel:** Verbesserungen und kleine Erweiterungen aus dem laufenden Betrieb, parallel zum Produktiv-Rollout. Referenz: [`docs/features/extensions-2026-06.md`](docs/features/extensions-2026-06.md).
+
+**Akzeptanz (alle ✓):**
+- ✅ **Schulen-Dropdown** bei Klassenerstellung — `GET /schools` (scope-aware)
+- ✅ **Klassen-Detailfeld + Edit-Dialog** (Name/Kürzel/Details, Migration 0012); Schulwechsel bewusst ausgeschlossen
+- ✅ **„Details anzeigen"** von der Klassenansicht in das User-Detail (Admin/SMI)
+- ✅ **User-Dashboard** (`GET /users/{guid}/dashboard`: Klassen + KL) + **Edit-Modus** (read-only mit „Bearbeiten")
+- ✅ **PW-Reset in der Klassenansicht** + Schüler-Klassenfilter (`?class_id` matcht Schüler)
+- ✅ **AD-Verbindungstest** (`POST /admin/ad-test`, nur LDAP; Entra-PW-Test verworfen — MFA-Modell)
+- ✅ **Einzelschüler-Übergang** — `student_guids`-Teilmenge im Promote
+- ✅ **Per-User-Einstellungen** (Sprache/Region/Formate, Migration 0013, `/me/preferences`); Datums-/Zeit-/Zahlenformate werden über `lib/useFormatters` app-weit angewendet
+- ✅ **Rolle Fachlehrer** — eigene Tabelle (Migration 0014, ADR-0005), Zuweisung mit Fach, PW-Reset für eigene Schüler:innen, „Meine Schüler"-Sicht
+- ✅ **Test/CI** — Coverage-Gate (75 %), Router-Tests, Rename-Integritätstests, Pre-commit spiegelt Frontend-CI
+
 ## Cross-Cutting (laufend)
 
 - Sicherheits-Updates der Dependencies (renovate)

@@ -20,9 +20,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+/** Minimal shape the modal needs — satisfied by AdUserOut and ClassMembershipOut.
+ *  upn is widened to nullable so a class-membership row (upn: string | null) fits. */
+export type ResetTarget = Pick<AdUserOut, "ad_object_guid" | "given_name" | "surname"> & {
+  upn: string | null;
+};
+
 interface Props {
   /** When non-null the modal is open for the given student. Pass null to close. */
-  student: AdUserOut | null;
+  student: ResetTarget | null;
   onClose: () => void;
 }
 
