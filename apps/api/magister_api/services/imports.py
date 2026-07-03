@@ -221,6 +221,11 @@ class ImportService:
         # the router after apply() to build the hand-out PDFs. Never persisted.
         self.provisioned: list[ProvisionedCredential] = []
         self._app_settings: AppSettings | None = None
+        # Intra-file duplicate guards for the ``students`` import — reset at the
+        # start of each stage() so two rows can't both claim the same UPN /
+        # sAMAccountName (AD would reject the second only at apply time).
+        self._seen_upns: set[str] = set()
+        self._seen_sams: set[str] = set()
 
     async def _app_settings_row(self) -> AppSettings:
         if self._app_settings is None:
@@ -244,6 +249,8 @@ class ImportService:
     ) -> StageSummary:
         if kind not in TEMPLATES:
             raise InvalidCsvError(f"unknown import kind: {kind}")
+        self._seen_upns = set()
+        self._seen_sams = set()
         expected_header = TEMPLATES[kind][0]
         reader = csv.DictReader(io.StringIO(csv_text))
         if reader.fieldnames is None or [(h or "").strip().lower() for h in reader.fieldnames] != [
@@ -476,6 +483,16 @@ class ImportService:
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        # Intra-file duplicates: catch two rows claiming the same identity here,
+        # rather than letting the second one fail cryptically at apply time.
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"duplicate upn {upn} in this file"]
+        self._seen_upns.add(upn)
+        if sam in self._seen_sams:
+            return IMPORT_ACTION_ERROR, [f"duplicate sam_account_name {sam!r} in this file"]
+        self._seen_sams.add(sam)
+
         settings_row = await self._app_settings_row()
         domain = upn.split("@", 1)[1]
         if settings_row.mail_domains and domain not in settings_row.mail_domains:
@@ -501,6 +518,14 @@ class ImportService:
         ).scalar_one_or_none()
         if existing is not None:
             return IMPORT_ACTION_ERROR, [f"upn {upn} already exists"]
+
+        existing_sam = (
+            await self.session.execute(
+                select(AdUserCache).where(AdUserCache.sam_account_name == sam)
+            )
+        ).scalar_one_or_none()
+        if existing_sam is not None:
+            return IMPORT_ACTION_ERROR, [f"sam_account_name {sam!r} already exists"]
 
         return IMPORT_ACTION_CREATE, []
 

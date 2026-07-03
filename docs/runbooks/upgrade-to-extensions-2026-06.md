@@ -44,8 +44,14 @@ Referenz für den Funktionsumfang: [`docs/features/extensions-2026-06.md`](../fe
 ```bash
 cd /opt/magister/deploy/compose          # Pfad eurer Installation
 
+# Backup-Verzeichnis anlegen und dem eigenen User schreibbar machen — die
+# Umleitung `> …` läuft ausserhalb von `sudo` (als dein Login-User), nicht als root.
+sudo mkdir -p /backup
+sudo chown "$(id -un)":"$(id -gn)" /backup
+
 docker compose exec postgres pg_dump -U magister magister \
   | gzip > /backup/magister-before-v0.4.0-$(date +%Y%m%d-%H%M).sql.gz
+ls -lh /backup/                           # kontrollieren: Datei ist da und > 0 Byte
 ```
 
 ---
