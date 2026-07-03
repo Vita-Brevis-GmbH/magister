@@ -40,4 +40,29 @@ class ImportJobDetailOut(ImportJobOut):
     """Per-action counts (create/update/skip/error)."""
 
 
-__all__ = ["ImportJobDetailOut", "ImportJobOut", "ImportStagedRowOut"]
+class ProvisionedCredentialOut(BaseModel):
+    """One-time credential for a provisioned student (``students`` import).
+
+    Returned exactly once in the apply response so the caller can render the
+    hand-out PDFs. The password is never persisted or audited.
+    """
+
+    upn: str
+    display_name: str
+    class_name: str
+    password: str
+    force_change: bool
+
+
+class ImportApplyResultOut(ImportJobDetailOut):
+    credentials: list[ProvisionedCredentialOut] = []
+    """Populated only for the ``students`` provisioning import; empty otherwise."""
+
+
+__all__ = [
+    "ImportApplyResultOut",
+    "ImportJobDetailOut",
+    "ImportJobOut",
+    "ImportStagedRowOut",
+    "ProvisionedCredentialOut",
+]

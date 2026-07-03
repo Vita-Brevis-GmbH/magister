@@ -18,16 +18,20 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFil
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.import_job import ALLOWED_IMPORT_KINDS
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.imports import (
+    ImportApplyResultOut,
     ImportJobDetailOut,
     ImportJobOut,
     ImportStagedRowOut,
+    ProvisionedCredentialOut,
 )
 from magister_api.services.imports import (
     ImportJobBadStateError,
@@ -175,15 +179,16 @@ async def get_job(
     )
 
 
-@router.post("/{job_id}/apply", response_model=ImportJobDetailOut)
+@router.post("/{job_id}/apply", response_model=ImportApplyResultOut)
 async def apply_job(
     job_id: int,
     request: Request,
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
-) -> ImportJobDetailOut:
-    svc = ImportService(session, settings, user.to_scope())
+    ad: AdClient = Depends(get_ad_client),
+) -> ImportApplyResultOut:
+    svc = ImportService(session, settings, user.to_scope(), ad=ad)
     try:
         job_pre, _, _ = await svc.get_with_rows(job_id=job_id)
     except ImportJobNotFoundError as exc:
@@ -198,7 +203,7 @@ async def apply_job(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     job, rows, counts = await svc.get_with_rows(job_id=job_id)
-    return ImportJobDetailOut(
+    return ImportApplyResultOut(
         id=job.id,
         school_id=job.school_id,
         kind=job.kind,
@@ -210,6 +215,7 @@ async def apply_job(
         summary=job.summary,
         rows=[ImportStagedRowOut.model_validate(r) for r in rows],
         counts=counts,
+        credentials=[ProvisionedCredentialOut(**vars(c)) for c in svc.provisioned],
     )
 
 

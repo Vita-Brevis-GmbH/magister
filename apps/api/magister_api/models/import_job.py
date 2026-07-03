@@ -26,8 +26,15 @@ from magister_api.models.base import Base, utcnow
 IMPORT_KIND_CLASSES = "classes"
 IMPORT_KIND_CLASS_MEMBERSHIPS = "class_memberships"
 IMPORT_KIND_CLASS_TEACHERS = "class_teachers"
+# Provisioning import: creates NEW AD student accounts (see ADR 0006).
+IMPORT_KIND_STUDENTS = "students"
 ALLOWED_IMPORT_KINDS: frozenset[str] = frozenset(
-    {IMPORT_KIND_CLASSES, IMPORT_KIND_CLASS_MEMBERSHIPS, IMPORT_KIND_CLASS_TEACHERS}
+    {
+        IMPORT_KIND_CLASSES,
+        IMPORT_KIND_CLASS_MEMBERSHIPS,
+        IMPORT_KIND_CLASS_TEACHERS,
+        IMPORT_KIND_STUDENTS,
+    }
 )
 
 IMPORT_STATUS_STAGED = "staged"
@@ -65,7 +72,7 @@ class ImportJob(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('classes', 'class_memberships', 'class_teachers')",
+            "kind IN ('classes', 'class_memberships', 'class_teachers', 'students')",
             name="ck_import_jobs_kind",
         ),
         CheckConstraint(
@@ -109,6 +116,7 @@ __all__ = [
     "IMPORT_KIND_CLASSES",
     "IMPORT_KIND_CLASS_MEMBERSHIPS",
     "IMPORT_KIND_CLASS_TEACHERS",
+    "IMPORT_KIND_STUDENTS",
     "IMPORT_STATUS_APPLIED",
     "IMPORT_STATUS_CANCELLED",
     "IMPORT_STATUS_STAGED",

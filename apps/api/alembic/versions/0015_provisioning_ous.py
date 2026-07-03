@@ -33,8 +33,22 @@ def upgrade() -> None:
     op.add_column("app_settings", sa.Column("ad_ou_students_other", sa.String(512), nullable=True))
     op.add_column("app_settings", sa.Column("ad_ou_teachers", sa.String(512), nullable=True))
 
+    # Allow the new 'students' provisioning import kind.
+    op.drop_constraint("ck_import_jobs_kind", "import_jobs", type_="check")
+    op.create_check_constraint(
+        "ck_import_jobs_kind",
+        "import_jobs",
+        "kind IN ('classes', 'class_memberships', 'class_teachers', 'students')",
+    )
+
 
 def downgrade() -> None:
+    op.drop_constraint("ck_import_jobs_kind", "import_jobs", type_="check")
+    op.create_check_constraint(
+        "ck_import_jobs_kind",
+        "import_jobs",
+        "kind IN ('classes', 'class_memberships', 'class_teachers')",
+    )
     op.drop_column("app_settings", "ad_ou_teachers")
     op.drop_column("app_settings", "ad_ou_students_other")
     op.drop_column("app_settings", "ad_ou_students_zyklus3")
