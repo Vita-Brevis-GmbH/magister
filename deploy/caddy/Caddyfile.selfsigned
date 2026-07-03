@@ -14,6 +14,16 @@
 # locking you out of the site entirely. Do not add Strict-Transport-Security
 # to this file.
 
+{
+	# When a client connects without SNI — e.g. access by IP address, where
+	# browsers and curl omit the SNI extension — fall back to this name so
+	# Caddy still serves the internal certificate instead of aborting the
+	# handshake with a "tlsv1 alert internal error". Set MAGISTER_PUBLIC_HOSTNAME
+	# to the exact host OR IP you reach the server by (e.g. 172.25.8.27), so the
+	# certificate subject, the site match, and this default all line up.
+	default_sni {$MAGISTER_PUBLIC_HOSTNAME}
+}
+
 (security_headers) {
 	header {
 		# MIME-sniff lock-down + clickjacking + referrer minimisation.
