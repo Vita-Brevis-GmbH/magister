@@ -27,9 +27,11 @@ import type {
   SubjectTeacherOut,
   CurrentUserOut,
   ActivityReport,
+  ImportApplyResult,
   ImportJobDetailOut,
   ImportJobOut,
   ImportKind,
+  ProvisionedCredential,
   LetterRequest,
   LetterTemplate,
   StudentsByClassReport,
@@ -552,15 +554,46 @@ export function useStageImport() {
 
 export function useApplyImport() {
   const qc = useQueryClient();
-  return useMutation<ImportJobDetailOut, ApiError, number>({
+  return useMutation<ImportApplyResult, ApiError, number>({
     mutationFn: (jobId) =>
-      apiFetch<ImportJobDetailOut>(`/imports/${jobId}/apply`, { method: "POST" }),
+      apiFetch<ImportApplyResult>(`/imports/${jobId}/apply`, { method: "POST" }),
     onSuccess: (_data, jobId) => {
       qc.invalidateQueries({ queryKey: importsKey });
       qc.invalidateQueries({ queryKey: ["imports", jobId] });
       qc.invalidateQueries({ queryKey: queryKeys.classes });
     },
   });
+}
+
+/**
+ * POST the one-time credentials to the stateless PDF renderer and trigger a
+ * browser download of the ZIP (per-student hand-outs + per-class table).
+ * Credentials are never persisted; this re-sends them over the same session.
+ */
+export async function downloadHandouts(
+  credentials: ProvisionedCredential[],
+  schoolName: string,
+): Promise<void> {
+  const csrf = document.cookie.match(/(?:^|; )magister_csrf=([^;]+)/)?.[1];
+  const res = await fetch(`${API_BASE}/imports/handouts`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
+    },
+    body: JSON.stringify({ credentials, school_name: schoolName }),
+  });
+  if (!res.ok) throw new ApiError(res.status, "handout_render_failed", await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "schueler-zugangsdaten.zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function useCancelImport() {

@@ -7,6 +7,9 @@ persisted or audited.
 
 from __future__ import annotations
 
+import io
+import zipfile
+
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
@@ -133,6 +136,42 @@ async def test_provision_students_end_to_end(
         .all()
     )
     assert len(events) == 2
+
+
+@pytest.mark.asyncio
+async def test_render_handouts_zip(as_schulleitung_a: AsyncClient) -> None:
+    body = {
+        "school_name": "Testschule",
+        "credentials": [
+            {
+                "upn": "anna.muster@schule.ch",
+                "display_name": "Anna Muster",
+                "class_name": "3a",
+                "password": "Tiger-Wolke-47",
+                "force_change": True,
+            },
+            {
+                "upn": "ben.beispiel@schule.ch",
+                "display_name": "Ben Beispiel",
+                "class_name": "3b",
+                "password": "Panda-Segel-83",
+                "force_change": False,
+            },
+        ],
+    }
+    r = await as_schulleitung_a.post("/imports/handouts", json=body)
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == "application/zip"
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    assert set(zf.namelist()) == {"schueler-handouts.pdf", "klassen-uebersicht.pdf"}
+    for name in zf.namelist():
+        assert zf.read(name)[:4] == b"%PDF"
+
+
+@pytest.mark.asyncio
+async def test_handouts_empty_400(as_schulleitung_a: AsyncClient) -> None:
+    r = await as_schulleitung_a.post("/imports/handouts", json={"credentials": []})
+    assert r.status_code == 400
 
 
 @pytest.mark.asyncio

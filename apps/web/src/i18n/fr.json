@@ -292,8 +292,13 @@
         "ad_computers_search_base": "Base de recherche (ordinateurs)",
         "ad_computers_search_base_hint": "Optionnel. Chemin de l'OU des ordinateurs ; correspondance via managedBy=<user-dn>. Vide = sync d'appareils désactivée.",
         "ad_sync_interval_minutes": "Intervalle de synchronisation (minutes)",
-        "mail_domains": "Domaines e-mail autorisés"
-      }
+        "mail_domains": "Domaines e-mail autorisés",
+        "ad_ou_students_zyklus3": "OU cible élèves cycle 3",
+        "ad_ou_students_other": "OU cible élèves (autres)",
+        "ad_ou_teachers": "OU cible enseignants"
+      },
+      "provisioning_title": "Provisionnement (nouveaux comptes)",
+      "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe (cycle 3 = années 7 à 9). Laisser vide désactive le provisionnement pour cette catégorie."
     },
     "local_admin": {
       "title": "Compte administrateur local",
@@ -370,6 +375,11 @@
     "kind_classes_desc": "Créer ou mettre à jour des classes. Colonnes: name, kuerzel, jahrgangsstufe.",
     "kind_class_memberships_desc": "Affecter des élèves à une classe. L'UPN doit exister dans l'AD. Colonnes: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Affecter des enseignants de classe (titulaire/co/suppléant). Colonnes: teacher_upn, class_name, role, valid_from, valid_to.",
+    "kind_students": "Nouveaux élèves (créer des comptes AD)",
+    "kind_students_desc": "Crée de nouveaux comptes AD et les affecte à une classe. Les mots de passe sont générés. Colonnes: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "credentials_ready": "{{count}} compte(s) créé(s) — téléchargez les identifiants maintenant",
+    "credentials_hint": "Les mots de passe ne sont affichés qu'une seule fois et ne sont enregistrés nulle part. Téléchargez les PDF maintenant (fiche par élève + tableau de classe).",
+    "download_handouts": "Télécharger les PDF d'identifiants",
     "download_template": "Télécharger le modèle",
     "file_label": "Fichier CSV",
     "upload_button": "Téléverser et prévisualiser",

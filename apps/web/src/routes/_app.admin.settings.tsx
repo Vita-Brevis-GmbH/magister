@@ -28,6 +28,9 @@ interface FormState {
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
+  ad_ou_students_zyklus3: string;
+  ad_ou_students_other: string;
+  ad_ou_teachers: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -45,6 +48,9 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
+    ad_ou_students_zyklus3: data.ad_ou_students_zyklus3 ?? "",
+    ad_ou_students_other: data.ad_ou_students_other ?? "",
+    ad_ou_teachers: data.ad_ou_teachers ?? "",
   };
 }
 
@@ -97,6 +103,15 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const interval = Number(form.ad_sync_interval_minutes);
   if (Number.isFinite(interval) && interval !== current.ad_sync_interval_minutes) {
     payload.ad_sync_interval_minutes = interval;
+  }
+  if (form.ad_ou_students_zyklus3 !== (current.ad_ou_students_zyklus3 ?? "")) {
+    payload.ad_ou_students_zyklus3 = form.ad_ou_students_zyklus3;
+  }
+  if (form.ad_ou_students_other !== (current.ad_ou_students_other ?? "")) {
+    payload.ad_ou_students_other = form.ad_ou_students_other;
+  }
+  if (form.ad_ou_teachers !== (current.ad_ou_teachers ?? "")) {
+    payload.ad_ou_teachers = form.ad_ou_teachers;
   }
   return payload;
 }
@@ -282,6 +297,36 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               {...field("ad_sync_interval_minutes")}
             />
           </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-sm font-medium">{t("admin.settings.provisioning_title")}</p>
+            <p className="text-xs text-muted-foreground">{t("admin.settings.provisioning_hint")}</p>
+            <div className="space-y-1">
+              <Label htmlFor="ou-z3">{t("admin.settings.field.ad_ou_students_zyklus3")}</Label>
+              <Input
+                id="ou-z3"
+                placeholder="OU=SekI,OU=Schule,DC=…"
+                {...field("ad_ou_students_zyklus3")}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ou-other">{t("admin.settings.field.ad_ou_students_other")}</Label>
+              <Input
+                id="ou-other"
+                placeholder="OU=Schueler,OU=Schule,DC=…"
+                {...field("ad_ou_students_other")}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ou-teachers">{t("admin.settings.field.ad_ou_teachers")}</Label>
+              <Input
+                id="ou-teachers"
+                placeholder="OU=Lehrer,OU=Schule,DC=…"
+                {...field("ad_ou_teachers")}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2 border-t pt-4">
             <div className="flex items-center gap-3">
               <Button

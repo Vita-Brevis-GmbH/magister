@@ -138,6 +138,9 @@ class AppSettingsService:
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
+            AppSettings.ad_ou_students_zyklus3,
+            AppSettings.ad_ou_students_other,
+            AppSettings.ad_ou_teachers,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -158,6 +161,9 @@ class AppSettingsService:
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
+            ad_ou_students_zyklus3=row.ad_ou_students_zyklus3,
+            ad_ou_students_other=row.ad_ou_students_other,
+            ad_ou_teachers=row.ad_ou_teachers,
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -194,6 +200,9 @@ class AppSettingsService:
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
+            "ad_ou_students_zyklus3": payload.ad_ou_students_zyklus3,
+            "ad_ou_students_other": payload.ad_ou_students_other,
+            "ad_ou_teachers": payload.ad_ou_teachers,
         }
         for col, val in plain_fields.items():
             if val is not None:

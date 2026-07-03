@@ -114,6 +114,23 @@ Siehe [ADR 0005](../adr/0005-fachlehrer-separate-table.md) für die Modellierung
 
 ---
 
+## Schüler-Provisioning per CSV-Import
+
+Siehe [ADR 0006](../adr/0006-student-ad-provisioning.md) für den Provisioning-Entscheid.
+
+| | |
+|---|---|
+| **Import-Typ** | `students` — legt beim *Apply* **neue AD-Accounts** an (`AdClient.create_user`, LDAPS `add` mit dem Service-Bind), setzt Passwort, aktiviert das Konto, optional `pwdLastSet=0`. Danach `ad_user_cache`-Eintrag + `class_membership`. |
+| **CSV-Spalten** | `given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change` (display_name/sam optional → abgeleitet; mail = UPN). |
+| **Ziel-OU** | Aus dem Zyklus der Klasse (Migration 0015, App-Settings: Z3 · übrige · Lehrer). Fehlt die OU → Zeile abgelehnt, kein Fallback. |
+| **Passwörter** | Lesbar (`Wort-Wort-Zahl`, kuratierte Wortliste, AD-komplex). **Einmalig** in der Apply-Antwort, **nie** gespeichert/geloggt. |
+| **Audit** | `student_provisioned` — Payload nur `upn`, `class_name`, `force_change`, objectGUID (nie das Passwort; Allowlist würde es ablehnen). |
+| **PDFs** | `POST /imports/handouts` rendert ein ZIP: Handout **pro Schüler:in** (UPN + Passwort) + **Tabelle pro Klasse** (WeasyPrint, stateless, nichts gespeichert). |
+| **UI** | Import-Wizard kennt den Typ `students`; nach dem Apply erscheint „Zugangsdaten-PDFs herunterladen". Admin-Settings hat drei OU-Felder. |
+| **RBAC** | `require_schulleitung` (wie die übrigen Importe). |
+
+---
+
 ## Test- & CI-Stützpunkte (in diesem Batch ergänzt)
 
 - Coverage-Gate in `backend-ci.yml` (`--cov-fail-under=75`).

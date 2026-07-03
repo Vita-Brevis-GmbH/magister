@@ -289,8 +289,13 @@
         "ad_computers_search_base": "Such-Basis (Computer)",
         "ad_computers_search_base_hint": "Optional. Pfad zur Computer-OU; Geräte werden über managedBy=<user-dn> zugeordnet. Leer lassen, um die Geräte-Synchronisation zu deaktivieren.",
         "ad_sync_interval_minutes": "Sync-Intervall (Minuten)",
-        "mail_domains": "Erlaubte Mail-Domains"
-      }
+        "mail_domains": "Erlaubte Mail-Domains",
+        "ad_ou_students_zyklus3": "Ziel-OU Schüler:innen Zyklus 3",
+        "ad_ou_students_other": "Ziel-OU Schüler:innen (übrige)",
+        "ad_ou_teachers": "Ziel-OU Lehrpersonen"
+      },
+      "provisioning_title": "Provisioning (neue Accounts)",
+      "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse (Zyklus 3 = Jahrgangsstufe 7–9). Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich."
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",
@@ -367,6 +372,11 @@
     "kind_classes_desc": "Klassen anlegen oder aktualisieren. Spalten: name, kuerzel, jahrgangsstufe.",
     "kind_class_memberships_desc": "Schüler:innen einer Klasse zuweisen. UPN muss im AD existieren. Spalten: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Klassenlehrpersonen (KL/Co-KL/Stellvertretung) zuweisen. Spalten: teacher_upn, class_name, role, valid_from, valid_to.",
+    "kind_students": "Neue Schüler:innen (AD-Accounts anlegen)",
+    "kind_students_desc": "Legt neue AD-Accounts an und weist sie einer Klasse zu. Passwörter werden generiert. Spalten: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "credentials_ready": "{{count}} Account(s) angelegt — Zugangsdaten jetzt herunterladen",
+    "credentials_hint": "Die Passwörter werden nur einmal angezeigt und nirgends gespeichert. Lade die PDFs jetzt herunter (Handout pro Schüler:in + Klassentabelle).",
+    "download_handouts": "Zugangsdaten-PDFs herunterladen",
     "download_template": "Template herunterladen",
     "file_label": "CSV-Datei",
     "upload_button": "Hochladen & prüfen",

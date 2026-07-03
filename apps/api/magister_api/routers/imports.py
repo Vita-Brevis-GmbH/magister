@@ -14,7 +14,10 @@ RBAC: Admin + Schulleitung. KL has no access.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,12 +30,14 @@ from magister_api.models.import_job import ALLOWED_IMPORT_KINDS
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.imports import (
+    HandoutRequest,
     ImportApplyResultOut,
     ImportJobDetailOut,
     ImportJobOut,
     ImportStagedRowOut,
     ProvisionedCredentialOut,
 )
+from magister_api.services.handouts import HandoutEntry, render_handouts_zip
 from magister_api.services.imports import (
     ImportJobBadStateError,
     ImportJobNotFoundError,
@@ -216,6 +221,43 @@ async def apply_job(
         rows=[ImportStagedRowOut.model_validate(r) for r in rows],
         counts=counts,
         credentials=[ProvisionedCredentialOut(**vars(c)) for c in svc.provisioned],
+    )
+
+
+@router.post("/handouts")
+async def render_handouts(
+    body: HandoutRequest,
+    user: AuthenticatedUser = Depends(require_schulleitung),
+) -> Response:
+    """Render the one-time student credentials into a ZIP of two PDFs.
+
+    Stateless: credentials are supplied by the caller (the apply response) and
+    never persisted here. The ZIP holds a per-student hand-out PDF and a
+    per-class overview table.
+    """
+    _ = user  # auth gate only
+    if not body.credentials:
+        raise HTTPException(status_code=400, detail="no_credentials")
+    entries = [
+        HandoutEntry(
+            upn=c.upn,
+            display_name=c.display_name,
+            class_name=c.class_name,
+            password=c.password,
+            force_change=c.force_change,
+        )
+        for c in body.credentials
+    ]
+    zip_bytes = await run_in_threadpool(
+        render_handouts_zip,
+        entries,
+        school_name=body.school_name,
+        generated_on=date.today().strftime("%d.%m.%Y"),
+    )
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="schueler-zugangsdaten.zip"'},
     )
 
 

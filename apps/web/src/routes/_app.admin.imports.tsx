@@ -4,13 +4,14 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import {
+  downloadHandouts,
   useApplyImport,
   useCancelImport,
   useImportJob,
   useImportJobs,
   useStageImport,
 } from "@/api/hooks";
-import type { ImportJobDetailOut, ImportKind } from "@/api/types";
+import type { ImportJobDetailOut, ImportKind, ProvisionedCredential } from "@/api/types";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -28,7 +29,7 @@ export const Route = createFileRoute("/_app/admin/imports")({
   component: ImportsPage,
 });
 
-const ALL_KINDS: ImportKind[] = ["classes", "class_memberships", "class_teachers"];
+const ALL_KINDS: ImportKind[] = ["classes", "class_memberships", "class_teachers", "students"];
 
 function ImportsPage(): JSX.Element {
   const { t } = useTranslation();
@@ -230,9 +231,22 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
   const q = useImportJob(jobId);
   const apply = useApplyImport();
   const cancel = useCancelImport();
+  const [credentials, setCredentials] = useState<ProvisionedCredential[]>([]);
+  const [handoutError, setHandoutError] = useState(false);
 
   function handleApply() {
-    apply.mutate(jobId);
+    apply.mutate(jobId, {
+      onSuccess: (data) => setCredentials(data.credentials ?? []),
+    });
+  }
+
+  async function handleDownloadHandouts() {
+    setHandoutError(false);
+    try {
+      await downloadHandouts(credentials, "");
+    } catch {
+      setHandoutError(true);
+    }
   }
   function handleCancel() {
     cancel.mutate(jobId, { onSuccess: () => onClose() });
@@ -272,6 +286,19 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
           {apply.isError && (
             <div className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               {t("errors.generic")}
+            </div>
+          )}
+
+          {credentials.length > 0 && (
+            <div className="space-y-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-3">
+              <p className="text-sm font-medium">
+                {t("imports.credentials_ready", { count: credentials.length })}
+              </p>
+              <p className="text-xs text-muted-foreground">{t("imports.credentials_hint")}</p>
+              <Button size="sm" onClick={handleDownloadHandouts}>
+                {t("imports.download_handouts")}
+              </Button>
+              {handoutError && <p className="text-xs text-destructive">{t("errors.generic")}</p>}
             </div>
           )}
 

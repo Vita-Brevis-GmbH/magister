@@ -59,7 +59,15 @@ class ImportApplyResultOut(ImportJobDetailOut):
     """Populated only for the ``students`` provisioning import; empty otherwise."""
 
 
+class HandoutRequest(BaseModel):
+    """Credentials to render into the hand-out PDFs (never persisted)."""
+
+    credentials: list[ProvisionedCredentialOut]
+    school_name: str = ""
+
+
 __all__ = [
+    "HandoutRequest",
     "ImportApplyResultOut",
     "ImportJobDetailOut",
     "ImportJobOut",

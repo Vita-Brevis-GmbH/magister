@@ -37,6 +37,11 @@ class AppSettingsOut(BaseModel):
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
 
+    # Provisioning target OUs (student import).
+    ad_ou_students_zyklus3: str | None
+    ad_ou_students_other: str | None
+    ad_ou_teachers: str | None
+
     # Audit fingerprint
     updated_at: datetime
     updated_by_upn: str | None
@@ -82,6 +87,12 @@ class AppSettingsUpdate(BaseModel):
     ad_users_search_base: str | None = None
     ad_computers_search_base: str | None = None
     ad_sync_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
+
+    # Provisioning target OUs. Send an empty string to clear (disables
+    # provisioning for that bucket); send null/omit to leave unchanged.
+    ad_ou_students_zyklus3: str | None = None
+    ad_ou_students_other: str | None = None
+    ad_ou_teachers: str | None = None
 
 
 __all__ = ["AppSettingsOut", "AppSettingsUpdate"]
