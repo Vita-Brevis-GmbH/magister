@@ -255,6 +255,8 @@ export interface AppSettingsOut {
   ad_ou_students_zyklus3: string | null;
   ad_ou_students_other: string | null;
   ad_ou_teachers: string | null;
+  zyklus1_max_grade: number;
+  zyklus2_max_grade: number;
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -467,4 +469,6 @@ export interface AppSettingsUpdate {
   ad_ou_students_zyklus3?: string | null;
   ad_ou_students_other?: string | null;
   ad_ou_teachers?: string | null;
+  zyklus1_max_grade?: number | null;
+  zyklus2_max_grade?: number | null;
 }

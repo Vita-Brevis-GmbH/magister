@@ -24,22 +24,58 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "letters" / "templates
 HANDOUT_FILE = "schueler-handouts.pdf"
 CLASS_TABLE_FILE = "klassen-uebersicht.pdf"
 
-# German strings for the hand-out PDFs (parent-facing letters are German-only
-# too; see docs/runbooks/upgrade-to-m3 known limitations).
-_STRINGS_DE = {
-    "title": "Deine Zugangsdaten",
-    "class_label": "Klasse",
-    "username": "Benutzername",
-    "password": "Passwort",
-    "force_change_note": "Beim ersten Anmelden musst du ein neues Passwort setzen.",
-    "keep_safe": "Bewahre diesen Zettel sicher auf und gib ihn niemandem weiter.",
-    "students": "Schüler:innen",
-    "name": "Name",
-    "change": "Wechsel",
-    "yes": "ja",
-    "no": "nein",
-    "confidential": "Vertraulich — nur für die Lehrperson. Nach der Übergabe vernichten.",
+# Hand-out strings in the three Swiss national languages. Unknown languages
+# (e.g. "en") fall back to German.
+_STRINGS: dict[str, dict[str, str]] = {
+    "de": {
+        "title": "Deine Zugangsdaten",
+        "class_label": "Klasse",
+        "username": "Benutzername",
+        "password": "Passwort",
+        "force_change_note": "Beim ersten Anmelden musst du ein neues Passwort setzen.",
+        "keep_safe": "Bewahre diesen Zettel sicher auf und gib ihn niemandem weiter.",
+        "students": "Schüler:innen",
+        "name": "Name",
+        "change": "Wechsel",
+        "yes": "ja",
+        "no": "nein",
+        "confidential": "Vertraulich — nur für die Lehrperson. Nach der Übergabe vernichten.",
+    },
+    "fr": {
+        "title": "Tes identifiants",
+        "class_label": "Classe",
+        "username": "Nom d'utilisateur",
+        "password": "Mot de passe",
+        "force_change_note": (
+            "Lors de la première connexion, tu devras définir un nouveau mot de passe."
+        ),
+        "keep_safe": "Conserve cette feuille en lieu sûr et ne la donne à personne.",
+        "students": "élèves",
+        "name": "Nom",
+        "change": "Changement",
+        "yes": "oui",
+        "no": "non",
+        "confidential": "Confidentiel — réservé à l'enseignant. À détruire après la remise.",
+    },
+    "it": {
+        "title": "Le tue credenziali",
+        "class_label": "Classe",
+        "username": "Nome utente",
+        "password": "Password",
+        "force_change_note": "Al primo accesso dovrai impostare una nuova password.",
+        "keep_safe": "Conserva questo foglio in un luogo sicuro e non darlo a nessuno.",
+        "students": "studenti",
+        "name": "Nome",
+        "change": "Cambio",
+        "yes": "sì",
+        "no": "no",
+        "confidential": "Riservato — solo per il docente. Distruggere dopo la consegna.",
+    },
 }
+
+
+def _strings_for(language: str) -> dict[str, str]:
+    return _STRINGS.get((language or "de").lower()[:2], _STRINGS["de"])
 
 
 @dataclass(frozen=True)
@@ -82,22 +118,25 @@ def _html_to_pdf(html: str) -> bytes:
 
 
 def render_handouts_zip(
-    entries: list[HandoutEntry], *, school_name: str, generated_on: str
+    entries: list[HandoutEntry], *, school_name: str, generated_on: str, language: str = "de"
 ) -> bytes:
     """Render both hand-out PDFs and return them as a single ZIP archive.
 
-    Pure/synchronous (WeasyPrint) — call via ``run_in_threadpool``.
+    ``language`` is one of de/fr/it (Swiss national languages); anything else
+    falls back to German. Pure/synchronous (WeasyPrint) — call via
+    ``run_in_threadpool``.
     """
     env = _build_env()
+    strings = _strings_for(language)
     sorted_entries = sorted(entries, key=lambda x: (x.class_name, x.display_name.lower()))
     handouts_html = env.get_template("student_handouts.html").render(
-        entries=sorted_entries, school_name=school_name, generated_on=generated_on, t=_STRINGS_DE
+        entries=sorted_entries, school_name=school_name, generated_on=generated_on, t=strings
     )
     table_html = env.get_template("student_class_table.html").render(
         groups=_group_by_class(entries),
         school_name=school_name,
         generated_on=generated_on,
-        t=_STRINGS_DE,
+        t=strings,
     )
     handouts_pdf = _html_to_pdf(handouts_html)
     table_pdf = _html_to_pdf(table_html)

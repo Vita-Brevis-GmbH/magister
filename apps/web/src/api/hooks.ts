@@ -573,6 +573,7 @@ export function useApplyImport() {
 export async function downloadHandouts(
   credentials: ProvisionedCredential[],
   schoolName: string,
+  language = "de",
 ): Promise<void> {
   const csrf = document.cookie.match(/(?:^|; )magister_csrf=([^;]+)/)?.[1];
   const res = await fetch(`${API_BASE}/imports/handouts`, {
@@ -582,7 +583,7 @@ export async function downloadHandouts(
       "Content-Type": "application/json",
       ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
     },
-    body: JSON.stringify({ credentials, school_name: schoolName }),
+    body: JSON.stringify({ credentials, school_name: schoolName, language }),
   });
   if (!res.ok) throw new ApiError(res.status, "handout_render_failed", await res.text());
   const blob = await res.blob();

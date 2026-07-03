@@ -63,7 +63,7 @@ async def test_template_students_csv(as_schulleitung_a: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_provision_students_end_to_end(
-    as_schulleitung_a: AsyncClient,
+    as_smi_a: AsyncClient,
     app: FastAPI,
     db_session: AsyncSession,
     school_a: int,
@@ -76,7 +76,7 @@ async def test_provision_students_end_to_end(
         "Anna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true\n"
         "Ben,Beispiel,Ben B.,ben.beispiel@schule.ch,,3a,2026-08-12,false\n"
     )
-    r = await as_schulleitung_a.post(
+    r = await as_smi_a.post(
         "/imports?kind=students",
         files={"file": ("students.csv", csv, "text/csv")},
     )
@@ -88,7 +88,7 @@ async def test_provision_students_end_to_end(
 
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     try:
-        r = await as_schulleitung_a.post(f"/imports/{job_id}/apply")
+        r = await as_smi_a.post(f"/imports/{job_id}/apply")
     finally:
         app.dependency_overrides.pop(get_ad_client, None)
 
@@ -139,7 +139,63 @@ async def test_provision_students_end_to_end(
 
 
 @pytest.mark.asyncio
-async def test_render_handouts_zip(as_schulleitung_a: AsyncClient) -> None:
+async def test_schulleitung_cannot_stage_students(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    await _seed_class(db_session, school_a, "3a", 3)
+    csv = f"{STUDENTS_HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true\n"
+    r = await as_schulleitung_a.post(
+        "/imports?kind=students",
+        files={"file": ("students.csv", csv, "text/csv")},
+    )
+    assert r.status_code == 403, r.text
+
+
+@pytest.mark.asyncio
+async def test_smi_can_stage_students(
+    as_smi_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    await _seed_class(db_session, school_a, "3a", 3)
+    csv = f"{STUDENTS_HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true\n"
+    r = await as_smi_a.post(
+        "/imports?kind=students",
+        files={"file": ("students.csv", csv, "text/csv")},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["counts"]["create"] == 1
+
+
+@pytest.mark.asyncio
+async def test_schulleitung_can_still_stage_classes(
+    as_schulleitung_a: AsyncClient,
+) -> None:
+    csv = "name,kuerzel,jahrgangsstufe\n9z,9z,9\n"
+    r = await as_schulleitung_a.post(
+        "/imports?kind=classes",
+        files={"file": ("classes.csv", csv, "text/csv")},
+    )
+    assert r.status_code == 201, r.text
+
+
+@pytest.mark.asyncio
+async def test_schulleitung_cannot_download_handouts(as_schulleitung_a: AsyncClient) -> None:
+    body = {
+        "credentials": [
+            {
+                "upn": "a@schule.ch",
+                "display_name": "A",
+                "class_name": "3a",
+                "password": "Tiger-Wolke-47",
+                "force_change": True,
+            }
+        ],
+    }
+    r = await as_schulleitung_a.post("/imports/handouts", json=body)
+    assert r.status_code == 403, r.text
+
+
+@pytest.mark.asyncio
+async def test_render_handouts_zip(as_smi_a: AsyncClient) -> None:
     body = {
         "school_name": "Testschule",
         "credentials": [
@@ -159,7 +215,7 @@ async def test_render_handouts_zip(as_schulleitung_a: AsyncClient) -> None:
             },
         ],
     }
-    r = await as_schulleitung_a.post("/imports/handouts", json=body)
+    r = await as_smi_a.post("/imports/handouts", json=body)
     assert r.status_code == 200, r.text
     assert r.headers["content-type"] == "application/zip"
     zf = zipfile.ZipFile(io.BytesIO(r.content))
@@ -169,14 +225,14 @@ async def test_render_handouts_zip(as_schulleitung_a: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
-async def test_handouts_empty_400(as_schulleitung_a: AsyncClient) -> None:
-    r = await as_schulleitung_a.post("/imports/handouts", json={"credentials": []})
+async def test_handouts_empty_400(as_smi_a: AsyncClient) -> None:
+    r = await as_smi_a.post("/imports/handouts", json={"credentials": []})
     assert r.status_code == 400
 
 
 @pytest.mark.asyncio
 async def test_stage_error_when_ou_not_configured(
-    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+    as_smi_a: AsyncClient, db_session: AsyncSession, school_a: int
 ) -> None:
     # Clear the "other" OU so a Zyklus-1/2 class cannot be provisioned.
     row = await db_session.get(AppSettings, 1)
@@ -186,7 +242,7 @@ async def test_stage_error_when_ou_not_configured(
     await _seed_class(db_session, school_a, "3a", 3)
 
     csv = f"{STUDENTS_HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true\n"
-    r = await as_schulleitung_a.post(
+    r = await as_smi_a.post(
         "/imports?kind=students",
         files={"file": ("students.csv", csv, "text/csv")},
     )
@@ -198,7 +254,7 @@ async def test_stage_error_when_ou_not_configured(
 
 @pytest.mark.asyncio
 async def test_stage_error_when_upn_exists(
-    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+    as_smi_a: AsyncClient, db_session: AsyncSession, school_a: int
 ) -> None:
     await _seed_class(db_session, school_a, "3a", 3)
     db_session.add(
@@ -213,7 +269,7 @@ async def test_stage_error_when_upn_exists(
     await db_session.commit()
 
     csv = f"{STUDENTS_HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true\n"
-    r = await as_schulleitung_a.post(
+    r = await as_smi_a.post(
         "/imports?kind=students",
         files={"file": ("students.csv", csv, "text/csv")},
     )

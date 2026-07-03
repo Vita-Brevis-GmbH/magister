@@ -122,7 +122,8 @@ Siehe [ADR 0006](../adr/0006-student-ad-provisioning.md) für den Provisioning-E
 |---|---|
 | **Import-Typ** | `students` — legt beim *Apply* **neue AD-Accounts** an (`AdClient.create_user`, LDAPS `add` mit dem Service-Bind), setzt Passwort, aktiviert das Konto, optional `pwdLastSet=0`. Danach `ad_user_cache`-Eintrag + `class_membership`. |
 | **CSV-Spalten** | `given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change` (display_name/sam optional → abgeleitet; mail = UPN). |
-| **Ziel-OU** | Aus dem Zyklus der Klasse (Migration 0015, App-Settings: Z3 · übrige · Lehrer). Fehlt die OU → Zeile abgelehnt, kein Fallback. |
+| **Ziel-OU** | Aus dem Zyklus der Klasse (Migration 0015, App-Settings: Z3 · übrige · Lehrer). Die Zyklus-Grenzen (Jahrgangsstufe) sind in den Settings konfigurierbar (Migration 0016, Default Z1 ≤ 2, Z2 ≤ 6, Z3 darüber). Fehlt die OU → Zeile abgelehnt, kein Fallback. |
+| **RBAC** | `students` nur **Admin + SMI** (AD-Accounts anlegen); übrige Import-Typen weiter Admin + Schulleitung. Intra-Datei-Duplikate (UPN/sAMAccountName) werden in der Vorschau abgefangen. |
 | **Passwörter** | Lesbar (`Wort-Wort-Zahl`, kuratierte Wortliste, AD-komplex). **Einmalig** in der Apply-Antwort, **nie** gespeichert/geloggt. |
 | **Audit** | `student_provisioned` — Payload nur `upn`, `class_name`, `force_change`, objectGUID (nie das Passwort; Allowlist würde es ablehnen). |
 | **PDFs** | `POST /imports/handouts` rendert ein ZIP: Handout **pro Schüler:in** (UPN + Passwort) + **Tabelle pro Klasse** (WeasyPrint, stateless, nichts gespeichert). |

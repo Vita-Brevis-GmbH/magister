@@ -74,6 +74,16 @@ class AppSettings(Base):
     ad_ou_students_other: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_ou_teachers: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
+    # Zyklus boundaries by Jahrgangsstufe: Zyklus 1 = grades ≤ z1_max, Zyklus 2
+    # = z1_max+1..z2_max, Zyklus 3 = above z2_max. Defaults follow Lehrplan 21
+    # (Z1: 1-2, Z2: 3-6, Z3: 7+). Drives the student provisioning target-OU.
+    zyklus1_max_grade: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=2, server_default="2"
+    )
+    zyklus2_max_grade: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=6, server_default="6"
+    )
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

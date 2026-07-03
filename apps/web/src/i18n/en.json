@@ -292,10 +292,13 @@
         "mail_domains": "Allowed mail domains",
         "ad_ou_students_zyklus3": "Target OU students Zyklus 3",
         "ad_ou_students_other": "Target OU students (others)",
-        "ad_ou_teachers": "Target OU teachers"
+        "ad_ou_teachers": "Target OU teachers",
+        "zyklus1_max_grade": "Zyklus 1 up to grade",
+        "zyklus2_max_grade": "Zyklus 2 up to grade"
       },
       "provisioning_title": "Provisioning (new accounts)",
-      "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus (Zyklus 3 = grades 7–9). Leaving one empty disables provisioning for that bucket."
+      "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus. Leaving one empty disables provisioning for that bucket.",
+      "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."
     },
     "local_admin": {
       "title": "Local admin account",

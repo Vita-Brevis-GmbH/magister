@@ -9,7 +9,8 @@ Endpoints
 - ``POST /imports/{id}/apply`` — Apply staged actions (one savepoint per row)
 - ``DELETE /imports/{id}`` — Cancel a staged job
 
-RBAC: Admin + Schulleitung. KL has no access.
+RBAC: classes / memberships / KL-roles → Admin + Schulleitung. The ``students``
+provisioning import (creates AD accounts) → Admin + SMI only. KL has no access.
 """
 
 from __future__ import annotations
@@ -23,10 +24,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_schulleitung
+from magister_api.auth.rbac import (
+    ROLE_ADMIN,
+    ROLE_SCHULLEITUNG,
+    ROLE_SMI,
+    require_role,
+)
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
-from magister_api.models.import_job import ALLOWED_IMPORT_KINDS
+from magister_api.models.import_job import ALLOWED_IMPORT_KINDS, IMPORT_KIND_STUDENTS
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.imports import (
@@ -48,6 +54,21 @@ from magister_api.services.imports import (
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
+# Broad gate: any staff role reaches the endpoints; the per-kind check below
+# then narrows access. Classes/memberships/teachers stay Admin+Schulleitung;
+# the `students` provisioning import is restricted to Admin+SMI (creates AD
+# accounts — a Schulträger-IT/Admin responsibility, not general Schulleitung).
+require_import_access = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI)
+
+
+def _authorize_kind(user: AuthenticatedUser, kind: str) -> None:
+    """Enforce the per-kind role rule. Raises 403 on mismatch."""
+    if kind == IMPORT_KIND_STUDENTS:
+        if not (user.is_admin or ROLE_SMI in user.roles):
+            raise HTTPException(status_code=403, detail="forbidden")
+    elif not (user.is_admin or ROLE_SCHULLEITUNG in user.roles):
+        raise HTTPException(status_code=403, detail="forbidden")
+
 
 def _resolve_school_id(payload_school_id: int | None, user: AuthenticatedUser) -> int:
     """Same rule as /classes: Schulleitung writes into their own school; Admin must pass it."""
@@ -66,7 +87,7 @@ def _resolve_school_id(payload_school_id: int | None, user: AuthenticatedUser) -
 @router.get("/templates/{kind}.csv", response_class=PlainTextResponse)
 async def get_template(
     kind: str,
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
 ) -> PlainTextResponse:
     """Download a CSV template with the expected header and 2-3 example rows."""
     if kind not in ALLOWED_IMPORT_KINDS:
@@ -82,7 +103,7 @@ async def get_template(
 
 @router.get("", response_model=list[ImportJobOut])
 async def list_jobs(
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> list[ImportJobOut]:
@@ -102,12 +123,13 @@ async def stage_import(
     file: UploadFile,
     request: Request,
     school_id: int | None = Query(default=None),
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> ImportJobDetailOut:
     if kind not in ALLOWED_IMPORT_KINDS:
         raise HTTPException(status_code=400, detail="unknown_kind")
+    _authorize_kind(user, kind)
     target_school = _resolve_school_id(school_id, user)
 
     # Hardening-audit M-04: bound CSV uploads so a stray multi-GB upload
@@ -158,7 +180,7 @@ async def stage_import(
 @router.get("/{job_id}", response_model=ImportJobDetailOut)
 async def get_job(
     job_id: int,
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> ImportJobDetailOut:
@@ -169,6 +191,7 @@ async def get_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
+    _authorize_kind(user, job.kind)
     return ImportJobDetailOut(
         id=job.id,
         school_id=job.school_id,
@@ -188,7 +211,7 @@ async def get_job(
 async def apply_job(
     job_id: int,
     request: Request,
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
     ad: AdClient = Depends(get_ad_client),
@@ -200,6 +223,7 @@ async def apply_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job_pre.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
+    _authorize_kind(user, job_pre.kind)
 
     ip, request_id = _ip_request_id(request)
     try:
@@ -227,7 +251,7 @@ async def apply_job(
 @router.post("/handouts")
 async def render_handouts(
     body: HandoutRequest,
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
 ) -> Response:
     """Render the one-time student credentials into a ZIP of two PDFs.
 
@@ -235,7 +259,8 @@ async def render_handouts(
     never persisted here. The ZIP holds a per-student hand-out PDF and a
     per-class overview table.
     """
-    _ = user  # auth gate only
+    # Hand-outs only exist for the students provisioning import → Admin/SMI.
+    _authorize_kind(user, IMPORT_KIND_STUDENTS)
     if not body.credentials:
         raise HTTPException(status_code=400, detail="no_credentials")
     entries = [
@@ -251,6 +276,7 @@ async def render_handouts(
     zip_bytes = await run_in_threadpool(
         render_handouts_zip,
         entries,
+        language=body.language,
         school_name=body.school_name,
         generated_on=date.today().strftime("%d.%m.%Y"),
     )
@@ -265,7 +291,7 @@ async def render_handouts(
 async def cancel_job(
     job_id: int,
     request: Request,
-    user: AuthenticatedUser = Depends(require_schulleitung),
+    user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> None:
@@ -276,6 +302,7 @@ async def cancel_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job_pre.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
+    _authorize_kind(user, job_pre.kind)
 
     ip, request_id = _ip_request_id(request)
     try:

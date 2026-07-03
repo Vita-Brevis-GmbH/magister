@@ -295,10 +295,13 @@
         "mail_domains": "Domini e-mail consentiti",
         "ad_ou_students_zyklus3": "OU di destinazione studenti ciclo 3",
         "ad_ou_students_other": "OU di destinazione studenti (altri)",
-        "ad_ou_teachers": "OU di destinazione insegnanti"
+        "ad_ou_teachers": "OU di destinazione insegnanti",
+        "zyklus1_max_grade": "Ciclo 1 fino all'anno",
+        "zyklus2_max_grade": "Ciclo 2 fino all'anno"
       },
       "provisioning_title": "Provisioning (nuovi account)",
-      "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe (ciclo 3 = anni 7–9). Lasciare vuoto disattiva il provisioning per quel gruppo."
+      "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe. Lasciare vuoto disattiva il provisioning per quel gruppo.",
+      "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+)."
     },
     "local_admin": {
       "title": "Account amministratore locale",

@@ -50,6 +50,8 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     ad_ou_students_zyklus3: null,
     ad_ou_students_other: null,
     ad_ou_teachers: null,
+    zyklus1_max_grade: 2,
+    zyklus2_max_grade: 6,
     updated_at: "2026-05-08T12:00:00+00:00",
     updated_by_upn: "ops@example.ch",
     ...overrides,

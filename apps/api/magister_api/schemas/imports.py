@@ -64,6 +64,7 @@ class HandoutRequest(BaseModel):
 
     credentials: list[ProvisionedCredentialOut]
     school_name: str = ""
+    language: str = "de"  # de/fr/it; unknown falls back to de
 
 
 __all__ = [

@@ -295,10 +295,13 @@
         "mail_domains": "Domaines e-mail autorisés",
         "ad_ou_students_zyklus3": "OU cible élèves cycle 3",
         "ad_ou_students_other": "OU cible élèves (autres)",
-        "ad_ou_teachers": "OU cible enseignants"
+        "ad_ou_teachers": "OU cible enseignants",
+        "zyklus1_max_grade": "Cycle 1 jusqu'à l'année",
+        "zyklus2_max_grade": "Cycle 2 jusqu'à l'année"
       },
       "provisioning_title": "Provisionnement (nouveaux comptes)",
-      "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe (cycle 3 = années 7 à 9). Laisser vide désactive le provisionnement pour cette catégorie."
+      "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe. Laisser vide désactive le provisionnement pour cette catégorie.",
+      "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+)."
     },
     "local_admin": {
       "title": "Compte administrateur local",
