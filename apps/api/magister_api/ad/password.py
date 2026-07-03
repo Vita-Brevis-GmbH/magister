@@ -16,6 +16,8 @@ from __future__ import annotations
 import secrets
 import string
 
+from magister_api.ad._wordlist_de import WORDS_DE
+
 # Avoid confusable glyphs (0/O/o, 1/l/I) so the hand-out PW is unambiguous.
 _LOWER = "abcdefghijkmnpqrstuvwxyz"
 _UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -24,6 +26,13 @@ _SPECIAL = "!#$%&*+-=?@_"
 
 DEFAULT_LENGTH = 14  # > 12 to give some headroom over AD's typical minimum
 MIN_LENGTH = 12
+
+# Readable-password defaults: two capitalised words joined by hyphens plus a
+# trailing digit group. Kid-friendly to read out and type, while still hitting
+# AD's 4-of-4 charset classes (upper via capitalisation, lower, digit, the
+# hyphen as the special char).
+READABLE_WORDS = 2
+READABLE_MIN_DIGITS = 2
 
 
 def generate_password(length: int = DEFAULT_LENGTH) -> str:
@@ -43,6 +52,32 @@ def generate_password(length: int = DEFAULT_LENGTH) -> str:
     chars.extend(rng.choice(pool) for _ in range(length - len(chars)))
     rng.shuffle(chars)
     return "".join(chars)
+
+
+def generate_readable_password(
+    *, words: int = READABLE_WORDS, min_digits: int = READABLE_MIN_DIGITS
+) -> str:
+    """Human-readable password (``Tiger-Wolke-47``) that still passes AD policy.
+
+    Words are drawn from a curated German wordlist and capitalised; a trailing
+    digit group is padded so the total always clears :data:`MIN_LENGTH`. The
+    result therefore hits all four charset classes (upper, lower, digit, the
+    ``-`` special) without relying on confusable glyphs.
+    """
+    if words < 1:
+        raise ValueError("words must be >= 1")
+    rng = secrets.SystemRandom()
+    chosen = [rng.choice(WORDS_DE).capitalize() for _ in range(words)]
+    base = "-".join(chosen)
+    # Pad the digit group so `base-digits` is at least MIN_LENGTH characters.
+    n_digits = max(min_digits, MIN_LENGTH - len(base) - 1)
+    digits = "".join(rng.choice(_DIGIT) for _ in range(n_digits))
+    pw = f"{base}-{digits}"
+    # Construction guarantees length + 4 charset classes; verify defensively so
+    # a future wordlist edit can never emit a policy-violating password.
+    if not passes_default_complexity(pw):  # pragma: no cover - invariant
+        raise ValueError("generated readable password failed complexity check")
+    return pw
 
 
 def count_charset_classes(pw: str) -> int:
@@ -68,5 +103,6 @@ __all__ = [
     "MIN_LENGTH",
     "count_charset_classes",
     "generate_password",
+    "generate_readable_password",
     "passes_default_complexity",
 ]
