@@ -1,0 +1,27 @@
+# Magister SELF-SIGNED-TLS override — serve HTTPS with a self-signed
+# certificate (Caddy's built-in "internal" CA) instead of public ACME.
+#
+# For internal hosts that need HTTPS but cannot obtain a public Let's-Encrypt
+# certificate (internal-only hostname, no reachable ACME challenge). The
+# browser shows a one-time "untrusted certificate" warning that you accept
+# manually — after that the site works over HTTPS.
+#
+# Session/CSRF cookies keep the Secure flag (this IS real HTTPS), so unlike
+# the plain-HTTP dev override, nothing needs to be relaxed on the API.
+#
+# Usage (from deploy/compose/):
+#   docker compose -f docker-compose.yml -f docker-compose.selfsigned.yml up -d
+#   → browse https://<MAGISTER_PUBLIC_HOSTNAME>  (accept the cert warning once)
+#
+# Build the images from source at the same time (before a GHCR release exists):
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml -f docker-compose.selfsigned.yml up -d --build
+
+services:
+  caddy:
+    # Point Caddy at the self-signed config instead of the ACME one. Set
+    # entrypoint + command explicitly so the invocation is "caddy run …"
+    # regardless of how the base image splits ENTRYPOINT vs CMD.
+    entrypoint: ["caddy"]
+    command: ["run", "--config", "/etc/caddy/Caddyfile.selfsigned", "--adapter", "caddyfile"]
+    volumes:
+      - ../caddy/Caddyfile.selfsigned:/etc/caddy/Caddyfile.selfsigned:ro

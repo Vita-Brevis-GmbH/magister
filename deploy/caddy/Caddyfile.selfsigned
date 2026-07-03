@@ -1,0 +1,68 @@
+# Magister reverse proxy — self-signed / internal TLS.
+#
+# For hosts that need HTTPS but cannot obtain a public ACME certificate
+# (internal-only hostname, no reachable Let's-Encrypt challenge). Caddy's
+# built-in "internal" issuer generates a self-signed certificate from its own
+# local CA — no ACME, works fully offline. Browsers show a one-time
+# "untrusted certificate" warning that you accept manually.
+#
+# Loaded ONLY via docker-compose.selfsigned.yml; production keeps
+# ../caddy/Caddyfile (public ACME auto-TLS).
+#
+# NOTE: HSTS is deliberately OMITTED here. With a self-signed cert, an HSTS
+# header would make the browser refuse the manual "accept the risk" bypass,
+# locking you out of the site entirely. Do not add Strict-Transport-Security
+# to this file.
+
+(security_headers) {
+	header {
+		# MIME-sniff lock-down + clickjacking + referrer minimisation.
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+
+		# Disable powerful platform APIs the SPA does not use.
+		Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(), battery=(), camera=(), cross-origin-isolated=(), display-capture=(), document-domain=(), encrypted-media=(), execution-while-not-rendered=(), execution-while-out-of-viewport=(), fullscreen=(self), geolocation=(), gyroscope=(), keyboard-map=(), magnetometer=(), microphone=(), midi=(), navigation-override=(), payment=(), picture-in-picture=(), publickey-credentials-get=(), screen-wake-lock=(), sync-xhr=(), usb=(), web-share=(), xr-spatial-tracking=(), interest-cohort=()"
+
+		# Cross-Origin isolation — Magister is strictly same-origin.
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		Cross-Origin-Resource-Policy "same-origin"
+
+		# Content-Security-Policy — fully self-hosted SPA.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-elem 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'none'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
+
+		# Strip the Server header so the reverse-proxy version is not advertised.
+		-Server
+	}
+}
+
+{$MAGISTER_PUBLIC_HOSTNAME} {
+	# Self-signed certificate from Caddy's internal CA — no ACME, works
+	# offline. The cert is stored in the caddy_data volume and persists
+	# across restarts.
+	tls internal
+
+	encode zstd gzip
+
+	import security_headers
+
+	# Health-probe — answered by the API directly, no /api/ prefix.
+	handle /healthz {
+		reverse_proxy magister-api:8000
+	}
+
+	# API + auth surface; handle_path strips the /api/ prefix before
+	# forwarding, mirroring the production Caddyfile.
+	handle_path /api/* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	# Everything else is the SPA (magister-web).
+	handle {
+		reverse_proxy magister-web:80
+	}
+}
