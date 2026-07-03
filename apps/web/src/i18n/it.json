@@ -292,8 +292,13 @@
         "ad_computers_search_base": "Base di ricerca (computer)",
         "ad_computers_search_base_hint": "Opzionale. Percorso OU dei computer; abbinamento via managedBy=<user-dn>. Vuoto = sync dispositivi disattivato.",
         "ad_sync_interval_minutes": "Intervallo di sincronizzazione (minuti)",
-        "mail_domains": "Domini e-mail consentiti"
-      }
+        "mail_domains": "Domini e-mail consentiti",
+        "ad_ou_students_zyklus3": "OU di destinazione studenti ciclo 3",
+        "ad_ou_students_other": "OU di destinazione studenti (altri)",
+        "ad_ou_teachers": "OU di destinazione insegnanti"
+      },
+      "provisioning_title": "Provisioning (nuovi account)",
+      "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe (ciclo 3 = anni 7–9). Lasciare vuoto disattiva il provisioning per quel gruppo."
     },
     "local_admin": {
       "title": "Account amministratore locale",
@@ -370,6 +375,11 @@
     "kind_classes_desc": "Crea o aggiorna classi. Colonne: name, kuerzel, jahrgangsstufe.",
     "kind_class_memberships_desc": "Assegna alunni/e a una classe. L'UPN deve esistere in AD. Colonne: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Assegna insegnanti di classe (titolare/co/supplente). Colonne: teacher_upn, class_name, role, valid_from, valid_to.",
+    "kind_students": "Nuovi studenti (crea account AD)",
+    "kind_students_desc": "Crea nuovi account AD e li assegna a una classe. Le password vengono generate. Colonne: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "credentials_ready": "{{count}} account creati — scarica ora le credenziali",
+    "credentials_hint": "Le password vengono mostrate una sola volta e non vengono salvate. Scarica i PDF ora (foglio per studente + tabella della classe).",
+    "download_handouts": "Scarica i PDF delle credenziali",
     "download_template": "Scarica il modello",
     "file_label": "File CSV",
     "upload_button": "Carica e visualizza",

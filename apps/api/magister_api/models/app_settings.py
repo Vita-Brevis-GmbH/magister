@@ -66,6 +66,14 @@ class AppSettings(Base):
         Integer, nullable=False, default=15, server_default="15"
     )
 
+    # Target OUs for provisioning new AD accounts via the student import.
+    # The student OU is chosen by the class's Zyklus (Zyklus 3 vs the rest);
+    # teachers land in their own OU. Unset = provisioning is refused with a
+    # clear error (never fall back to a wrong OU).
+    ad_ou_students_zyklus3: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ad_ou_students_other: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ad_ou_teachers: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

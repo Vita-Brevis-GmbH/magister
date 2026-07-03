@@ -252,6 +252,9 @@ export interface AppSettingsOut {
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
+  ad_ou_students_zyklus3: string | null;
+  ad_ou_students_other: string | null;
+  ad_ou_teachers: string | null;
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -404,7 +407,7 @@ export interface LetterRequest {
   temp_password?: string | null;
 }
 
-export type ImportKind = "classes" | "class_memberships" | "class_teachers";
+export type ImportKind = "classes" | "class_memberships" | "class_teachers" | "students";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";
 
@@ -435,6 +438,18 @@ export interface ImportJobDetailOut extends ImportJobOut {
   counts: Record<ImportAction, number>;
 }
 
+export interface ProvisionedCredential {
+  upn: string;
+  display_name: string;
+  class_name: string;
+  password: string;
+  force_change: boolean;
+}
+
+export interface ImportApplyResult extends ImportJobDetailOut {
+  credentials: ProvisionedCredential[];
+}
+
 export interface AppSettingsUpdate {
   oidc_issuer?: string | null;
   oidc_client_id?: string | null;
@@ -449,4 +464,7 @@ export interface AppSettingsUpdate {
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;
+  ad_ou_students_zyklus3?: string | null;
+  ad_ou_students_other?: string | null;
+  ad_ou_teachers?: string | null;
 }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page { size: A4; margin: 16mm; }
+      body { font-family: "DejaVu Sans", Arial, sans-serif; color: #111; font-size: 10.5pt; }
+      .class-block { page-break-after: always; }
+      .class-block:last-child { page-break-after: auto; }
+      .school { font-size: 9pt; color: #555; margin-bottom: 4mm; }
+      h2 { font-size: 14pt; margin: 0 0 4mm; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #ccc; padding: 2mm 3mm; text-align: left; }
+      th { background: #f2f2f2; font-size: 9.5pt; }
+      td.pw { font-family: "DejaVu Sans Mono", monospace; }
+      .warn { font-size: 8.5pt; color: #a00; margin-top: 3mm; }
+    </style>
+  </head>
+  <body>
+    {% for group in groups %}
+    <div class="class-block">
+      <div class="school">{{ school_name }} · {{ generated_on }}</div>
+      <h2>{{ t.class_label }} {{ group.class_name }} — {{ group.entries | length }} {{ t.students }}</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>{{ t.name }}</th>
+            <th>{{ t.username }}</th>
+            <th>{{ t.password }}</th>
+            <th>{{ t.change }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in group.entries %}
+          <tr>
+            <td>{{ e.display_name }}</td>
+            <td>{{ e.upn }}</td>
+            <td class="pw">{{ e.password }}</td>
+            <td>{% if e.force_change %}{{ t.yes }}{% else %}{{ t.no }}{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="warn">{{ t.confidential }}</p>
+    </div>
+    {% endfor %}
+  </body>
+</html>

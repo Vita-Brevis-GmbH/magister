@@ -2,7 +2,7 @@
 
 **Gilt für:** Magister-Instanzen auf M3-Stand (`v0.3.x`)
 **Ziel-Version:** Erweiterungen 2026-06 (`v0.4.0`)
-**Aufwand:** ~10 Minuten Downtime (nur Image-Tausch + 3 additive Migrationen)
+**Aufwand:** ~10 Minuten Downtime (nur Image-Tausch + 4 additive Migrationen)
 
 Referenz für den Funktionsumfang: [`docs/features/extensions-2026-06.md`](../features/extensions-2026-06.md).
 
@@ -21,6 +21,7 @@ Referenz für den Funktionsumfang: [`docs/features/extensions-2026-06.md`](../fe
 | Einzelschüler-Übergang | `POST /classes/{id}/promote` mit `student_guids` |
 | Per-User-Einstellungen (Sprache/Region/Formate) | `GET/PUT /me/preferences` |
 | Rolle Fachlehrer + „Meine Schüler" | `GET/POST/DELETE /classes/{id}/subject-teachers`, `GET /me/students` |
+| Schüler-Provisioning per CSV (neue AD-Accounts) | Import-Typ `students`, `POST /imports/handouts` (PDFs) · ADR-0006 |
 
 ---
 
@@ -29,6 +30,12 @@ Referenz für den Funktionsumfang: [`docs/features/extensions-2026-06.md`](../fe
 - Zugriff auf den Docker-Host (SSH)
 - Backup der PostgreSQL-Datenbank
 - Bestehende `.env` — **keine neuen Env-Vars** in diesem Batch
+- **Nur für das Schüler-Provisioning:** Der AD-Service-Account (Bind-User)
+  braucht **Anlege- + Passwort-Setz-Rechte** in den Ziel-OUs. Die drei Ziel-OUs
+  (Schüler Zyklus 3 · übrige · Lehrer) werden nach dem Upgrade unter
+  **Admin → Einstellungen** gesetzt. Ohne diese Rechte/OUs schlägt das Anlegen
+  zeilenweise fehl (sichtbar im Import-Ergebnis, kein Totalabbruch) — die
+  übrigen Features funktionieren unabhängig davon.
 
 ---
 
@@ -98,13 +105,14 @@ folgenden Schritte (Migration + `up -d`) unverändert funktionieren.
 
 ## 4. Datenbank-Migrationen ausführen
 
-Dieser Batch bringt **drei additive Migrationen** (keine Umbauten bestehender Tabellen):
+Dieser Batch bringt **vier additive Migrationen** (keine Umbauten bestehender Tabellen):
 
 | Migration | Änderung |
 |---|---|
 | `0012_class_details` | Spalte `classes.details TEXT NULL` |
 | `0013_user_preferences` | Tabelle `user_preferences` (PK `ad_object_guid`) |
 | `0014_subject_teacher_roles` | Tabelle `subject_teacher_roles` |
+| `0015_provisioning_ous` | 3 Ziel-OU-Spalten in `app_settings`; erweitert den `import_jobs.kind`-Check um `students` |
 
 ```bash
 docker compose run --rm magister-api alembic upgrade head
@@ -116,6 +124,7 @@ Erwartete Ausgabe:
 Running upgrade 0011_audit_key_id      -> 0012_class_details
 Running upgrade 0012_class_details     -> 0013_user_preferences
 Running upgrade 0013_user_preferences  -> 0014_subject_teacher_roles
+Running upgrade 0014_subject_teacher_roles -> 0015_provisioning_ous
 ```
 
 > **Service-Name:** In der aktuellen `docker-compose.yml` heisst der API-Service
@@ -169,8 +178,10 @@ docker compose up -d
 docker compose run --rm magister-api alembic downgrade 0011_audit_key_id
 ```
 
-⚠ Der Downgrade verwirft `subject_teacher_roles`, `user_preferences` und die Spalte
-`classes.details` inklusive Daten. Im Zweifel das Backup aus Schritt 1 einspielen.
+⚠ Der Downgrade verwirft `subject_teacher_roles`, `user_preferences`, die
+`app_settings`-OU-Spalten und die Spalte `classes.details` inklusive Daten.
+Bereits provisionierte AD-Accounts bleiben in AD bestehen (Sync holt sie
+wieder in den Cache). Im Zweifel das Backup aus Schritt 1 einspielen.
 
 ---
 

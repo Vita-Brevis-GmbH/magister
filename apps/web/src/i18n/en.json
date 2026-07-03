@@ -289,8 +289,13 @@
         "ad_computers_search_base": "Search base (computers)",
         "ad_computers_search_base_hint": "Optional. Path to the Computer-OU; devices are matched via managedBy=<user-dn>. Leave empty to disable device sync.",
         "ad_sync_interval_minutes": "Sync interval (minutes)",
-        "mail_domains": "Allowed mail domains"
-      }
+        "mail_domains": "Allowed mail domains",
+        "ad_ou_students_zyklus3": "Target OU students Zyklus 3",
+        "ad_ou_students_other": "Target OU students (others)",
+        "ad_ou_teachers": "Target OU teachers"
+      },
+      "provisioning_title": "Provisioning (new accounts)",
+      "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus (Zyklus 3 = grades 7–9). Leaving one empty disables provisioning for that bucket."
     },
     "local_admin": {
       "title": "Local admin account",
@@ -367,6 +372,11 @@
     "kind_classes_desc": "Create or update classes. Columns: name, kuerzel, jahrgangsstufe.",
     "kind_class_memberships_desc": "Assign students to a class. UPN must exist in AD. Columns: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Assign class teachers (haupt/co/stellvertretung). Columns: teacher_upn, class_name, role, valid_from, valid_to.",
+    "kind_students": "New students (create AD accounts)",
+    "kind_students_desc": "Creates new AD accounts and assigns them to a class. Passwords are generated. Columns: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "credentials_ready": "{{count}} account(s) created — download the credentials now",
+    "credentials_hint": "Passwords are shown only once and stored nowhere. Download the PDFs now (per-student hand-out + class table).",
+    "download_handouts": "Download credential PDFs",
     "download_template": "Download template",
     "file_label": "CSV file",
     "upload_button": "Upload & preview",

@@ -34,12 +34,15 @@ from ldap3 import (
     Tls,
 )
 from ldap3.core.exceptions import LDAPException
+from ldap3.utils.dn import escape_rdn
 
 from magister_api.ad.errors import AdUnavailableError, AdUserParseError
 from magister_api.config import Settings
 
 # AD `userAccountControl` bit 2 = ACCOUNTDISABLE (account disabled when bit set).
 UAC_ACCOUNTDISABLE = 0x0002
+# `userAccountControl` for a normal, enabled user account (NORMAL_ACCOUNT).
+UAC_NORMAL_ACCOUNT = 0x0200
 
 DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "objectGUID",
@@ -653,6 +656,132 @@ class AdClient:
                     conn.unbind()
                 except LDAPException:
                     pass
+
+    async def create_user(
+        self,
+        *,
+        ou_dn: str,
+        common_name: str,
+        sam_account_name: str,
+        user_principal_name: str,
+        mail: str | None,
+        given_name: str,
+        surname: str,
+        display_name: str,
+        password: str,
+        force_change: bool,
+    ) -> str:
+        """Create an enabled AD user account and return its ``objectGUID``.
+
+        Real AD: the object is added disabled (UAC 514), the password is set via
+        ``unicodePwd``, the account is then enabled (UAC 512) and — when
+        ``force_change`` — ``pwdLastSet=0`` forces a change at first logon.
+        objectGUID is server-generated and read back. AD-side conflicts (a
+        duplicate DN / UPN / sAMAccountName) surface as
+        :class:`AdUnavailableError`, which the import maps to a per-row failure.
+        """
+        return await run_in_threadpool(
+            self._sync_create_user,
+            ou_dn,
+            common_name,
+            sam_account_name,
+            user_principal_name,
+            mail,
+            given_name,
+            surname,
+            display_name,
+            password,
+            force_change,
+        )
+
+    def _sync_create_user(
+        self,
+        ou_dn: str,
+        common_name: str,
+        sam_account_name: str,
+        user_principal_name: str,
+        mail: str | None,
+        given_name: str,
+        surname: str,
+        display_name: str,
+        password: str,
+        force_change: bool,
+    ) -> str:
+        dn = f"CN={escape_rdn(common_name)},{ou_dn}"
+        attrs: dict[str, Any] = {
+            "sAMAccountName": sam_account_name,
+            "userPrincipalName": user_principal_name,
+            "givenName": given_name,
+            "sn": surname,
+            "displayName": display_name,
+        }
+        if mail:
+            attrs["mail"] = mail
+        mock = self._settings.ad_use_mock
+        new_guid = str(uuid.uuid4())
+        if mock:
+            # MOCK_SYNC never generates objectGUID or enforces AD password
+            # semantics, so we seed a GUID and an already-enabled account.
+            attrs["objectGUID"] = uuid.UUID(new_guid).bytes_le
+            attrs["userAccountControl"] = UAC_NORMAL_ACCOUNT
+        else:
+            # Real AD: create disabled, set password, then enable.
+            attrs["userAccountControl"] = str(UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE)
+
+        conn, owned = self._acquire_connection()
+        try:
+            self._require_ok(
+                conn.add(dn, ["top", "person", "organizationalPerson", "user"], attrs)
+            )
+            if not mock:
+                encoded = f'"{password}"'.encode("utf-16-le")
+                self._require_ok(conn.modify(dn, {"unicodePwd": [(MODIFY_REPLACE, [encoded])]}))
+                self._require_ok(
+                    conn.modify(
+                        dn,
+                        {"userAccountControl": [(MODIFY_REPLACE, [str(UAC_NORMAL_ACCOUNT)])]},
+                    )
+                )
+                if force_change:
+                    self._require_ok(conn.modify(dn, {"pwdLastSet": [(MODIFY_REPLACE, ["0"])]}))
+                new_guid = self._read_object_guid(conn, dn)
+            return new_guid
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_add_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    @staticmethod
+    def _require_ok(result: object) -> None:
+        """Raise :class:`AdUnavailableError` unless an ldap3 op reports success."""
+        ok = result[0] if isinstance(result, tuple) else result
+        if not ok:
+            raise AdUnavailableError("ldap_add_failed")
+
+    def _read_object_guid(self, conn: Connection, dn: str) -> str:
+        ok = conn.search(
+            search_base=dn,
+            search_filter="(objectClass=user)",
+            search_scope=BASE,
+            attributes=["objectGUID"],
+        )
+        if isinstance(ok, tuple):
+            ok = ok[0]
+        if not ok:
+            raise AdUnavailableError("ldap_read_guid_failed")
+        for entry in conn.response or []:
+            if entry.get("type") != "searchResEntry":
+                continue
+            raw = (entry.get("attributes") or {}).get("objectGUID")
+            if isinstance(raw, list):
+                raw = raw[0] if raw else None
+            if raw is not None:
+                return _decode_object_guid(raw)
+        raise AdUnavailableError("ldap_read_guid_failed")
 
     def mock_connection(self) -> Connection:
         """Return the persistent MOCK_SYNC connection so tests can seed entries."""

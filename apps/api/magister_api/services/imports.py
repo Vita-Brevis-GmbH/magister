@@ -18,8 +18,12 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
+from magister_api.ad.ou import select_student_ou, zyklus_for_jahrgangsstufe
+from magister_api.ad.password import generate_readable_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
@@ -35,6 +39,7 @@ from magister_api.models.import_job import (
     IMPORT_KIND_CLASS_MEMBERSHIPS,
     IMPORT_KIND_CLASS_TEACHERS,
     IMPORT_KIND_CLASSES,
+    IMPORT_KIND_STUDENTS,
     IMPORT_STATUS_APPLIED,
     IMPORT_STATUS_CANCELLED,
     IMPORT_STATUS_STAGED,
@@ -46,6 +51,12 @@ from magister_api.models.school_class import (
     SchoolClass,
 )
 from magister_api.repositories.base import ScopeContext
+
+# sAMAccountName is capped at 20 chars in AD; UPN local part beyond that must
+# be shortened by an explicit column value.
+_SAM_MAX_LEN = 20
+_FORCE_CHANGE_TRUE = {"true", "1", "ja", "yes", "x", "wahr"}
+_FORCE_CHANGE_FALSE = {"false", "0", "nein", "no", "falsch"}
 
 # ---------------------------------------------------------------------------
 # Templates
@@ -74,6 +85,34 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             ["erika.lehrer@schule.ch", "3a", "haupt", "2026-08-12", ""],
             ["max.kollege@schule.ch", "3a", "co", "2026-08-12", ""],
             ["sven.vertret@schule.ch", "3a", "stellvertretung", "2026-11-01", "2026-12-31"],
+        ],
+    ),
+    IMPORT_KIND_STUDENTS: (
+        # Provisioning: creates NEW AD accounts. display_name/sam_account_name
+        # are optional (derived when blank); mail is set equal to the UPN.
+        [
+            "given_name",
+            "surname",
+            "display_name",
+            "upn",
+            "sam_account_name",
+            "class",
+            "valid_from",
+            "force_change",
+        ],
+        [
+            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true"],
+            [
+                "Ben",
+                "Beispiel",
+                "Ben B.",
+                "ben.beispiel@schule.ch",
+                "ben.beispiel",
+                "3a",
+                "2026-08-12",
+                "false",
+            ],
+            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", ""],
         ],
     ),
 }
@@ -115,6 +154,21 @@ class StageSummary:
     counts: dict[str, int]
 
 
+@dataclass(frozen=True)
+class ProvisionedCredential:
+    """One-time credential for a freshly provisioned student.
+
+    Never persisted and never audited — surfaced once in the apply response so
+    the caller can render the hand-out PDFs, then discarded.
+    """
+
+    upn: str
+    display_name: str
+    class_name: str
+    password: str
+    force_change: bool
+
+
 # ---------------------------------------------------------------------------
 # Service
 # ---------------------------------------------------------------------------
@@ -133,12 +187,48 @@ def _parse_date(s: str) -> datetime | None:
         raise ValueError(f"invalid date {s!r} (expected YYYY-MM-DD)") from exc
 
 
+def _parse_force_change(s: str) -> bool:
+    """Parse the ``force_change`` CSV column. Empty defaults to True (safer)."""
+    v = (s or "").strip().lower()
+    if not v:
+        return True
+    if v in _FORCE_CHANGE_TRUE:
+        return True
+    if v in _FORCE_CHANGE_FALSE:
+        return False
+    raise ValueError(f"force_change must be true/false, got {s!r}")
+
+
+def _derive_sam(upn: str, explicit: str) -> str:
+    """sAMAccountName: explicit value if given, else the UPN local part."""
+    return (explicit or "").strip() or upn.split("@", 1)[0]
+
+
 class ImportService:
-    def __init__(self, session: AsyncSession, settings: Settings, scope: ScopeContext) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        settings: Settings,
+        scope: ScopeContext,
+        ad: AdClient | None = None,
+    ) -> None:
         self.session = session
         self.settings = settings
         self.scope = scope
+        self.ad = ad
         self.audit = AuditService(session, settings)
+        # One-time credentials for the ``students`` provisioning import; read by
+        # the router after apply() to build the hand-out PDFs. Never persisted.
+        self.provisioned: list[ProvisionedCredential] = []
+        self._app_settings: AppSettings | None = None
+
+    async def _app_settings_row(self) -> AppSettings:
+        if self._app_settings is None:
+            row = await self.session.get(AppSettings, 1)
+            if row is None:
+                raise ValueError("app_settings not initialised")
+            self._app_settings = row
+        return self._app_settings
 
     # ----- Stage --------------------------------------------------------
 
@@ -226,6 +316,8 @@ class ImportService:
                 return await self._classify_membership(school_id, row)
             if kind == IMPORT_KIND_CLASS_TEACHERS:
                 return await self._classify_teacher_role(school_id, row)
+            if kind == IMPORT_KIND_STUDENTS:
+                return await self._classify_student(school_id, row)
         except Exception as exc:  # noqa: BLE001 — defensive fallback
             return IMPORT_ACTION_ERROR, [str(exc)]
         return IMPORT_ACTION_ERROR, ["unsupported kind"]
@@ -352,6 +444,66 @@ class ImportService:
             return IMPORT_ACTION_SKIP, []
         return IMPORT_ACTION_CREATE, []
 
+    async def _classify_student(self, school_id: int, row: dict[str, str]) -> tuple[str, list[str]]:
+        errors: list[str] = []
+        given = row.get("given_name", "").strip()
+        surname = row.get("surname", "").strip()
+        upn = row.get("upn", "").strip().lower()
+        class_name = row.get("class", "").strip()
+
+        if not given:
+            errors.append("given_name is required")
+        if not surname:
+            errors.append("surname is required")
+        if not upn or "@" not in upn or "." not in upn.split("@", 1)[1]:
+            errors.append("upn is required and must look like name@domain.tld")
+        if not class_name:
+            errors.append("class is required")
+        try:
+            _parse_date(row.get("valid_from", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+        try:
+            _parse_force_change(row.get("force_change", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+        if upn and "@" in upn:
+            sam = _derive_sam(upn, row.get("sam_account_name", ""))
+            if len(sam) > _SAM_MAX_LEN:
+                errors.append(
+                    f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
+                )
+        if errors:
+            return IMPORT_ACTION_ERROR, errors
+
+        settings_row = await self._app_settings_row()
+        domain = upn.split("@", 1)[1]
+        if settings_row.mail_domains and domain not in settings_row.mail_domains:
+            return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
+
+        cls = await self._lookup_class(school_id, class_name)
+        if cls is None:
+            return IMPORT_ACTION_ERROR, [f"class {class_name!r} not found in school"]
+
+        ou = select_student_ou(
+            jahrgangsstufe=cls.jahrgangsstufe,
+            ou_zyklus3=settings_row.ad_ou_students_zyklus3,
+            ou_other=settings_row.ad_ou_students_other,
+        )
+        if not ou:
+            zyklus = zyklus_for_jahrgangsstufe(cls.jahrgangsstufe)
+            return IMPORT_ACTION_ERROR, [
+                f"target OU for Zyklus {zyklus} not configured in settings"
+            ]
+
+        existing = (
+            await self.session.execute(select(AdUserCache).where(AdUserCache.upn == upn))
+        ).scalar_one_or_none()
+        if existing is not None:
+            return IMPORT_ACTION_ERROR, [f"upn {upn} already exists"]
+
+        return IMPORT_ACTION_CREATE, []
+
     async def _lookup_user(self, upn: str, *, kind: str) -> AdUserCache | None:
         stmt = select(AdUserCache).where(
             AdUserCache.upn == upn,
@@ -405,6 +557,7 @@ class ImportService:
                 continue
 
             sp = await self.session.begin_nested()
+            cred: ProvisionedCredential | None = None
             try:
                 if job.kind == IMPORT_KIND_CLASSES:
                     await self._apply_class(job.school_id, staged)
@@ -412,6 +565,8 @@ class ImportService:
                     await self._apply_membership(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_CLASS_TEACHERS:
                     await self._apply_teacher_role(job.school_id, staged)
+                elif job.kind == IMPORT_KIND_STUDENTS:
+                    cred = await self._apply_student(job.school_id, staged, ip, request_id)
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
                 staged.applied_at = now
@@ -420,6 +575,10 @@ class ImportService:
                 else:
                     applied_counts["updated"] += 1
                 await sp.commit()
+                # Append only after the row commits, so a rolled-back row never
+                # leaks a credential into the hand-out list.
+                if cred is not None:
+                    self.provisioned.append(cred)
             except Exception as exc:  # noqa: BLE001
                 await sp.rollback()
                 staged.applied_at = now
@@ -539,6 +698,91 @@ class ImportService:
                 valid_to=valid_to,
                 created_by=self.scope.upn,
             )
+        )
+
+    async def _apply_student(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> ProvisionedCredential:
+        if self.ad is None:
+            raise ValueError("ad_client_unavailable")
+        row = staged.raw_data
+        given = row["given_name"].strip()
+        surname = row["surname"].strip()
+        upn = row["upn"].strip().lower()
+        class_name = row["class"].strip()
+        display = (row.get("display_name") or "").strip() or f"{given} {surname}"
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        force_change = _parse_force_change(row.get("force_change", ""))
+        valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
+
+        cls = await self._lookup_class(school_id, class_name)
+        if cls is None:
+            raise ValueError(f"class {class_name!r} not found")
+        settings_row = await self._app_settings_row()
+        ou = select_student_ou(
+            jahrgangsstufe=cls.jahrgangsstufe,
+            ou_zyklus3=settings_row.ad_ou_students_zyklus3,
+            ou_other=settings_row.ad_ou_students_other,
+        )
+        if not ou:
+            raise ValueError("target_ou_not_configured")
+
+        password = generate_readable_password()
+        guid = await self.ad.create_user(
+            ou_dn=ou,
+            common_name=display,
+            sam_account_name=sam,
+            user_principal_name=upn,
+            mail=upn,  # mail equals UPN by policy
+            given_name=given,
+            surname=surname,
+            display_name=display,
+            password=password,
+            force_change=force_change,
+        )
+
+        self.session.add(
+            AdUserCache(
+                ad_object_guid=guid,
+                school_id=school_id,
+                upn=upn,
+                sam_account_name=sam,
+                given_name=given,
+                surname=surname,
+                display_name=display,
+                mail=upn,
+                kind="student",
+                enabled=True,
+                last_sync_at=utcnow(),
+            )
+        )
+        self.session.add(
+            ClassMembership(
+                class_id=cls.id,
+                ad_object_guid=guid,
+                valid_from=valid_from,
+                valid_to=None,
+                created_by=self.scope.upn,
+            )
+        )
+        # Audit the provisioning — never the password (allowlist would reject it).
+        await self.audit.emit(
+            action="student_provisioned",
+            target_kind="ad_user",
+            target_id=guid,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"upn": upn, "class_name": class_name, "force_change": force_change},
+        )
+        return ProvisionedCredential(
+            upn=upn,
+            display_name=display,
+            class_name=class_name,
+            password=password,
+            force_change=force_change,
         )
 
     # ----- Cancel -------------------------------------------------------

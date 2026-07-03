@@ -95,6 +95,7 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ **Einzelschüler-Übergang** — `student_guids`-Teilmenge im Promote
 - ✅ **Per-User-Einstellungen** (Sprache/Region/Formate, Migration 0013, `/me/preferences`); Datums-/Zeit-/Zahlenformate werden über `lib/useFormatters` app-weit angewendet
 - ✅ **Rolle Fachlehrer** — eigene Tabelle (Migration 0014, ADR-0005), Zuweisung mit Fach, PW-Reset für eigene Schüler:innen, „Meine Schüler"-Sicht
+- ✅ **Schüler-Provisioning per CSV** — Import-Typ `students` legt neue AD-Accounts an (Migration 0015, ADR-0006), generierte lesbare Passwörter, Ziel-OU nach Zyklus, Zugangsdaten-PDFs (Handout + Klassentabelle)
 - ✅ **Test/CI** — Coverage-Gate (75 %), Router-Tests, Rename-Integritätstests, Pre-commit spiegelt Frontend-CI
 
 ## Cross-Cutting (laufend)
