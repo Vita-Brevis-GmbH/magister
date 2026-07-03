@@ -1,0 +1,30 @@
+# Magister BUILD override — build the api/web images locally from the source
+# checkout instead of pulling them pre-built from GHCR.
+#
+# Use this on a host that has the full repo checked out (e.g. /opt/magister)
+# when you cannot or do not want to pull pre-built images from GHCR — for
+# example to run the current `main` before a release tag has produced images.
+#
+# Usage (from deploy/compose/, repo checked out at the desired ref):
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml build
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d
+#
+# The built images are tagged with exactly the names the base compose file
+# expects (MAGISTER_API_IMAGE / MAGISTER_WEB_IMAGE, default …:latest), so a
+# later plain `docker compose up -d` keeps using the locally built images.
+#
+# Plain-HTTP dev host (combine with the dev override), build + start in one go:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.build.yml up -d --build
+
+services:
+  magister-api:
+    build:
+      context: ../../apps/api
+      dockerfile: Dockerfile
+    image: ${MAGISTER_API_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-api:latest}
+
+  magister-web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    image: ${MAGISTER_WEB_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-web:latest}

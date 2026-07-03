@@ -66,6 +66,36 @@ Erwartete Tags: `ghcr.io/vita-brevis-gmbh/magister-api:v0.4.0` und `…/magister
 
 ---
 
+## 3b. Alternative: Images auf dem Server bauen (ohne GHCR)
+
+Wenn die GHCR-Images (noch) nicht gebaut sind — z.B. um den aktuellen `main`
+zu fahren, bevor ein Release-Tag Images erzeugt hat — baust du sie direkt aus
+dem Quellcode-Checkout (`/opt/magister`) mit dem Build-Override
+`docker-compose.build.yml`:
+
+```bash
+cd /opt/magister
+sudo git fetch origin
+sudo git checkout main
+sudo git pull --ff-only origin main        # jetzt auf dem Stand mit allen neuen Funktionen
+
+cd deploy/compose
+docker compose -f docker-compose.yml -f docker-compose.build.yml build magister-api magister-web
+```
+
+Die Images werden mit genau den Namen getaggt, die die Basis-Compose erwartet
+(`MAGISTER_API_IMAGE` / `MAGISTER_WEB_IMAGE`, Default `…:latest`), sodass die
+folgenden Schritte (Migration + `up -d`) unverändert funktionieren.
+
+> **Plain-HTTP-/Dev-Host** (ohne DNS/Zertifikat, erreichbar per IP): den
+> Dev-Override dazunehmen und in einem Rutsch bauen + starten:
+> ```bash
+> docker compose -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.build.yml up -d --build
+> ```
+> Danach direkt weiter zu Schritt 4 (Migrationen).
+
+---
+
 ## 4. Datenbank-Migrationen ausführen
 
 Dieser Batch bringt **drei additive Migrationen** (keine Umbauten bestehender Tabellen):
