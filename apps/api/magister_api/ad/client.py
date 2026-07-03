@@ -730,9 +730,7 @@ class AdClient:
 
         conn, owned = self._acquire_connection()
         try:
-            self._require_ok(
-                conn.add(dn, ["top", "person", "organizationalPerson", "user"], attrs)
-            )
+            self._require_ok(conn.add(dn, ["top", "person", "organizationalPerson", "user"], attrs))
             if not mock:
                 encoded = f'"{password}"'.encode("utf-16-le")
                 self._require_ok(conn.modify(dn, {"unicodePwd": [(MODIFY_REPLACE, [encoded])]}))
