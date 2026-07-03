@@ -31,3 +31,28 @@ class TestSelectStudentOu:
 
     def test_missing_other_ou_returns_none(self) -> None:
         assert select_student_ou(jahrgangsstufe=2, ou_zyklus3="OU=Z3,DC=x", ou_other="") is None
+
+    def test_custom_boundaries_shift_zyklus3(self) -> None:
+        # With z2_max=8, grade 7 is Zyklus 2 → "other" OU, grade 9 is Zyklus 3.
+        assert zyklus_for_jahrgangsstufe(7, zyklus1_max=4, zyklus2_max=8) == 2
+        assert zyklus_for_jahrgangsstufe(9, zyklus1_max=4, zyklus2_max=8) == 3
+        assert (
+            select_student_ou(
+                jahrgangsstufe=7,
+                ou_zyklus3="OU=Z3,DC=x",
+                ou_other="OU=Other,DC=x",
+                zyklus1_max=4,
+                zyklus2_max=8,
+            )
+            == "OU=Other,DC=x"
+        )
+        assert (
+            select_student_ou(
+                jahrgangsstufe=9,
+                ou_zyklus3="OU=Z3,DC=x",
+                ou_other="OU=Other,DC=x",
+                zyklus1_max=4,
+                zyklus2_max=8,
+            )
+            == "OU=Z3,DC=x"
+        )

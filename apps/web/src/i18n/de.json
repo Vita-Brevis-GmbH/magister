@@ -292,10 +292,13 @@
         "mail_domains": "Erlaubte Mail-Domains",
         "ad_ou_students_zyklus3": "Ziel-OU Schüler:innen Zyklus 3",
         "ad_ou_students_other": "Ziel-OU Schüler:innen (übrige)",
-        "ad_ou_teachers": "Ziel-OU Lehrpersonen"
+        "ad_ou_teachers": "Ziel-OU Lehrpersonen",
+        "zyklus1_max_grade": "Zyklus 1 bis Jahrgangsstufe",
+        "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe"
       },
       "provisioning_title": "Provisioning (neue Accounts)",
-      "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse (Zyklus 3 = Jahrgangsstufe 7–9). Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich."
+      "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
+      "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",

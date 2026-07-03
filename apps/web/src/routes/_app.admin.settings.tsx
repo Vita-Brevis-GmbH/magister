@@ -31,6 +31,8 @@ interface FormState {
   ad_ou_students_zyklus3: string;
   ad_ou_students_other: string;
   ad_ou_teachers: string;
+  zyklus1_max_grade: string;
+  zyklus2_max_grade: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -51,6 +53,8 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_ou_students_zyklus3: data.ad_ou_students_zyklus3 ?? "",
     ad_ou_students_other: data.ad_ou_students_other ?? "",
     ad_ou_teachers: data.ad_ou_teachers ?? "",
+    zyklus1_max_grade: String(data.zyklus1_max_grade),
+    zyklus2_max_grade: String(data.zyklus2_max_grade),
   };
 }
 
@@ -112,6 +116,14 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   if (form.ad_ou_teachers !== (current.ad_ou_teachers ?? "")) {
     payload.ad_ou_teachers = form.ad_ou_teachers;
+  }
+  const z1 = Number(form.zyklus1_max_grade);
+  if (Number.isFinite(z1) && z1 !== current.zyklus1_max_grade) {
+    payload.zyklus1_max_grade = z1;
+  }
+  const z2 = Number(form.zyklus2_max_grade);
+  if (Number.isFinite(z2) && z2 !== current.zyklus2_max_grade) {
+    payload.zyklus2_max_grade = z2;
   }
   return payload;
 }
@@ -325,6 +337,17 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
                 {...field("ad_ou_teachers")}
               />
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
+                <Input id="z1max" type="number" min={1} max={13} {...field("zyklus1_max_grade")} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
+                <Input id="z2max" type="number" min={1} max={13} {...field("zyklus2_max_grade")} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
           </div>
 
           <div className="space-y-2 border-t pt-4">

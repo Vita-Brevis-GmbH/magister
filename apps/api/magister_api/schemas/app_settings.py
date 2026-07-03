@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class AppSettingsOut(BaseModel):
@@ -41,6 +41,10 @@ class AppSettingsOut(BaseModel):
     ad_ou_students_zyklus3: str | None
     ad_ou_students_other: str | None
     ad_ou_teachers: str | None
+
+    # Zyklus boundaries by Jahrgangsstufe.
+    zyklus1_max_grade: int
+    zyklus2_max_grade: int
 
     # Audit fingerprint
     updated_at: datetime
@@ -93,6 +97,20 @@ class AppSettingsUpdate(BaseModel):
     ad_ou_students_zyklus3: str | None = None
     ad_ou_students_other: str | None = None
     ad_ou_teachers: str | None = None
+
+    # Zyklus boundaries (grade 1..13). z1_max < z2_max.
+    zyklus1_max_grade: int | None = Field(default=None, ge=1, le=13)
+    zyklus2_max_grade: int | None = Field(default=None, ge=1, le=13)
+
+    @model_validator(mode="after")
+    def _check_zyklus_order(self) -> AppSettingsUpdate:
+        if (
+            self.zyklus1_max_grade is not None
+            and self.zyklus2_max_grade is not None
+            and self.zyklus1_max_grade >= self.zyklus2_max_grade
+        ):
+            raise ValueError("zyklus1_max_grade must be < zyklus2_max_grade")
+        return self
 
 
 __all__ = ["AppSettingsOut", "AppSettingsUpdate"]

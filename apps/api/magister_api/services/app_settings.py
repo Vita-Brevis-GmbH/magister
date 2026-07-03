@@ -141,6 +141,8 @@ class AppSettingsService:
             AppSettings.ad_ou_students_zyklus3,
             AppSettings.ad_ou_students_other,
             AppSettings.ad_ou_teachers,
+            AppSettings.zyklus1_max_grade,
+            AppSettings.zyklus2_max_grade,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -164,6 +166,8 @@ class AppSettingsService:
             ad_ou_students_zyklus3=row.ad_ou_students_zyklus3,
             ad_ou_students_other=row.ad_ou_students_other,
             ad_ou_teachers=row.ad_ou_teachers,
+            zyklus1_max_grade=row.zyklus1_max_grade,
+            zyklus2_max_grade=row.zyklus2_max_grade,
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -203,6 +207,8 @@ class AppSettingsService:
             "ad_ou_students_zyklus3": payload.ad_ou_students_zyklus3,
             "ad_ou_students_other": payload.ad_ou_students_other,
             "ad_ou_teachers": payload.ad_ou_teachers,
+            "zyklus1_max_grade": payload.zyklus1_max_grade,
+            "zyklus2_max_grade": payload.zyklus2_max_grade,
         }
         for col, val in plain_fields.items():
             if val is not None:

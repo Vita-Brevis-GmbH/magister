@@ -506,9 +506,15 @@ class ImportService:
             jahrgangsstufe=cls.jahrgangsstufe,
             ou_zyklus3=settings_row.ad_ou_students_zyklus3,
             ou_other=settings_row.ad_ou_students_other,
+            zyklus1_max=settings_row.zyklus1_max_grade,
+            zyklus2_max=settings_row.zyklus2_max_grade,
         )
         if not ou:
-            zyklus = zyklus_for_jahrgangsstufe(cls.jahrgangsstufe)
+            zyklus = zyklus_for_jahrgangsstufe(
+                cls.jahrgangsstufe,
+                zyklus1_max=settings_row.zyklus1_max_grade,
+                zyklus2_max=settings_row.zyklus2_max_grade,
+            )
             return IMPORT_ACTION_ERROR, [
                 f"target OU for Zyklus {zyklus} not configured in settings"
             ]
@@ -748,6 +754,8 @@ class ImportService:
             jahrgangsstufe=cls.jahrgangsstufe,
             ou_zyklus3=settings_row.ad_ou_students_zyklus3,
             ou_other=settings_row.ad_ou_students_other,
+            zyklus1_max=settings_row.zyklus1_max_grade,
+            zyklus2_max=settings_row.zyklus2_max_grade,
         )
         if not ou:
             raise ValueError("target_ou_not_configured")
