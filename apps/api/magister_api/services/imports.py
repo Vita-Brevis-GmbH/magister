@@ -519,12 +519,17 @@ class ImportService:
                 f"target OU for Zyklus {zyklus} not configured in settings"
             ]
 
+        # scope-bypass: UPN is an AD-global identifier — a new account must be
+        # unique across ALL schools, so this existence check is intentionally
+        # not school_id-filtered.
         existing = (
             await self.session.execute(select(AdUserCache).where(AdUserCache.upn == upn))
         ).scalar_one_or_none()
         if existing is not None:
             return IMPORT_ACTION_ERROR, [f"upn {upn} already exists"]
 
+        # scope-bypass: sAMAccountName is likewise AD-global and must be unique
+        # across all schools.
         existing_sam = (
             await self.session.execute(
                 select(AdUserCache).where(AdUserCache.sam_account_name == sam)
