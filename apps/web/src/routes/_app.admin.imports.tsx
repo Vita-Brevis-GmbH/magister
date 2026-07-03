@@ -226,7 +226,7 @@ function NewImportWizard({
 // ---------------------------------------------------------------------------
 
 function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void }): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const fmt = useFormatters();
   const q = useImportJob(jobId);
   const apply = useApplyImport();
@@ -243,7 +243,7 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
   async function handleDownloadHandouts() {
     setHandoutError(false);
     try {
-      await downloadHandouts(credentials, "");
+      await downloadHandouts(credentials, "", i18n.language);
     } catch {
       setHandoutError(true);
     }

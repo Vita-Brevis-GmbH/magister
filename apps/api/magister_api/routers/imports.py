@@ -276,6 +276,7 @@ async def render_handouts(
     zip_bytes = await run_in_threadpool(
         render_handouts_zip,
         entries,
+        language=body.language,
         school_name=body.school_name,
         generated_on=date.today().strftime("%d.%m.%Y"),
     )
