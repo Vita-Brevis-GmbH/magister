@@ -1,0 +1,44 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    "group:monorepos"
+  ],
+  "timezone": "Europe/Zurich",
+  "schedule": ["before 6am on monday"],
+  "labels": ["dependencies"],
+  "prConcurrentLimit": 5,
+  "rangeStrategy": "bump",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 6am on the first day of the month"]
+  },
+  "vulnerabilityAlerts": {
+    "labels": ["security"],
+    "schedule": ["at any time"]
+  },
+  "osvVulnerabilityAlerts": true,
+  "packageRules": [
+    {
+      "description": "Group non-major backend (uv) updates.",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "backend deps (non-major)"
+    },
+    {
+      "description": "Group non-major frontend (pnpm) updates.",
+      "matchManagers": ["npm"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "frontend deps (non-major)"
+    },
+    {
+      "description": "Keep the linters pinned exactly (CI parity) — surface but don't auto-range.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["ruff", "pyright"],
+      "rangeStrategy": "pin",
+      "groupName": "python linters"
+    }
+  ]
+}
