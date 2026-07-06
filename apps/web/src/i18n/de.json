@@ -401,7 +401,8 @@
     "apply_button": "{{count}} Änderungen anwenden",
     "error_invalid_header": "CSV-Header passt nicht zum gewählten Typ. Lade das Template herunter und vergleiche die Spalten.",
     "error_not_utf8": "Datei ist nicht UTF-8 kodiert. Speichere die CSV als UTF-8.",
-    "error_unknown_kind": "Unbekannter Import-Typ."
+    "error_unknown_kind": "Unbekannter Import-Typ.",
+    "handout_language": "Sprache der Zugangsdaten"
   },
   "privacy": {
     "section_title": "Datenauskunft (revDSG Art. 25)",

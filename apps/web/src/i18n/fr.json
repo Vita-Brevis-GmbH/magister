@@ -404,7 +404,8 @@
     "apply_button": "Appliquer {{count}} modifications",
     "error_invalid_header": "L'en-tête CSV ne correspond pas au type sélectionné. Téléchargez le modèle et comparez les colonnes.",
     "error_not_utf8": "Le fichier n'est pas encodé en UTF-8. Enregistrez le CSV en UTF-8.",
-    "error_unknown_kind": "Type d'import inconnu."
+    "error_unknown_kind": "Type d'import inconnu.",
+    "handout_language": "Langue des identifiants"
   },
   "privacy": {
     "section_title": "Export de données (LPD art. 25)",

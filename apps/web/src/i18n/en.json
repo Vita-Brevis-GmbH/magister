@@ -401,7 +401,8 @@
     "apply_button": "Apply {{count}} changes",
     "error_invalid_header": "CSV header doesn't match the selected kind. Download the template and compare columns.",
     "error_not_utf8": "File is not UTF-8 encoded. Save the CSV as UTF-8.",
-    "error_unknown_kind": "Unknown import kind."
+    "error_unknown_kind": "Unknown import kind.",
+    "handout_language": "Credential language"
   },
   "privacy": {
     "section_title": "Data export (revDSG Art. 25)",

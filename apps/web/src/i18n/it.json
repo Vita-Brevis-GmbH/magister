@@ -404,7 +404,8 @@
     "apply_button": "Applica {{count}} modifiche",
     "error_invalid_header": "L'intestazione CSV non corrisponde al tipo selezionato. Scarica il modello e confronta le colonne.",
     "error_not_utf8": "Il file non è codificato in UTF-8. Salva il CSV come UTF-8.",
-    "error_unknown_kind": "Tipo di importazione sconosciuto."
+    "error_unknown_kind": "Tipo di importazione sconosciuto.",
+    "handout_language": "Lingua delle credenziali"
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",

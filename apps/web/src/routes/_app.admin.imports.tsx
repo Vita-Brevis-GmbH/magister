@@ -240,10 +240,13 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
     });
   }
 
+  const uiLang = (["de", "fr", "it"] as const).find((l) => i18n.language.startsWith(l)) ?? "de";
+  const [handoutLang, setHandoutLang] = useState<"de" | "fr" | "it">(uiLang);
+
   async function handleDownloadHandouts() {
     setHandoutError(false);
     try {
-      await downloadHandouts(credentials, "", i18n.language);
+      await downloadHandouts(credentials, "", handoutLang);
     } catch {
       setHandoutError(true);
     }
@@ -295,9 +298,24 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
                 {t("imports.credentials_ready", { count: credentials.length })}
               </p>
               <p className="text-xs text-muted-foreground">{t("imports.credentials_hint")}</p>
-              <Button size="sm" onClick={handleDownloadHandouts}>
-                {t("imports.download_handouts")}
-              </Button>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground" htmlFor="handout-lang">
+                  {t("imports.handout_language")}
+                </label>
+                <select
+                  id="handout-lang"
+                  value={handoutLang}
+                  onChange={(e) => setHandoutLang(e.target.value as "de" | "fr" | "it")}
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+                >
+                  <option value="de">Deutsch</option>
+                  <option value="fr">Français</option>
+                  <option value="it">Italiano</option>
+                </select>
+                <Button size="sm" onClick={handleDownloadHandouts}>
+                  {t("imports.download_handouts")}
+                </Button>
+              </div>
               {handoutError && <p className="text-xs text-destructive">{t("errors.generic")}</p>}
             </div>
           )}
