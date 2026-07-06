@@ -42,6 +42,7 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     bootstrap_admins: ["admin@example.ch"],
     mail_domains: [],
     ad_dcs: ["dc1.example.local"],
+    ad_bind_mode: "simple",
     ad_bind_dn: "cn=svc,dc=example,dc=local",
     ad_bind_password_set: false,
     ad_users_search_base: "OU=Users,DC=example,DC=local",

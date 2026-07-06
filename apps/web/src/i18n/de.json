@@ -282,6 +282,7 @@
         "oidc_scopes": "Scopes",
         "bootstrap_admins": "Bootstrap-Admins (UPNs)",
         "ad_dcs": "Domain-Controller",
+        "ad_bind_gssapi": "AD-Bind über Kerberos/GSSAPI (ohne Passwort)",
         "ad_bind_dn": "Bind-DN",
         "ad_bind_password": "Bind-Passwort",
         "ad_bind_password_hint": "Leer lassen, um den gespeicherten Wert nicht zu ändern.",
@@ -296,6 +297,7 @@
         "zyklus1_max_grade": "Zyklus 1 bis Jahrgangsstufe",
         "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe"
       },
+      "ad_bind_gssapi_hint": "Aktiviert: Anmeldung am AD per Kerberos-Keytab, kein Bind-Passwort nötig (Bind-DN/Passwort werden ignoriert). Setzt einen eingerichteten Keytab voraus — siehe Runbook ad-gssapi-bind. Deaktiviert = klassischer Bind mit DN + Passwort.",
       "provisioning_title": "Provisioning (neue Accounts)",
       "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
       "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."

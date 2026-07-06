@@ -282,6 +282,7 @@
         "oidc_scopes": "Scopes",
         "bootstrap_admins": "Bootstrap admins (UPNs)",
         "ad_dcs": "Domain controllers",
+        "ad_bind_gssapi": "AD bind via Kerberos/GSSAPI (no password)",
         "ad_bind_dn": "Bind DN",
         "ad_bind_password": "Bind password",
         "ad_bind_password_hint": "Leave empty to keep the stored value.",
@@ -296,6 +297,7 @@
         "zyklus1_max_grade": "Zyklus 1 up to grade",
         "zyklus2_max_grade": "Zyklus 2 up to grade"
       },
+      "ad_bind_gssapi_hint": "When enabled, Magister authenticates to AD via a Kerberos keytab — no bind password needed (Bind DN/password are ignored). Requires a configured keytab (see runbook ad-gssapi-bind). Disabled = classic bind with DN + password.",
       "provisioning_title": "Provisioning (new accounts)",
       "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus. Leaving one empty disables provisioning for that bucket.",
       "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."

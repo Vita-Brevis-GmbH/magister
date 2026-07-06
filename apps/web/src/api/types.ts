@@ -247,6 +247,7 @@ export interface AppSettingsOut {
   bootstrap_admins: string[];
   mail_domains: string[];
   ad_dcs: string[];
+  ad_bind_mode: string;
   ad_bind_dn: string | null;
   ad_bind_password_set: boolean;
   ad_users_search_base: string | null;
@@ -461,6 +462,7 @@ export interface AppSettingsUpdate {
   bootstrap_admins?: string[] | null;
   mail_domains?: string[] | null;
   ad_dcs?: string[] | null;
+  ad_bind_mode?: string | null;
   ad_bind_dn?: string | null;
   ad_bind_password?: string | null;
   ad_users_search_base?: string | null;

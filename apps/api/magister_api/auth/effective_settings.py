@@ -47,6 +47,8 @@ def _overlay(base: Settings, eff: EffectiveAppSettings) -> Settings:
         update["bootstrap_admins"] = list(eff.bootstrap_admins)
     if eff.ad_dcs:
         update["ad_dcs"] = list(eff.ad_dcs)
+    if eff.ad_bind_mode:
+        update["ad_bind_mode"] = eff.ad_bind_mode
     if eff.ad_bind_dn:
         update["ad_bind_dn"] = eff.ad_bind_dn
     if eff.ad_bind_password:

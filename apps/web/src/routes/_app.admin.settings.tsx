@@ -23,6 +23,7 @@ interface FormState {
   bootstrap_admins: string;
   mail_domains: string;
   ad_dcs: string;
+  ad_bind_mode: string;
   ad_bind_dn: string;
   ad_bind_password: string;
   ad_users_search_base: string;
@@ -45,6 +46,7 @@ function fromOut(data: AppSettingsOut): FormState {
     bootstrap_admins: data.bootstrap_admins.join(", "),
     mail_domains: data.mail_domains.join(", "),
     ad_dcs: data.ad_dcs.join(", "),
+    ad_bind_mode: data.ad_bind_mode || "simple",
     ad_bind_dn: data.ad_bind_dn ?? "",
     ad_bind_password: "",
     ad_users_search_base: data.ad_users_search_base ?? "",
@@ -94,6 +96,9 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const dcs = splitCsv(form.ad_dcs);
   if (JSON.stringify(dcs) !== JSON.stringify(current.ad_dcs)) {
     payload.ad_dcs = dcs;
+  }
+  if (form.ad_bind_mode !== (current.ad_bind_mode || "simple")) {
+    payload.ad_bind_mode = form.ad_bind_mode;
   }
   if (form.ad_bind_dn !== (current.ad_bind_dn ?? "")) {
     payload.ad_bind_dn = form.ad_bind_dn || null;
@@ -264,8 +269,34 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
             <p className="text-xs text-muted-foreground">{t("admin.settings.csv_hint")}</p>
           </div>
           <div className="space-y-1">
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={form.ad_bind_mode === "gssapi"}
+                onChange={(e) => {
+                  setForm((prev) => ({
+                    ...prev,
+                    ad_bind_mode: e.target.checked ? "gssapi" : "simple",
+                  }));
+                  setSuccess(false);
+                }}
+              />
+              <span>
+                <span className="font-medium">{t("admin.settings.field.ad_bind_gssapi")}</span>
+                <span className="block text-xs text-muted-foreground">
+                  {t("admin.settings.ad_bind_gssapi_hint")}
+                </span>
+              </span>
+            </label>
+          </div>
+          <div className="space-y-1">
             <Label htmlFor="ad-bind-dn">{t("admin.settings.field.ad_bind_dn")}</Label>
-            <Input id="ad-bind-dn" {...field("ad_bind_dn")} />
+            <Input
+              id="ad-bind-dn"
+              disabled={form.ad_bind_mode === "gssapi"}
+              {...field("ad_bind_dn")}
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="ad-bind-password">{t("admin.settings.field.ad_bind_password")}</Label>
@@ -273,6 +304,7 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               id="ad-bind-password"
               type="password"
               autoComplete="new-password"
+              disabled={form.ad_bind_mode === "gssapi"}
               placeholder={
                 data.ad_bind_password_set
                   ? t("admin.settings.placeholder_secret_set")

@@ -56,6 +56,11 @@ class AppSettings(Base):
     ad_dcs: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Service-account bind mode: 'simple' (DN + password) or 'gssapi'
+    # (Kerberos/keytab, no stored password). GUI-toggleable.
+    ad_bind_mode: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="simple", server_default="simple"
+    )
     ad_bind_dn: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_bind_password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     ad_users_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)

@@ -285,6 +285,7 @@
         "oidc_scopes": "Scopes",
         "bootstrap_admins": "Bootstrap admins (UPN)",
         "ad_dcs": "Contrôleurs de domaine",
+        "ad_bind_gssapi": "Bind AD via Kerberos/GSSAPI (sans mot de passe)",
         "ad_bind_dn": "DN de bind",
         "ad_bind_password": "Mot de passe de bind",
         "ad_bind_password_hint": "Laisser vide pour conserver la valeur enregistrée.",
@@ -299,6 +300,7 @@
         "zyklus1_max_grade": "Cycle 1 jusqu'à l'année",
         "zyklus2_max_grade": "Cycle 2 jusqu'à l'année"
       },
+      "ad_bind_gssapi_hint": "Activé : Magister s'authentifie auprès d'AD via un keytab Kerberos — aucun mot de passe de bind requis (DN/mot de passe ignorés). Nécessite un keytab configuré (voir runbook ad-gssapi-bind). Désactivé = bind classique avec DN + mot de passe.",
       "provisioning_title": "Provisionnement (nouveaux comptes)",
       "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe. Laisser vide désactive le provisionnement pour cette catégorie.",
       "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+)."

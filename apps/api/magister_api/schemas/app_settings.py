@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class AppSettingsOut(BaseModel):
@@ -31,6 +31,7 @@ class AppSettingsOut(BaseModel):
 
     # AD
     ad_dcs: list[str]
+    ad_bind_mode: str
     ad_bind_dn: str | None
     ad_bind_password_set: bool
     ad_users_search_base: str | None
@@ -80,6 +81,7 @@ class AppSettingsUpdate(BaseModel):
     )
 
     ad_dcs: list[str] | None = None
+    ad_bind_mode: str | None = None
     ad_bind_dn: str | None = None
     ad_bind_password: str | None = Field(
         default=None,
@@ -101,6 +103,13 @@ class AppSettingsUpdate(BaseModel):
     # Zyklus boundaries (grade 1..13). z1_max < z2_max.
     zyklus1_max_grade: int | None = Field(default=None, ge=1, le=13)
     zyklus2_max_grade: int | None = Field(default=None, ge=1, le=13)
+
+    @field_validator("ad_bind_mode")
+    @classmethod
+    def _check_bind_mode(cls, v: str | None) -> str | None:
+        if v is not None and v not in {"simple", "gssapi"}:
+            raise ValueError("ad_bind_mode must be 'simple' or 'gssapi'")
+        return v
 
     @model_validator(mode="after")
     def _check_zyklus_order(self) -> AppSettingsUpdate:

@@ -47,6 +47,7 @@ class EffectiveAppSettings:
     bootstrap_admins: list[str]
     mail_domains: list[str]
     ad_dcs: list[str]
+    ad_bind_mode: str
     ad_bind_dn: str | None
     ad_bind_password: str | None
     ad_users_search_base: str | None
@@ -92,6 +93,7 @@ class AppSettingsService:
             AppSettings.bootstrap_admins,
             AppSettings.mail_domains,
             AppSettings.ad_dcs,
+            AppSettings.ad_bind_mode,
             AppSettings.ad_bind_dn,
             func.pgp_sym_decrypt(AppSettings.ad_bind_password_enc, self._key).label(
                 "ad_bind_password"
@@ -114,6 +116,7 @@ class AppSettingsService:
             bootstrap_admins=list(row.bootstrap_admins or []),
             mail_domains=list(row.mail_domains or []),
             ad_dcs=list(row.ad_dcs or []),
+            ad_bind_mode=row.ad_bind_mode,
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password=row.ad_bind_password,
             ad_users_search_base=row.ad_users_search_base,
@@ -133,6 +136,7 @@ class AppSettingsService:
             AppSettings.bootstrap_admins,
             AppSettings.mail_domains,
             AppSettings.ad_dcs,
+            AppSettings.ad_bind_mode,
             AppSettings.ad_bind_dn,
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
             AppSettings.ad_users_search_base,
@@ -158,6 +162,7 @@ class AppSettingsService:
             bootstrap_admins=list(row.bootstrap_admins or []),
             mail_domains=list(row.mail_domains or []),
             ad_dcs=list(row.ad_dcs or []),
+            ad_bind_mode=row.ad_bind_mode,
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password_set=bool(row.ad_bind_password_set),
             ad_users_search_base=row.ad_users_search_base,
@@ -200,6 +205,7 @@ class AppSettingsService:
             "bootstrap_admins": payload.bootstrap_admins,
             "mail_domains": payload.mail_domains,
             "ad_dcs": payload.ad_dcs,
+            "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
@@ -338,6 +344,7 @@ def _empty_effective() -> EffectiveAppSettings:
         bootstrap_admins=[],
         mail_domains=[],
         ad_dcs=[],
+        ad_bind_mode="simple",
         ad_bind_dn=None,
         ad_bind_password=None,
         ad_users_search_base=None,
