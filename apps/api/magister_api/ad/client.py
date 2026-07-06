@@ -23,9 +23,11 @@ from ldap3 import (
     ALL_ATTRIBUTES,
     BASE,
     FIRST,
+    GSSAPI,
     MOCK_SYNC,
     MODIFY_REPLACE,
     SAFE_SYNC,
+    SASL,
     SIMPLE,
     SUBTREE,
     Connection,
@@ -267,6 +269,26 @@ def _make_pool(settings: Settings) -> ServerPool:
     return ServerPool(servers, FIRST, active=True, exhaust=True)
 
 
+def _service_bind_kwargs(settings: Settings) -> dict[str, Any]:
+    """ldap3 auth kwargs for the service-account bind, per configured mode.
+
+    - ``simple`` (default): bind DN + password over LDAPS.
+    - ``gssapi``: SASL/GSSAPI (Kerberos). No password is stored anywhere — the
+      ticket comes from the ambient krb5 credential cache, populated from a
+      keytab (see docs/runbooks/ad-gssapi-bind.md). ``ad_bind_dn`` /
+      ``ad_bind_password`` are not required in this mode.
+    """
+    if settings.ad_bind_mode == "gssapi":
+        return {"authentication": SASL, "sasl_mechanism": GSSAPI}
+    if not settings.ad_bind_dn or not settings.ad_bind_password:
+        raise AdUnavailableError("MAGISTER_AD_BIND_DN / _BIND_PASSWORD must be set")
+    return {
+        "authentication": SIMPLE,
+        "user": settings.ad_bind_dn,
+        "password": settings.ad_bind_password.get_secret_value(),
+    }
+
+
 def _open_connection(settings: Settings, *, mock: bool) -> Connection:
     """Return a (synchronous) ldap3 Connection. Caller closes via ``unbind()``."""
     if mock:
@@ -287,16 +309,12 @@ def _open_connection(settings: Settings, *, mock: bool) -> Connection:
         conn.bind()
         return conn
     pool = _make_pool(settings)
-    if not settings.ad_bind_dn or not settings.ad_bind_password:
-        raise AdUnavailableError("MAGISTER_AD_BIND_DN / _BIND_PASSWORD must be set")
     return Connection(
         pool,
-        user=settings.ad_bind_dn,
-        password=settings.ad_bind_password.get_secret_value(),
-        authentication=SIMPLE,
         client_strategy=SAFE_SYNC,
         auto_bind=True,
         receive_timeout=10,
+        **_service_bind_kwargs(settings),
     )
 
 

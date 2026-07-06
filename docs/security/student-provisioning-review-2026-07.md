@@ -48,10 +48,14 @@ used for user passwords) is impossible. What is enforced instead:
 bind password through the admin settings UI rather than the env var, leave
 `MAGISTER_AD_BIND_PASSWORD` empty in `.env`, and keep `.env` at mode `600`.
 
-**Recommended follow-up (not blocking):** encrypt the bind password with a
-*dedicated* key rather than reusing `MAGISTER_AUDIT_KEY`, so compromise of one
-key does not expose the other. This needs a key-rotation runbook update and is
-tracked separately.
+**Preferred hardening (implemented, opt-in):** run the service bind over
+**Kerberos/GSSAPI** (`MAGISTER_AD_BIND_MODE=gssapi`) with a keytab from an AD
+service account — then there is **no bind password at all** in the DB, `.env`,
+or logs; AD owns and rotates the credential. See
+[ADR 0007](../adr/0007-ad-gssapi-service-bind.md) and
+[runbook `ad-gssapi-bind.md`](../runbooks/ad-gssapi-bind.md). For instances that
+stay on `simple`, a dedicated encryption key (instead of `MAGISTER_AUDIT_KEY`)
+remains a smaller backlog hardening.
 
 ## Dependencies (Dependabot)
 
