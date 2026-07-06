@@ -68,6 +68,13 @@ class Settings(BaseSettings):
     local_admin_password_hash: SecretStr | None = Field(default=None)
 
     ad_dcs: Annotated[list[str], NoDecode] = Field(default_factory=list)
+    ad_bind_mode: str = Field(
+        default="simple",
+        description=(
+            "Service-account bind mode: 'simple' (DN + password over LDAPS) or "
+            "'gssapi' (Kerberos/keytab, no stored password). See ad-gssapi-bind runbook."
+        ),
+    )
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None
     ad_users_search_base: str | None = Field(
@@ -114,6 +121,13 @@ class Settings(BaseSettings):
         allowed = {"development", "staging", "production", "test"}
         if v not in allowed:
             raise ValueError(f"environment must be one of {allowed}, got {v!r}")
+        return v
+
+    @field_validator("ad_bind_mode")
+    @classmethod
+    def _check_bind_mode(cls, v: str) -> str:
+        if v not in {"simple", "gssapi"}:
+            raise ValueError(f"ad_bind_mode must be 'simple' or 'gssapi', got {v!r}")
         return v
 
     def require_runtime_secrets(self) -> None:

@@ -26,6 +26,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Kerberos/GSSAPI service bind (MAGISTER_AD_BIND_MODE=gssapi). Optional so the
+# default image/CI need no krb5 build toolchain; the production image installs
+# this extra + krb5 system libs (see docs/runbooks/ad-gssapi-bind.md).
+gssapi = [
+    "gssapi>=1.8",
+]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",

@@ -14,16 +14,22 @@ COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
 
 WORKDIR /app
 
+# Build toolchain + Kerberos headers so the optional `gssapi` extra (Kerberos
+# service bind) compiles. Cheap and keeps the image gssapi-capable out of the box.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends build-essential libkrb5-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 # Copy dependency manifest first to maximise layer-cache reuse on rebuilds.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project --no-dev
+RUN uv sync --frozen --no-install-project --no-dev --extra gssapi
 
 # Now copy the source and install the project itself.
 COPY magister_api ./magister_api
 COPY alembic ./alembic
 COPY alembic.ini ./
 COPY docker-entrypoint.sh ./
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra gssapi
 
 # --- Runtime ----------------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
@@ -38,12 +44,13 @@ RUN groupadd --system --gid 1000 magister \
  && useradd  --system --uid 1000 --gid magister --create-home --home-dir /app magister
 
 # Runtime libs:
-# - libldap is needed by ldap3 only when using GSSAPI; we stay on plain
-#   SIMPLE+TLS so it's not required.
-# - WeasyPrint (parent-letter PDFs, M3 US-1) needs Pango/Cairo/GDK-PixBuf.
+# - WeasyPrint (parent-letter + credential PDFs) needs Pango/Cairo/GDK-PixBuf.
+# - Kerberos runtime + SASL GSSAPI module + kinit: only exercised when
+#   MAGISTER_AD_BIND_MODE=gssapi (Kerberos service bind); harmless otherwise.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
       libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 libgdk-pixbuf-2.0-0 \
+      libkrb5-3 libsasl2-modules-gssapi-mit krb5-user \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
