@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import SecretStr
 from sqlalchemy import func, select
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.config import Settings
@@ -75,6 +76,24 @@ class TestRedactedAndEffective:
         eff = await svc.get_effective()
         assert eff.oidc_client_secret == "round-trip-secret"
         assert eff.ad_bind_password == "round-trip-bind-pw"
+
+    async def test_dedicated_secrets_key_is_actually_used(self, db_session: AsyncSession) -> None:
+        # Written with a dedicated secrets key (distinct from the audit key).
+        writer = AppSettingsService(db_session, _settings(secrets_key=SecretStr("dedicated-xyz")))
+        await writer.update(
+            AppSettingsUpdate(ad_bind_password="kt-secret"),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="rk",
+        )
+        # Same key → round-trips.
+        assert (await writer.get_effective()).ad_bind_password == "kt-secret"
+        # Audit-key-only service (no secrets_key) must NOT be able to decrypt it,
+        # proving the dedicated key is what protects the value.
+        reader = AppSettingsService(db_session, _settings())
+        with pytest.raises(DBAPIError):
+            await reader.get_effective()
 
 
 class TestVersionBumping:

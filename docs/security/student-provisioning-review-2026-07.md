@@ -53,9 +53,14 @@ bind password through the admin settings UI rather than the env var, leave
 service account — then there is **no bind password at all** in the DB, `.env`,
 or logs; AD owns and rotates the credential. See
 [ADR 0007](../adr/0007-ad-gssapi-service-bind.md) and
-[runbook `ad-gssapi-bind.md`](../runbooks/ad-gssapi-bind.md). For instances that
-stay on `simple`, a dedicated encryption key (instead of `MAGISTER_AUDIT_KEY`)
-remains a smaller backlog hardening.
+[runbook `ad-gssapi-bind.md`](../runbooks/ad-gssapi-bind.md).
+
+For instances that stay on `simple`, the app-settings secrets (OIDC client
+secret, AD bind password) can now be encrypted with a **dedicated key**
+`MAGISTER_SECRETS_KEY` instead of reusing `MAGISTER_AUDIT_KEY` — so compromise
+of the audit key does not expose them and vice versa. It falls back to the
+audit key when unset (no behaviour change); adopting a distinct key requires
+re-entering those two secrets once in the admin UI.
 
 ## Dependencies (Dependabot)
 

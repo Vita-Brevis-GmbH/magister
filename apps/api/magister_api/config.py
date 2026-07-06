@@ -41,6 +41,20 @@ class Settings(BaseSettings):
             "old rows with the previous key while new writes use the current."
         ),
     )
+    secrets_key: SecretStr = Field(
+        default=SecretStr(""),
+        description=(
+            "Optional dedicated pgcrypto key for the app_settings secrets "
+            "(oidc_client_secret, ad_bind_password). Falls back to audit_key "
+            "when empty, so leaving it unset keeps current behaviour. Setting a "
+            "distinct value requires re-entering those secrets once (they are "
+            "then re-encrypted with the new key)."
+        ),
+    )
+
+    def app_secrets_key(self) -> str:
+        """Key for the app_settings secret columns; falls back to audit_key."""
+        return self.secrets_key.get_secret_value() or self.audit_key.get_secret_value()
 
     oidc_issuer: str = Field(default="")
     oidc_client_id: str = Field(default="")

@@ -62,9 +62,13 @@ class AppSettingsService:
 
     @property
     def _key(self) -> str:
-        key = self._settings.audit_key.get_secret_value()
+        # Dedicated secrets key when configured, else the audit key (default).
+        key = self._settings.app_secrets_key()
         if not key:
-            raise RuntimeError("MAGISTER_AUDIT_KEY is empty — settings access refused")
+            raise RuntimeError(
+                "neither MAGISTER_SECRETS_KEY nor MAGISTER_AUDIT_KEY is set — "
+                "settings-secret access refused"
+            )
         return key
 
     # ---------- reads ----------
