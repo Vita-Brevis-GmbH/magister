@@ -361,7 +361,9 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
                   }}
                 />
                 <span>
-                  <span className="font-medium">{t("admin.settings.field.ad_tls_skip_verify")}</span>
+                  <span className="font-medium">
+                    {t("admin.settings.field.ad_tls_skip_verify")}
+                  </span>
                   <span className="block text-xs text-muted-foreground">
                     {t("admin.settings.ad_tls_skip_verify_hint")}
                   </span>
