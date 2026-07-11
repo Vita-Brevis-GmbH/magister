@@ -34,6 +34,10 @@ class AppSettingsOut(BaseModel):
     ad_bind_mode: str
     ad_bind_dn: str | None
     ad_bind_password_set: bool
+    ad_tls_verify: bool
+    # Public CA certificate (PEM) — safe to return so the GUI can display /
+    # edit it. None when no CA has been imported.
+    ad_tls_ca_pem: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -90,6 +94,15 @@ class AppSettingsUpdate(BaseModel):
             "current encrypted value untouched."
         ),
     )
+    ad_tls_verify: bool | None = None
+    ad_tls_ca_pem: str | None = Field(
+        default=None,
+        description=(
+            "Inline PEM CA bundle the DC cert is verified against. Send null / "
+            "omit to leave unchanged; send an empty string to clear (fall back "
+            "to the OS trust store)."
+        ),
+    )
     ad_users_search_base: str | None = None
     ad_computers_search_base: str | None = None
     ad_sync_interval_minutes: int | None = Field(default=None, ge=1, le=1440)
@@ -109,6 +122,16 @@ class AppSettingsUpdate(BaseModel):
     def _check_bind_mode(cls, v: str | None) -> str | None:
         if v is not None and v not in {"simple", "gssapi"}:
             raise ValueError("ad_bind_mode must be 'simple' or 'gssapi'")
+        return v
+
+    @field_validator("ad_tls_ca_pem")
+    @classmethod
+    def _check_ca_pem(cls, v: str | None) -> str | None:
+        # Empty string is the explicit "clear" sentinel; anything else must at
+        # least look like a PEM certificate so we fail fast with a clean 422
+        # instead of only surfacing the problem at connect time.
+        if v is not None and v.strip() and "-----BEGIN CERTIFICATE-----" not in v:
+            raise ValueError("ad_tls_ca_pem must be a PEM certificate")
         return v
 
     @model_validator(mode="after")

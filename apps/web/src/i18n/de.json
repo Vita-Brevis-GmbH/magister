@@ -294,6 +294,9 @@
         "ad_bind_dn": "Bind-DN",
         "ad_bind_password": "Bind-Passwort",
         "ad_bind_password_hint": "Leer lassen, um den gespeicherten Wert nicht zu ändern.",
+        "ad_tls_ca_pem": "AD-Zertifikat (CA, PEM)",
+        "ad_tls_ca_pem_hint": "Optional. Root- oder Zwischenzertifikat der Domäne als PEM einfügen. Der Domain-Controller wird gegen dieses Zertifikat geprüft. Leer lassen = Zertifikatsspeicher des Betriebssystems.",
+        "ad_tls_skip_verify": "Zertifikat ignorieren (unsicher)",
         "ad_users_search_base": "Such-Basis (User)",
         "ad_computers_search_base": "Such-Basis (Computer)",
         "ad_computers_search_base_hint": "Optional. Pfad zur Computer-OU; Geräte werden über managedBy=<user-dn> zugeordnet. Leer lassen, um die Geräte-Synchronisation zu deaktivieren.",
@@ -306,6 +309,9 @@
         "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe"
       },
       "ad_bind_gssapi_hint": "Aktiviert: Anmeldung am AD per Kerberos-Keytab, kein Bind-Passwort nötig (Bind-DN/Passwort werden ignoriert). Setzt einen eingerichteten Keytab voraus — siehe Runbook ad-gssapi-bind. Deaktiviert = klassischer Bind mit DN + Passwort.",
+      "tls_title": "LDAPS-Zertifikat",
+      "ad_tls_skip_verify_hint": "Aktiviert: Das Zertifikat des Domain-Controllers wird nicht geprüft. Nur als Übergangslösung nutzen, bis das CA-Zertifikat importiert ist.",
+      "ad_tls_skip_verify_warning": "Achtung: Die Verbindung ist zwar verschlüsselt, aber nicht authentifiziert — anfällig für Man-in-the-Middle-Angriffe.",
       "provisioning_title": "Provisioning (neue Accounts)",
       "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
       "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."

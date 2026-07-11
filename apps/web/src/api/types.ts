@@ -250,6 +250,8 @@ export interface AppSettingsOut {
   ad_bind_mode: string;
   ad_bind_dn: string | null;
   ad_bind_password_set: boolean;
+  ad_tls_verify: boolean;
+  ad_tls_ca_pem: string | null;
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
@@ -465,6 +467,8 @@ export interface AppSettingsUpdate {
   ad_bind_mode?: string | null;
   ad_bind_dn?: string | null;
   ad_bind_password?: string | null;
+  ad_tls_verify?: boolean | null;
+  ad_tls_ca_pem?: string | null;
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;

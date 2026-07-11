@@ -45,6 +45,8 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     ad_bind_mode: "simple",
     ad_bind_dn: "cn=svc,dc=example,dc=local",
     ad_bind_password_set: false,
+    ad_tls_verify: true,
+    ad_tls_ca_pem: null,
     ad_users_search_base: "OU=Users,DC=example,DC=local",
     ad_computers_search_base: null,
     ad_sync_interval_minutes: 15,

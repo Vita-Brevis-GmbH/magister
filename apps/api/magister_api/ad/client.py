@@ -243,14 +243,19 @@ def _parse_generalized_time(raw: Any) -> datetime | None:
 def _make_tls(settings: Settings) -> Tls:
     """Build the TLS config for the LDAPS pool.
 
-    - ``validate=CERT_REQUIRED`` rejects untrusted DC certificates.
+    - ``validate=CERT_REQUIRED`` rejects untrusted DC certificates. When the
+      operator has explicitly disabled verification (``ad_tls_verify=False``)
+      we drop to ``CERT_NONE``: the transport is still encrypted (LDAPS 636)
+      but no longer authenticated. This is a documented, audited stop-gap for
+      "I can't import the CA yet" — never the default.
     - ``version=PROTOCOL_TLS_CLIENT`` plus the ``OP_NO_TLSv1*`` mask
       forbids anything below TLS 1.2. Many AD deployments still cap at
       TLS 1.2, so we cannot mandate 1.3 here as we do on the public web
       edge; everything older than 1.2 is refused.
-    - ``ca_certs_file`` pins the trust anchor to the Schulträger root CA
-      when configured, giving defence-in-depth against a compromised
-      system trust store. Falls back to the OS bundle when unset.
+    - The trust anchor is pinned to the Schulträger root CA when configured,
+      giving defence-in-depth against a compromised system trust store: an
+      inline PEM (``ad_tls_ca_pem``, imported from the GUI) wins over the
+      ``ad_ca_bundle_path`` file; both unset falls back to the OS bundle.
     """
     import ssl
 
@@ -258,11 +263,25 @@ def _make_tls(settings: Settings) -> Tls:
     # modern Python and listing it is pointless. SSLv3 + TLS 1.0/1.1 are
     # the ones that still need the explicit OP_NO_*.
     ssl_options = ssl.OP_NO_SSLv3 | ssl.OP_NO_TLSv1 | ssl.OP_NO_TLSv1_1
+    if not settings.ad_tls_verify:
+        logger.warning(
+            "AD LDAPS certificate validation is DISABLED (ad_tls_verify=false) — "
+            "transport is encrypted but not authenticated."
+        )
+        return Tls(
+            validate=ssl.CERT_NONE,
+            version=ssl.PROTOCOL_TLS_CLIENT,
+            ssl_options=[ssl_options],
+        )
+    ca_pem = (settings.ad_tls_ca_pem or "").strip() or None
     return Tls(
         validate=ssl.CERT_REQUIRED,
         version=ssl.PROTOCOL_TLS_CLIENT,
         ssl_options=[ssl_options],
-        ca_certs_file=settings.ad_ca_bundle_path,
+        # ldap3 accepts the CA bundle either as a file path or inline PEM data;
+        # prefer the imported inline PEM and only fall back to the file path.
+        ca_certs_file=None if ca_pem else settings.ad_ca_bundle_path,
+        ca_certs_data=ca_pem,
     )
 
 

@@ -50,6 +50,8 @@ class EffectiveAppSettings:
     ad_bind_mode: str
     ad_bind_dn: str | None
     ad_bind_password: str | None
+    ad_tls_verify: bool
+    ad_tls_ca_pem: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -102,6 +104,8 @@ class AppSettingsService:
             func.pgp_sym_decrypt(AppSettings.ad_bind_password_enc, self._key).label(
                 "ad_bind_password"
             ),
+            AppSettings.ad_tls_verify,
+            AppSettings.ad_tls_ca_pem,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -123,6 +127,8 @@ class AppSettingsService:
             ad_bind_mode=row.ad_bind_mode,
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password=row.ad_bind_password,
+            ad_tls_verify=bool(row.ad_tls_verify),
+            ad_tls_ca_pem=row.ad_tls_ca_pem,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -143,6 +149,8 @@ class AppSettingsService:
             AppSettings.ad_bind_mode,
             AppSettings.ad_bind_dn,
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
+            AppSettings.ad_tls_verify,
+            AppSettings.ad_tls_ca_pem,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -169,6 +177,8 @@ class AppSettingsService:
             ad_bind_mode=row.ad_bind_mode,
             ad_bind_dn=row.ad_bind_dn,
             ad_bind_password_set=bool(row.ad_bind_password_set),
+            ad_tls_verify=bool(row.ad_tls_verify),
+            ad_tls_ca_pem=row.ad_tls_ca_pem,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -211,6 +221,7 @@ class AppSettingsService:
             "ad_dcs": payload.ad_dcs,
             "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
+            "ad_tls_verify": payload.ad_tls_verify,
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
@@ -240,6 +251,14 @@ class AppSettingsService:
                 payload.ad_bind_password, self._key
             )
             diff["rotated_ad_credential"] = True
+
+        # CA PEM is not a secret, but it is bulky — record only whether a cert
+        # is now present in the audit diff, never the PEM body. None = leave
+        # unchanged; empty string = clear (store NULL).
+        if payload.ad_tls_ca_pem is not None:
+            pem = payload.ad_tls_ca_pem.strip() or None
+            values["ad_tls_ca_pem"] = pem
+            diff["ad_tls_ca_pem_set"] = pem is not None
 
         # Always bump version + updated_*.
         values["version"] = AppSettings.version + 1
@@ -317,6 +336,10 @@ class AppSettingsService:
             values["ad_users_search_base"] = settings.ad_users_search_base
         if settings.ad_computers_search_base:
             values["ad_computers_search_base"] = settings.ad_computers_search_base
+        if settings.ad_tls_ca_pem:
+            values["ad_tls_ca_pem"] = settings.ad_tls_ca_pem
+        if not settings.ad_tls_verify:
+            values["ad_tls_verify"] = False
         if settings.ad_sync_interval_minutes:
             values["ad_sync_interval_minutes"] = settings.ad_sync_interval_minutes
 
@@ -351,6 +374,8 @@ def _empty_effective() -> EffectiveAppSettings:
         ad_bind_mode="simple",
         ad_bind_dn=None,
         ad_bind_password=None,
+        ad_tls_verify=True,
+        ad_tls_ca_pem=None,
         ad_users_search_base=None,
         ad_computers_search_base=None,
         ad_sync_interval_minutes=15,

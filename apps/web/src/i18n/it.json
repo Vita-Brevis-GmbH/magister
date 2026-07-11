@@ -297,6 +297,9 @@
         "ad_bind_dn": "Bind DN",
         "ad_bind_password": "Password di bind",
         "ad_bind_password_hint": "Lascia vuoto per mantenere il valore memorizzato.",
+        "ad_tls_ca_pem": "Certificato AD (CA, PEM)",
+        "ad_tls_ca_pem_hint": "Facoltativo. Incolla il certificato radice o intermedio del dominio in formato PEM. Il domain controller viene verificato rispetto a questo certificato. Lascia vuoto = archivio certificati del sistema operativo.",
+        "ad_tls_skip_verify": "Ignora il certificato (non sicuro)",
         "ad_users_search_base": "Base di ricerca (utenti)",
         "ad_computers_search_base": "Base di ricerca (computer)",
         "ad_computers_search_base_hint": "Opzionale. Percorso OU dei computer; abbinamento via managedBy=<user-dn>. Vuoto = sync dispositivi disattivato.",
@@ -309,6 +312,9 @@
         "zyklus2_max_grade": "Ciclo 2 fino all'anno"
       },
       "ad_bind_gssapi_hint": "Se attivo, Magister si autentica ad AD tramite un keytab Kerberos — nessuna password di bind necessaria (Bind DN/password ignorati). Richiede un keytab configurato (vedi runbook ad-gssapi-bind). Disattivato = bind classico con DN + password.",
+      "tls_title": "Certificato LDAPS",
+      "ad_tls_skip_verify_hint": "Se attivo, il certificato del domain controller non viene verificato. Da usare solo come soluzione temporanea finché il certificato CA non è stato importato.",
+      "ad_tls_skip_verify_warning": "Attenzione: la connessione è cifrata ma non autenticata — vulnerabile ad attacchi man-in-the-middle.",
       "provisioning_title": "Provisioning (nuovi account)",
       "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe. Lasciare vuoto disattiva il provisioning per quel gruppo.",
       "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+)."

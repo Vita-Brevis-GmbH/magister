@@ -12,12 +12,15 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Integer,
     LargeBinary,
     String,
+    Text,
     func,
+    true,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -63,6 +66,14 @@ class AppSettings(Base):
     )
     ad_bind_dn: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_bind_password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # LDAPS trust: optional pasted PEM CA bundle the DC cert is verified against
+    # (public data, so plain Text — not encrypted like the bind password) and a
+    # verify toggle. ``ad_tls_verify=False`` skips DC-cert validation entirely:
+    # the transport stays encrypted (LDAPS 636) but is no longer authenticated.
+    ad_tls_verify: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    ad_tls_ca_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
     ad_users_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Optional: subtree to walk for ``Computer`` objects whose ``managedBy``
     # points at a user. Unset = device sync is skipped silently.

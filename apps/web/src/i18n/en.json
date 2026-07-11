@@ -294,6 +294,9 @@
         "ad_bind_dn": "Bind DN",
         "ad_bind_password": "Bind password",
         "ad_bind_password_hint": "Leave empty to keep the stored value.",
+        "ad_tls_ca_pem": "AD certificate (CA, PEM)",
+        "ad_tls_ca_pem_hint": "Optional. Paste the domain's root or intermediate certificate as PEM. The domain controller is verified against it. Leave empty to use the operating-system trust store.",
+        "ad_tls_skip_verify": "Ignore certificate (insecure)",
         "ad_users_search_base": "Search base (users)",
         "ad_computers_search_base": "Search base (computers)",
         "ad_computers_search_base_hint": "Optional. Path to the Computer-OU; devices are matched via managedBy=<user-dn>. Leave empty to disable device sync.",
@@ -306,6 +309,9 @@
         "zyklus2_max_grade": "Zyklus 2 up to grade"
       },
       "ad_bind_gssapi_hint": "When enabled, Magister authenticates to AD via a Kerberos keytab — no bind password needed (Bind DN/password are ignored). Requires a configured keytab (see runbook ad-gssapi-bind). Disabled = classic bind with DN + password.",
+      "tls_title": "LDAPS certificate",
+      "ad_tls_skip_verify_hint": "When enabled, the domain controller's certificate is not verified. Use only as a stop-gap until the CA certificate has been imported.",
+      "ad_tls_skip_verify_warning": "Warning: the connection is encrypted but not authenticated — vulnerable to man-in-the-middle attacks.",
       "provisioning_title": "Provisioning (new accounts)",
       "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus. Leaving one empty disables provisioning for that bucket.",
       "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+)."

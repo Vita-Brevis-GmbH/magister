@@ -26,6 +26,8 @@ interface FormState {
   ad_bind_mode: string;
   ad_bind_dn: string;
   ad_bind_password: string;
+  ad_tls_verify: boolean;
+  ad_tls_ca_pem: string;
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
@@ -49,6 +51,8 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_bind_mode: data.ad_bind_mode || "simple",
     ad_bind_dn: data.ad_bind_dn ?? "",
     ad_bind_password: "",
+    ad_tls_verify: data.ad_tls_verify,
+    ad_tls_ca_pem: data.ad_tls_ca_pem ?? "",
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
@@ -102,6 +106,13 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   if (form.ad_bind_dn !== (current.ad_bind_dn ?? "")) {
     payload.ad_bind_dn = form.ad_bind_dn || null;
+  }
+  if (form.ad_tls_verify !== current.ad_tls_verify) {
+    payload.ad_tls_verify = form.ad_tls_verify;
+  }
+  if (form.ad_tls_ca_pem !== (current.ad_tls_ca_pem ?? "")) {
+    // Empty string clears the stored cert (falls back to the OS trust store).
+    payload.ad_tls_ca_pem = form.ad_tls_ca_pem;
   }
   if (form.ad_users_search_base !== (current.ad_users_search_base ?? "")) {
     payload.ad_users_search_base = form.ad_users_search_base || null;
@@ -316,6 +327,54 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               {t("admin.settings.field.ad_bind_password_hint")}
             </p>
           </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-sm font-medium">{t("admin.settings.tls_title")}</p>
+            <div className="space-y-1">
+              <Label htmlFor="ad-tls-ca-pem">{t("admin.settings.field.ad_tls_ca_pem")}</Label>
+              <textarea
+                id="ad-tls-ca-pem"
+                rows={6}
+                spellCheck={false}
+                disabled={!form.ad_tls_verify}
+                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 font-mono text-xs shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder={"-----BEGIN CERTIFICATE-----\n…\n-----END CERTIFICATE-----"}
+                value={form.ad_tls_ca_pem}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, ad_tls_ca_pem: e.target.value }));
+                  setSuccess(false);
+                }}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("admin.settings.field.ad_tls_ca_pem_hint")}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={!form.ad_tls_verify}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, ad_tls_verify: !e.target.checked }));
+                    setSuccess(false);
+                  }}
+                />
+                <span>
+                  <span className="font-medium">{t("admin.settings.field.ad_tls_skip_verify")}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t("admin.settings.ad_tls_skip_verify_hint")}
+                  </span>
+                </span>
+              </label>
+              {!form.ad_tls_verify ? (
+                <p className="text-xs font-medium text-destructive">
+                  {t("admin.settings.ad_tls_skip_verify_warning")}
+                </p>
+              ) : null}
+            </div>
+          </div>
+
           <div className="space-y-1">
             <Label htmlFor="ad-search-base">{t("admin.settings.field.ad_users_search_base")}</Label>
             <Input id="ad-search-base" {...field("ad_users_search_base")} />

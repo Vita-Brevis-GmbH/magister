@@ -53,6 +53,11 @@ def _overlay(base: Settings, eff: EffectiveAppSettings) -> Settings:
         update["ad_bind_dn"] = eff.ad_bind_dn
     if eff.ad_bind_password:
         update["ad_bind_password"] = SecretStr(eff.ad_bind_password)
+    # ad_tls_verify is a bool where False is meaningful — always overlay it so a
+    # DB row that disables verification actually takes effect over the env default.
+    update["ad_tls_verify"] = eff.ad_tls_verify
+    if eff.ad_tls_ca_pem:
+        update["ad_tls_ca_pem"] = eff.ad_tls_ca_pem
     if eff.ad_users_search_base:
         update["ad_users_search_base"] = eff.ad_users_search_base
     if eff.ad_computers_search_base:

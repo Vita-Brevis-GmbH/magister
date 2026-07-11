@@ -297,6 +297,9 @@
         "ad_bind_dn": "DN de bind",
         "ad_bind_password": "Mot de passe de bind",
         "ad_bind_password_hint": "Laisser vide pour conserver la valeur enregistrée.",
+        "ad_tls_ca_pem": "Certificat AD (CA, PEM)",
+        "ad_tls_ca_pem_hint": "Facultatif. Collez le certificat racine ou intermédiaire du domaine au format PEM. Le contrôleur de domaine est vérifié par rapport à ce certificat. Laisser vide = magasin de certificats du système d'exploitation.",
+        "ad_tls_skip_verify": "Ignorer le certificat (non sécurisé)",
         "ad_users_search_base": "Base de recherche (utilisateurs)",
         "ad_computers_search_base": "Base de recherche (ordinateurs)",
         "ad_computers_search_base_hint": "Optionnel. Chemin de l'OU des ordinateurs ; correspondance via managedBy=<user-dn>. Vide = sync d'appareils désactivée.",
@@ -309,6 +312,9 @@
         "zyklus2_max_grade": "Cycle 2 jusqu'à l'année"
       },
       "ad_bind_gssapi_hint": "Activé : Magister s'authentifie auprès d'AD via un keytab Kerberos — aucun mot de passe de bind requis (DN/mot de passe ignorés). Nécessite un keytab configuré (voir runbook ad-gssapi-bind). Désactivé = bind classique avec DN + mot de passe.",
+      "tls_title": "Certificat LDAPS",
+      "ad_tls_skip_verify_hint": "Activé : le certificat du contrôleur de domaine n'est pas vérifié. À utiliser uniquement comme solution temporaire jusqu'à l'import du certificat CA.",
+      "ad_tls_skip_verify_warning": "Attention : la connexion est chiffrée mais non authentifiée — vulnérable aux attaques de l'homme du milieu.",
       "provisioning_title": "Provisionnement (nouveaux comptes)",
       "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe. Laisser vide désactive le provisionnement pour cette catégorie.",
       "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+)."

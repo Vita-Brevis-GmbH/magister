@@ -9,6 +9,7 @@ from ldap3.core.exceptions import (
     LDAPInvalidCredentialsResult,
     LDAPSocketOpenError,
     LDAPSocketReceiveError,
+    LDAPSSLConfigurationError,
     LDAPStartTLSError,
 )
 
@@ -55,7 +56,7 @@ def _looks_like_tls(exc: BaseException) -> bool:
     cur: BaseException | None = exc
     while cur is not None and id(cur) not in seen:
         seen.add(id(cur))
-        if isinstance(cur, (LDAPCertificateError, LDAPStartTLSError)):
+        if isinstance(cur, (LDAPCertificateError, LDAPStartTLSError, LDAPSSLConfigurationError)):
             return True
         haystack = str(cur).lower()
         if any(marker in haystack for marker in _TLS_MARKERS):

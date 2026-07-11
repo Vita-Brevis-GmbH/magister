@@ -111,6 +111,23 @@ class Settings(BaseSettings):
             "root CA for defence-in-depth against a compromised system CA."
         ),
     )
+    ad_tls_ca_pem: str | None = Field(
+        default=None,
+        description=(
+            "Optional inline PEM CA bundle (managed from the admin GUI). Takes "
+            "precedence over ``ad_ca_bundle_path`` when set. Public data, not a "
+            "secret."
+        ),
+    )
+    ad_tls_verify: bool = Field(
+        default=True,
+        description=(
+            "When false, the LDAPS connection does NOT validate the "
+            "domain-controller certificate (still encrypted, but unauthenticated "
+            "transport — vulnerable to MITM). Intended only as a stop-gap while a "
+            "proper CA is imported. Every disabled state is audited."
+        ),
+    )
     ad_computers_search_base: str | None = Field(
         default=None,
         description=(
