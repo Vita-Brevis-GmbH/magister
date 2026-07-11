@@ -265,6 +265,14 @@
       "test_ad_button": "Test connection",
       "test_ad_ok": "Connection successful.",
       "test_ad_failed": "Connection failed.",
+      "test_ad_reason": {
+        "ad_config": "Configuration incomplete: check the domain controllers and the bind DN/password.",
+        "ad_unreachable": "Domain controller unreachable. Check the hostname, port 636 and firewall.",
+        "ad_tls": "TLS/certificate error. Check the DC certificate and the configured CA bundle.",
+        "ad_timeout": "Timed out waiting for the domain controller to respond.",
+        "ad_auth": "Bind rejected. Check the service account's bind DN and password.",
+        "ad_bind_failed": "Connection failed (unknown error)."
+      },
       "test_ad_hint": "Tests the saved service account against AD. Save first.",
       "save": "Save",
       "success": "Settings saved.",

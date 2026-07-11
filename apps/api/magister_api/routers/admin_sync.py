@@ -83,7 +83,7 @@ async def test_ad_connection(
     Never echoes or logs credentials; the audit event records only the boolean
     outcome so operators can see that a test was run.
     """
-    ok = await ad.probe_service_connection()
+    ok, reason = await ad.probe_service_connection_detailed()
     audit = AuditService(session, settings)
     await audit.emit(
         action="ad_connection_tested",
@@ -94,9 +94,9 @@ async def test_ad_connection(
         school_id=None,
         ip=getattr(request.state, "client_ip", None),
         request_id=getattr(request.state, "request_id", ""),
-        payload={"ok": ok},
+        payload={"ok": ok, "reason": reason},
     )
-    return AdConnectionTestOut(ok=ok, detail="ad_ok" if ok else "ad_bind_failed")
+    return AdConnectionTestOut(ok=ok, detail=reason)
 
 
 __all__ = ["router", "get_ad_client"]

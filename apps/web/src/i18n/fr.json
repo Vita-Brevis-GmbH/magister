@@ -268,6 +268,14 @@
       "test_ad_button": "Tester la connexion",
       "test_ad_ok": "Connexion réussie.",
       "test_ad_failed": "Échec de la connexion.",
+      "test_ad_reason": {
+        "ad_config": "Configuration incomplète : vérifiez les contrôleurs de domaine ainsi que le DN et le mot de passe de bind.",
+        "ad_unreachable": "Contrôleur de domaine injoignable. Vérifiez le nom d'hôte, le port 636 et le pare-feu.",
+        "ad_tls": "Erreur TLS/certificat. Vérifiez le certificat du DC et le bundle CA configuré.",
+        "ad_timeout": "Délai dépassé en attendant la réponse du contrôleur de domaine.",
+        "ad_auth": "Authentification refusée. Vérifiez le DN de bind et le mot de passe du compte de service.",
+        "ad_bind_failed": "Échec de la connexion (erreur inconnue)."
+      },
       "test_ad_hint": "Teste le compte de service enregistré sur l'AD. Enregistrez d'abord.",
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",

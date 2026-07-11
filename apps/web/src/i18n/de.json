@@ -263,6 +263,14 @@
       "test_ad_button": "Verbindung testen",
       "test_ad_ok": "Verbindung erfolgreich.",
       "test_ad_failed": "Verbindung fehlgeschlagen.",
+      "test_ad_reason": {
+        "ad_config": "Konfiguration unvollständig: Domain-Controller sowie Bind-DN und Passwort prüfen.",
+        "ad_unreachable": "Domain-Controller nicht erreichbar. Hostname, Port 636 und Firewall prüfen.",
+        "ad_tls": "TLS-/Zertifikatsfehler. DC-Zertifikat und hinterlegtes CA-Bundle prüfen.",
+        "ad_timeout": "Zeitüberschreitung bei der Antwort des Domain-Controllers.",
+        "ad_auth": "Anmeldung abgelehnt. Bind-DN und Passwort des Service-Accounts prüfen.",
+        "ad_bind_failed": "Verbindung fehlgeschlagen (unbekannter Fehler)."
+      },
       "test_ad_hint": "Testet den gespeicherten Service-Account gegen das AD. Bitte zuerst speichern.",
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",

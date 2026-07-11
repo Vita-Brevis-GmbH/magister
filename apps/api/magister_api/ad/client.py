@@ -11,6 +11,7 @@ The client supports two backends:
 
 from __future__ import annotations
 
+import logging
 import struct
 import uuid
 from collections.abc import Iterable, Sequence
@@ -38,8 +39,15 @@ from ldap3 import (
 from ldap3.core.exceptions import LDAPException
 from ldap3.utils.dn import escape_rdn
 
-from magister_api.ad.errors import AdUnavailableError, AdUserParseError
+from magister_api.ad.errors import (
+    REASON_CONFIG,
+    AdUnavailableError,
+    AdUserParseError,
+    classify_ldap_error,
+)
 from magister_api.config import Settings
+
+logger = logging.getLogger(__name__)
 
 # AD `userAccountControl` bit 2 = ACCOUNTDISABLE (account disabled when bit set).
 UAC_ACCOUNTDISABLE = 0x0002
@@ -530,21 +538,45 @@ class AdClient:
         Returns True if a sealed LDAPS bind with the configured service account
         succeeds, False otherwise. Never raises and never logs credentials.
         """
+        ok, _reason = await self.probe_service_connection_detailed()
+        return ok
+
+    async def probe_service_connection_detailed(self) -> tuple[bool, str]:
+        """Like :meth:`probe_service_connection` but also return a reason code.
+
+        On failure the second element is one of the safe, credential-free
+        ``ad_*`` reason codes from :mod:`magister_api.ad.errors` (e.g.
+        ``ad_unreachable``, ``ad_tls``, ``ad_timeout``, ``ad_auth``,
+        ``ad_config``). On success it is ``"ad_ok"``. The code carries no host,
+        DN, or credential material, so it is safe to return to the client and to
+        log.
+        """
         return await run_in_threadpool(self._sync_probe_service_connection)
 
-    def _sync_probe_service_connection(self) -> bool:
+    def _sync_probe_service_connection(self) -> tuple[bool, str]:
         if self._settings.ad_use_mock:
-            return True
+            return True, "ad_ok"
+        # Call ``_open_connection`` directly (not ``_acquire_connection``, which
+        # flattens every ldap3 failure to a single opaque code) so we can
+        # classify the specific failure the DC reported.
         try:
-            conn, owned = self._acquire_connection()
+            conn = _open_connection(self._settings, mock=False)
         except AdUnavailableError:
-            return False
-        if owned:
-            try:
-                conn.unbind()
-            except LDAPException:
-                pass
-        return True
+            # Raised by ``_make_pool`` / ``_service_bind_kwargs`` when the AD
+            # config is incomplete (no DCs, or missing bind DN / password).
+            logger.warning("AD connection test failed: reason=%s", REASON_CONFIG)
+            return False, REASON_CONFIG
+        except LDAPException as exc:
+            reason = classify_ldap_error(exc)
+            # Log the category only — never the exception text (may echo the
+            # bind DN) nor any credential material.
+            logger.warning("AD connection test failed: reason=%s", reason)
+            return False, reason
+        try:
+            conn.unbind()
+        except LDAPException:
+            pass
+        return True, "ad_ok"
 
     async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
         """Try a SIMPLE bind as ``user_dn`` to validate the password against AD policy."""

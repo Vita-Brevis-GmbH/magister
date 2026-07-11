@@ -400,7 +400,10 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
                 >
                   {testAd.data.ok
                     ? t("admin.settings.test_ad_ok")
-                    : t("admin.settings.test_ad_failed")}
+                    : t([
+                        `admin.settings.test_ad_reason.${testAd.data.detail}`,
+                        "admin.settings.test_ad_failed",
+                      ])}
                 </span>
               ) : testAd.isError ? (
                 <span className="text-sm text-destructive">{t("errors.generic")}</span>

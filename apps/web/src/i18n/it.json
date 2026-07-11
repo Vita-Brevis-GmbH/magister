@@ -268,6 +268,14 @@
       "test_ad_button": "Verifica connessione",
       "test_ad_ok": "Connessione riuscita.",
       "test_ad_failed": "Connessione non riuscita.",
+      "test_ad_reason": {
+        "ad_config": "Configurazione incompleta: verificare i domain controller e il DN/password di bind.",
+        "ad_unreachable": "Domain controller non raggiungibile. Verificare nome host, porta 636 e firewall.",
+        "ad_tls": "Errore TLS/certificato. Verificare il certificato del DC e il bundle CA configurato.",
+        "ad_timeout": "Timeout in attesa della risposta del domain controller.",
+        "ad_auth": "Autenticazione rifiutata. Verificare il DN di bind e la password dell'account di servizio.",
+        "ad_bind_failed": "Connessione non riuscita (errore sconosciuto)."
+      },
       "test_ad_hint": "Verifica l'account di servizio salvato contro l'AD. Salva prima.",
       "save": "Salva",
       "success": "Impostazioni salvate.",
