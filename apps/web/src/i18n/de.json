@@ -272,6 +272,11 @@
         "ad_bind_failed": "Verbindung fehlgeschlagen (unbekannter Fehler)."
       },
       "test_ad_hint": "Testet den gespeicherten Service-Account gegen das AD. Bitte zuerst speichern.",
+      "sync_ad_button": "Jetzt synchronisieren",
+      "sync_ad_running": "Synchronisiere …",
+      "sync_ad_ok": "{{count}} Benutzer synchronisiert.",
+      "sync_ad_unavailable": "AD nicht erreichbar.",
+      "sync_ad_hint": "Startet sofort einen vollständigen AD-Sync. Läuft sonst automatisch im eingestellten Intervall.",
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",
       "save": "Speichern",

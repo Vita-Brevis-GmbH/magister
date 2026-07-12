@@ -277,6 +277,11 @@
         "ad_bind_failed": "Connessione non riuscita (errore sconosciuto)."
       },
       "test_ad_hint": "Verifica l'account di servizio salvato contro l'AD. Salva prima.",
+      "sync_ad_button": "Sincronizza ora",
+      "sync_ad_running": "Sincronizzazione …",
+      "sync_ad_ok": "{{count}} utenti sincronizzati.",
+      "sync_ad_unavailable": "AD non raggiungibile.",
+      "sync_ad_hint": "Avvia subito una sincronizzazione AD completa. Altrimenti automatica secondo l'intervallo configurato.",
       "save": "Salva",
       "success": "Impostazioni salvate.",
       "error_invalid": "Input non valido. Verifica.",

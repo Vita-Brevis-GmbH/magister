@@ -24,6 +24,15 @@
 	default_sni {$MAGISTER_PUBLIC_HOSTNAME}
 }
 
+# HTTPS-only: bounce every plain-HTTP request to its HTTPS equivalent
+# (Host + path preserved), so nothing is served over cleartext even on an
+# internal host reached by IP. HSTS stays OFF here (see the header note
+# below) — the redirect is enough and does not lock out the one-time
+# self-signed-cert acceptance.
+http:// {
+	redir https://{host}{uri} permanent
+}
+
 (security_headers) {
 	header {
 		# MIME-sniff lock-down + clickjacking + referrer minimisation.

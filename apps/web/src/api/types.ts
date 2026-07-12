@@ -269,6 +269,11 @@ export interface AdConnectionTestOut {
   detail: string;
 }
 
+export interface AdSyncResultOut {
+  synced_count: number;
+  school_partition: Record<string, number>;
+}
+
 export type PrefLanguage = "de" | "fr" | "it" | "en";
 export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
 export type PrefTimeFormat = "24h" | "12h";

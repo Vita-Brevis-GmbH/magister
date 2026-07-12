@@ -277,6 +277,11 @@
         "ad_bind_failed": "Échec de la connexion (erreur inconnue)."
       },
       "test_ad_hint": "Teste le compte de service enregistré sur l'AD. Enregistrez d'abord.",
+      "sync_ad_button": "Synchroniser maintenant",
+      "sync_ad_running": "Synchronisation …",
+      "sync_ad_ok": "{{count}} utilisateurs synchronisés.",
+      "sync_ad_unavailable": "AD injoignable.",
+      "sync_ad_hint": "Lance immédiatement une synchronisation AD complète. Sinon automatique selon l'intervalle configuré.",
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",
       "error_invalid": "Entrée invalide. Veuillez vérifier.",

@@ -11,6 +11,15 @@
 	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
 }
 
+# HTTPS-only: every plain-HTTP request is permanently redirected to its
+# HTTPS equivalent (Host + path preserved). No application content is ever
+# served over cleartext. This explicit catch-all replaces Caddy's implicit
+# per-host redirect, so it also covers access by IP or an unexpected Host
+# header — anything that hits :80 bounces to :443.
+http:// {
+	redir https://{host}{uri} permanent
+}
+
 (security_headers) {
 	header {
 		# HSTS — explicit so includeSubDomains + preload are guaranteed

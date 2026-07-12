@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
   AdConnectionTestOut,
+  AdSyncResultOut,
   AdUserListResponse,
   AdUserOut,
   AppSettingsOut,
@@ -451,6 +452,19 @@ export function useUpdateAppSettings() {
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
     mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+  });
+}
+
+export function useTriggerAdSync() {
+  const qc = useQueryClient();
+  return useMutation<AdSyncResultOut, ApiError, void>({
+    mutationFn: () =>
+      apiFetch<AdSyncResultOut>("/admin/ad-sync?mode=full", { method: "POST" }),
+    onSuccess: () => {
+      // Fresh rows + updated last_sync_at.
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: queryKeys.appSettings });
+    },
   });
 }
 

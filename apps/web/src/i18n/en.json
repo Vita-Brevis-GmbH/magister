@@ -274,6 +274,11 @@
         "ad_bind_failed": "Connection failed (unknown error)."
       },
       "test_ad_hint": "Tests the saved service account against AD. Save first.",
+      "sync_ad_button": "Sync now",
+      "sync_ad_running": "Syncing …",
+      "sync_ad_ok": "{{count}} users synced.",
+      "sync_ad_unavailable": "AD unreachable.",
+      "sync_ad_hint": "Runs a full AD sync immediately. Otherwise it runs automatically at the configured interval.",
       "save": "Save",
       "success": "Settings saved.",
       "error_invalid": "Input is invalid. Please review.",

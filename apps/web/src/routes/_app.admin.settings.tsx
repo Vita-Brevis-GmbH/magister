@@ -3,7 +3,12 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useAppSettings, useTestAdConnection, useUpdateAppSettings } from "@/api/hooks";
+import {
+  useAppSettings,
+  useTestAdConnection,
+  useTriggerAdSync,
+  useUpdateAppSettings,
+} from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -170,6 +175,7 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
+  const syncAd = useTriggerAdSync();
   const [form, setForm] = useState<FormState>(() => fromOut(data));
   const [success, setSuccess] = useState(false);
 
@@ -471,6 +477,33 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">{t("admin.settings.test_ad_hint")}</p>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <div className="flex items-center gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => syncAd.mutate()}
+                disabled={syncAd.isPending}
+              >
+                {syncAd.isPending
+                  ? t("admin.settings.sync_ad_running")
+                  : t("admin.settings.sync_ad_button")}
+              </Button>
+              {syncAd.data ? (
+                <span className="text-sm text-emerald-700">
+                  {t("admin.settings.sync_ad_ok", { count: syncAd.data.synced_count })}
+                </span>
+              ) : syncAd.isError ? (
+                <span className="text-sm text-destructive">
+                  {syncAd.error instanceof ApiError && syncAd.error.status === 503
+                    ? t("admin.settings.sync_ad_unavailable")
+                    : t("errors.generic")}
+                </span>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
           </div>
         </CardContent>
       </Card>
