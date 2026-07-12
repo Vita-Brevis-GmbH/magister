@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
   AdConnectionTestOut,
+  AdLoginRequest,
   AdSyncResultOut,
   AdUserListResponse,
   AdUserOut,
@@ -41,6 +42,8 @@ import type {
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
+  RoleAssignmentOut,
+  RoleGrantRequest,
   MailDomainsOut,
   SchoolOut,
   StudentPasswordResetRequest,
@@ -71,6 +74,7 @@ export const queryKeys = {
   appSettings: ["app-settings"] as const,
   myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
+  roles: ["admin-roles"] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -399,6 +403,51 @@ export function useLocalLogin() {
   });
 }
 
+export function useAdLogin() {
+  return useMutation<void, ApiError, AdLoginRequest>({
+    mutationFn: (body) =>
+      apiFetch<void>("/auth/login/ad", {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+// --- Role assignments (admin) ----------------------------------------------
+
+export function useRoles() {
+  return useQuery<RoleAssignmentOut[]>({
+    queryKey: queryKeys.roles,
+    queryFn: () => apiFetch<RoleAssignmentOut[]>("/admin/roles"),
+  });
+}
+
+export function useGrantRole() {
+  const qc = useQueryClient();
+  return useMutation<RoleAssignmentOut, ApiError, { guid: string; body: RoleGrantRequest }>({
+    mutationFn: ({ guid, body }) =>
+      apiFetch<RoleAssignmentOut>(`/admin/users/${encodeURIComponent(guid)}/roles`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
+  });
+}
+
+export function useRevokeRole() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, { guid: string; role: string; school_id: number | null }>({
+    mutationFn: ({ guid, role, school_id }) => {
+      const params = new URLSearchParams({ role });
+      if (school_id != null) params.set("school_id", String(school_id));
+      return apiFetch<void>(`/admin/users/${encodeURIComponent(guid)}/roles?${params.toString()}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
+  });
+}
+
 // --- Local admin lifecycle (admin-only) -----------------------------------
 
 export function useLocalAdmin() {
@@ -458,8 +507,7 @@ export function useTestAdConnection() {
 export function useTriggerAdSync() {
   const qc = useQueryClient();
   return useMutation<AdSyncResultOut, ApiError, void>({
-    mutationFn: () =>
-      apiFetch<AdSyncResultOut>("/admin/ad-sync?mode=full", { method: "POST" }),
+    mutationFn: () => apiFetch<AdSyncResultOut>("/admin/ad-sync?mode=full", { method: "POST" }),
     onSuccess: () => {
       // Fresh rows + updated last_sync_at.
       qc.invalidateQueries({ queryKey: ["users"] });

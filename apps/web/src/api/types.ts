@@ -15,6 +15,32 @@ export interface CurrentUserOut {
 export interface AuthCapabilities {
   oidc_enabled: boolean;
   local_login_enabled: boolean;
+  ad_login_enabled: boolean;
+}
+
+export interface AdLoginRequest {
+  login: string;
+  password: string;
+}
+
+export type GrantableRole = "admin" | "schulleitung" | "smi";
+
+export interface RoleAssignmentOut {
+  ad_object_guid: string;
+  role: string;
+  school_id: number | null;
+  school_name: string | null;
+  granted_by: string | null;
+  granted_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}
+
+export interface RoleGrantRequest {
+  role: GrantableRole;
+  school_id: number | null;
 }
 
 export interface LocalLoginRequest {
@@ -252,6 +278,8 @@ export interface AppSettingsOut {
   ad_bind_password_set: boolean;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string | null;
+  ad_login_enabled: boolean;
+  ad_login_group: string | null;
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
@@ -474,6 +502,8 @@ export interface AppSettingsUpdate {
   ad_bind_password?: string | null;
   ad_tls_verify?: boolean | null;
   ad_tls_ca_pem?: string | null;
+  ad_login_enabled?: boolean | null;
+  ad_login_group?: string | null;
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;

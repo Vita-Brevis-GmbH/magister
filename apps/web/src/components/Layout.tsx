@@ -56,13 +56,22 @@ export function Layout() {
               {t("nav.my_students")}
             </Link>
             {me.data?.is_admin ? (
-              <Link
-                to="/admin/settings"
-                activeProps={{ className: navActive }}
-                inactiveProps={{ className: navIdle }}
-              >
-                {t("nav.admin")}
-              </Link>
+              <>
+                <Link
+                  to="/admin/settings"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.admin")}
+                </Link>
+                <Link
+                  to="/admin/roles"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.roles")}
+                </Link>
+              </>
             ) : null}
             {me.data?.is_admin ||
             me.data?.roles.includes("schulleitung") ||

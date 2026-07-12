@@ -33,6 +33,8 @@ interface FormState {
   ad_bind_password: string;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string;
+  ad_login_enabled: boolean;
+  ad_login_group: string;
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
@@ -58,6 +60,8 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_bind_password: "",
     ad_tls_verify: data.ad_tls_verify,
     ad_tls_ca_pem: data.ad_tls_ca_pem ?? "",
+    ad_login_enabled: data.ad_login_enabled,
+    ad_login_group: data.ad_login_group ?? "",
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
@@ -118,6 +122,12 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   if (form.ad_tls_ca_pem !== (current.ad_tls_ca_pem ?? "")) {
     // Empty string clears the stored cert (falls back to the OS trust store).
     payload.ad_tls_ca_pem = form.ad_tls_ca_pem;
+  }
+  if (form.ad_login_enabled !== current.ad_login_enabled) {
+    payload.ad_login_enabled = form.ad_login_enabled;
+  }
+  if (form.ad_login_group !== (current.ad_login_group ?? "")) {
+    payload.ad_login_group = form.ad_login_group || null;
   }
   if (form.ad_users_search_base !== (current.ad_users_search_base ?? "")) {
     payload.ad_users_search_base = form.ad_users_search_base || null;
@@ -381,6 +391,46 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
                 </p>
               ) : null}
             </div>
+          </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <p className="text-sm font-medium">{t("admin.settings.ad_login_title")}</p>
+            <div className="space-y-1">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={form.ad_login_enabled}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, ad_login_enabled: e.target.checked }));
+                    setSuccess(false);
+                  }}
+                />
+                <span>
+                  <span className="font-medium">{t("admin.settings.field.ad_login_enabled")}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {t("admin.settings.ad_login_enabled_hint")}
+                  </span>
+                </span>
+              </label>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="ad-login-group">{t("admin.settings.field.ad_login_group")}</Label>
+              <Input
+                id="ad-login-group"
+                disabled={!form.ad_login_enabled}
+                placeholder="CN=Magister-Login,OU=Groups,DC=…"
+                {...field("ad_login_group")}
+              />
+              <p className="text-xs text-muted-foreground">
+                {t("admin.settings.field.ad_login_group_hint")}
+              </p>
+            </div>
+            {form.ad_login_enabled && !form.ad_login_group.trim() ? (
+              <p className="text-xs font-medium text-destructive">
+                {t("admin.settings.ad_login_group_required")}
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1">

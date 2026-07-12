@@ -16,7 +16,8 @@
     "imports": "Imports",
     "reports": "Rapports",
     "audit": "Journal d'audit",
-    "my_students": "Mes élèves"
+    "my_students": "Mes élèves",
+    "roles": "Rôles"
   },
   "auth": {
     "login_title": "Connexion",
@@ -34,8 +35,13 @@
     "errors": {
       "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect.",
       "account_locked": "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard.",
-      "local_login_disabled": "La connexion locale est désactivée."
-    }
+      "local_login_disabled": "La connexion locale est désactivée.",
+      "ad_login_disabled": "La connexion AD n'est pas disponible."
+    },
+    "login_ad_disclosure": "Se connecter avec un compte AD",
+    "login_ad_username": "Nom d'utilisateur (AD)",
+    "login_ad_password": "Mot de passe",
+    "login_ad_submit": "Se connecter"
   },
   "me": {
     "title": "Mon profil",
@@ -314,7 +320,10 @@
         "ad_ou_students_other": "OU cible élèves (autres)",
         "ad_ou_teachers": "OU cible enseignants",
         "zyklus1_max_grade": "Cycle 1 jusqu'à l'année",
-        "zyklus2_max_grade": "Cycle 2 jusqu'à l'année"
+        "zyklus2_max_grade": "Cycle 2 jusqu'à l'année",
+        "ad_login_enabled": "Activer la connexion AD",
+        "ad_login_group": "Groupe d'autorisation",
+        "ad_login_group_hint": "Groupe AD (DN ou CN) dont les membres peuvent se connecter via AD. Appartenance directe uniquement."
       },
       "ad_bind_gssapi_hint": "Activé : Magister s'authentifie auprès d'AD via un keytab Kerberos — aucun mot de passe de bind requis (DN/mot de passe ignorés). Nécessite un keytab configuré (voir runbook ad-gssapi-bind). Désactivé = bind classique avec DN + mot de passe.",
       "tls_title": "Certificat LDAPS",
@@ -322,7 +331,10 @@
       "ad_tls_skip_verify_warning": "Attention : la connexion est chiffrée mais non authentifiée — vulnérable aux attaques de l'homme du milieu.",
       "provisioning_title": "Provisionnement (nouveaux comptes)",
       "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe. Laisser vide désactive le provisionnement pour cette catégorie.",
-      "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+)."
+      "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+).",
+      "ad_login_title": "Connexion AD",
+      "ad_login_enabled_hint": "Permet la connexion avec un nom d'utilisateur et un mot de passe AD (LDAPS) en plus d'Entra ID. Pas de MFA sur cette voie.",
+      "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe."
     },
     "local_admin": {
       "title": "Compte administrateur local",
@@ -343,6 +355,32 @@
       "password_changed": "Mot de passe modifié.",
       "error_invalid_current": "Le mot de passe actuel est incorrect.",
       "error_not_configured": "Le compte administrateur local n'est pas configuré."
+    },
+    "roles": {
+      "title": "Rôles et autorisations",
+      "description": "Qui peut faire quoi dans Magister. Les rôles s'appliquent aux comptes AD et Entra ID.",
+      "list_title": "Rôles attribués",
+      "list_desc": "Tous les rôles actifs Admin, Direction et SMI.",
+      "empty": "Aucun rôle attribué pour l'instant.",
+      "col_user": "Utilisateur",
+      "col_role": "Rôle",
+      "col_school": "École",
+      "col_granted_by": "Attribué par",
+      "role_admin": "Administrateur",
+      "role_schulleitung": "Direction",
+      "role_smi": "IT du responsable (SMI)",
+      "revoke": "Retirer",
+      "grant_title": "Attribuer un rôle",
+      "grant_desc": "Rechercher un utilisateur, choisir un rôle et (sauf admin) une école.",
+      "user": "Utilisateur",
+      "user_search_placeholder": "Rechercher nom ou UPN …",
+      "change_user": "Changer",
+      "no_matches": "Aucun résultat.",
+      "school_placeholder": "Choisir une école …",
+      "school_all": "Toutes les écoles",
+      "grant_button": "Attribuer le rôle",
+      "grant_ok": "Rôle attribué.",
+      "grant_not_found": "Utilisateur ou école introuvable."
     }
   },
   "substitutions": {

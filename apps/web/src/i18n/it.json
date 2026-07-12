@@ -16,7 +16,8 @@
     "imports": "Importazioni",
     "reports": "Rapporti",
     "audit": "Registro di audit",
-    "my_students": "I miei studenti"
+    "my_students": "I miei studenti",
+    "roles": "Ruoli"
   },
   "auth": {
     "login_title": "Accedi",
@@ -34,8 +35,13 @@
     "errors": {
       "invalid_credentials": "Nome utente o password errati.",
       "account_locked": "Account bloccato temporaneamente dopo troppi tentativi falliti. Riprova più tardi.",
-      "local_login_disabled": "L'accesso locale è disabilitato."
-    }
+      "local_login_disabled": "L'accesso locale è disabilitato.",
+      "ad_login_disabled": "L'accesso AD non è disponibile."
+    },
+    "login_ad_disclosure": "Accedi con account AD",
+    "login_ad_username": "Nome utente (AD)",
+    "login_ad_password": "Password",
+    "login_ad_submit": "Accedi"
   },
   "me": {
     "title": "Il mio profilo",
@@ -314,7 +320,10 @@
         "ad_ou_students_other": "OU di destinazione studenti (altri)",
         "ad_ou_teachers": "OU di destinazione insegnanti",
         "zyklus1_max_grade": "Ciclo 1 fino all'anno",
-        "zyklus2_max_grade": "Ciclo 2 fino all'anno"
+        "zyklus2_max_grade": "Ciclo 2 fino all'anno",
+        "ad_login_enabled": "Abilita accesso AD",
+        "ad_login_group": "Gruppo di autorizzazione",
+        "ad_login_group_hint": "Gruppo AD (DN o CN) i cui membri possono accedere tramite AD. Solo appartenenza diretta."
       },
       "ad_bind_gssapi_hint": "Se attivo, Magister si autentica ad AD tramite un keytab Kerberos — nessuna password di bind necessaria (Bind DN/password ignorati). Richiede un keytab configurato (vedi runbook ad-gssapi-bind). Disattivato = bind classico con DN + password.",
       "tls_title": "Certificato LDAPS",
@@ -322,7 +331,10 @@
       "ad_tls_skip_verify_warning": "Attenzione: la connessione è cifrata ma non autenticata — vulnerabile ad attacchi man-in-the-middle.",
       "provisioning_title": "Provisioning (nuovi account)",
       "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe. Lasciare vuoto disattiva il provisioning per quel gruppo.",
-      "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+)."
+      "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+).",
+      "ad_login_title": "Accesso AD",
+      "ad_login_enabled_hint": "Consente l'accesso con nome utente e password AD (LDAPS) oltre a Entra ID. Nessun MFA su questa via.",
+      "ad_login_group_required": "Senza un gruppo nessuno può accedere tramite AD. Indicare un gruppo."
     },
     "local_admin": {
       "title": "Account amministratore locale",
@@ -343,6 +355,32 @@
       "password_changed": "Password modificata.",
       "error_invalid_current": "Password attuale errata.",
       "error_not_configured": "Account amministratore locale non configurato."
+    },
+    "roles": {
+      "title": "Ruoli e autorizzazioni",
+      "description": "Chi può fare cosa in Magister. I ruoli valgono per gli account AD ed Entra ID.",
+      "list_title": "Ruoli assegnati",
+      "list_desc": "Tutti i ruoli attivi Admin, Direzione e SMI.",
+      "empty": "Nessun ruolo ancora assegnato.",
+      "col_user": "Utente",
+      "col_role": "Ruolo",
+      "col_school": "Scuola",
+      "col_granted_by": "Assegnato da",
+      "role_admin": "Amministratore",
+      "role_schulleitung": "Direzione",
+      "role_smi": "IT dell'ente (SMI)",
+      "revoke": "Revoca",
+      "grant_title": "Assegna un ruolo",
+      "grant_desc": "Cerca un utente, scegli un ruolo e (tranne admin) una scuola.",
+      "user": "Utente",
+      "user_search_placeholder": "Cerca nome o UPN …",
+      "change_user": "Cambia",
+      "no_matches": "Nessun risultato.",
+      "school_placeholder": "Seleziona scuola …",
+      "school_all": "Tutte le scuole",
+      "grant_button": "Assegna ruolo",
+      "grant_ok": "Ruolo assegnato.",
+      "grant_not_found": "Utente o scuola non trovati."
     }
   },
   "substitutions": {
