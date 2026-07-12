@@ -52,6 +52,8 @@ class EffectiveAppSettings:
     ad_bind_password: str | None
     ad_tls_verify: bool
     ad_tls_ca_pem: str | None
+    ad_login_enabled: bool
+    ad_login_group: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -106,6 +108,8 @@ class AppSettingsService:
             ),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
+            AppSettings.ad_login_enabled,
+            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -129,6 +133,8 @@ class AppSettingsService:
             ad_bind_password=row.ad_bind_password,
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
+            ad_login_enabled=bool(row.ad_login_enabled),
+            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -151,6 +157,8 @@ class AppSettingsService:
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
+            AppSettings.ad_login_enabled,
+            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -179,6 +187,8 @@ class AppSettingsService:
             ad_bind_password_set=bool(row.ad_bind_password_set),
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
+            ad_login_enabled=bool(row.ad_login_enabled),
+            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -222,6 +232,8 @@ class AppSettingsService:
             "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_tls_verify": payload.ad_tls_verify,
+            "ad_login_enabled": payload.ad_login_enabled,
+            "ad_login_group": payload.ad_login_group,
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
@@ -340,6 +352,10 @@ class AppSettingsService:
             values["ad_tls_ca_pem"] = settings.ad_tls_ca_pem
         if not settings.ad_tls_verify:
             values["ad_tls_verify"] = False
+        if settings.ad_login_enabled:
+            values["ad_login_enabled"] = True
+        if settings.ad_login_group:
+            values["ad_login_group"] = settings.ad_login_group
         if settings.ad_sync_interval_minutes:
             values["ad_sync_interval_minutes"] = settings.ad_sync_interval_minutes
 
@@ -376,6 +392,8 @@ def _empty_effective() -> EffectiveAppSettings:
         ad_bind_password=None,
         ad_tls_verify=True,
         ad_tls_ca_pem=None,
+        ad_login_enabled=False,
+        ad_login_group=None,
         ad_users_search_base=None,
         ad_computers_search_base=None,
         ad_sync_interval_minutes=15,

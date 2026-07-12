@@ -91,6 +91,24 @@ class Settings(BaseSettings):
     )
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None
+    ad_login_enabled: bool = Field(
+        default=False,
+        description=(
+            "When true, users may sign in directly with their AD credentials "
+            "(username + password, LDAPS bind) in addition to Entra ID/OIDC. "
+            "There is NO MFA on this path — it is gated by membership in "
+            "``ad_login_group``."
+        ),
+    )
+    ad_login_group: str | None = Field(
+        default=None,
+        description=(
+            "AD group (full DN or CN) whose members are allowed to sign in via "
+            "the direct AD-credential path. Only DIRECT membership is honored "
+            "(nested groups are not resolved). Required for ad_login_enabled to "
+            "grant access."
+        ),
+    )
     ad_users_search_base: str | None = Field(
         default=None,
         description=(

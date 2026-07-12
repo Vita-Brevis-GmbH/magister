@@ -19,6 +19,7 @@ from sqlalchemy import (
     LargeBinary,
     String,
     Text,
+    false,
     func,
     true,
 )
@@ -74,6 +75,14 @@ class AppSettings(Base):
         Boolean, nullable=False, default=True, server_default=true()
     )
     ad_tls_ca_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Direct AD-credential login (username + password, LDAPS bind) as an
+    # alternative to Entra/OIDC. ``ad_login_enabled`` is the master switch;
+    # only members of ``ad_login_group`` (a DN or CN, direct membership) may
+    # sign in that way. No MFA on this path.
+    ad_login_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    ad_login_group: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_users_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # Optional: subtree to walk for ``Computer`` objects whose ``managedBy``
     # points at a user. Unset = device sync is skipped silently.

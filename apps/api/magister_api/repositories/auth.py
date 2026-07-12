@@ -77,6 +77,16 @@ class RoleAssignmentRepository:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all_active(self) -> list[RoleAssignment]:
+        """Every active admin/schulleitung/smi grant across all users.
+
+        # scope-bypass: the roles overview is admin-only (require_admin) and is
+        # deliberately cross-school — it exists to show who holds which role.
+        """
+        stmt = select(RoleAssignment).where(RoleAssignment.revoked_at.is_(None))
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
     async def grant(
         self,
         *,

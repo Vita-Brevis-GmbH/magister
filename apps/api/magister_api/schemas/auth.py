@@ -9,6 +9,13 @@ from pydantic import BaseModel, ConfigDict, Field
 from magister_api.schemas.common import ObjectGuid, Upn
 
 
+class AdLoginRequest(BaseModel):
+    """Direct AD-credential login (username + password over LDAPS)."""
+
+    login: str = Field(min_length=1, max_length=256, description="sAMAccountName or UPN")
+    password: str = Field(min_length=1, max_length=512)
+
+
 class CurrentUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

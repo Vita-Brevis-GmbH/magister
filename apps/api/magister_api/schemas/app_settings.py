@@ -38,6 +38,8 @@ class AppSettingsOut(BaseModel):
     # Public CA certificate (PEM) — safe to return so the GUI can display /
     # edit it. None when no CA has been imported.
     ad_tls_ca_pem: str | None
+    ad_login_enabled: bool
+    ad_login_group: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -103,6 +105,8 @@ class AppSettingsUpdate(BaseModel):
             "to the OS trust store)."
         ),
     )
+    ad_login_enabled: bool | None = None
+    ad_login_group: str | None = None
     ad_users_search_base: str | None = None
     ad_computers_search_base: str | None = None
     ad_sync_interval_minutes: int | None = Field(default=None, ge=1, le=1440)

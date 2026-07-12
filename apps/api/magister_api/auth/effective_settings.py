@@ -58,6 +58,10 @@ def _overlay(base: Settings, eff: EffectiveAppSettings) -> Settings:
     update["ad_tls_verify"] = eff.ad_tls_verify
     if eff.ad_tls_ca_pem:
         update["ad_tls_ca_pem"] = eff.ad_tls_ca_pem
+    # ad_login_enabled is a bool where False is meaningful — always overlay.
+    update["ad_login_enabled"] = eff.ad_login_enabled
+    if eff.ad_login_group:
+        update["ad_login_group"] = eff.ad_login_group
     if eff.ad_users_search_base:
         update["ad_users_search_base"] = eff.ad_users_search_base
     if eff.ad_computers_search_base:

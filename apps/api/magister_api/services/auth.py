@@ -9,14 +9,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import timedelta
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient, AdUserRecord
 from magister_api.audit.service import AuditService
 from magister_api.auth.bootstrap import maybe_bootstrap_admin
 from magister_api.auth.oidc import OidcUserInfo
 from magister_api.auth.sessions import new_session_id
 from magister_api.config import Settings
-from magister_api.models.auth import Session
+from magister_api.models.auth import AdUserCache, Session
+from magister_api.models.school import School
+from magister_api.repositories.ad_users import AdUserCacheSyncRepository
 from magister_api.repositories.auth import (
     AdUserCacheRepository,
     SessionRepository,
@@ -134,6 +138,82 @@ class AuthService:
             )
 
         return LoginResult(session=sess, bootstrap_granted=bootstrap_granted)
+
+    async def complete_ad_login(
+        self,
+        *,
+        ad: AdClient,
+        login: str,
+        password: str,
+        ip: str | None,
+        user_agent: str | None,
+        request_id: str,
+    ) -> LoginResult:
+        """Authenticate against AD (LDAPS bind + login-group), then create a session.
+
+        Raises :class:`LoginRefusedError` on any auth/authorization failure
+        (``ad_login_disabled`` / ``ad_login_failed`` / ``user_disabled``). The
+        password never leaves this call and is never logged.
+        """
+        if not self.settings.ad_login_enabled:
+            raise LoginRefusedError("ad_login_disabled")
+
+        record = await ad.authenticate(login=login, password=password)
+        if record is None:
+            raise LoginRefusedError("ad_login_failed")
+
+        # Upsert the authenticated user into ad_user_cache so a session (and the
+        # later role lookups) have a row to hang off — mirrors the sync writer,
+        # including school resolution by OU.
+        resolver = await self._school_resolver()
+        await AdUserCacheSyncRepository(self.session).upsert_from_ad(
+            [record], school_id_resolver=resolver
+        )
+        cache_row = await self.session.get(AdUserCache, record.ad_object_guid)
+        if cache_row is None or not cache_row.enabled:
+            raise LoginRefusedError("user_disabled")
+
+        sessions_repo = SessionRepository(self.session)
+        sid = new_session_id()
+        sess = await sessions_repo.create(
+            session_id=sid,
+            ad_object_guid=record.ad_object_guid,
+            oidc_subject="",  # not an OIDC session
+            lifetime=timedelta(minutes=self.settings.session_lifetime_minutes),
+            ip=ip,
+            user_agent=user_agent,
+            auth_kind="ad",
+        )
+        audit = AuditService(self.session, self.settings)
+        await audit.emit(
+            action="ad_login",
+            target_kind="session",
+            target_id=sess.id[:12],
+            actor_upn=record.upn,
+            actor_object_guid=record.ad_object_guid,
+            school_id=None,
+            ip=ip,
+            request_id=request_id,
+            payload={"user_agent": user_agent},
+        )
+        return LoginResult(session=sess, bootstrap_granted=False)
+
+    async def _school_resolver(self):
+        """Return ``record -> school_id | None`` driven by the OU→scope_short match.
+
+        Mirrors :class:`magister_api.services.ad_sync.AdSyncService` so a login
+        upsert lands the user in the same school the periodic sync would.
+        """
+        # scope-bypass: login upsert runs as the auth service, not a scoped user.
+        schools = list((await self.session.execute(select(School))).scalars().all())
+
+        def _resolve(record: AdUserRecord) -> int | None:
+            for s in schools:
+                if record.matches_school_via_ou(s.scope_short):
+                    return s.id
+            return None
+
+        return _resolve
 
     async def logout(
         self,

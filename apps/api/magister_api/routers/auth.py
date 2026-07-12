@@ -17,6 +17,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.audit.service import AuditService
 from magister_api.auth.csrf import issue_csrf_token
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
@@ -27,7 +28,8 @@ from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.repositories.auth import SessionRepository
 from magister_api.repositories.local_admin import LocalAdminRepository
-from magister_api.schemas.auth import CurrentUserOut
+from magister_api.routers.admin_sync import get_ad_client
+from magister_api.schemas.auth import AdLoginRequest, CurrentUserOut
 from magister_api.schemas.local_admin import LocalLoginRequest
 from magister_api.services.auth import AuthService, LoginRefusedError
 from magister_api.services.local_admin import (
@@ -240,7 +242,76 @@ async def capabilities(
     oidc_enabled = bool(settings.oidc_issuer and settings.oidc_client_id)
     local_row = await LocalAdminRepository(session).get()
     local_login_enabled = local_row is not None and local_row.enabled
-    return {"oidc_enabled": oidc_enabled, "local_login_enabled": local_login_enabled}
+    # AD login is only usable when both the master switch AND an authorizing
+    # group are set — otherwise the backend would reject every attempt.
+    ad_login_enabled = bool(settings.ad_login_enabled and settings.ad_login_group)
+    return {
+        "oidc_enabled": oidc_enabled,
+        "local_login_enabled": local_login_enabled,
+        "ad_login_enabled": ad_login_enabled,
+    }
+
+
+_AD_REFUSAL_TO_STATUS: dict[str, int] = {
+    "ad_login_disabled": status.HTTP_403_FORBIDDEN,
+    "ad_login_failed": status.HTTP_401_UNAUTHORIZED,
+    "user_disabled": status.HTTP_403_FORBIDDEN,
+}
+
+
+@router.post("/login/ad")
+# Same IP ceiling as the local-admin login; the AD side has no per-account
+# lockout, so this per-IP limit is the brute-force guard.
+@limiter.limit("20/minute")  # pyright: ignore[reportUntypedFunctionDecorator]
+async def login_ad(
+    request: Request,
+    payload: AdLoginRequest,
+    settings: Settings = Depends(get_effective_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> Response:
+    """Username + password login against AD (LDAPS bind + login-group check).
+
+    CSRF-exempt (predates the session) via the ``/auth/login`` prefix in
+    :class:`CsrfMiddleware.EXEMPT_PATH_PREFIXES`. Rate-limited per IP. The
+    password is never logged.
+    """
+    auth_service = AuthService(session, settings)
+    request_id = getattr(request.state, "request_id", "")
+    client_ip = getattr(request.state, "client_ip", None)
+    user_agent = request.headers.get("user-agent")
+    try:
+        result = await auth_service.complete_ad_login(
+            ad=ad,
+            login=payload.login,
+            password=payload.password,
+            ip=client_ip,
+            user_agent=user_agent,
+            request_id=request_id,
+        )
+    except LoginRefusedError as exc:
+        audit = AuditService(session, settings)
+        await audit.emit(
+            action="ad_login_failed",
+            target_kind="session",
+            target_id=payload.login[:64],
+            actor_upn="",
+            actor_object_guid=None,
+            school_id=None,
+            ip=client_ip,
+            request_id=request_id,
+            payload={"reason": exc.code},
+        )
+        # Return (not raise) so the failure audit commits — mirrors login_local.
+        return JSONResponse(
+            status_code=_AD_REFUSAL_TO_STATUS.get(exc.code, status.HTTP_401_UNAUTHORIZED),
+            content={"detail": exc.code},
+        )
+
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _set_session_cookie(response, result.session.id, settings)
+    _set_csrf_cookie(response, issue_csrf_token(result.session.id, settings), settings)
+    return response
 
 
 _REFUSAL_TO_STATUS: dict[LoginRefusal, int] = {
