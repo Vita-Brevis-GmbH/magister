@@ -26,6 +26,35 @@ class AdUserParseError(ValueError):
     """An LDAP entry could not be parsed into an :class:`AdUserRecord`."""
 
 
+# Reason codes for a *sync* failure. The bind may succeed (the connection test
+# is green) yet the sync still fail because it additionally searches a subtree —
+# so "AD unreachable" is misleading. These distinguish the real cause. They
+# double as i18n keys on the frontend (``admin.settings.sync_ad_reason.*``).
+SYNC_REASON_SEARCH_BASE_MISSING = "ad_search_base_missing"
+SYNC_REASON_SEARCH_FAILED = "ad_search_failed"
+SYNC_REASON_BIND_FAILED = "ad_bind_failed"
+SYNC_REASON_CONFIG = "ad_config"
+SYNC_REASON_UNAVAILABLE = "ad_unavailable"
+
+
+def classify_sync_failure(exc: AdUnavailableError) -> str:
+    """Map an :class:`AdUnavailableError` from the sync path to a reason code.
+
+    The codes are safe to return and log: they carry no host, DN, or credential
+    material (only the internal marker strings the AD client raises).
+    """
+    msg = str(exc)
+    if "SEARCH_BASE" in msg:
+        return SYNC_REASON_SEARCH_BASE_MISSING
+    if msg == "ldap_bind_failed":
+        return SYNC_REASON_BIND_FAILED
+    if msg in ("ldap_search_failed", "ldap_computer_search_failed"):
+        return SYNC_REASON_SEARCH_FAILED
+    if "MAGISTER_AD_DCS" in msg or "BIND_DN" in msg or "BIND_PASSWORD" in msg:
+        return SYNC_REASON_CONFIG
+    return SYNC_REASON_UNAVAILABLE
+
+
 # --- Failure classification ----------------------------------------------------------
 #
 # The connection test needs to tell the operator *why* a bind failed without

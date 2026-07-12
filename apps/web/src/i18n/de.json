@@ -283,6 +283,13 @@
       "sync_ad_ok": "{{count}} Benutzer synchronisiert.",
       "sync_ad_unavailable": "AD nicht erreichbar.",
       "sync_ad_hint": "Startet sofort einen vollständigen AD-Sync. Läuft sonst automatisch im eingestellten Intervall.",
+      "sync_ad_reason": {
+        "ad_search_base_missing": "Such-Basis (User) ist nicht gesetzt. Bitte oben eine gültige DN eintragen und speichern.",
+        "ad_search_failed": "AD-Suche fehlgeschlagen. Such-Basis-DN prüfen und ob der Service-Account diesen Bereich lesen darf.",
+        "ad_bind_failed": "Anmeldung am AD abgelehnt. Bind-DN und Passwort prüfen.",
+        "ad_config": "AD-Konfiguration unvollständig. Domain-Controller und Bind-Zugang prüfen.",
+        "ad_unavailable": "AD nicht erreichbar."
+      },
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",
       "save": "Speichern",

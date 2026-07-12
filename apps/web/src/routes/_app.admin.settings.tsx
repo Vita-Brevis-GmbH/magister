@@ -548,7 +548,10 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               ) : syncAd.isError ? (
                 <span className="text-sm text-destructive">
                   {syncAd.error instanceof ApiError && syncAd.error.status === 503
-                    ? t("admin.settings.sync_ad_unavailable")
+                    ? t([
+                        `admin.settings.sync_ad_reason.${syncAd.error.code}`,
+                        "admin.settings.sync_ad_unavailable",
+                      ])
                     : t("errors.generic")}
                 </span>
               ) : null}

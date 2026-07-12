@@ -5,13 +5,14 @@ from the app lifespan, interval from ``app_settings.ad_sync_interval_minutes``).
 
 from __future__ import annotations
 
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
-from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.errors import AdUnavailableError, classify_sync_failure
 from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.effective_settings import get_effective_settings
@@ -20,6 +21,8 @@ from magister_api.config import Settings
 from magister_api.db import get_session
 from magister_api.schemas.ad_users import AdConnectionTestOut, AdSyncResultOut
 from magister_api.services.ad_sync import AdSyncService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -63,7 +66,12 @@ async def trigger_ad_sync(
             mode=mode,
         )
     except AdUnavailableError as exc:
-        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+        # The bind may be fine (the connection test is green) yet the sync still
+        # fails because it searches a subtree — surface the specific reason
+        # instead of a misleading "unreachable". Log the category (never creds).
+        reason = classify_sync_failure(exc)
+        logger.warning("AD sync failed: reason=%s", reason)
+        raise HTTPException(status_code=503, detail=reason) from exc
     return AdSyncResultOut(
         synced_count=result.synced_count,
         school_partition={str(k): v for k, v in result.school_partition.items()},
