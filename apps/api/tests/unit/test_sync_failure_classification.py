@@ -11,6 +11,8 @@ from magister_api.ad.errors import (
     SYNC_REASON_BIND_FAILED,
     SYNC_REASON_CONFIG,
     SYNC_REASON_SEARCH_BASE_MISSING,
+    SYNC_REASON_SEARCH_BASE_NOT_FOUND,
+    SYNC_REASON_SEARCH_DENIED,
     SYNC_REASON_SEARCH_FAILED,
     SYNC_REASON_UNAVAILABLE,
     AdUnavailableError,
@@ -26,9 +28,19 @@ def test_missing_search_base() -> None:
     assert _r("MAGISTER_AD_USERS_SEARCH_BASE is not configured") == SYNC_REASON_SEARCH_BASE_MISSING
 
 
-def test_search_failed() -> None:
+def test_search_failed_generic() -> None:
     assert _r("ldap_search_failed") == SYNC_REASON_SEARCH_FAILED
     assert _r("ldap_computer_search_failed") == SYNC_REASON_SEARCH_FAILED
+    assert _r("ldap_search_failed:sizeLimitExceeded") == SYNC_REASON_SEARCH_FAILED
+
+
+def test_search_base_not_found() -> None:
+    assert _r("ldap_search_failed:noSuchObject") == SYNC_REASON_SEARCH_BASE_NOT_FOUND
+    assert _r("ldap_computer_search_failed:noSuchObject") == SYNC_REASON_SEARCH_BASE_NOT_FOUND
+
+
+def test_search_denied() -> None:
+    assert _r("ldap_search_failed:insufficientAccessRights") == SYNC_REASON_SEARCH_DENIED
 
 
 def test_bind_failed() -> None:

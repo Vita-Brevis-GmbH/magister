@@ -419,6 +419,66 @@ class AdClient:
         except LDAPException as exc:
             raise AdUnavailableError("ldap_bind_failed") from exc
 
+    # RFC 2696 (paged results) control OID. AD caps a single search at
+    # MaxPageSize (default 1000) and answers a larger unpaged search with
+    # ``sizeLimitExceeded`` — which the client would surface as a bare
+    # "search failed". We must page through every result set that can exceed
+    # that cap (the user list and the Computer-OU walk).
+    _PAGED_CONTROL_OID = "1.2.840.113556.1.4.319"
+    _PAGE_SIZE = 1000
+
+    @staticmethod
+    def _paged_search(
+        conn: Connection,
+        base: str,
+        search_filter: str,
+        attributes: list[str],
+    ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+        """Run a paged SUBTREE search and return ``(entries, last_result)``.
+
+        Normalises the two ldap3 return shapes (SAFE_SYNC tuple vs MOCK_SYNC
+        bool). ``last_result`` is the final ``searchResDone`` dict — the caller
+        inspects its ``result`` code / ``description`` to distinguish success
+        (0) from noSuchObject (32), insufficientAccessRights (50), etc.
+        """
+        entries: list[dict[str, Any]] = []
+        result: dict[str, Any] = {}
+        cookie: bytes | None = None
+        while True:
+            res = conn.search(
+                search_base=base,
+                search_filter=search_filter,
+                search_scope=SUBTREE,
+                attributes=attributes,
+                paged_size=AdClient._PAGE_SIZE,
+                paged_cookie=cookie,
+            )
+            if isinstance(res, tuple):
+                status, result, response = res[0], res[1] or {}, res[2] or []
+            else:  # MOCK_SYNC returns a bool; state lives on the connection.
+                status, result, response = res, (conn.result or {}), (conn.response or [])
+            if not status:
+                return entries, result
+            entries.extend(e for e in response if e.get("type") == "searchResEntry")
+            controls = result.get("controls") or {}
+            paged = controls.get(AdClient._PAGED_CONTROL_OID) or {}
+            cookie = ((paged.get("value") or {}).get("cookie")) or None
+            if not cookie:
+                break
+        return entries, result
+
+    @staticmethod
+    def _search_failure_detail(result: dict[str, Any]) -> str | None:
+        """Return the LDAP failure description, or ``None`` on success/empty.
+
+        A missing/None code is treated as success (mock returns no code on an
+        empty result). Only a concrete non-zero result code is a failure.
+        """
+        code = result.get("result")
+        if code in (0, None):
+            return None
+        return str(result.get("description") or code)
+
     def _sync_search(
         self,
         base: str,
@@ -427,22 +487,12 @@ class AdClient:
     ) -> list[AdUserRecord]:
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.search(
-                search_base=base,
-                search_filter=search_filter,
-                search_scope=SUBTREE,
-                attributes=attributes,
-            )
-            # ldap3 SAFE_SYNC returns a (status, result, response, request) tuple;
-            # MOCK_SYNC returns a bool. Normalise.
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok:
-                raise AdUnavailableError("ldap_search_failed")
+            raw, result = self._paged_search(conn, base, search_filter, attributes)
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                raise AdUnavailableError(f"ldap_search_failed:{detail}")
             entries: list[AdUserRecord] = []
-            for entry in conn.response or []:
-                if entry.get("type") != "searchResEntry":
-                    continue
+            for entry in raw:
                 try:
                     entries.append(parse_ad_entry(entry.get("attributes", {}), entry.get("dn", "")))
                 except AdUserParseError:
@@ -477,20 +527,21 @@ class AdClient:
     def _sync_search_managed_computers(self, base: str) -> dict[str, str]:
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.search(
-                search_base=base,
-                search_filter="(&(objectClass=computer)(managedBy=*))",
-                search_scope=SUBTREE,
-                attributes=["cn", "name", "managedBy"],
+            raw, result = self._paged_search(
+                conn,
+                base,
+                "(&(objectClass=computer)(managedBy=*))",
+                ["cn", "name", "managedBy"],
             )
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok:
-                raise AdUnavailableError("ldap_computer_search_failed")
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                # Device enrichment is optional (see the docstring): a wrong or
+                # empty Computer-OU must never abort the user sync. Log the
+                # category and skip — device_name just stays as-is.
+                logger.warning("AD computer search skipped: %s", detail)
+                return {}
             out: dict[str, str] = {}
-            for entry in conn.response or []:
-                if entry.get("type") != "searchResEntry":
-                    continue
+            for entry in raw:
                 attrs = entry.get("attributes", {})
                 managed_by = _first_value(attrs.get("managedBy"))
                 if not managed_by:

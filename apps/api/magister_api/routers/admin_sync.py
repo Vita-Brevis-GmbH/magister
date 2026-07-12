@@ -70,7 +70,9 @@ async def trigger_ad_sync(
         # fails because it searches a subtree — surface the specific reason
         # instead of a misleading "unreachable". Log the category (never creds).
         reason = classify_sync_failure(exc)
-        logger.warning("AD sync failed: reason=%s", reason)
+        # ``str(exc)`` carries only internal markers + the LDAP result
+        # description (e.g. "ldap_search_failed:noSuchObject") — no credentials.
+        logger.warning("AD sync failed: reason=%s detail=%s", reason, exc)
         raise HTTPException(status_code=503, detail=reason) from exc
     return AdSyncResultOut(
         synced_count=result.synced_count,

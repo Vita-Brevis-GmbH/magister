@@ -285,6 +285,8 @@
       "sync_ad_hint": "Startet sofort einen vollständigen AD-Sync. Läuft sonst automatisch im eingestellten Intervall.",
       "sync_ad_reason": {
         "ad_search_base_missing": "Such-Basis (User) ist nicht gesetzt. Bitte oben eine gültige DN eintragen und speichern.",
+        "ad_search_base_not_found": "Such-Basis nicht gefunden (noSuchObject). Die DN existiert so nicht — Schreibweise und OU-Pfad prüfen.",
+        "ad_search_denied": "Zugriff verweigert. Der Service-Account darf diesen Bereich nicht lesen.",
         "ad_search_failed": "AD-Suche fehlgeschlagen. Such-Basis-DN prüfen und ob der Service-Account diesen Bereich lesen darf.",
         "ad_bind_failed": "Anmeldung am AD abgelehnt. Bind-DN und Passwort prüfen.",
         "ad_config": "AD-Konfiguration unvollständig. Domain-Controller und Bind-Zugang prüfen.",

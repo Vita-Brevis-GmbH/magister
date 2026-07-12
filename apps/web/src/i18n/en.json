@@ -287,6 +287,8 @@
       "sync_ad_hint": "Runs a full AD sync immediately. Otherwise it runs automatically at the configured interval.",
       "sync_ad_reason": {
         "ad_search_base_missing": "User search base is not set. Enter a valid DN above and save.",
+        "ad_search_base_not_found": "Search base not found (noSuchObject). That DN does not exist — check the spelling and OU path.",
+        "ad_search_denied": "Access denied. The service account may not read that subtree.",
         "ad_search_failed": "AD search failed. Check the search-base DN and that the service account may read that subtree.",
         "ad_bind_failed": "AD bind rejected. Check the bind DN and password.",
         "ad_config": "AD configuration incomplete. Check the domain controllers and bind account.",

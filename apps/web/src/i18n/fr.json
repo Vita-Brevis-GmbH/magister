@@ -290,6 +290,8 @@
       "sync_ad_hint": "Lance immédiatement une synchronisation AD complète. Sinon automatique selon l'intervalle configuré.",
       "sync_ad_reason": {
         "ad_search_base_missing": "La base de recherche (utilisateurs) n'est pas définie. Saisissez un DN valide ci-dessus et enregistrez.",
+        "ad_search_base_not_found": "Base de recherche introuvable (noSuchObject). Ce DN n'existe pas — vérifiez l'orthographe et le chemin d'OU.",
+        "ad_search_denied": "Accès refusé. Le compte de service ne peut pas lire cette sous-arborescence.",
         "ad_search_failed": "Échec de la recherche AD. Vérifiez le DN de la base de recherche et que le compte de service peut lire cette sous-arborescence.",
         "ad_bind_failed": "Authentification AD refusée. Vérifiez le DN de bind et le mot de passe.",
         "ad_config": "Configuration AD incomplète. Vérifiez les contrôleurs de domaine et le compte de bind.",

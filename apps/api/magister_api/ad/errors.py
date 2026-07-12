@@ -31,6 +31,8 @@ class AdUserParseError(ValueError):
 # so "AD unreachable" is misleading. These distinguish the real cause. They
 # double as i18n keys on the frontend (``admin.settings.sync_ad_reason.*``).
 SYNC_REASON_SEARCH_BASE_MISSING = "ad_search_base_missing"
+SYNC_REASON_SEARCH_BASE_NOT_FOUND = "ad_search_base_not_found"
+SYNC_REASON_SEARCH_DENIED = "ad_search_denied"
 SYNC_REASON_SEARCH_FAILED = "ad_search_failed"
 SYNC_REASON_BIND_FAILED = "ad_bind_failed"
 SYNC_REASON_CONFIG = "ad_config"
@@ -41,14 +43,22 @@ def classify_sync_failure(exc: AdUnavailableError) -> str:
     """Map an :class:`AdUnavailableError` from the sync path to a reason code.
 
     The codes are safe to return and log: they carry no host, DN, or credential
-    material (only the internal marker strings the AD client raises).
+    material (only the internal marker strings the AD client raises, plus the
+    LDAP result *description* which is a protocol constant like ``noSuchObject``).
+    Search failures may carry a ``:<description>`` suffix (e.g.
+    ``ldap_search_failed:noSuchObject``) which we mine for a finer reason.
     """
     msg = str(exc)
     if "SEARCH_BASE" in msg:
         return SYNC_REASON_SEARCH_BASE_MISSING
     if msg == "ldap_bind_failed":
         return SYNC_REASON_BIND_FAILED
-    if msg in ("ldap_search_failed", "ldap_computer_search_failed"):
+    if msg.startswith("ldap_search_failed") or msg.startswith("ldap_computer_search_failed"):
+        low = msg.lower()
+        if "nosuchobject" in low:
+            return SYNC_REASON_SEARCH_BASE_NOT_FOUND
+        if "insufficientaccess" in low or "insufficient access" in low:
+            return SYNC_REASON_SEARCH_DENIED
         return SYNC_REASON_SEARCH_FAILED
     if "MAGISTER_AD_DCS" in msg or "BIND_DN" in msg or "BIND_PASSWORD" in msg:
         return SYNC_REASON_CONFIG
