@@ -256,8 +256,17 @@ class TestAdUnavailable:
         app: FastAPI,
         app_settings: Settings,
     ) -> None:
-        # Live mode with no DCs configured triggers AdUnavailableError immediately.
-        broken_settings = app_settings.model_copy(update={"ad_use_mock": False, "ad_dcs": []})
+        # Live mode with a search base but no DCs configured triggers
+        # AdUnavailableError immediately. The sync endpoint now surfaces the
+        # specific reason (ad_config = "MAGISTER_AD_DCS is empty") instead of a
+        # blanket "ad_unavailable".
+        broken_settings = app_settings.model_copy(
+            update={
+                "ad_use_mock": False,
+                "ad_dcs": [],
+                "ad_users_search_base": "DC=schule,DC=local",
+            }
+        )
         broken_client = AdClient(broken_settings)
         app.dependency_overrides[get_ad_client] = lambda: broken_client
         try:
@@ -265,7 +274,7 @@ class TestAdUnavailable:
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
         assert r.status_code == 503
-        assert r.json()["detail"] == "ad_unavailable"
+        assert r.json()["detail"] == "ad_config"
 
 
 class TestRbac:

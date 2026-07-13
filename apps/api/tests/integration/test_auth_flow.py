@@ -154,7 +154,7 @@ class TestBootstrapLoginFlow:
             assert me.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_csrf_required_for_logout(self, app: FastAPI, client: AsyncClient) -> None:
+    async def test_logout_is_csrf_exempt(self, app: FastAPI, client: AsyncClient) -> None:
         fake = FakeOidcClient(_bootstrap_userinfo())
         app.dependency_overrides[get_oidc_client] = lambda: fake
         await client.get("/auth/login", follow_redirects=False)
@@ -163,6 +163,8 @@ class TestBootstrapLoginFlow:
             params={"code": "c", "state": "state-xyz"},
             follow_redirects=False,
         )
-        # Missing X-CSRF-Token header → 403.
+        # Logout is deliberately CSRF-exempt (it still requires a valid session
+        # cookie; a stale csrf cookie must not be able to block sign-out).
         out = await client.post("/auth/logout")
-        assert out.status_code == 403
+        assert out.status_code == 200
+        assert out.json() == {"ok": True}
