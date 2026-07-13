@@ -491,7 +491,7 @@
     "kind_classes": "Classi",
     "kind_class_memberships": "Assegnazioni di classe (alunni/e)",
     "kind_class_teachers": "Insegnanti di classe",
-    "kind_classes_desc": "Crea o aggiorna classi. Colonne: name, kuerzel, jahrgangsstufe.",
+    "kind_classes_desc": "Crea o aggiorna classi. Colonne: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (facoltativo, per pluriclasse/Basisstufe; vuoto = classe singola). Scuola dell'infanzia: -1 = 1º, 0 = 2º.",
     "kind_class_memberships_desc": "Assegna alunni/e a una classe. L'UPN deve esistere in AD. Colonne: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Assegna insegnanti di classe (titolare/co/supplente). Colonne: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Nuovi studenti (crea account AD)",

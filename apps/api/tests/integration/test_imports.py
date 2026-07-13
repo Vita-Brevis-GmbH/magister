@@ -23,8 +23,10 @@ async def test_template_classes_csv(as_schulleitung_a: AsyncClient) -> None:
     assert 'filename="classes.csv"' in r.headers["content-disposition"]
     body = r.text
     lines = body.strip().splitlines()
-    assert lines[0] == "name,kuerzel,jahrgangsstufe"
+    assert lines[0] == "name,kuerzel,jahrgangsstufe,jahrgangsstufe_bis"
     assert len(lines) >= 4  # header + 3 example rows
+    # A multi-grade example row carries an upper bound.
+    assert any(line.endswith(",1,3") for line in lines[1:])
 
 
 @pytest.mark.asyncio
@@ -187,6 +189,63 @@ async def test_apply_creates_classes(
         .all()
     )
     assert [c.name for c in rows] == ["5a", "5b"]
+
+
+@pytest.mark.asyncio
+async def test_apply_classes_with_grade_range(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # New 4-column template: multi-grade (1–3) and Basisstufe (KG1..1).
+    csv = (
+        "name,kuerzel,jahrgangsstufe,jahrgangsstufe_bis\n"
+        "Mehrjahrgang 1-3,M13,1,3\n"
+        "Basisstufe A,BSA,-1,1\n"
+        "Einzel 4,E4,4,\n"
+    )
+    r = await as_schulleitung_a.post(
+        "/imports?kind=classes",
+        files={"file": ("classes.csv", csv, "text/csv")},
+    )
+    assert r.status_code == 201, r.text
+    job_id = r.json()["id"]
+
+    r2 = await as_schulleitung_a.post(f"/imports/{job_id}/apply")
+    assert r2.status_code == 200, r2.text
+    assert r2.json()["summary"]["applied"]["created"] == 3
+
+    from sqlalchemy import select
+
+    by_name = {
+        c.name: c
+        for c in (
+            (await db_session.execute(select(SchoolClass).where(SchoolClass.school_id == school_a)))
+            .scalars()
+            .all()
+        )
+    }
+    assert (
+        by_name["Mehrjahrgang 1-3"].jahrgangsstufe,
+        by_name["Mehrjahrgang 1-3"].jahrgangsstufe_bis,
+    ) == (1, 3)
+    assert (by_name["Basisstufe A"].jahrgangsstufe, by_name["Basisstufe A"].jahrgangsstufe_bis) == (
+        -1,
+        1,
+    )
+    assert by_name["Einzel 4"].jahrgangsstufe_bis is None
+
+
+@pytest.mark.asyncio
+async def test_stage_rejects_inverted_grade_range(as_schulleitung_a: AsyncClient) -> None:
+    csv = "name,kuerzel,jahrgangsstufe,jahrgangsstufe_bis\nBad,BAD,5,3\n"
+    r = await as_schulleitung_a.post(
+        "/imports?kind=classes",
+        files={"file": ("classes.csv", csv, "text/csv")},
+    )
+    assert r.status_code == 201, r.text
+    detail = await as_schulleitung_a.get(f"/imports/{r.json()['id']}")
+    rows = detail.json()["rows"]
+    assert rows[0]["action"] == "error"
+    assert any("jahrgangsstufe_bis" in e for e in rows[0]["errors"])
 
 
 @pytest.mark.asyncio

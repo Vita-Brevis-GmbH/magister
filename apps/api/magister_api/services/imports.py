@@ -64,11 +64,14 @@ _FORCE_CHANGE_FALSE = {"false", "0", "nein", "no", "falsch"}
 
 TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
     IMPORT_KIND_CLASSES: (
-        ["name", "kuerzel", "jahrgangsstufe"],
+        # jahrgangsstufe = untere/primäre Stufe; jahrgangsstufe_bis = optionale
+        # obere Stufe für Mehrjahrgangsklassen/Basisstufe (leer = Einzelklasse).
+        # Kindergarten: -1 = 1. KG, 0 = 2. KG, 1..13 = Klassen.
+        ["name", "kuerzel", "jahrgangsstufe", "jahrgangsstufe_bis"],
         [
-            ["3a", "3a", "3"],
-            ["3b", "3b", "3"],
-            ["Werken Gruppe Rot", "", "4"],
+            ["3a", "3a", "3", ""],
+            ["Mehrjahrgang 1-3", "M13", "1", "3"],
+            ["Basisstufe A", "BSA", "-1", "1"],
         ],
     ),
     IMPORT_KIND_CLASS_MEMBERSHIPS: (
@@ -115,6 +118,13 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", ""],
         ],
     ),
+}
+
+
+# Columns that may be omitted from the uploaded CSV (appended, in order).
+# Old files without them still validate; the template ships them included.
+OPTIONAL_HEADERS: dict[str, list[str]] = {
+    IMPORT_KIND_CLASSES: ["jahrgangsstufe_bis"],
 }
 
 
@@ -251,13 +261,17 @@ class ImportService:
             raise InvalidCsvError(f"unknown import kind: {kind}")
         self._seen_upns = set()
         self._seen_sams = set()
-        expected_header = TEMPLATES[kind][0]
+        template_header = TEMPLATES[kind][0]
+        optional = OPTIONAL_HEADERS.get(kind, [])
+        required = [h for h in template_header if h not in optional]
         reader = csv.DictReader(io.StringIO(csv_text))
-        if reader.fieldnames is None or [(h or "").strip().lower() for h in reader.fieldnames] != [
-            h.lower() for h in expected_header
-        ]:
+        got = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
+        # Accept the required columns, optionally followed by the optional
+        # columns in order (so both the old and the new template validate).
+        accepted = [[h.lower() for h in required + optional[:k]] for k in range(len(optional) + 1)]
+        if got not in accepted:
             raise InvalidCsvError(
-                f"csv header must be exactly {expected_header}, got {reader.fieldnames!r}"
+                f"csv header must be {required} (optional: {optional}), got {reader.fieldnames!r}"
             )
 
         job = ImportJob(
@@ -337,6 +351,7 @@ class ImportService:
 
         if not name:
             errors.append("name is required")
+        jahrgangsstufe: int | None = None
         try:
             jahrgangsstufe = int(jahrgangsstufe_raw)
             # -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen.
@@ -344,6 +359,19 @@ class ImportService:
                 errors.append("jahrgangsstufe must be -1..13")
         except ValueError:
             errors.append("jahrgangsstufe must be an integer")
+
+        # Optional upper bound for multi-grade classes / Basisstufe.
+        bis_raw = row.get("jahrgangsstufe_bis", "").strip()
+        jahrgangsstufe_bis: int | None = None
+        if bis_raw:
+            try:
+                jahrgangsstufe_bis = int(bis_raw)
+                if not -1 <= jahrgangsstufe_bis <= 13:
+                    errors.append("jahrgangsstufe_bis must be -1..13")
+                elif jahrgangsstufe is not None and jahrgangsstufe_bis < jahrgangsstufe:
+                    errors.append("jahrgangsstufe_bis must be >= jahrgangsstufe")
+            except ValueError:
+                errors.append("jahrgangsstufe_bis must be an integer")
 
         if errors:
             return IMPORT_ACTION_ERROR, errors
@@ -359,7 +387,11 @@ class ImportService:
 
         if existing is None:
             return IMPORT_ACTION_CREATE, []
-        if existing.kuerzel == kuerzel and existing.jahrgangsstufe == int(jahrgangsstufe_raw):
+        if (
+            existing.kuerzel == kuerzel
+            and existing.jahrgangsstufe == jahrgangsstufe
+            and existing.jahrgangsstufe_bis == jahrgangsstufe_bis
+        ):
             return IMPORT_ACTION_SKIP, []
         return IMPORT_ACTION_UPDATE, []
 
@@ -645,6 +677,8 @@ class ImportService:
         name = row["name"].strip()
         kuerzel = (row.get("kuerzel") or "").strip() or None
         jahrgangsstufe = int(row["jahrgangsstufe"])
+        bis_raw = (row.get("jahrgangsstufe_bis") or "").strip()
+        jahrgangsstufe_bis = int(bis_raw) if bis_raw else None
 
         existing = (
             await self.session.execute(
@@ -662,12 +696,14 @@ class ImportService:
                     name=name,
                     kuerzel=kuerzel,
                     jahrgangsstufe=jahrgangsstufe,
+                    jahrgangsstufe_bis=jahrgangsstufe_bis,
                     status=CLASS_STATUS_ACTIVE,
                 )
             )
         else:
             existing.kuerzel = kuerzel
             existing.jahrgangsstufe = jahrgangsstufe
+            existing.jahrgangsstufe_bis = jahrgangsstufe_bis
 
     async def _apply_membership(self, school_id: int, staged: ImportStagedRow) -> None:
         row = staged.raw_data

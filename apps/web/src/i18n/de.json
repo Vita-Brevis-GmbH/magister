@@ -488,7 +488,7 @@
     "kind_classes": "Klassen",
     "kind_class_memberships": "Klassen-Zuteilungen (Schüler:innen)",
     "kind_class_teachers": "Klassen-Zuteilungen (Lehrpersonen)",
-    "kind_classes_desc": "Klassen anlegen oder aktualisieren. Spalten: name, kuerzel, jahrgangsstufe.",
+    "kind_classes_desc": "Klassen anlegen oder aktualisieren. Spalten: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (optional, für Mehrjahrgang/Basisstufe; leer = Einzelklasse). Kindergarten: -1 = 1. KG, 0 = 2. KG.",
     "kind_class_memberships_desc": "Schüler:innen einer Klasse zuweisen. UPN muss im AD existieren. Spalten: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Klassenlehrpersonen (KL/Co-KL/Stellvertretung) zuweisen. Spalten: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Neue Schüler:innen (AD-Accounts anlegen)",

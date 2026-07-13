@@ -488,7 +488,7 @@
     "kind_classes": "Classes",
     "kind_class_memberships": "Class memberships (students)",
     "kind_class_teachers": "Class teachers",
-    "kind_classes_desc": "Create or update classes. Columns: name, kuerzel, jahrgangsstufe.",
+    "kind_classes_desc": "Create or update classes. Columns: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (optional, for multi-grade/Basisstufe; empty = single grade). Kindergarten: -1 = 1st KG, 0 = 2nd KG.",
     "kind_class_memberships_desc": "Assign students to a class. UPN must exist in AD. Columns: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Assign class teachers (haupt/co/stellvertretung). Columns: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "New students (create AD accounts)",
