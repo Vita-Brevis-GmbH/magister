@@ -9,12 +9,74 @@ import pytest
 
 from magister_api.ad.client import (
     UAC_ACCOUNTDISABLE,
+    AdClient,
     AdUserRecord,
     _decode_object_guid,
     _kind_from_member_of,
     parse_ad_entry,
 )
-from magister_api.ad.errors import AdUserParseError
+from magister_api.ad.errors import AdUnavailableError, AdUserParseError
+from magister_api.config import Settings
+
+
+class _FakeSafeSyncConn:
+    """Mimics a SAFE_SYNC ldap3 connection: ``search`` returns the 4-tuple
+    ``(status, result, response, request)`` and does NOT put the entries on
+    ``conn.response`` — the production shape that MOCK_SYNC hides."""
+
+    def __init__(self, entries: list[dict[str, Any]], *, result_code: int = 0) -> None:
+        self._entries = entries
+        self._result = {
+            "result": result_code,
+            "description": "success" if result_code == 0 else "operationsError",
+        }
+        # SAFE_SYNC contract: the connection attribute is not the source of truth.
+        self.response: list[dict[str, Any]] = []
+        self.result: dict[str, Any] = {}
+
+    def search(
+        self, **_kwargs: Any
+    ) -> tuple[bool, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+        return (self._result["result"] == 0, self._result, self._entries, {})
+
+    def unbind(self) -> None:  # pragma: no cover - trivial
+        pass
+
+
+class TestFindUserDnSafeSync:
+    """find_user_dn must read results from the returned tuple (SAFE_SYNC),
+    not from conn.response, and must surface real LDAP errors."""
+
+    @pytest.mark.asyncio
+    async def test_reads_dn_from_tuple_not_conn_response(self, monkeypatch: Any) -> None:
+        guid = "12345678-90ab-cdef-1234-567890abcdef"
+        dn = "CN=Anna,OU=Users,DC=schule,DC=local"
+        entries = [{"type": "searchResEntry", "dn": dn, "attributes": {}}]
+        client = AdClient(Settings(ad_users_search_base="DC=schule,DC=local"))
+        monkeypatch.setattr(
+            client, "_acquire_connection", lambda: (_FakeSafeSyncConn(entries), False)
+        )
+
+        assert await client.find_user_dn(guid) == dn
+
+    @pytest.mark.asyncio
+    async def test_ldap_error_raises_instead_of_silent_none(self, monkeypatch: Any) -> None:
+        guid = "12345678-90ab-cdef-1234-567890abcdef"
+        conn = _FakeSafeSyncConn([], result_code=1)  # operationsError
+        client = AdClient(Settings(ad_users_search_base="DC=schule,DC=local"))
+        monkeypatch.setattr(client, "_acquire_connection", lambda: (conn, False))
+
+        with pytest.raises(AdUnavailableError):
+            await client.find_user_dn(guid)
+
+    @pytest.mark.asyncio
+    async def test_genuinely_absent_returns_none(self, monkeypatch: Any) -> None:
+        guid = "12345678-90ab-cdef-1234-567890abcdef"
+        conn = _FakeSafeSyncConn([], result_code=0)  # success, zero entries
+        client = AdClient(Settings(ad_users_search_base="DC=schule,DC=local"))
+        monkeypatch.setattr(client, "_acquire_connection", lambda: (conn, False))
+
+        assert await client.find_user_dn(guid) is None
 
 
 class TestDecodeObjectGuid:

@@ -17,7 +17,7 @@ import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 from fastapi.concurrency import run_in_threadpool
 from ldap3 import (
@@ -516,6 +516,37 @@ class AdClient:
             return None
         return str(result.get("description") or code)
 
+    @staticmethod
+    def _single_search(
+        conn: Connection,
+        *,
+        base: str,
+        search_filter: str,
+        scope: str,
+        attributes: list[str],
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        """Run one non-paged search; normalise SAFE_SYNC tuple vs MOCK_SYNC.
+
+        Returns ``(result, entries)`` where ``result`` is the ``searchResDone``
+        dict (inspect via :meth:`_search_failure_detail`) and ``entries`` are
+        the ``searchResEntry`` dicts. Under SAFE_SYNC the response rides in the
+        returned tuple (``res[2]``) — reading ``conn.response`` is not the
+        documented contract there — with a ``conn.response`` fallback for
+        MOCK_SYNC. This mirrors :meth:`_paged_search`.
+        """
+        res = conn.search(
+            search_base=base,
+            search_filter=search_filter,
+            search_scope=cast(Any, scope),
+            attributes=attributes,
+        )
+        if isinstance(res, tuple):
+            result, response = (res[1] or {}), (res[2] or [])
+        else:  # MOCK_SYNC returns a bool; state lives on the connection.
+            result, response = (conn.result or {}), (conn.response or [])
+        entries = [e for e in response if e.get("type") == "searchResEntry"]
+        return result, entries
+
     def _sync_search(
         self,
         base: str,
@@ -662,24 +693,32 @@ class AdClient:
             try:
                 guid_bytes = uuid.UUID(ad_object_guid).bytes_le
             except ValueError:
+                logger.warning("find_user_dn: unparseable objectGUID %r", ad_object_guid)
                 return None
             search_filter = "(objectGUID=" + "".join(f"\\{b:02x}" for b in guid_bytes) + ")"
             base = self._settings.ad_users_search_base or ""
-            ok = conn.search(
-                search_base=base,
+            result, entries = self._single_search(
+                conn,
+                base=base,
                 search_filter=search_filter,
-                search_scope=SUBTREE,
+                scope=SUBTREE,
                 attributes=["distinguishedName"],
             )
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok:
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                # A real LDAP error (bad base, insufficient rights, referral,
+                # size limit) must not masquerade as "user not in AD" — surface
+                # it so the caller returns 503 and the reason lands in the log.
+                logger.warning("find_user_dn search failed under base=%r: %s", base, detail)
+                raise AdUnavailableError(f"ldap_search_failed:{detail}")
+            if not entries:
+                logger.warning(
+                    "find_user_dn: no AD object matched objectGUID under base=%r "
+                    "(user-search-base may not cover this user's OU)",
+                    base,
+                )
                 return None
-            for entry in conn.response or []:
-                if entry.get("type") != "searchResEntry":
-                    continue
-                return entry.get("dn") or None
-            return None
+            return entries[0].get("dn") or None
         finally:
             if owned:
                 try:
@@ -842,21 +881,17 @@ class AdClient:
             search_filter = (
                 f"(&(objectClass=user)(|(sAMAccountName={safe})(userPrincipalName={safe})))"
             )
-            ok = conn.search(
-                search_base=base,
+            _result, entries = self._single_search(
+                conn,
+                base=base,
                 search_filter=search_filter,
-                search_scope=SUBTREE,
+                scope=SUBTREE,
                 attributes=list(DEFAULT_USER_ATTRIBUTES),
             )
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok:
+            if not entries:
                 return None
-            for entry in conn.response or []:
-                if entry.get("type") != "searchResEntry":
-                    continue
-                return entry.get("dn", ""), entry.get("attributes", {})
-            return None
+            entry = entries[0]
+            return entry.get("dn", ""), entry.get("attributes", {})
         finally:
             if owned:
                 try:
@@ -919,20 +954,18 @@ class AdClient:
     def _sync_set_account_enabled(self, user_dn: str, enabled: bool) -> tuple[bool, bool]:
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.search(
-                search_base=user_dn,
+            result, entries = self._single_search(
+                conn,
+                base=user_dn,
                 search_filter="(objectClass=user)",
-                search_scope=BASE,
+                scope=BASE,
                 attributes=["userAccountControl"],
             )
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok:
-                raise AdUnavailableError("ldap_read_uac_failed")
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                raise AdUnavailableError(f"ldap_read_uac_failed:{detail}")
             current_uac: int | None = None
-            for entry in conn.response or []:
-                if entry.get("type") != "searchResEntry":
-                    continue
+            for entry in entries:
                 attrs = entry.get("attributes") or {}
                 raw = attrs.get("userAccountControl")
                 if isinstance(raw, list):
@@ -1068,19 +1101,17 @@ class AdClient:
             raise AdUnavailableError("ldap_add_failed")
 
     def _read_object_guid(self, conn: Connection, dn: str) -> str:
-        ok = conn.search(
-            search_base=dn,
+        result, entries = self._single_search(
+            conn,
+            base=dn,
             search_filter="(objectClass=user)",
-            search_scope=BASE,
+            scope=BASE,
             attributes=["objectGUID"],
         )
-        if isinstance(ok, tuple):
-            ok = ok[0]
-        if not ok:
-            raise AdUnavailableError("ldap_read_guid_failed")
-        for entry in conn.response or []:
-            if entry.get("type") != "searchResEntry":
-                continue
+        detail = self._search_failure_detail(result)
+        if detail is not None:
+            raise AdUnavailableError(f"ldap_read_guid_failed:{detail}")
+        for entry in entries:
             raw = (entry.get("attributes") or {}).get("objectGUID")
             if isinstance(raw, list):
                 raw = raw[0] if raw else None
