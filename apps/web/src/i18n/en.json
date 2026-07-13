@@ -515,7 +515,11 @@
     "error_invalid_header": "CSV header doesn't match the selected kind. Download the template and compare columns.",
     "error_not_utf8": "File is not UTF-8 encoded. Save the CSV as UTF-8.",
     "error_unknown_kind": "Unknown import kind.",
-    "handout_language": "Credential language"
+    "handout_language": "Credential language",
+    "school_label": "School",
+    "school_placeholder": "Select school …",
+    "school_hint": "The import is assigned to this school.",
+    "error_school_required": "Please select the target school first."
   },
   "privacy": {
     "section_title": "Data export (revDSG Art. 25)",

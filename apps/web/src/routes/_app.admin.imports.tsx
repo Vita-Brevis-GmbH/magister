@@ -7,8 +7,10 @@ import {
   downloadHandouts,
   useApplyImport,
   useCancelImport,
+  useCurrentUser,
   useImportJob,
   useImportJobs,
+  useSchools,
   useStageImport,
 } from "@/api/hooks";
 import type { ImportJobDetailOut, ImportKind, ProvisionedCredential } from "@/api/types";
@@ -125,7 +127,15 @@ function NewImportWizard({
   const { t } = useTranslation();
   const [kind, setKind] = useState<ImportKind>("classes");
   const [file, setFile] = useState<File | null>(null);
+  const [schoolId, setSchoolId] = useState("");
   const stage = useStageImport();
+  const me = useCurrentUser();
+  const schools = useSchools();
+
+  // Admins are not bound to a single school and must pick the target; a
+  // school-scoped user with exactly one school has it derived server-side.
+  const scope = me.data?.school_scope ?? [];
+  const mustPickSchool = (me.data?.is_admin ?? false) || scope.length > 1;
 
   function handleFile(e: ChangeEvent<HTMLInputElement>) {
     setFile(e.target.files?.[0] ?? null);
@@ -134,8 +144,9 @@ function NewImportWizard({
 
   function handleSubmit() {
     if (!file) return;
+    if (mustPickSchool && !schoolId) return;
     stage.mutate(
-      { kind, file },
+      { kind, file, schoolId: schoolId ? Number(schoolId) : undefined },
       {
         onSuccess: (data) => onStaged(data.id),
       },
@@ -186,6 +197,28 @@ function NewImportWizard({
           </p>
         </div>
 
+        {mustPickSchool && (
+          <div className="space-y-1">
+            <label htmlFor="import-school" className="text-sm font-medium">
+              {t("imports.school_label")}
+            </label>
+            <select
+              id="import-school"
+              value={schoolId}
+              onChange={(e) => setSchoolId(e.target.value)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">{t("imports.school_placeholder")}</option>
+              {(schools.data ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.kuerzel})
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">{t("imports.school_hint")}</p>
+          </div>
+        )}
+
         <div className="space-y-1">
           <label htmlFor="import-file" className="text-sm font-medium">
             {t("imports.file_label")}
@@ -212,7 +245,10 @@ function NewImportWizard({
           <Button variant="outline" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button disabled={!file || stage.isPending} onClick={handleSubmit}>
+          <Button
+            disabled={!file || (mustPickSchool && !schoolId) || stage.isPending}
+            onClick={handleSubmit}
+          >
             {stage.isPending ? t("common.loading") : t("imports.upload_button")}
           </Button>
         </div>
@@ -395,6 +431,7 @@ function stageErrorMessage(err: ApiError, t: (k: string) => string): string {
     if (err.code?.includes("csv header")) return t("imports.error_invalid_header");
     if (err.code === "csv_not_utf8") return t("imports.error_not_utf8");
     if (err.code === "unknown_kind") return t("imports.error_unknown_kind");
+    if (err.code === "school_id_required_for_admin") return t("imports.error_school_required");
     return err.code || t("errors.generic");
   }
   return t("errors.generic");

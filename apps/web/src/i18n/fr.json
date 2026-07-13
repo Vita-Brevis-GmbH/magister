@@ -518,7 +518,11 @@
     "error_invalid_header": "L'en-tête CSV ne correspond pas au type sélectionné. Téléchargez le modèle et comparez les colonnes.",
     "error_not_utf8": "Le fichier n'est pas encodé en UTF-8. Enregistrez le CSV en UTF-8.",
     "error_unknown_kind": "Type d'import inconnu.",
-    "handout_language": "Langue des identifiants"
+    "handout_language": "Langue des identifiants",
+    "school_label": "École",
+    "school_placeholder": "Choisir l’école …",
+    "school_hint": "L’import est attribué à cette école.",
+    "error_school_required": "Veuillez d’abord sélectionner l’école cible."
   },
   "privacy": {
     "section_title": "Export de données (LPD art. 25)",
