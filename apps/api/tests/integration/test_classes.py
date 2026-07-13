@@ -70,6 +70,65 @@ class TestClassDetails:
         assert len(rows) == 1
 
 
+class TestGradeRange:
+    @pytest.mark.asyncio
+    async def test_create_multigrade_class(self, as_schulleitung_a: AsyncClient) -> None:
+        resp = await as_schulleitung_a.post(
+            "/classes",
+            json={"name": "Mehrklasse 1-3", "jahrgangsstufe": 1, "jahrgangsstufe_bis": 3},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["jahrgangsstufe"] == 1
+        assert body["jahrgangsstufe_bis"] == 3
+
+    @pytest.mark.asyncio
+    async def test_create_basisstufe_kindergarten(self, as_schulleitung_a: AsyncClient) -> None:
+        # -1 = 1. Kindergarten … 1 = 1. Klasse (Basisstufe).
+        resp = await as_schulleitung_a.post(
+            "/classes",
+            json={"name": "Basisstufe A", "jahrgangsstufe": -1, "jahrgangsstufe_bis": 1},
+        )
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["jahrgangsstufe"] == -1
+        assert resp.json()["jahrgangsstufe_bis"] == 1
+
+    @pytest.mark.asyncio
+    async def test_single_grade_has_null_bis(self, as_schulleitung_a: AsyncClient) -> None:
+        resp = await as_schulleitung_a.post("/classes", json={"name": "5a", "jahrgangsstufe": 5})
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["jahrgangsstufe_bis"] is None
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_inverted_range(self, as_schulleitung_a: AsyncClient) -> None:
+        resp = await as_schulleitung_a.post(
+            "/classes",
+            json={"name": "Bad", "jahrgangsstufe": 5, "jahrgangsstufe_bis": 3},
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_patch_sets_and_clears_bis(self, as_schulleitung_a: AsyncClient) -> None:
+        cid = (
+            await as_schulleitung_a.post("/classes", json={"name": "6a", "jahrgangsstufe": 6})
+        ).json()["id"]
+
+        # Set a range.
+        resp = await as_schulleitung_a.patch(f"/classes/{cid}", json={"jahrgangsstufe_bis": 8})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["jahrgangsstufe_bis"] == 8
+
+        # Inverted range on patch → 422.
+        resp = await as_schulleitung_a.patch(f"/classes/{cid}", json={"jahrgangsstufe": 9})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == "invalid_grade_range"
+
+        # Clear back to single-grade with an explicit null.
+        resp = await as_schulleitung_a.patch(f"/classes/{cid}", json={"jahrgangsstufe_bis": None})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["jahrgangsstufe_bis"] is None
+
+
 class TestSchulleitungCrud:
     @pytest.mark.asyncio
     async def test_create_lists_get_then_archive(

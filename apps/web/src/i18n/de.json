@@ -152,7 +152,11 @@
     "promote_done_title": "Übergang abgeschlossen",
     "promote_done_moved": "{{count}} Schüler:innen erfolgreich verschoben.",
     "promote_done_failed": "{{count}} Schüler:innen konnten nicht verschoben werden (Überschneidung).",
-    "promote_done_archived": "«{{name}}» wurde archiviert."
+    "promote_done_archived": "«{{name}}» wurde archiviert.",
+    "jahrgangsstufe_von": "Jahrgangsstufe (von)",
+    "jahrgangsstufe_bis": "bis (optional)",
+    "jahrgangsstufe_bis_placeholder": "—",
+    "jahrgangsstufe_hint": "Einzelklasse: nur „von“. Mehrjahrgang/Basisstufe: Bereich angeben. Kindergarten: −1 = 1. KG, 0 = 2. KG."
   },
   "users": {
     "title": "User",

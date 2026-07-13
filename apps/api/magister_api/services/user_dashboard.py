@@ -62,6 +62,7 @@ class UserDashboardService:
                     name=cls.name,
                     kuerzel=cls.kuerzel,
                     jahrgangsstufe=cls.jahrgangsstufe,
+                    jahrgangsstufe_bis=cls.jahrgangsstufe_bis,
                     teachers=teachers,
                 )
             )

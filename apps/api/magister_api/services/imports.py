@@ -339,8 +339,9 @@ class ImportService:
             errors.append("name is required")
         try:
             jahrgangsstufe = int(jahrgangsstufe_raw)
-            if not 1 <= jahrgangsstufe <= 13:
-                errors.append("jahrgangsstufe must be 1..13")
+            # -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen.
+            if not -1 <= jahrgangsstufe <= 13:
+                errors.append("jahrgangsstufe must be -1..13")
         except ValueError:
             errors.append("jahrgangsstufe must be an integer")
 

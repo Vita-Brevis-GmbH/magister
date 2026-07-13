@@ -4,23 +4,36 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from magister_api.models.school_class import (
     CLASS_STATUS_ACTIVE,
     CLASS_STATUS_ARCHIVED,
 )
 
+# Grade bounds: -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen.
+GRADE_MIN = -1
+GRADE_MAX = 13
+
 
 class ClassCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     kuerzel: str | None = Field(default=None, max_length=32)
-    jahrgangsstufe: int = Field(ge=1, le=13)
+    # Lower/primary grade (drives Zyklus/OU routing, sorting, promotion).
+    jahrgangsstufe: int = Field(ge=GRADE_MIN, le=GRADE_MAX)
+    # Upper grade for multi-grade classes; omit/null for a single grade.
+    jahrgangsstufe_bis: int | None = Field(default=None, ge=GRADE_MIN, le=GRADE_MAX)
     details: str | None = Field(default=None, max_length=2000)
     school_id: int = Field(
         description="Schulträger-Admin must set this; Schulleitung gets it derived from scope.",
         default=0,
     )
+
+    @model_validator(mode="after")
+    def _check_range(self) -> ClassCreate:
+        if self.jahrgangsstufe_bis is not None and self.jahrgangsstufe_bis < self.jahrgangsstufe:
+            raise ValueError("jahrgangsstufe_bis must be >= jahrgangsstufe")
+        return self
 
 
 class ClassUpdate(BaseModel):
@@ -28,6 +41,9 @@ class ClassUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=64)
     kuerzel: str | None = Field(default=None, max_length=32)
+    jahrgangsstufe: int | None = Field(default=None, ge=GRADE_MIN, le=GRADE_MAX)
+    # Send an explicit null to clear the upper bound (make it single-grade).
+    jahrgangsstufe_bis: int | None = Field(default=None, ge=GRADE_MIN, le=GRADE_MAX)
     details: str | None = Field(default=None, max_length=2000)
 
 
@@ -39,6 +55,7 @@ class ClassOut(BaseModel):
     name: str
     kuerzel: str | None
     jahrgangsstufe: int
+    jahrgangsstufe_bis: int | None
     details: str | None
     status: str
     created_at: datetime

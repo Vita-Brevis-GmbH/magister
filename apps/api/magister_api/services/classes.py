@@ -33,6 +33,10 @@ class ClassPermissionError(PermissionError):
     """Raised on cross-school write attempts (Schulleitung A → School B)."""
 
 
+class ClassGradeRangeError(ValueError):
+    """Raised when jahrgangsstufe_bis < jahrgangsstufe on an update."""
+
+
 class ClassService:
     def __init__(self, session: AsyncSession, settings: Settings, scope: ScopeContext) -> None:
         self.session = session
@@ -57,6 +61,7 @@ class ClassService:
         name: str,
         kuerzel: str | None,
         jahrgangsstufe: int,
+        jahrgangsstufe_bis: int | None = None,
         details: str | None = None,
         ip: str | None,
         request_id: str,
@@ -67,6 +72,7 @@ class ClassService:
                 name=name,
                 kuerzel=kuerzel,
                 jahrgangsstufe=jahrgangsstufe,
+                jahrgangsstufe_bis=jahrgangsstufe_bis,
                 details=details,
             )
         except PermissionError as exc:
@@ -84,6 +90,7 @@ class ClassService:
                 "name": row.name,
                 "kuerzel": row.kuerzel,
                 "jahrgangsstufe": row.jahrgangsstufe,
+                "jahrgangsstufe_bis": row.jahrgangsstufe_bis,
             },
         )
         return row
@@ -95,6 +102,9 @@ class ClassService:
         new_name: str | None,
         new_kuerzel: str | None,
         new_details: str | None = None,
+        new_jahrgangsstufe: int | None = None,
+        set_jahrgangsstufe_bis: bool = False,
+        new_jahrgangsstufe_bis: int | None = None,
         ip: str | None,
         request_id: str,
     ) -> SchoolClass:
@@ -102,12 +112,25 @@ class ClassService:
         old_name = row.name
         old_kuerzel = row.kuerzel
         old_details = row.details
-        row, name_changed = await self.repo.update(
-            row, name=new_name, kuerzel=new_kuerzel, details=new_details
+
+        # Validate the effective grade range against whatever ends up on the row.
+        effective_von = new_jahrgangsstufe if new_jahrgangsstufe is not None else row.jahrgangsstufe
+        effective_bis = new_jahrgangsstufe_bis if set_jahrgangsstufe_bis else row.jahrgangsstufe_bis
+        if effective_bis is not None and effective_bis < effective_von:
+            raise ClassGradeRangeError("jahrgangsstufe_bis must be >= jahrgangsstufe")
+
+        row, cache_relevant_changed = await self.repo.update(
+            row,
+            name=new_name,
+            kuerzel=new_kuerzel,
+            details=new_details,
+            jahrgangsstufe=new_jahrgangsstufe,
+            set_jahrgangsstufe_bis=set_jahrgangsstufe_bis,
+            jahrgangsstufe_bis=new_jahrgangsstufe_bis,
         )
         kuerzel_changed = new_kuerzel is not None and new_kuerzel != old_kuerzel
         details_changed = new_details is not None and new_details != old_details
-        if name_changed or kuerzel_changed or details_changed:
+        if cache_relevant_changed or kuerzel_changed or details_changed:
             await self.audit.emit(
                 action="class_renamed",
                 target_kind="class",
@@ -123,6 +146,8 @@ class ClassService:
                     "old_kuerzel": old_kuerzel,
                     "new_kuerzel": row.kuerzel,
                     "details_changed": details_changed,
+                    "jahrgangsstufe": row.jahrgangsstufe,
+                    "jahrgangsstufe_bis": row.jahrgangsstufe_bis,
                 },
             )
         return row

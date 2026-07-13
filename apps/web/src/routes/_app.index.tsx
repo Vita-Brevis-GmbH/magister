@@ -14,6 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { gradeRangeLabel } from "@/lib/grade";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/")({
@@ -246,7 +247,9 @@ function ClassRow({ cls }: { cls: ClassOut }): JSX.Element {
         </Link>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">{cls.kuerzel ?? "—"}</TableCell>
-      <TableCell className="text-sm">{cls.jahrgangsstufe}</TableCell>
+      <TableCell className="text-sm">
+        {gradeRangeLabel(cls.jahrgangsstufe, cls.jahrgangsstufe_bis)}
+      </TableCell>
       <TableCell>
         {cls.status === "active" ? (
           <StatusPill tone="ok">{t("classes.status_active")}</StatusPill>

@@ -26,6 +26,7 @@ from magister_api.schemas.classes import (
 )
 from magister_api.schemas.classes import ClassPromotionError as ClassPromotionErrorSchema
 from magister_api.services.classes import (
+    ClassGradeRangeError,
     ClassNotFoundError,
     ClassPermissionError,
     ClassService,
@@ -66,6 +67,7 @@ async def create_class(
             name=payload.name,
             kuerzel=payload.kuerzel,
             jahrgangsstufe=payload.jahrgangsstufe,
+            jahrgangsstufe_bis=payload.jahrgangsstufe_bis,
             details=payload.details,
             ip=ip,
             request_id=request_id,
@@ -118,11 +120,16 @@ async def patch_class(
             new_name=payload.name,
             new_kuerzel=payload.kuerzel,
             new_details=payload.details,
+            new_jahrgangsstufe=payload.jahrgangsstufe,
+            set_jahrgangsstufe_bis="jahrgangsstufe_bis" in payload.model_fields_set,
+            new_jahrgangsstufe_bis=payload.jahrgangsstufe_bis,
             ip=ip,
             request_id=request_id,
         )
     except ClassNotFoundError as exc:
         raise HTTPException(status_code=404, detail="class_not_found") from exc
+    except ClassGradeRangeError as exc:
+        raise HTTPException(status_code=422, detail="invalid_grade_range") from exc
     return ClassOut.model_validate(row)
 
 

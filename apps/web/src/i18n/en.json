@@ -152,7 +152,11 @@
     "promote_done_title": "Transition complete",
     "promote_done_moved": "{{count}} students moved successfully.",
     "promote_done_failed": "{{count}} students could not be moved (overlap).",
-    "promote_done_archived": "«{{name}}» has been archived."
+    "promote_done_archived": "«{{name}}» has been archived.",
+    "jahrgangsstufe_von": "Grade (from)",
+    "jahrgangsstufe_bis": "to (optional)",
+    "jahrgangsstufe_bis_placeholder": "—",
+    "jahrgangsstufe_hint": "Single class: ‘from’ only. Multi-grade/Basisstufe: enter a range. Kindergarten: −1 = 1st KG, 0 = 2nd KG."
   },
   "users": {
     "title": "Users",

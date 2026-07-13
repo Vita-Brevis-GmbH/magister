@@ -155,7 +155,11 @@
     "promote_done_title": "Transition terminée",
     "promote_done_moved": "{{count}} élèves déplacés avec succès.",
     "promote_done_failed": "{{count}} élèves n'ont pas pu être déplacés (chevauchement).",
-    "promote_done_archived": "«{{name}}» a été archivée."
+    "promote_done_archived": "«{{name}}» a été archivée.",
+    "jahrgangsstufe_von": "Année (de)",
+    "jahrgangsstufe_bis": "à (facultatif)",
+    "jahrgangsstufe_bis_placeholder": "—",
+    "jahrgangsstufe_hint": "Classe simple : uniquement « de ». Multi-degrés/Basisstufe : indiquer une plage. École enfantine : −1 = 1re, 0 = 2e."
   },
   "users": {
     "title": "Utilisateurs",

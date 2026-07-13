@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { gradeRangeLabel } from "@/lib/grade";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/reports")({
@@ -85,7 +86,9 @@ function StudentsByClassSection(): JSX.Element {
                       <span className="ml-2 text-xs text-muted-foreground">({row.kuerzel})</span>
                     ) : null}
                   </TableCell>
-                  <TableCell>{row.jahrgangsstufe}</TableCell>
+                  <TableCell>
+                    {gradeRangeLabel(row.jahrgangsstufe, row.jahrgangsstufe_bis)}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{row.student_count}</TableCell>
                 </TableRow>
               ))

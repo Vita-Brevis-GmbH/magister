@@ -22,10 +22,25 @@ class TestClassCreate:
         c = ClassCreate(name="4a", jahrgangsstufe=4)
         assert c.kuerzel is None
 
-    @pytest.mark.parametrize("stufe", [0, 14, -1])
+    @pytest.mark.parametrize("stufe", [-2, 14, 99])
     def test_jahrgangsstufe_out_of_range(self, stufe: int) -> None:
         with pytest.raises(ValidationError):
             ClassCreate(name="4a", jahrgangsstufe=stufe)
+
+    @pytest.mark.parametrize("stufe", [-1, 0])
+    def test_kindergarten_grades_allowed(self, stufe: int) -> None:
+        # -1 = 1. Kindergarten, 0 = 2. Kindergarten.
+        c = ClassCreate(name="Basisstufe", jahrgangsstufe=stufe)
+        assert c.jahrgangsstufe == stufe
+
+    def test_grade_range_accepted(self) -> None:
+        c = ClassCreate(name="Mehrklasse", jahrgangsstufe=1, jahrgangsstufe_bis=3)
+        assert c.jahrgangsstufe == 1
+        assert c.jahrgangsstufe_bis == 3
+
+    def test_inverted_range_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            ClassCreate(name="Bad", jahrgangsstufe=5, jahrgangsstufe_bis=3)
 
     def test_empty_name_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -60,6 +75,7 @@ class TestClassOut:
             name = "4a"
             kuerzel = "K4A"
             jahrgangsstufe = 4
+            jahrgangsstufe_bis = None
             details = None
             status = "active"
             created_at = datetime.now(UTC)

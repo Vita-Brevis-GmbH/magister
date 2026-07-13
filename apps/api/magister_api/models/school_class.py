@@ -27,7 +27,14 @@ class SchoolClass(Base):
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     kuerzel: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Lower/primary grade. Drives Zyklus/OU routing, sorting and promotion.
+    # Kindergarten years are encoded below grade 1: -1 = 1. Kindergarten,
+    # 0 = 2. Kindergarten; grades 1..13 as usual.
     jahrgangsstufe: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Upper grade for multi-grade classes (Mehrjahrgangsklassen, Basisstufe).
+    # NULL means a single-grade class (equivalent to jahrgangsstufe_bis ==
+    # jahrgangsstufe). Always >= jahrgangsstufe when set.
+    jahrgangsstufe_bis: Mapped[int | None] = mapped_column(Integer, nullable=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default=CLASS_STATUS_ACTIVE)
     created_at: Mapped[datetime] = mapped_column(

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { gradeRangeLabel } from "@/lib/grade";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/users/$guid")({
@@ -513,7 +514,8 @@ function UserReadView({
                     {c.kuerzel ? ` (${c.kuerzel})` : ""}
                   </span>
                   {" · "}
-                  {t("classes.jahrgangsstufe")} {c.jahrgangsstufe}
+                  {t("classes.jahrgangsstufe")}{" "}
+                  {gradeRangeLabel(c.jahrgangsstufe, c.jahrgangsstufe_bis)}
                   {c.teachers.length > 0 ? (
                     <div className="text-muted-foreground">
                       {t("users.detail.class_teachers")}:{" "}

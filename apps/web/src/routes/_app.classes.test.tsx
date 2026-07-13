@@ -81,8 +81,45 @@ describe("CreateClassModal", () => {
       expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/classes")).toBe(true);
     });
     const body = classPostBody();
-    expect(body).toEqual({ name: "4a", kuerzel: "4A", jahrgangsstufe: 4, details: null });
+    expect(body).toEqual({
+      name: "4a",
+      kuerzel: "4A",
+      jahrgangsstufe: 4,
+      jahrgangsstufe_bis: null,
+      details: null,
+    });
     expect(body).not.toHaveProperty("school_id");
+  });
+
+  it("sends a grade range (von + bis) for a multi-grade class", async () => {
+    routeFetch({
+      classResponse: {
+        id: 9,
+        school_id: 1,
+        name: "Mehrklasse",
+        kuerzel: null,
+        jahrgangsstufe: 1,
+        jahrgangsstufe_bis: 3,
+        status: "active",
+        created_at: "2026-07-13T12:00:00+00:00",
+        updated_at: "2026-07-13T12:00:00+00:00",
+      },
+    });
+
+    renderWithQuery(
+      <CreateClassModal open={true} onClose={() => {}} defaultSchoolId={1} isAdmin={false} />,
+    );
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/^name$/i), "Mehrklasse");
+    await user.type(screen.getByLabelText(/jahrgangsstufe/i), "1");
+    await user.type(screen.getByLabelText(/bis \(optional\)/i), "3");
+    await user.click(screen.getByRole("button", { name: /anlegen/i }));
+
+    await waitFor(() => {
+      expect(fetchMock.mock.calls.some((c) => String(c[0]) === "/api/classes")).toBe(true);
+    });
+    expect(classPostBody().jahrgangsstufe_bis).toBe(3);
   });
 
   it("requires + sends school_id from the dropdown when isAdmin", async () => {

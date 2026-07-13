@@ -68,7 +68,10 @@ export interface ClassOut {
   school_id: number;
   name: string;
   kuerzel: string | null;
+  /** Lower/primary grade. -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen. */
   jahrgangsstufe: number;
+  /** Upper grade for multi-grade classes; null = single grade. */
+  jahrgangsstufe_bis: number | null;
   details: string | null;
   status: SchoolClassStatus;
   created_at: string;
@@ -79,6 +82,7 @@ export interface ClassCreate {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  jahrgangsstufe_bis?: number | null;
   details?: string | null;
   school_id?: number;
 }
@@ -86,6 +90,8 @@ export interface ClassCreate {
 export interface ClassUpdate {
   name?: string | null;
   kuerzel?: string | null;
+  jahrgangsstufe?: number | null;
+  jahrgangsstufe_bis?: number | null;
   details?: string | null;
 }
 
@@ -188,6 +194,7 @@ export interface UserClassOut {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  jahrgangsstufe_bis?: number | null;
   teachers: ClassTeacherBrief[];
 }
 
@@ -476,6 +483,7 @@ export interface StudentsByClassRow {
   name: string;
   kuerzel: string | null;
   jahrgangsstufe: number;
+  jahrgangsstufe_bis?: number | null;
   student_count: number;
 }
 export interface StudentsByClassReport {

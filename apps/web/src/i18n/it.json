@@ -155,7 +155,11 @@
     "promote_done_title": "Transizione completata",
     "promote_done_moved": "{{count}} alunni/e spostati con successo.",
     "promote_done_failed": "{{count}} alunni/e non hanno potuto essere spostati (sovrapposizione).",
-    "promote_done_archived": "«{{name}}» è stata archiviata."
+    "promote_done_archived": "«{{name}}» è stata archiviata.",
+    "jahrgangsstufe_von": "Anno (da)",
+    "jahrgangsstufe_bis": "a (opzionale)",
+    "jahrgangsstufe_bis_placeholder": "—",
+    "jahrgangsstufe_hint": "Classe singola: solo « da ». Pluriclasse/Basisstufe: indicare un intervallo. Scuola dell'infanzia: −1 = 1º, 0 = 2º."
   },
   "users": {
     "title": "Utenti",

@@ -39,6 +39,7 @@ class ReportsRepository(BaseRepository):
                 SchoolClass.name,
                 SchoolClass.kuerzel,
                 SchoolClass.jahrgangsstufe,
+                SchoolClass.jahrgangsstufe_bis,
                 func.count(ClassMembership.id).label("student_count"),
             )
             .select_from(SchoolClass)
@@ -53,6 +54,7 @@ class ReportsRepository(BaseRepository):
                 SchoolClass.name,
                 SchoolClass.kuerzel,
                 SchoolClass.jahrgangsstufe,
+                SchoolClass.jahrgangsstufe_bis,
             )
             .order_by(SchoolClass.jahrgangsstufe, SchoolClass.name)
         )
@@ -65,7 +67,8 @@ class ReportsRepository(BaseRepository):
                 name=r[2],
                 kuerzel=r[3],
                 jahrgangsstufe=r[4],
-                student_count=r[5],
+                jahrgangsstufe_bis=r[5],
+                student_count=r[6],
             )
             for r in rows
         ]

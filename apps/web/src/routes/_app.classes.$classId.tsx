@@ -50,6 +50,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { gradeRangeLabel } from "@/lib/grade";
 import { useFormatters } from "@/lib/useFormatters";
 import { displayLabel } from "@/lib/userDisplay";
 
@@ -88,7 +89,8 @@ function ClassDetailPage(): JSX.Element {
             <CardHeader>
               <CardTitle className="font-serif text-2xl">{klass.data.name}</CardTitle>
               <CardDescription>
-                {t("classes.jahrgangsstufe")}: {klass.data.jahrgangsstufe}
+                {t("classes.jahrgangsstufe")}:{" "}
+                {gradeRangeLabel(klass.data.jahrgangsstufe, klass.data.jahrgangsstufe_bis)}
                 {klass.data.kuerzel ? ` · ${klass.data.kuerzel}` : ""}
                 {" · "}
                 {klass.data.status === "active"

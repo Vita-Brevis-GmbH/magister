@@ -50,6 +50,7 @@ class ClassRepository(BaseRepository):
         name: str,
         kuerzel: str | None,
         jahrgangsstufe: int,
+        jahrgangsstufe_bis: int | None = None,
         details: str | None = None,
     ) -> SchoolClass:
         if not self.scope.can_access_school(school_id):
@@ -59,6 +60,7 @@ class ClassRepository(BaseRepository):
             name=name,
             kuerzel=kuerzel,
             jahrgangsstufe=jahrgangsstufe,
+            jahrgangsstufe_bis=jahrgangsstufe_bis,
             details=details,
             status=CLASS_STATUS_ACTIVE,
         )
@@ -74,24 +76,35 @@ class ClassRepository(BaseRepository):
         name: str | None = None,
         kuerzel: str | None = None,
         details: str | None = None,
+        jahrgangsstufe: int | None = None,
+        set_jahrgangsstufe_bis: bool = False,
+        jahrgangsstufe_bis: int | None = None,
     ) -> tuple[SchoolClass, bool]:
-        """Apply non-None fields. Returns (row, name_changed).
+        """Apply provided fields. Returns (row, cache_relevant_changed).
 
-        ``name_changed`` drives the active-classes cache invalidation; kuerzel
-        and details are not part of that cached list, so they don't bump it.
+        The active-classes cache stores name + grade (used for sorting/display),
+        so a name or grade change bumps it; kuerzel and details do not. For the
+        optional upper bound, ``set_jahrgangsstufe_bis`` distinguishes "clear to
+        single-grade" (True + None) from "leave unchanged" (False).
         """
-        name_changed = False
+        cache_relevant_changed = False
         if name is not None and name != cls.name:
             cls.name = name
-            name_changed = True
+            cache_relevant_changed = True
         if kuerzel is not None and kuerzel != cls.kuerzel:
             cls.kuerzel = kuerzel
         if details is not None and details != cls.details:
             cls.details = details
+        if jahrgangsstufe is not None and jahrgangsstufe != cls.jahrgangsstufe:
+            cls.jahrgangsstufe = jahrgangsstufe
+            cache_relevant_changed = True
+        if set_jahrgangsstufe_bis and jahrgangsstufe_bis != cls.jahrgangsstufe_bis:
+            cls.jahrgangsstufe_bis = jahrgangsstufe_bis
+            cache_relevant_changed = True
         await self.session.flush()
-        if name_changed:
+        if cache_relevant_changed:
             bump_kind(CACHE_KIND)
-        return cls, name_changed
+        return cls, cache_relevant_changed
 
     async def archive(self, cls: SchoolClass) -> SchoolClass:
         cls.status = CLASS_STATUS_ARCHIVED

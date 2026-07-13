@@ -13,6 +13,7 @@ class StudentsByClassRow(BaseModel):
     name: str
     kuerzel: str | None
     jahrgangsstufe: int
+    jahrgangsstufe_bis: int | None = None
     student_count: int
 
 

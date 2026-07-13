@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { gradeRangeLabel } from "@/lib/grade";
 
 export const Route = createFileRoute("/_app/classes")({
   component: ClassesPage,
@@ -105,7 +106,7 @@ function ClassesPage(): JSX.Element {
                   </Link>
                 </TableCell>
                 <TableCell>{c.kuerzel ?? "–"}</TableCell>
-                <TableCell>{c.jahrgangsstufe}</TableCell>
+                <TableCell>{gradeRangeLabel(c.jahrgangsstufe, c.jahrgangsstufe_bis)}</TableCell>
                 <TableCell>{schoolName(c.school_id)}</TableCell>
                 <TableCell>
                   {c.status === "active"
@@ -184,6 +185,7 @@ export function CreateClassModal({
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
   const [jahrgangsstufe, setJahrgangsstufe] = useState("");
+  const [jahrgangsstufeBis, setJahrgangsstufeBis] = useState("");
   const [details, setDetails] = useState("");
   const [schoolId, setSchoolId] = useState(defaultSchoolId !== null ? String(defaultSchoolId) : "");
   const schools = useSchools();
@@ -193,6 +195,7 @@ export function CreateClassModal({
     setName("");
     setKuerzel("");
     setJahrgangsstufe("");
+    setJahrgangsstufeBis("");
     setDetails("");
     setSchoolId(defaultSchoolId !== null ? String(defaultSchoolId) : "");
     create.reset();
@@ -205,6 +208,7 @@ export function CreateClassModal({
         name,
         kuerzel: kuerzel || null,
         jahrgangsstufe: Number(jahrgangsstufe),
+        jahrgangsstufe_bis: jahrgangsstufeBis === "" ? null : Number(jahrgangsstufeBis),
         details: details || null,
         ...(isAdmin && { school_id: Number(schoolId) }),
       },
@@ -260,18 +264,33 @@ export function CreateClassModal({
               maxLength={32}
             />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="class-jahrgang">{t("classes.jahrgangsstufe")}</Label>
-            <Input
-              id="class-jahrgang"
-              type="number"
-              min={1}
-              max={13}
-              value={jahrgangsstufe}
-              onChange={(e) => setJahrgangsstufe(e.target.value)}
-              required
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="class-jahrgang">{t("classes.jahrgangsstufe_von")}</Label>
+              <Input
+                id="class-jahrgang"
+                type="number"
+                min={-1}
+                max={13}
+                value={jahrgangsstufe}
+                onChange={(e) => setJahrgangsstufe(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="class-jahrgang-bis">{t("classes.jahrgangsstufe_bis")}</Label>
+              <Input
+                id="class-jahrgang-bis"
+                type="number"
+                min={-1}
+                max={13}
+                value={jahrgangsstufeBis}
+                onChange={(e) => setJahrgangsstufeBis(e.target.value)}
+                placeholder={t("classes.jahrgangsstufe_bis_placeholder")}
+              />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">{t("classes.jahrgangsstufe_hint")}</p>
           <div className="space-y-1">
             <Label htmlFor="class-details">{t("classes.details")}</Label>
             <textarea
@@ -331,22 +350,47 @@ interface RenameProps {
 
 export function EditClassModal({ target, onClose }: RenameProps): JSX.Element {
   const { t } = useTranslation();
-  const [name, setName] = useState(target?.name ?? "");
-  const [kuerzel, setKuerzel] = useState(target?.kuerzel ?? "");
-  const [details, setDetails] = useState(target?.details ?? "");
+  const [name, setName] = useState("");
+  const [kuerzel, setKuerzel] = useState("");
+  const [details, setDetails] = useState("");
+  const [jahrgangsstufe, setJahrgangsstufe] = useState("");
+  const [jahrgangsstufeBis, setJahrgangsstufeBis] = useState("");
+  const [hydratedId, setHydratedId] = useState<number | null>(null);
   const update = useUpdateClass(target?.id ?? 0);
+
+  // Hydrate from the target whenever a new class opens. Controlled inputs keep
+  // the grade fields honest — a stale "" would otherwise submit as grade 0 (KG2).
+  if (target && hydratedId !== target.id) {
+    setName(target.name);
+    setKuerzel(target.kuerzel ?? "");
+    setDetails(target.details ?? "");
+    setJahrgangsstufe(String(target.jahrgangsstufe));
+    setJahrgangsstufeBis(
+      target.jahrgangsstufe_bis != null ? String(target.jahrgangsstufe_bis) : "",
+    );
+    setHydratedId(target.id);
+    update.reset();
+  }
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
     if (!target) return;
+    const bisNum = jahrgangsstufeBis === "" ? null : Number(jahrgangsstufeBis);
+    const vonNum = Number(jahrgangsstufe);
     update.mutate(
       {
         ...(name !== target.name && { name }),
         ...(kuerzel !== (target.kuerzel ?? "") && { kuerzel: kuerzel || null }),
         ...(details !== (target.details ?? "") && { details }),
+        ...(jahrgangsstufe !== "" &&
+          vonNum !== target.jahrgangsstufe && { jahrgangsstufe: vonNum }),
+        ...(bisNum !== (target.jahrgangsstufe_bis ?? null) && { jahrgangsstufe_bis: bisNum }),
       },
       {
-        onSuccess: () => onClose(),
+        onSuccess: () => {
+          setHydratedId(null);
+          onClose();
+        },
       },
     );
   }
@@ -376,7 +420,7 @@ export function EditClassModal({ target, onClose }: RenameProps): JSX.Element {
             <Label htmlFor="edit-name">{t("classes.name")}</Label>
             <Input
               id="edit-name"
-              defaultValue={target?.name ?? ""}
+              value={name}
               onChange={(e) => setName(e.target.value)}
               required
               maxLength={64}
@@ -386,16 +430,43 @@ export function EditClassModal({ target, onClose }: RenameProps): JSX.Element {
             <Label htmlFor="edit-kuerzel">{t("classes.kuerzel")}</Label>
             <Input
               id="edit-kuerzel"
-              defaultValue={target?.kuerzel ?? ""}
+              value={kuerzel}
               onChange={(e) => setKuerzel(e.target.value)}
               maxLength={32}
             />
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="edit-jahrgang">{t("classes.jahrgangsstufe_von")}</Label>
+              <Input
+                id="edit-jahrgang"
+                type="number"
+                min={-1}
+                max={13}
+                value={jahrgangsstufe}
+                onChange={(e) => setJahrgangsstufe(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="edit-jahrgang-bis">{t("classes.jahrgangsstufe_bis")}</Label>
+              <Input
+                id="edit-jahrgang-bis"
+                type="number"
+                min={-1}
+                max={13}
+                value={jahrgangsstufeBis}
+                onChange={(e) => setJahrgangsstufeBis(e.target.value)}
+                placeholder={t("classes.jahrgangsstufe_bis_placeholder")}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("classes.jahrgangsstufe_hint")}</p>
           <div className="space-y-1">
             <Label htmlFor="edit-details">{t("classes.details")}</Label>
             <textarea
               id="edit-details"
-              defaultValue={target?.details ?? ""}
+              value={details}
               onChange={(e) => setDetails(e.target.value)}
               maxLength={2000}
               rows={2}
@@ -578,7 +649,8 @@ function PromoteClassWizard({
                       {c.name}
                       {c.kuerzel ? ` (${c.kuerzel})` : ""}
                       {" · "}
-                      {t("classes.jahrgangsstufe")} {c.jahrgangsstufe}
+                      {t("classes.jahrgangsstufe")}{" "}
+                      {gradeRangeLabel(c.jahrgangsstufe, c.jahrgangsstufe_bis)}
                     </option>
                   ))}
                 </select>
