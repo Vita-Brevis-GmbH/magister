@@ -54,9 +54,7 @@ class DemoDataService:
     ) -> PurgeResult:
         # scope-bypass: demo purge is a global, admin-only maintenance action.
         school = (
-            await self.session.execute(
-                select(School).where(School.kuerzel == DEMO_SCHOOL_KUERZEL)
-            )
+            await self.session.execute(select(School).where(School.kuerzel == DEMO_SCHOOL_KUERZEL))
         ).scalar_one_or_none()
         if school is None:
             return PurgeResult(found=False)
@@ -106,9 +104,7 @@ class DemoDataService:
         await self.session.execute(delete(School).where(School.id == school.id))
         await self.session.flush()
 
-        result = PurgeResult(
-            found=True, schools=1, classes=len(class_ids), users=len(demo_guids)
-        )
+        result = PurgeResult(found=True, schools=1, classes=len(class_ids), users=len(demo_guids))
         await self.audit.emit(
             action="demo_data_purged",
             target_kind="demo_data",

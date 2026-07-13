@@ -61,9 +61,7 @@ class TestKindFromMemberOf:
         # People who sign in are staff — the admin group must NOT make them a
         # "student"/"admin" *kind*; they are teachers (admin is an RBAC role).
         assert _kind_from_member_of(["CN=Admins,OU=Groups"]) == "teacher"
-        assert (
-            _kind_from_member_of(["CN=Admins,OU=Groups", "CN=Teachers,OU=Groups"]) == "teacher"
-        )
+        assert _kind_from_member_of(["CN=Admins,OU=Groups", "CN=Teachers,OU=Groups"]) == "teacher"
 
 
 class TestClassifyKindByOu:

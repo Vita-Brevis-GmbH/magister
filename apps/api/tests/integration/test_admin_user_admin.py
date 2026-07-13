@@ -122,9 +122,7 @@ async def test_delete_user_success(
     assert r.status_code == 200, r.text
     assert r.json()["ad_disabled"] is True
     gone = (
-        await db_session.execute(
-            select(AdUserCache).where(AdUserCache.ad_object_guid == guid)
-        )
+        await db_session.execute(select(AdUserCache).where(AdUserCache.ad_object_guid == guid))
     ).scalar_one_or_none()
     assert gone is None
 
@@ -134,9 +132,7 @@ async def test_delete_user_not_found(
     as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient
 ) -> None:
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
-    r = await as_admin.request(
-        "DELETE", "/admin/ad-users/00000000-0000-0000-0000-000000000000"
-    )
+    r = await as_admin.request("DELETE", "/admin/ad-users/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404, r.text
     assert r.json()["detail"] == "user_not_found"
 
@@ -171,9 +167,7 @@ async def test_purge_demo_data(as_admin: AsyncClient, db_session: AsyncSession) 
     body = r.json()
     assert body == {"found": True, "schools": 1, "classes": 1, "users": 1}
     left = (
-        await db_session.execute(
-            select(School).where(School.kuerzel == DEMO_SCHOOL_KUERZEL)
-        )
+        await db_session.execute(select(School).where(School.kuerzel == DEMO_SCHOOL_KUERZEL))
     ).scalar_one_or_none()
     assert left is None
 
