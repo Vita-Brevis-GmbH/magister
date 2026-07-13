@@ -199,7 +199,11 @@
       "error_mail_domains_missing": "Mail domains are not yet configured. Add them in Administration → System settings.",
       "error_domain_not_allowed": "This domain is not on the allow-list.",
       "error_validation": "Invalid input. Please review.",
-      "error_not_found": "User not found."
+      "error_not_found": "User not found.",
+      "delete": "Delete",
+      "delete_confirm": "Really delete this user?",
+      "delete_yes": "Delete",
+      "delete_err_ad": "AD unreachable — deactivation failed."
     },
     "field": {
       "display_name": "Display name",
@@ -220,7 +224,8 @@
       "local_part_placeholder": "first.last",
       "domain_empty": "— no domain —",
       "domains_missing": "No mail domains configured. Administration → System settings."
-    }
+    },
+    "new_user": "New user"
   },
   "password_reset": {
     "button": "Reset password",
@@ -340,7 +345,14 @@
       "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
       "ad_login_title": "AD sign-in",
       "ad_login_enabled_hint": "Allows signing in with an AD username and password (LDAPS) in addition to Entra ID. No MFA on this path.",
-      "ad_login_group_required": "Without a group nobody can sign in via AD. Please provide a group."
+      "ad_login_group_required": "Without a group nobody can sign in via AD. Please provide a group.",
+      "danger_title": "Danger zone",
+      "purge_demo_desc": "Permanently deletes the demo data (school “BSP” with classes and demo people).",
+      "purge_demo_button": "Delete demo data",
+      "purge_demo_confirm": "Really delete the demo data?",
+      "purge_demo_yes": "Delete permanently",
+      "purge_demo_ok": "Deleted: {{classes}} classes, {{users}} people.",
+      "purge_demo_none": "No demo data found."
     },
     "local_admin": {
       "title": "Local admin account",
@@ -387,6 +399,30 @@
       "grant_button": "Grant role",
       "grant_ok": "Role granted.",
       "grant_not_found": "User or school not found."
+    },
+    "user_new": {
+      "title": "Create a new user",
+      "description": "Creates a real AD account and shows a temporary password once.",
+      "given_name": "First name",
+      "surname": "Last name",
+      "sam": "Sign-in name (sAMAccountName)",
+      "upn": "UPN (sign-in email)",
+      "mail": "Email (optional)",
+      "ou": "Target OU / role",
+      "ou_hint": "Determines the OU and the classification. The OUs come from the provisioning settings.",
+      "ou_teacher": "Teacher",
+      "ou_student_zyklus3": "Student (cycle 3)",
+      "ou_student_other": "Student (other)",
+      "submit": "Create",
+      "created_title": "User created",
+      "created_desc": "The temporary password is shown only now. It must be changed at first sign-in.",
+      "temp_password": "Temporary password",
+      "temp_hint": "Hand it to the person securely. It will not be shown again.",
+      "to_users": "To the user list",
+      "create_another": "Create another",
+      "err_ou_not_configured": "Target OU not configured. Set the provisioning OUs under Settings.",
+      "err_ad": "AD unreachable or conflict (UPN/sign-in name already exists).",
+      "err_invalid": "Invalid input. Please check."
     }
   },
   "substitutions": {

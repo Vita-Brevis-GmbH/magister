@@ -62,14 +62,24 @@ function UsersPage(): JSX.Element {
           <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("users.title")}</h1>
           <p className="text-sm text-muted-foreground">{t("users.intro")}</p>
         </div>
-        <p className="text-xs text-muted-foreground">
-          {t("users.last_sync_at")}:{" "}
-          <span className="font-medium text-foreground">
-            {q.data?.last_sync_at
-              ? fmt.formatDateTime(q.data.last_sync_at)
-              : t("users.never_synced")}
-          </span>
-        </p>
+        <div className="flex items-center gap-3">
+          <p className="text-xs text-muted-foreground">
+            {t("users.last_sync_at")}:{" "}
+            <span className="font-medium text-foreground">
+              {q.data?.last_sync_at
+                ? fmt.formatDateTime(q.data.last_sync_at)
+                : t("users.never_synced")}
+            </span>
+          </p>
+          {me.data?.is_admin ? (
+            <Link
+              to="/admin/user-new"
+              className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              {t("users.new_user")}
+            </Link>
+          ) : null}
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-3">

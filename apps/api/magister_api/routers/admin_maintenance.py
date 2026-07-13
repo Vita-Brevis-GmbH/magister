@@ -1,0 +1,42 @@
+"""Admin maintenance actions (demo-data purge)."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from magister_api.auth.current_user import AuthenticatedUser
+from magister_api.auth.rbac import require_admin
+from magister_api.config import Settings, get_settings
+from magister_api.db import get_session
+from magister_api.routers._helpers import _ip_request_id
+from magister_api.schemas.user_admin import DemoPurgeResponse
+from magister_api.services.demo_data import DemoDataService
+
+router = APIRouter(prefix="/admin/demo-data", tags=["admin"])
+
+
+@router.post("/purge", response_model=DemoPurgeResponse)
+async def purge_demo_data(
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> DemoPurgeResponse:
+    """Delete the ``BSP`` demo school and everything under it. Idempotent."""
+    ip, request_id = _ip_request_id(request)
+    result = await DemoDataService(session, settings).purge(
+        actor_upn=user.upn,
+        actor_object_guid=user.ad_object_guid,
+        ip=ip,
+        request_id=request_id,
+    )
+    return DemoPurgeResponse(
+        found=result.found,
+        schools=result.schools,
+        classes=result.classes,
+        users=result.users,
+    )
+
+
+__all__ = ["router"]

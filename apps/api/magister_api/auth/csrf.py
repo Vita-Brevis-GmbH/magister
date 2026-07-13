@@ -57,10 +57,13 @@ class CsrfMiddleware(BaseHTTPMiddleware):
     """Enforce double-submit + HMAC for unsafe methods on protected paths.
 
     Endpoints under ``/auth/login`` and ``/auth/callback`` are exempt because
-    they pre-date the session.
+    they pre-date the session. ``/auth/logout`` is exempt too: it still
+    requires a valid session cookie (``get_current_user``), forging it is only
+    a nuisance (it logs the victim out), and requiring a matching CSRF token
+    there means a stale ``magister_csrf`` cookie silently blocks sign-out.
     """
 
-    EXEMPT_PATH_PREFIXES = ("/auth/login", "/auth/callback", "/healthz")
+    EXEMPT_PATH_PREFIXES = ("/auth/login", "/auth/logout", "/auth/callback", "/healthz")
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]

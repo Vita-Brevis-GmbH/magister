@@ -152,20 +152,57 @@ def _first_value(attr: Any) -> Any:
 
 
 def _kind_from_member_of(member_of: Iterable[str] | None) -> str:
-    """Heuristic mapping. Refine via OU/group convention in #3.1.
+    """Fallback classification by AD group when the OU gives no answer.
 
-    - Member of `*Teachers*` group → 'teacher'
-    - Member of `*Admins*`        → 'admin'
-    - else                          → 'student'
+    - Member of a `*Teacher*` / `*Lehrer*` group → 'teacher'
+    - Member of an `*Admin*` group               → 'teacher'
+      (people who sign in are staff — usually teachers; ``admin`` is an RBAC
+      role granted separately, not a person *kind*)
+    - else                                        → 'student'
     """
     if not member_of:
         return "student"
     upper_members = [m.upper() for m in member_of]
-    if any("ADMIN" in m for m in upper_members):
-        return "admin"
     if any("TEACHER" in m or "LEHRER" in m for m in upper_members):
         return "teacher"
+    if any("ADMIN" in m for m in upper_members):
+        return "teacher"
     return "student"
+
+
+def _dn_under_ou(dn: str, ou: str | None) -> bool:
+    """True if ``dn`` sits under the organizational unit ``ou`` (or equals it).
+
+    Both are compared case-insensitively (LDAP DNs are case-insensitive). We
+    require a component boundary so ``OU=Lehrer,…`` does not match
+    ``OU=NichtLehrer,…``.
+    """
+    if not ou:
+        return False
+    d = dn.strip().lower()
+    o = ou.strip().lower()
+    return bool(o) and (d == o or d.endswith("," + o))
+
+
+def classify_kind_by_ou(
+    dn: str,
+    fallback_kind: str,
+    *,
+    teacher_ou: str | None,
+    student_ous: Iterable[str | None],
+) -> str:
+    """Classify a user as teacher/student by which target OU their DN sits under.
+
+    The configured provisioning OUs (Admin → Einstellungen) are authoritative:
+    a DN under the teacher OU is a teacher, a DN under any student OU is a
+    student. When the DN matches no configured OU we keep ``fallback_kind``
+    (the group-based guess), so partially-configured deployments still work.
+    """
+    if _dn_under_ou(dn, teacher_ou):
+        return "teacher"
+    if any(_dn_under_ou(dn, ou) for ou in student_ous):
+        return "student"
+    return fallback_kind
 
 
 def _is_member_of_group(member_of: Any, group: str) -> bool:
@@ -1024,5 +1061,6 @@ __all__ = [
     "DEFAULT_USER_ATTRIBUTES",
     "AdClient",
     "AdUserRecord",
+    "classify_kind_by_ou",
     "parse_ad_entry",
 ]

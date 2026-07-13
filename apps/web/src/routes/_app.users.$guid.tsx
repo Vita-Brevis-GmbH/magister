@@ -1,10 +1,11 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import {
   useCurrentUser,
+  useDeleteAdUser,
   useMailDomains,
   useUpdateUser,
   useUser,
@@ -69,6 +70,8 @@ function UserDetailPage(): JSX.Element {
   const mailDomainsQ = useMailDomains();
   const me = useCurrentUser();
   const update = useUpdateUser(guid);
+  const del = useDeleteAdUser();
+  const navigate = useNavigate();
 
   const canChangeLogin = me.data?.is_admin ?? false;
   const domains = mailDomainsQ.data?.domains ?? [];
@@ -77,6 +80,7 @@ function UserDetailPage(): JSX.Element {
   const [savedFlash, setSavedFlash] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Re-hydrate the form from the loaded user. Runs on load and whenever we
   // (re-)enter edit mode, so Cancel + re-open always starts from server state.
@@ -223,8 +227,47 @@ function UserDetailPage(): JSX.Element {
               {t("users.detail.edit")}
             </Button>
           ) : null}
+          {!editing && me.data?.is_admin ? (
+            confirmDelete ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-destructive">{t("users.detail.delete_confirm")}</span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={del.isPending}
+                  onClick={() => del.mutate(guid, { onSuccess: () => navigate({ to: "/users" }) })}
+                >
+                  {t("users.detail.delete_yes")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmDelete(false)}
+                >
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)}>
+                {t("users.detail.delete")}
+              </Button>
+            )
+          ) : null}
         </CardHeader>
       </Card>
+
+      {del.isError ? (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {del.error instanceof ApiError && del.error.status === 503
+            ? t("users.detail.delete_err_ad")
+            : t("errors.generic")}
+        </div>
+      ) : null}
 
       {savedFlash && !editing ? (
         <div

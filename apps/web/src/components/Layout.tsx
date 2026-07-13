@@ -121,9 +121,9 @@ export function Layout() {
             ) : null}
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               onClick={() => logout.mutate()}
-              disabled={logout.isPending}
+              aria-busy={logout.isPending}
             >
               {t("nav.logout")}
             </Button>

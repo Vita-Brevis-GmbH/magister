@@ -57,9 +57,43 @@ class TestKindFromMemberOf:
         assert _kind_from_member_of(["CN=Teachers,OU=Groups"]) == "teacher"
         assert _kind_from_member_of(["cn=Lehrer,OU=Groups"]) == "teacher"
 
-    def test_admin_wins_over_teacher(self) -> None:
-        groups = ["CN=Admins,OU=Groups", "CN=Teachers,OU=Groups"]
-        assert _kind_from_member_of(groups) == "admin"
+    def test_admin_group_is_teacher_not_admin(self) -> None:
+        # People who sign in are staff — the admin group must NOT make them a
+        # "student"/"admin" *kind*; they are teachers (admin is an RBAC role).
+        assert _kind_from_member_of(["CN=Admins,OU=Groups"]) == "teacher"
+        assert (
+            _kind_from_member_of(["CN=Admins,OU=Groups", "CN=Teachers,OU=Groups"]) == "teacher"
+        )
+
+
+class TestClassifyKindByOu:
+    TEACHER_OU = "OU=Lehrer,OU=Schule,DC=schule,DC=local"
+    STUDENT_OU = "OU=Schueler,OU=Schule,DC=schule,DC=local"
+
+    def _c(self, dn: str, fallback: str = "student") -> str:
+        from magister_api.ad.client import classify_kind_by_ou
+
+        return classify_kind_by_ou(
+            dn, fallback, teacher_ou=self.TEACHER_OU, student_ous=[self.STUDENT_OU, None]
+        )
+
+    def test_dn_under_teacher_ou(self) -> None:
+        assert self._c(f"CN=Hans Muster,{self.TEACHER_OU}") == "teacher"
+
+    def test_dn_under_teacher_ou_case_insensitive(self) -> None:
+        assert self._c("cn=hans,ou=lehrer,ou=schule,dc=schule,dc=local") == "teacher"
+
+    def test_dn_under_student_ou(self) -> None:
+        assert self._c(f"CN=Kind,{self.STUDENT_OU}", fallback="teacher") == "student"
+
+    def test_boundary_not_substring(self) -> None:
+        # OU=NichtLehrer must not match teacher_ou "OU=Lehrer,...".
+        dn = "CN=x,OU=NichtLehrer,OU=Schule,DC=schule,DC=local"
+        assert self._c(dn, fallback="student") == "student"
+
+    def test_no_match_keeps_fallback(self) -> None:
+        dn = "CN=y,OU=Other,DC=schule,DC=local"
+        assert self._c(dn, fallback="teacher") == "teacher"
 
 
 class TestParseAdEntry:

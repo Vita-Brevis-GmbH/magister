@@ -302,6 +302,35 @@ export interface AdSyncResultOut {
   school_partition: Record<string, number>;
 }
 
+export type AdUserOuKey = "teacher" | "student_zyklus3" | "student_other";
+
+export interface AdUserCreateRequest {
+  given_name: string;
+  surname: string;
+  sam_account_name: string;
+  user_principal_name: string;
+  mail?: string | null;
+  ou_key: AdUserOuKey;
+}
+
+export interface AdUserCreateResponse {
+  ad_object_guid: string;
+  temp_password: string;
+  force_change: boolean;
+}
+
+export interface AdUserDeleteResponse {
+  ad_object_guid: string;
+  ad_disabled: boolean;
+}
+
+export interface DemoPurgeResponse {
+  found: boolean;
+  schools: number;
+  classes: number;
+  users: number;
+}
+
 export type PrefLanguage = "de" | "fr" | "it" | "en";
 export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
 export type PrefTimeFormat = "24h" | "12h";

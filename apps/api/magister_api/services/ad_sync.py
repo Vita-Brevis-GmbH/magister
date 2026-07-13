@@ -24,11 +24,12 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from magister_api.ad.client import AdClient, AdUserRecord
+from magister_api.ad.client import AdClient, AdUserRecord, classify_kind_by_ou
 from magister_api.ad.errors import AdUnavailableError
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.ad_sync_state import AdSyncState
+from magister_api.models.app_settings import AppSettings
 from magister_api.models.school import School
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
 
@@ -54,6 +55,44 @@ class AdSyncService:
         self.ad = ad
         self.repo = AdUserCacheSyncRepository(session)
         self.audit = AuditService(session, settings)
+
+    async def _reclassify_by_ou(self, records: list[AdUserRecord]) -> list[AdUserRecord]:
+        """Override each record's ``kind`` from the configured target OUs.
+
+        The provisioning OUs (Admin → Einstellungen) are the authority for
+        teacher-vs-student: a DN under the teacher OU is a teacher, under a
+        student OU a student. Falls back to the AD-group guess already on the
+        record when the DN matches no configured OU.
+
+        # scope-bypass: app_settings is a global singleton (no school scope).
+        """
+        row = (
+            await self.session.execute(
+                select(
+                    AppSettings.ad_ou_teachers,
+                    AppSettings.ad_ou_students_zyklus3,
+                    AppSettings.ad_ou_students_other,
+                ).where(AppSettings.id == 1)
+            )
+        ).one_or_none()
+        if row is None or not (
+            row.ad_ou_teachers or row.ad_ou_students_zyklus3 or row.ad_ou_students_other
+        ):
+            # No target OUs configured — keep the group-based classification.
+            return records
+        student_ous = (row.ad_ou_students_zyklus3, row.ad_ou_students_other)
+        return [
+            replace(
+                r,
+                kind=classify_kind_by_ou(
+                    r.distinguished_name,
+                    r.kind,
+                    teacher_ou=row.ad_ou_teachers,
+                    student_ous=student_ous,
+                ),
+            )
+            for r in records
+        ]
 
     async def _load_schools(self) -> list[School]:
         # scope-bypass: sync runs as a service user that owns all schools.
@@ -114,6 +153,8 @@ class AdSyncService:
                 payload={"reason": str(exc), "mode": effective_mode},
             )
             raise
+
+        records = await self._reclassify_by_ou(records)
 
         schools = await self._load_schools()
         resolver = self._school_resolver(schools)

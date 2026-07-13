@@ -199,7 +199,11 @@
       "error_mail_domains_missing": "Es sind noch keine Mail-Domains konfiguriert. Bitte unter Administration → Systemeinstellungen ergänzen.",
       "error_domain_not_allowed": "Diese Domain ist nicht in der erlaubten Liste.",
       "error_validation": "Eingabe ist ungültig. Bitte prüfen.",
-      "error_not_found": "User nicht gefunden."
+      "error_not_found": "User nicht gefunden.",
+      "delete": "Löschen",
+      "delete_confirm": "Benutzer wirklich löschen?",
+      "delete_yes": "Löschen",
+      "delete_err_ad": "AD nicht erreichbar — Deaktivierung fehlgeschlagen."
     },
     "field": {
       "display_name": "Anzeigename",
@@ -220,7 +224,8 @@
       "local_part_placeholder": "vorname.nachname",
       "domain_empty": "— keine Domain —",
       "domains_missing": "Noch keine Mail-Domains konfiguriert. Administration → Systemeinstellungen."
-    }
+    },
+    "new_user": "Neuer Benutzer"
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",
@@ -340,7 +345,14 @@
       "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
       "ad_login_title": "AD-Anmeldung",
       "ad_login_enabled_hint": "Erlaubt die Anmeldung mit AD-Benutzername und Passwort (LDAPS) zusätzlich zu Entra ID. Kein MFA auf diesem Weg.",
-      "ad_login_group_required": "Ohne Gruppe kann sich niemand per AD anmelden. Bitte eine Gruppe angeben."
+      "ad_login_group_required": "Ohne Gruppe kann sich niemand per AD anmelden. Bitte eine Gruppe angeben.",
+      "danger_title": "Gefahrenzone",
+      "purge_demo_desc": "Löscht die Beispieldaten (Schule „BSP\" mit Klassen und Demo-Personen) unwiderruflich.",
+      "purge_demo_button": "Beispieldaten löschen",
+      "purge_demo_confirm": "Beispieldaten wirklich löschen?",
+      "purge_demo_yes": "Endgültig löschen",
+      "purge_demo_ok": "Gelöscht: {{classes}} Klassen, {{users}} Personen.",
+      "purge_demo_none": "Keine Beispieldaten gefunden."
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",
@@ -387,6 +399,30 @@
       "grant_button": "Rolle vergeben",
       "grant_ok": "Rolle vergeben.",
       "grant_not_found": "Benutzer oder Schule nicht gefunden."
+    },
+    "user_new": {
+      "title": "Neuen Benutzer anlegen",
+      "description": "Legt ein echtes AD-Konto an und zeigt einmalig ein temporäres Passwort.",
+      "given_name": "Vorname",
+      "surname": "Nachname",
+      "sam": "Anmeldename (sAMAccountName)",
+      "upn": "UPN (Anmelde-E-Mail)",
+      "mail": "E-Mail (optional)",
+      "ou": "Ziel-OU / Rolle",
+      "ou_hint": "Bestimmt OU und Klassifizierung. Die OUs stammen aus den Provisioning-Einstellungen.",
+      "ou_teacher": "Lehrperson",
+      "ou_student_zyklus3": "Schüler:in (Zyklus 3)",
+      "ou_student_other": "Schüler:in (übrige)",
+      "submit": "Anlegen",
+      "created_title": "Benutzer angelegt",
+      "created_desc": "Das temporäre Passwort wird nur jetzt angezeigt. Beim ersten Login muss es geändert werden.",
+      "temp_password": "Temporäres Passwort",
+      "temp_hint": "Sicher an die Person übergeben. Es wird nicht erneut angezeigt.",
+      "to_users": "Zur Benutzerliste",
+      "create_another": "Weiteren anlegen",
+      "err_ou_not_configured": "Ziel-OU nicht konfiguriert. Bitte unter Einstellungen die Provisioning-OUs setzen.",
+      "err_ad": "AD nicht erreichbar oder Konflikt (UPN/Anmeldename existiert bereits).",
+      "err_invalid": "Eingabe ungültig. Bitte prüfen."
     }
   },
   "substitutions": {

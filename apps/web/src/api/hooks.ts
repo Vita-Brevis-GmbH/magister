@@ -7,8 +7,12 @@ import type {
   AdConnectionTestOut,
   AdLoginRequest,
   AdSyncResultOut,
+  AdUserCreateRequest,
+  AdUserCreateResponse,
+  AdUserDeleteResponse,
   AdUserListResponse,
   AdUserOut,
+  DemoPurgeResponse,
   AppSettingsOut,
   AppSettingsUpdate,
   AuditEventListResponse,
@@ -92,7 +96,10 @@ export function useLogout() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
-    onSuccess: () => {
+    // Land on /login whether or not the server call succeeded, so the button
+    // never appears to "do nothing" — the session is cleared server-side on
+    // success, and on any failure the login screen re-evaluates the session.
+    onSettled: () => {
       qc.clear();
       window.location.assign("/login");
     },
@@ -501,6 +508,41 @@ export function useUpdateAppSettings() {
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
     mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+  });
+}
+
+export function useCreateAdUser() {
+  const qc = useQueryClient();
+  return useMutation<AdUserCreateResponse, ApiError, AdUserCreateRequest>({
+    mutationFn: (body) =>
+      apiFetch<AdUserCreateResponse>("/admin/ad-users", { method: "POST", body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useDeleteAdUser() {
+  const qc = useQueryClient();
+  return useMutation<AdUserDeleteResponse, ApiError, string>({
+    mutationFn: (guid) =>
+      apiFetch<AdUserDeleteResponse>(`/admin/ad-users/${encodeURIComponent(guid)}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: queryKeys.roles });
+    },
+  });
+}
+
+export function usePurgeDemoData() {
+  const qc = useQueryClient();
+  return useMutation<DemoPurgeResponse, ApiError, void>({
+    mutationFn: () => apiFetch<DemoPurgeResponse>("/admin/demo-data/purge", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: queryKeys.classes });
+      qc.invalidateQueries({ queryKey: queryKeys.schools });
+    },
   });
 }
 

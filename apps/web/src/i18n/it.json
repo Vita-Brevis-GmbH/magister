@@ -202,7 +202,11 @@
       "error_mail_domains_missing": "I domini e-mail non sono ancora configurati.",
       "error_domain_not_allowed": "Questo dominio non è consentito.",
       "error_validation": "Input non valido.",
-      "error_not_found": "Utente non trovato."
+      "error_not_found": "Utente non trovato.",
+      "delete": "Elimina",
+      "delete_confirm": "Eliminare davvero questo utente?",
+      "delete_yes": "Elimina",
+      "delete_err_ad": "AD non raggiungibile — disattivazione fallita."
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -223,7 +227,8 @@
       "local_part_placeholder": "nome.cognome",
       "domain_empty": "— nessun dominio —",
       "domains_missing": "Nessun dominio e-mail configurato."
-    }
+    },
+    "new_user": "Nuovo utente"
   },
   "password_reset": {
     "button": "Reimposta password",
@@ -343,7 +348,14 @@
       "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+).",
       "ad_login_title": "Accesso AD",
       "ad_login_enabled_hint": "Consente l'accesso con nome utente e password AD (LDAPS) oltre a Entra ID. Nessun MFA su questa via.",
-      "ad_login_group_required": "Senza un gruppo nessuno può accedere tramite AD. Indicare un gruppo."
+      "ad_login_group_required": "Senza un gruppo nessuno può accedere tramite AD. Indicare un gruppo.",
+      "danger_title": "Zona pericolosa",
+      "purge_demo_desc": "Elimina definitivamente i dati demo (scuola «BSP» con classi e persone demo).",
+      "purge_demo_button": "Elimina dati demo",
+      "purge_demo_confirm": "Eliminare davvero i dati demo?",
+      "purge_demo_yes": "Elimina definitivamente",
+      "purge_demo_ok": "Eliminati: {{classes}} classi, {{users}} persone.",
+      "purge_demo_none": "Nessun dato demo trovato."
     },
     "local_admin": {
       "title": "Account amministratore locale",
@@ -390,6 +402,30 @@
       "grant_button": "Assegna ruolo",
       "grant_ok": "Ruolo assegnato.",
       "grant_not_found": "Utente o scuola non trovati."
+    },
+    "user_new": {
+      "title": "Crea un nuovo utente",
+      "description": "Crea un vero account AD e mostra una volta una password temporanea.",
+      "given_name": "Nome",
+      "surname": "Cognome",
+      "sam": "Nome di accesso (sAMAccountName)",
+      "upn": "UPN (email di accesso)",
+      "mail": "Email (facoltativa)",
+      "ou": "OU di destinazione / ruolo",
+      "ou_hint": "Determina l'OU e la classificazione. Le OU provengono dalle impostazioni di provisioning.",
+      "ou_teacher": "Docente",
+      "ou_student_zyklus3": "Studente (ciclo 3)",
+      "ou_student_other": "Studente (altri)",
+      "submit": "Crea",
+      "created_title": "Utente creato",
+      "created_desc": "La password temporanea è mostrata solo ora. Deve essere cambiata al primo accesso.",
+      "temp_password": "Password temporanea",
+      "temp_hint": "Consegnala in modo sicuro alla persona. Non verrà più mostrata.",
+      "to_users": "All'elenco utenti",
+      "create_another": "Creane un altro",
+      "err_ou_not_configured": "OU di destinazione non configurata. Imposta le OU di provisioning nelle Impostazioni.",
+      "err_ad": "AD non raggiungibile o conflitto (UPN/nome di accesso già esistente).",
+      "err_invalid": "Input non valido. Verificare."
     }
   },
   "substitutions": {

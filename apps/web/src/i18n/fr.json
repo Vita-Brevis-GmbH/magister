@@ -202,7 +202,11 @@
       "error_mail_domains_missing": "Les domaines e-mail ne sont pas encore configurés.",
       "error_domain_not_allowed": "Ce domaine n'est pas autorisé.",
       "error_validation": "Entrée non valide.",
-      "error_not_found": "Utilisateur introuvable."
+      "error_not_found": "Utilisateur introuvable.",
+      "delete": "Supprimer",
+      "delete_confirm": "Supprimer vraiment cet utilisateur ?",
+      "delete_yes": "Supprimer",
+      "delete_err_ad": "AD injoignable — désactivation échouée."
     },
     "field": {
       "display_name": "Nom affiché",
@@ -223,7 +227,8 @@
       "local_part_placeholder": "prenom.nom",
       "domain_empty": "— pas de domaine —",
       "domains_missing": "Aucun domaine e-mail configuré."
-    }
+    },
+    "new_user": "Nouvel utilisateur"
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",
@@ -343,7 +348,14 @@
       "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+).",
       "ad_login_title": "Connexion AD",
       "ad_login_enabled_hint": "Permet la connexion avec un nom d'utilisateur et un mot de passe AD (LDAPS) en plus d'Entra ID. Pas de MFA sur cette voie.",
-      "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe."
+      "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe.",
+      "danger_title": "Zone dangereuse",
+      "purge_demo_desc": "Supprime définitivement les données de démonstration (école « BSP » avec classes et personnes de démo).",
+      "purge_demo_button": "Supprimer les données de démo",
+      "purge_demo_confirm": "Supprimer vraiment les données de démo ?",
+      "purge_demo_yes": "Supprimer définitivement",
+      "purge_demo_ok": "Supprimé : {{classes}} classes, {{users}} personnes.",
+      "purge_demo_none": "Aucune donnée de démo trouvée."
     },
     "local_admin": {
       "title": "Compte administrateur local",
@@ -390,6 +402,30 @@
       "grant_button": "Attribuer le rôle",
       "grant_ok": "Rôle attribué.",
       "grant_not_found": "Utilisateur ou école introuvable."
+    },
+    "user_new": {
+      "title": "Créer un nouvel utilisateur",
+      "description": "Crée un vrai compte AD et affiche une fois un mot de passe temporaire.",
+      "given_name": "Prénom",
+      "surname": "Nom",
+      "sam": "Nom de connexion (sAMAccountName)",
+      "upn": "UPN (e-mail de connexion)",
+      "mail": "E-mail (facultatif)",
+      "ou": "OU cible / rôle",
+      "ou_hint": "Détermine l'OU et la classification. Les OU proviennent des paramètres de provisionnement.",
+      "ou_teacher": "Enseignant·e",
+      "ou_student_zyklus3": "Élève (cycle 3)",
+      "ou_student_other": "Élève (autres)",
+      "submit": "Créer",
+      "created_title": "Utilisateur créé",
+      "created_desc": "Le mot de passe temporaire n'est affiché que maintenant. Il doit être changé à la première connexion.",
+      "temp_password": "Mot de passe temporaire",
+      "temp_hint": "Remettez-le en main propre de façon sûre. Il ne sera plus affiché.",
+      "to_users": "Vers la liste des utilisateurs",
+      "create_another": "En créer un autre",
+      "err_ou_not_configured": "OU cible non configurée. Définissez les OU de provisionnement dans les Paramètres.",
+      "err_ad": "AD injoignable ou conflit (UPN/nom de connexion déjà existant).",
+      "err_invalid": "Saisie invalide. Veuillez vérifier."
     }
   },
   "substitutions": {
