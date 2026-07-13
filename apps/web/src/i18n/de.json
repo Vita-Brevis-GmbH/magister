@@ -15,7 +15,8 @@
     "logout": "Abmelden",
     "my_students": "Meine Schüler:innen",
     "roles": "Rollen",
-    "devices": "Geräte"
+    "devices": "Geräte",
+    "schools": "Schulen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -690,6 +691,45 @@
     "error": {
       "out_of_scope": "Zuweisung ausserhalb Ihres Schul-Bereichs nicht erlaubt.",
       "assignment_invalid": "Ungültiges Zuweisungsziel."
+    }
+  },
+  "schools": {
+    "title": "Schulen",
+    "subtitle": "Schulhäuser mit Adresse, Kontakt und Standort erfassen.",
+    "empty": "Noch keine Schulen erfasst.",
+    "create_button": "Schule erfassen",
+    "create_title": "Neue Schule",
+    "edit_title": "Schule bearbeiten",
+    "form_hint": "Name, Kürzel und Bereichskürzel sind erforderlich; Adresse und Kontakt sind optional.",
+    "save": "Speichern",
+    "edit_button": "Bearbeiten",
+    "delete_button": "Löschen",
+    "map_open": "Auf Karte",
+    "map_preview": "Kartenvorschau",
+    "coords_hint": "Koordinaten (Breite/Länge) optional — nur nötig für die eingebettete Kartenvorschau. Ohne Koordinaten öffnet „Auf Karte“ die Adresse in OpenStreetMap.",
+    "delete_title": "Schule löschen",
+    "delete_confirm": "Schule „{{name}}“ wirklich löschen?",
+    "delete_confirm_button": "Löschen",
+    "error_kuerzel_conflict": "Dieses Kürzel ist bereits vergeben.",
+    "error_in_use": "Schule kann nicht gelöscht werden: Es sind noch Klassen, Benutzer, Rollen oder Importe damit verknüpft.",
+    "field": {
+      "name": "Name",
+      "kuerzel": "Kürzel",
+      "scope_short": "Bereichskürzel (OU)",
+      "street": "Strasse / Nr.",
+      "postal_code": "PLZ",
+      "city": "Ort",
+      "phone": "Telefon",
+      "description": "Beschreibung",
+      "latitude": "Breite (Lat)",
+      "longitude": "Länge (Lon)"
+    },
+    "col": {
+      "name": "Name",
+      "kuerzel": "Kürzel",
+      "city": "Ort",
+      "phone": "Telefon",
+      "actions": "Aktionen"
     }
   }
 }

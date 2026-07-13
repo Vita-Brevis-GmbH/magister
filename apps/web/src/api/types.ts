@@ -100,7 +100,29 @@ export interface SchoolOut {
   name: string;
   kuerzel: string;
   scope_short: string;
+  street?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
+
+export interface SchoolCreate {
+  name: string;
+  kuerzel: string;
+  scope_short: string;
+  street?: string | null;
+  postal_code?: string | null;
+  city?: string | null;
+  phone?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export type SchoolUpdate = Partial<SchoolCreate>;
 
 export type ClassTeacherRole = "haupt" | "co" | "stellvertretung";
 

@@ -67,6 +67,13 @@ export function Layout() {
             {me.data?.is_admin ? (
               <>
                 <Link
+                  to="/admin/schools"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.schools")}
+                </Link>
+                <Link
                   to="/admin/settings"
                   activeProps={{ className: navActive }}
                   inactiveProps={{ className: navIdle }}

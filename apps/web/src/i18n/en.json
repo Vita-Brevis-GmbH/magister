@@ -15,7 +15,8 @@
     "audit": "Audit Log",
     "my_students": "My students",
     "roles": "Roles",
-    "devices": "Devices"
+    "devices": "Devices",
+    "schools": "Schools"
   },
   "auth": {
     "login_title": "Sign in",
@@ -690,6 +691,45 @@
     "error": {
       "out_of_scope": "Assignment outside your school scope is not allowed.",
       "assignment_invalid": "Invalid assignment target."
+    }
+  },
+  "schools": {
+    "title": "Schools",
+    "subtitle": "Manage school buildings with address, contact and location.",
+    "empty": "No schools yet.",
+    "create_button": "Add school",
+    "create_title": "New school",
+    "edit_title": "Edit school",
+    "form_hint": "Name, short code and scope code are required; address and contact are optional.",
+    "save": "Save",
+    "edit_button": "Edit",
+    "delete_button": "Delete",
+    "map_open": "Map",
+    "map_preview": "Map preview",
+    "coords_hint": "Coordinates (lat/lon) optional — only needed for the embedded map preview. Without them, ‘Map’ opens the address in OpenStreetMap.",
+    "delete_title": "Delete school",
+    "delete_confirm": "Really delete school “{{name}}”?",
+    "delete_confirm_button": "Delete",
+    "error_kuerzel_conflict": "This short code is already in use.",
+    "error_in_use": "Cannot delete: classes, users, roles or imports are still linked to this school.",
+    "field": {
+      "name": "Name",
+      "kuerzel": "Short code",
+      "scope_short": "Scope code (OU)",
+      "street": "Street / no.",
+      "postal_code": "Postal code",
+      "city": "City",
+      "phone": "Phone",
+      "description": "Description",
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    },
+    "col": {
+      "name": "Name",
+      "kuerzel": "Short code",
+      "city": "City",
+      "phone": "Phone",
+      "actions": "Actions"
     }
   }
 }

@@ -27,8 +27,10 @@ class AuditEvent(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     target_kind: Mapped[str] = mapped_column(String(64), nullable=False)
     target_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # SET NULL: deleting an (unused) school preserves its audit events; the
+    # scoping link is cleared rather than blocking the delete.
     school_id: Mapped[int | None] = mapped_column(
-        ForeignKey("schools.id", ondelete="RESTRICT"), nullable=True, index=True
+        ForeignKey("schools.id", ondelete="SET NULL"), nullable=True, index=True
     )
     ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_id: Mapped[str] = mapped_column(String(36), nullable=False)

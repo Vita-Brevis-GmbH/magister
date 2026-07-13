@@ -18,7 +18,8 @@
     "audit": "Registro di audit",
     "my_students": "I miei studenti",
     "roles": "Ruoli",
-    "devices": "Dispositivi"
+    "devices": "Dispositivi",
+    "schools": "Scuole"
   },
   "auth": {
     "login_title": "Accedi",
@@ -693,6 +694,45 @@
     "error": {
       "out_of_scope": "Assegnazione fuori dal tuo ambito scolastico non consentita.",
       "assignment_invalid": "Destinazione di assegnazione non valida."
+    }
+  },
+  "schools": {
+    "title": "Scuole",
+    "subtitle": "Gestisci gli edifici scolastici con indirizzo, contatto e posizione.",
+    "empty": "Ancora nessuna scuola.",
+    "create_button": "Aggiungi scuola",
+    "create_title": "Nuova scuola",
+    "edit_title": "Modifica scuola",
+    "form_hint": "Nome, sigla e sigla dell’ambito sono obbligatori; indirizzo e contatto sono facoltativi.",
+    "save": "Salva",
+    "edit_button": "Modifica",
+    "delete_button": "Elimina",
+    "map_open": "Mappa",
+    "map_preview": "Anteprima mappa",
+    "coords_hint": "Coordinate (lat/lon) facoltative — necessarie solo per l’anteprima incorporata. Senza, « Mappa » apre l’indirizzo in OpenStreetMap.",
+    "delete_title": "Elimina scuola",
+    "delete_confirm": "Eliminare davvero la scuola « {{name}} »?",
+    "delete_confirm_button": "Elimina",
+    "error_kuerzel_conflict": "Questa sigla è già in uso.",
+    "error_in_use": "Impossibile eliminare: classi, utenti, ruoli o importazioni sono ancora collegati.",
+    "field": {
+      "name": "Nome",
+      "kuerzel": "Sigla",
+      "scope_short": "Sigla ambito (OU)",
+      "street": "Via / n.",
+      "postal_code": "CAP",
+      "city": "Località",
+      "phone": "Telefono",
+      "description": "Descrizione",
+      "latitude": "Latitudine",
+      "longitude": "Longitudine"
+    },
+    "col": {
+      "name": "Nome",
+      "kuerzel": "Sigla",
+      "city": "Località",
+      "phone": "Telefono",
+      "actions": "Azioni"
     }
   }
 }

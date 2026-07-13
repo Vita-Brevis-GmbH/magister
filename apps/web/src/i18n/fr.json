@@ -18,7 +18,8 @@
     "audit": "Journal d'audit",
     "my_students": "Mes élèves",
     "roles": "Rôles",
-    "devices": "Appareils"
+    "devices": "Appareils",
+    "schools": "Écoles"
   },
   "auth": {
     "login_title": "Connexion",
@@ -693,6 +694,45 @@
     "error": {
       "out_of_scope": "L'attribution hors de votre périmètre scolaire n'est pas autorisée.",
       "assignment_invalid": "Cible d'attribution invalide."
+    }
+  },
+  "schools": {
+    "title": "Écoles",
+    "subtitle": "Gérer les bâtiments scolaires avec adresse, contact et emplacement.",
+    "empty": "Aucune école pour l’instant.",
+    "create_button": "Ajouter une école",
+    "create_title": "Nouvelle école",
+    "edit_title": "Modifier l’école",
+    "form_hint": "Le nom, le code court et le code de périmètre sont requis ; l’adresse et le contact sont facultatifs.",
+    "save": "Enregistrer",
+    "edit_button": "Modifier",
+    "delete_button": "Supprimer",
+    "map_open": "Carte",
+    "map_preview": "Aperçu de la carte",
+    "coords_hint": "Coordonnées (lat/lon) facultatives — nécessaires uniquement pour l’aperçu intégré. Sans elles, « Carte » ouvre l’adresse dans OpenStreetMap.",
+    "delete_title": "Supprimer l’école",
+    "delete_confirm": "Vraiment supprimer l’école « {{name}} » ?",
+    "delete_confirm_button": "Supprimer",
+    "error_kuerzel_conflict": "Ce code court est déjà utilisé.",
+    "error_in_use": "Suppression impossible : des classes, utilisateurs, rôles ou imports y sont encore liés.",
+    "field": {
+      "name": "Nom",
+      "kuerzel": "Code court",
+      "scope_short": "Code de périmètre (OU)",
+      "street": "Rue / n°",
+      "postal_code": "NPA",
+      "city": "Localité",
+      "phone": "Téléphone",
+      "description": "Description",
+      "latitude": "Latitude",
+      "longitude": "Longitude"
+    },
+    "col": {
+      "name": "Nom",
+      "kuerzel": "Code court",
+      "city": "Localité",
+      "phone": "Téléphone",
+      "actions": "Actions"
     }
   }
 }

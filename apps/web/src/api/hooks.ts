@@ -54,6 +54,8 @@ import type {
   RoleGrantRequest,
   MailDomainsOut,
   SchoolOut,
+  SchoolCreate,
+  SchoolUpdate,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
   SubstitutionOut,
@@ -125,6 +127,36 @@ export function useSchools() {
     queryKey: queryKeys.schools,
     queryFn: () => apiFetch<SchoolOut[]>("/schools"),
     staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateSchool() {
+  const qc = useQueryClient();
+  return useMutation<SchoolOut, ApiError, SchoolCreate>({
+    mutationFn: (body) => apiFetch<SchoolOut>("/schools", { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.schools });
+    },
+  });
+}
+
+export function useUpdateSchool(schoolId: number) {
+  const qc = useQueryClient();
+  return useMutation<SchoolOut, ApiError, SchoolUpdate>({
+    mutationFn: (body) => apiFetch<SchoolOut>(`/schools/${schoolId}`, { method: "PATCH", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.schools });
+    },
+  });
+}
+
+export function useDeleteSchool() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (schoolId) => apiFetch<void>(`/schools/${schoolId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.schools });
+    },
   });
 }
 
