@@ -28,6 +28,8 @@ export const Route = createFileRoute("/_app/users/$guid")({
 
 interface FormState {
   display_name: string;
+  given_name: string;
+  surname: string;
   upn_local: string;
   upn_domain: string;
   sam_account_name: string;
@@ -43,6 +45,8 @@ interface FormState {
 function emptyForm(): FormState {
   return {
     display_name: "",
+    given_name: "",
+    surname: "",
     upn_local: "",
     upn_domain: "",
     sam_account_name: "",
@@ -90,6 +94,8 @@ function UserDetailPage(): JSX.Element {
     const mail = splitMail(userQ.data.mail);
     setForm({
       display_name: userQ.data.display_name ?? "",
+      given_name: userQ.data.given_name ?? "",
+      surname: userQ.data.surname ?? "",
       upn_local: upn.local,
       upn_domain: upn.domain,
       sam_account_name: userQ.data.sam_account_name ?? "",
@@ -136,6 +142,11 @@ function UserDetailPage(): JSX.Element {
 
     const dn = trimOrNull(form.display_name);
     if (dn !== current.display_name) out.display_name = dn;
+
+    const gn = trimOrNull(form.given_name);
+    if (gn !== current.given_name) out.given_name = gn;
+    const sn = trimOrNull(form.surname);
+    if (sn !== current.surname) out.surname = sn;
 
     if (canChangeLogin) {
       const upnNew =
@@ -316,6 +327,20 @@ function UserDetailPage(): JSX.Element {
                 onChange={(v) => setField("display_name", v)}
                 placeholder={t("users.field.display_name_placeholder")}
               />
+              <div className="grid grid-cols-2 gap-3">
+                <Field
+                  id="given_name"
+                  label={t("users.field.given_name")}
+                  value={form.given_name}
+                  onChange={(v) => setField("given_name", v)}
+                />
+                <Field
+                  id="surname"
+                  label={t("users.field.surname")}
+                  value={form.surname}
+                  onChange={(v) => setField("surname", v)}
+                />
+              </div>
               <UpnField
                 localValue={form.upn_local}
                 domainValue={form.upn_domain}

@@ -17,7 +17,8 @@
     "reports": "Rapporti",
     "audit": "Registro di audit",
     "my_students": "I miei studenti",
-    "roles": "Ruoli"
+    "roles": "Ruoli",
+    "devices": "Dispositivi"
   },
   "auth": {
     "login_title": "Accedi",
@@ -226,7 +227,9 @@
       "temp_device_name_hint": "Durante la riparazione del dispositivo principale.",
       "local_part_placeholder": "nome.cognome",
       "domain_empty": "— nessun dominio —",
-      "domains_missing": "Nessun dominio e-mail configurato."
+      "domains_missing": "Nessun dominio e-mail configurato.",
+      "given_name": "Nome",
+      "surname": "Cognome"
     },
     "new_user": "Nuovo utente"
   },
@@ -252,7 +255,11 @@
     "error_student_not_in_ad": "Studente non trovato in AD. Controlla la sincronizzazione AD.",
     "error_student_not_found": "Studente non trovato.",
     "error_not_a_student": "Questo utente non è uno studente.",
-    "error_password_policy": "La password non rispetta la policy AD."
+    "error_password_policy": "La password non rispetta la policy AD.",
+    "error_not_found": "Utente non trovato.",
+    "error_disabled": "L'account è disattivato.",
+    "error_not_in_ad": "Account non trovato in AD.",
+    "error_wrong_kind": "Non disponibile per questo tipo di account."
   },
   "errors": {
     "title": "Errore",
@@ -622,5 +629,62 @@
     "empty": "Attualmente non sei assegnato a nessuna classe come KL o docente di materia.",
     "empty_class": "Nessuno studente attivo.",
     "count": "{{count}} studenti"
+  },
+  "devices": {
+    "title": "Dispositivi",
+    "subtitle": "Inventario dispositivi — gestito in Magister, importato dall'AD solo con il nome.",
+    "empty": "Ancora nessun dispositivo.",
+    "create_button": "Crea dispositivo",
+    "create_title": "Nuovo dispositivo",
+    "create_description": "Aggiungere manualmente un dispositivo all'inventario.",
+    "create_submit": "Crea",
+    "edit_title": "Modifica dispositivo",
+    "save": "Salva",
+    "assign_button": "Assegna",
+    "edit_button": "Modifica",
+    "delete_button": "Elimina",
+    "assign_title": "Assegna dispositivo",
+    "assign_submit": "Salva assegnazione",
+    "assignment_type": "Assegnazione",
+    "select_person": "Persona",
+    "select_class": "Classe",
+    "select_school": "Scuola",
+    "select_placeholder": "Selezionare …",
+    "person_search_placeholder": "Cerca per nome o utente …",
+    "free": "Libero / Disponibile",
+    "assigned_person": "Persona: {{name}}",
+    "assigned_class": "Classe: {{name}}",
+    "assigned_school": "Scuola: {{name}}",
+    "delete_title": "Elimina dispositivo",
+    "delete_confirm": "Rimuovere davvero il dispositivo “{{name}}” dall'inventario?",
+    "delete_confirm_button": "Elimina",
+    "field": {
+      "name": "Denominazione",
+      "type": "Tipo",
+      "serial": "N. serie/inventario",
+      "notes": "Nota"
+    },
+    "col": {
+      "name": "Denominazione",
+      "type": "Tipo",
+      "serial": "N. serie/inventario",
+      "assignment": "Assegnazione",
+      "source": "Origine",
+      "actions": "Azioni"
+    },
+    "source": {
+      "ad": "AD",
+      "manual": "Manuale"
+    },
+    "assignment": {
+      "free": "Libero / Disponibile",
+      "person": "Persona",
+      "class": "Classe",
+      "school": "Scuola"
+    },
+    "error": {
+      "out_of_scope": "Assegnazione fuori dal tuo ambito scolastico non consentita.",
+      "assignment_invalid": "Destinazione di assegnazione non valida."
+    }
   }
 }

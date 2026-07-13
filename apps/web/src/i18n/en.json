@@ -14,7 +14,8 @@
     "reports": "Reports",
     "audit": "Audit Log",
     "my_students": "My students",
-    "roles": "Roles"
+    "roles": "Roles",
+    "devices": "Devices"
   },
   "auth": {
     "login_title": "Sign in",
@@ -223,7 +224,9 @@
       "temp_device_name_hint": "While the primary device is in repair.",
       "local_part_placeholder": "first.last",
       "domain_empty": "— no domain —",
-      "domains_missing": "No mail domains configured. Administration → System settings."
+      "domains_missing": "No mail domains configured. Administration → System settings.",
+      "given_name": "First name",
+      "surname": "Last name"
     },
     "new_user": "New user"
   },
@@ -249,7 +252,11 @@
     "error_student_not_in_ad": "Student not found in AD. Check AD sync.",
     "error_student_not_found": "Student not found.",
     "error_not_a_student": "This user is not a student.",
-    "error_password_policy": "Password does not meet AD policy."
+    "error_password_policy": "Password does not meet AD policy.",
+    "error_not_found": "User not found.",
+    "error_disabled": "Account is disabled.",
+    "error_not_in_ad": "Account not found in AD.",
+    "error_wrong_kind": "Not available for this account type."
   },
   "errors": {
     "title": "Error",
@@ -619,5 +626,62 @@
     "empty": "You are currently not assigned to any class as KL or subject teacher.",
     "empty_class": "No active students.",
     "count": "{{count}} students"
+  },
+  "devices": {
+    "title": "Devices",
+    "subtitle": "Device inventory — managed in Magister, imported from AD by name only.",
+    "empty": "No devices yet.",
+    "create_button": "Create device",
+    "create_title": "New device",
+    "create_description": "Add a device to the inventory manually.",
+    "create_submit": "Create",
+    "edit_title": "Edit device",
+    "save": "Save",
+    "assign_button": "Assign",
+    "edit_button": "Edit",
+    "delete_button": "Delete",
+    "assign_title": "Assign device",
+    "assign_submit": "Save assignment",
+    "assignment_type": "Assignment",
+    "select_person": "Person",
+    "select_class": "Class",
+    "select_school": "School",
+    "select_placeholder": "Please select …",
+    "person_search_placeholder": "Search by name or user …",
+    "free": "Free / Available",
+    "assigned_person": "Person: {{name}}",
+    "assigned_class": "Class: {{name}}",
+    "assigned_school": "School: {{name}}",
+    "delete_title": "Delete device",
+    "delete_confirm": "Really remove device “{{name}}” from the inventory?",
+    "delete_confirm_button": "Delete",
+    "field": {
+      "name": "Name",
+      "type": "Type",
+      "serial": "Serial/asset no.",
+      "notes": "Note"
+    },
+    "col": {
+      "name": "Name",
+      "type": "Type",
+      "serial": "Serial/asset no.",
+      "assignment": "Assignment",
+      "source": "Source",
+      "actions": "Actions"
+    },
+    "source": {
+      "ad": "AD",
+      "manual": "Manual"
+    },
+    "assignment": {
+      "free": "Free / Available",
+      "person": "Person",
+      "class": "Class",
+      "school": "School"
+    },
+    "error": {
+      "out_of_scope": "Assignment outside your school scope is not allowed.",
+      "assignment_invalid": "Invalid assignment target."
+    }
   }
 }

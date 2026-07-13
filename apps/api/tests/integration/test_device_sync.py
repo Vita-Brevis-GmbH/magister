@@ -34,6 +34,7 @@ pytestmark = pytest.mark.postgres
 
 ANNA_GUID = "11111111-1111-1111-1111-1111111111aa"
 BENO_GUID = "22222222-2222-2222-2222-2222222222aa"
+LAPTOP_GUID = "33333333-3333-3333-3333-3333333333aa"
 ANNA_DN = "CN=Anna,OU=Teachers,OU=ALPHA,DC=schule,DC=local"
 BENO_DN = "CN=Beno,OU=Students,OU=ALPHA,DC=schule,DC=local"
 
@@ -54,16 +55,18 @@ def _seed_user(conn: Connection, *, guid: str, dn: str, upn: str) -> None:
     )
 
 
-def _seed_computer(conn: Connection, *, cn: str, dn: str, managed_by: str) -> None:
-    conn.strategy.add_entry(
-        dn,
-        {
-            "objectClass": ["computer"],
-            "cn": cn,
-            "name": cn,
-            "managedBy": managed_by,
-        },
-    )
+def _seed_computer(
+    conn: Connection, *, cn: str, dn: str, managed_by: str, guid: str | None = None
+) -> None:
+    attrs: dict[str, object] = {
+        "objectClass": ["computer"],
+        "cn": cn,
+        "name": cn,
+        "managedBy": managed_by,
+    }
+    if guid is not None:
+        attrs["objectGUID"] = _le(guid)
+    conn.strategy.add_entry(dn, attrs)
 
 
 @pytest_asyncio.fixture
@@ -84,6 +87,7 @@ async def mock_ad_with_devices(app_settings: Settings):
         cn="LAPTOP-ANNA01",
         dn="CN=LAPTOP-ANNA01,OU=Computers,DC=schule,DC=local",
         managed_by=ANNA_DN,
+        guid=LAPTOP_GUID,
     )
     # Beno has no managed computer — device_name stays None.
     yield client
@@ -179,6 +183,76 @@ class TestSyncMergesDevice:
             event = await AuditService(s, app_settings).read(row.id)
         assert event is not None
         assert event.payload["device_count"] == 1
+
+
+class TestDeviceImportIntoTable:
+    @pytest.mark.asyncio
+    async def test_search_computers_returns_guid_name_pairs(
+        self, mock_ad_with_devices: AdClient
+    ) -> None:
+        pairs = await mock_ad_with_devices.search_computers()
+        assert (LAPTOP_GUID, "LAPTOP-ANNA01") in pairs
+
+    @pytest.mark.asyncio
+    async def test_full_sync_imports_device_row(
+        self,
+        db_session: AsyncSession,
+        app_settings: Settings,
+        mock_ad_with_devices: AdClient,
+        engine: AsyncEngine,
+    ) -> None:
+        from magister_api.models.device import Device
+
+        svc = AdSyncService(db_session, app_settings, mock_ad_with_devices)
+        result = await svc.sync_all(
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="r1",
+        )
+        await db_session.commit()
+        assert result.synced_count == 2
+
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            dev = (
+                await s.execute(select(Device).where(Device.ad_object_guid == LAPTOP_GUID))
+            ).scalar_one_or_none()
+        assert dev is not None
+        assert dev.name == "LAPTOP-ANNA01"
+        assert dev.source == "ad"
+        # The AD import never binds the device to a person — that's Magister's job.
+        assert dev.assigned_person_guid is None
+        assert dev.school_id is None
+
+    @pytest.mark.asyncio
+    async def test_reimport_is_idempotent(
+        self,
+        db_session: AsyncSession,
+        app_settings: Settings,
+        mock_ad_with_devices: AdClient,
+        engine: AsyncEngine,
+    ) -> None:
+        from magister_api.models.device import Device
+
+        svc = AdSyncService(db_session, app_settings, mock_ad_with_devices)
+        for _ in range(2):
+            await svc.sync_all(
+                actor_upn="admin@example.ch",
+                actor_object_guid=None,
+                ip=None,
+                request_id="r1",
+            )
+            await db_session.commit()
+
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            rows = (
+                (await s.execute(select(Device).where(Device.ad_object_guid == LAPTOP_GUID)))
+                .scalars()
+                .all()
+            )
+        assert len(rows) == 1  # upsert, not duplicate
 
 
 class TestSyncWithoutComputerBase:

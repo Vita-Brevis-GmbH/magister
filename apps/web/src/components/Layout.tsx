@@ -55,6 +55,15 @@ export function Layout() {
             >
               {t("nav.my_students")}
             </Link>
+            {me.data?.is_admin || me.data?.roles.includes("smi") ? (
+              <Link
+                to="/devices"
+                activeProps={{ className: navActive }}
+                inactiveProps={{ className: navIdle }}
+              >
+                {t("nav.devices")}
+              </Link>
+            ) : null}
             {me.data?.is_admin ? (
               <>
                 <Link

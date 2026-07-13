@@ -220,6 +220,8 @@ export interface AdUserOut {
  *  admin-only and must be non-empty when sent. */
 export interface UserAttributesUpdate {
   display_name?: string | null;
+  given_name?: string | null;
+  surname?: string | null;
   upn?: string | null;
   sam_account_name?: string | null;
   mail?: string | null;
@@ -383,6 +385,47 @@ export interface BulkClassMembershipResult {
   added: number;
   memberships: ClassMembershipOut[];
   errors: BulkClassMembershipError[];
+}
+
+// --- Devices ---------------------------------------------------------------
+
+/** Device inventory row. Managed in Magister; imported from AD by name only. */
+export interface DeviceOut {
+  id: number;
+  name: string;
+  device_type: string | null;
+  serial_number: string | null;
+  notes: string | null;
+  school_id: number | null;
+  class_id: number | null;
+  assigned_person_guid: string | null;
+  ad_object_guid: string | null;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DeviceCreate {
+  name: string;
+  device_type?: string | null;
+  serial_number?: string | null;
+  notes?: string | null;
+}
+
+export interface DeviceUpdate {
+  name?: string | null;
+  device_type?: string | null;
+  serial_number?: string | null;
+  notes?: string | null;
+}
+
+export type DeviceAssignmentType = "person" | "class" | "school" | "free";
+
+export interface DeviceAssign {
+  assignment_type: DeviceAssignmentType;
+  person_guid?: string | null;
+  class_id?: number | null;
+  school_id?: number | null;
 }
 
 export interface AuditEventOut {

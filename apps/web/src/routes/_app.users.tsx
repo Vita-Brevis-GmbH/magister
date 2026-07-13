@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { useCurrentUser, useUsers, type UseUsersParams } from "@/api/hooks";
 import type { AdUserOut } from "@/api/types";
-import { ResetPasswordModal } from "@/components/ResetPasswordModal";
+import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -35,7 +35,7 @@ function UsersPage(): JSX.Element {
   const fmt = useFormatters();
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
-  const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const me = useCurrentUser();
   const canEditUsers = me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
@@ -164,12 +164,21 @@ function UsersPage(): JSX.Element {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          {u.kind === "student" && u.enabled ? (
+                          {u.enabled &&
+                          (u.kind === "student" || (u.kind === "teacher" && canEditUsers)) ? (
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              onClick={() => setResetTarget(u)}
+                              onClick={() =>
+                                setResetTarget({
+                                  ad_object_guid: u.ad_object_guid,
+                                  given_name: u.given_name,
+                                  surname: u.surname,
+                                  upn: u.upn,
+                                  kind: u.kind === "teacher" ? "teacher" : "student",
+                                })
+                              }
                             >
                               {t("password_reset.button")}
                             </Button>

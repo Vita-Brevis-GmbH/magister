@@ -14,7 +14,8 @@
     "audit": "Audit-Log",
     "logout": "Abmelden",
     "my_students": "Meine Schüler:innen",
-    "roles": "Rollen"
+    "roles": "Rollen",
+    "devices": "Geräte"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -223,7 +224,9 @@
       "temp_device_name_hint": "Während das Hauptgerät in Reparatur ist.",
       "local_part_placeholder": "vorname.nachname",
       "domain_empty": "— keine Domain —",
-      "domains_missing": "Noch keine Mail-Domains konfiguriert. Administration → Systemeinstellungen."
+      "domains_missing": "Noch keine Mail-Domains konfiguriert. Administration → Systemeinstellungen.",
+      "given_name": "Vorname",
+      "surname": "Nachname"
     },
     "new_user": "Neuer Benutzer"
   },
@@ -249,7 +252,11 @@
     "error_student_not_in_ad": "Schüler:in im AD nicht gefunden. AD-Sync prüfen.",
     "error_student_not_found": "Schüler:in nicht gefunden.",
     "error_not_a_student": "Dieser User ist kein:e Schüler:in.",
-    "error_password_policy": "Das Passwort entspricht nicht den AD-Richtlinien."
+    "error_password_policy": "Das Passwort entspricht nicht den AD-Richtlinien.",
+    "error_not_found": "Benutzer:in nicht gefunden.",
+    "error_disabled": "Konto ist deaktiviert.",
+    "error_not_in_ad": "Konto nicht im AD gefunden.",
+    "error_wrong_kind": "Für diesen Kontotyp nicht möglich."
   },
   "errors": {
     "title": "Fehler",
@@ -619,5 +626,62 @@
     "empty": "Du bist aktuell keiner Klasse als KL oder Fachlehrperson zugewiesen.",
     "empty_class": "Keine aktiven Schüler:innen.",
     "count": "{{count}} Schüler:innen"
+  },
+  "devices": {
+    "title": "Geräte",
+    "subtitle": "Geräteinventar – in Magister verwaltet, aus dem AD nur mit dem Namen importiert.",
+    "empty": "Noch keine Geräte erfasst.",
+    "create_button": "Gerät erstellen",
+    "create_title": "Neues Gerät",
+    "create_description": "Ein Gerät manuell zum Inventar hinzufügen.",
+    "create_submit": "Erstellen",
+    "edit_title": "Gerät bearbeiten",
+    "save": "Speichern",
+    "assign_button": "Zuweisen",
+    "edit_button": "Bearbeiten",
+    "delete_button": "Löschen",
+    "assign_title": "Gerät zuweisen",
+    "assign_submit": "Zuweisung speichern",
+    "assignment_type": "Zuweisung",
+    "select_person": "Person",
+    "select_class": "Klasse",
+    "select_school": "Schule",
+    "select_placeholder": "Bitte auswählen …",
+    "person_search_placeholder": "Nach Name oder Benutzer suchen …",
+    "free": "Frei / Verfügbar",
+    "assigned_person": "Person: {{name}}",
+    "assigned_class": "Klasse: {{name}}",
+    "assigned_school": "Schule: {{name}}",
+    "delete_title": "Gerät löschen",
+    "delete_confirm": "Gerät „{{name}}“ wirklich aus dem Inventar entfernen?",
+    "delete_confirm_button": "Löschen",
+    "field": {
+      "name": "Bezeichnung",
+      "type": "Typ",
+      "serial": "Serien-/Inventarnr.",
+      "notes": "Notiz"
+    },
+    "col": {
+      "name": "Bezeichnung",
+      "type": "Typ",
+      "serial": "Serien-/Inventarnr.",
+      "assignment": "Zuweisung",
+      "source": "Quelle",
+      "actions": "Aktionen"
+    },
+    "source": {
+      "ad": "AD",
+      "manual": "Manuell"
+    },
+    "assignment": {
+      "free": "Frei / Verfügbar",
+      "person": "Person",
+      "class": "Klasse",
+      "school": "Schule"
+    },
+    "error": {
+      "out_of_scope": "Zuweisung ausserhalb Ihres Schul-Bereichs nicht erlaubt.",
+      "assignment_invalid": "Ungültiges Zuweisungsziel."
+    }
   }
 }

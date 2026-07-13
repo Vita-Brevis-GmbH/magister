@@ -17,7 +17,8 @@
     "reports": "Rapports",
     "audit": "Journal d'audit",
     "my_students": "Mes élèves",
-    "roles": "Rôles"
+    "roles": "Rôles",
+    "devices": "Appareils"
   },
   "auth": {
     "login_title": "Connexion",
@@ -226,7 +227,9 @@
       "temp_device_name_hint": "Pendant la réparation de l'appareil principal.",
       "local_part_placeholder": "prenom.nom",
       "domain_empty": "— pas de domaine —",
-      "domains_missing": "Aucun domaine e-mail configuré."
+      "domains_missing": "Aucun domaine e-mail configuré.",
+      "given_name": "Prénom",
+      "surname": "Nom"
     },
     "new_user": "Nouvel utilisateur"
   },
@@ -252,7 +255,11 @@
     "error_student_not_in_ad": "Élève introuvable dans l'AD. Vérifiez la synchronisation AD.",
     "error_student_not_found": "Élève introuvable.",
     "error_not_a_student": "Cet utilisateur n'est pas un·e élève.",
-    "error_password_policy": "Le mot de passe ne respecte pas la politique AD."
+    "error_password_policy": "Le mot de passe ne respecte pas la politique AD.",
+    "error_not_found": "Utilisateur introuvable.",
+    "error_disabled": "Le compte est désactivé.",
+    "error_not_in_ad": "Compte introuvable dans l'AD.",
+    "error_wrong_kind": "Indisponible pour ce type de compte."
   },
   "errors": {
     "title": "Erreur",
@@ -622,5 +629,62 @@
     "empty": "Vous n'êtes actuellement attribué à aucune classe comme KL ou enseignant de matière.",
     "empty_class": "Aucun élève actif.",
     "count": "{{count}} élèves"
+  },
+  "devices": {
+    "title": "Appareils",
+    "subtitle": "Inventaire des appareils — géré dans Magister, importé de l'AD par nom uniquement.",
+    "empty": "Aucun appareil pour l'instant.",
+    "create_button": "Créer un appareil",
+    "create_title": "Nouvel appareil",
+    "create_description": "Ajouter manuellement un appareil à l'inventaire.",
+    "create_submit": "Créer",
+    "edit_title": "Modifier l'appareil",
+    "save": "Enregistrer",
+    "assign_button": "Attribuer",
+    "edit_button": "Modifier",
+    "delete_button": "Supprimer",
+    "assign_title": "Attribuer l'appareil",
+    "assign_submit": "Enregistrer l'attribution",
+    "assignment_type": "Attribution",
+    "select_person": "Personne",
+    "select_class": "Classe",
+    "select_school": "École",
+    "select_placeholder": "Veuillez choisir …",
+    "person_search_placeholder": "Rechercher par nom ou utilisateur …",
+    "free": "Libre / Disponible",
+    "assigned_person": "Personne : {{name}}",
+    "assigned_class": "Classe : {{name}}",
+    "assigned_school": "École : {{name}}",
+    "delete_title": "Supprimer l'appareil",
+    "delete_confirm": "Vraiment retirer l'appareil « {{name}} » de l'inventaire ?",
+    "delete_confirm_button": "Supprimer",
+    "field": {
+      "name": "Désignation",
+      "type": "Type",
+      "serial": "N° série/inventaire",
+      "notes": "Note"
+    },
+    "col": {
+      "name": "Désignation",
+      "type": "Type",
+      "serial": "N° série/inventaire",
+      "assignment": "Attribution",
+      "source": "Source",
+      "actions": "Actions"
+    },
+    "source": {
+      "ad": "AD",
+      "manual": "Manuel"
+    },
+    "assignment": {
+      "free": "Libre / Disponible",
+      "person": "Personne",
+      "class": "Classe",
+      "school": "École"
+    },
+    "error": {
+      "out_of_scope": "L'attribution hors de votre périmètre scolaire n'est pas autorisée.",
+      "assignment_invalid": "Cible d'attribution invalide."
+    }
   }
 }

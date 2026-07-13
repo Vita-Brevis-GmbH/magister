@@ -25,6 +25,10 @@ import type {
   ClassOut,
   ClassPromotionRequest,
   ClassPromotionResult,
+  DeviceOut,
+  DeviceCreate,
+  DeviceUpdate,
+  DeviceAssign,
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
@@ -79,6 +83,7 @@ export const queryKeys = {
   myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
+  devices: ["devices"] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -157,6 +162,56 @@ export function useArchiveClass() {
     mutationFn: (classId) => apiFetch<void>(`/classes/${classId}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classes });
+    },
+  });
+}
+
+// --- Devices ---------------------------------------------------------------
+
+export function useDevices() {
+  return useQuery<DeviceOut[]>({
+    queryKey: queryKeys.devices,
+    queryFn: () => apiFetch<DeviceOut[]>("/devices"),
+  });
+}
+
+export function useCreateDevice() {
+  const qc = useQueryClient();
+  return useMutation<DeviceOut, ApiError, DeviceCreate>({
+    mutationFn: (body) => apiFetch<DeviceOut>("/devices", { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.devices });
+    },
+  });
+}
+
+export function useUpdateDevice(deviceId: number) {
+  const qc = useQueryClient();
+  return useMutation<DeviceOut, ApiError, DeviceUpdate>({
+    mutationFn: (body) => apiFetch<DeviceOut>(`/devices/${deviceId}`, { method: "PATCH", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.devices });
+    },
+  });
+}
+
+export function useAssignDevice(deviceId: number) {
+  const qc = useQueryClient();
+  return useMutation<DeviceOut, ApiError, DeviceAssign>({
+    mutationFn: (body) =>
+      apiFetch<DeviceOut>(`/devices/${deviceId}/assign`, { method: "POST", body }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.devices });
+    },
+  });
+}
+
+export function useDeleteDevice() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (deviceId) => apiFetch<void>(`/devices/${deviceId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.devices });
     },
   });
 }
@@ -582,6 +637,18 @@ export function useResetStudentPassword(adObjectGuid: string) {
   return useMutation<StudentPasswordResetResponse, ApiError, StudentPasswordResetRequest>({
     mutationFn: (body) =>
       apiFetch<StudentPasswordResetResponse>(`/students/${adObjectGuid}/password-reset`, {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+// Same request/response shape as the student endpoint (teacher schemas
+// subclass them); gated to admin / SMI-of-the-teacher's-school on the backend.
+export function useResetTeacherPassword(adObjectGuid: string) {
+  return useMutation<StudentPasswordResetResponse, ApiError, StudentPasswordResetRequest>({
+    mutationFn: (body) =>
+      apiFetch<StudentPasswordResetResponse>(`/teachers/${adObjectGuid}/password-reset`, {
         method: "POST",
         body,
       }),

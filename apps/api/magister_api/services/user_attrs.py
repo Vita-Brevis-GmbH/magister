@@ -31,6 +31,8 @@ from magister_api.schemas.user_attrs import UserAttributesUpdate
 # (``temp_device_name``) are handled separately.
 _AD_ATTR_TO_COLUMN: dict[str, str] = {
     "displayName": "display_name",
+    "givenName": "given_name",
+    "sn": "surname",
     "userPrincipalName": "upn",
     "sAMAccountName": "sam_account_name",
     "mail": "mail",
@@ -43,6 +45,8 @@ _AD_ATTR_TO_COLUMN: dict[str, str] = {
 # Payload field → AD attribute name.
 _PAYLOAD_TO_AD_ATTR: dict[str, str] = {
     "display_name": "displayName",
+    "given_name": "givenName",
+    "surname": "sn",
     "upn": "userPrincipalName",
     "sam_account_name": "sAMAccountName",
     "mail": "mail",

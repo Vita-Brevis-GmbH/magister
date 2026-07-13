@@ -32,6 +32,7 @@ from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.school import School
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
+from magister_api.services.devices import import_devices_from_ad
 
 SyncMode = Literal["full", "incremental"]
 
@@ -167,6 +168,7 @@ class AdSyncService:
         # often and a stale device_name on a delta-changed user is acceptable
         # until the next full sync runs.
         device_count = 0
+        devices_imported = 0
         if effective_mode == "full":
             device_map = await self.ad.search_managed_computers()
             if device_map:
@@ -175,6 +177,13 @@ class AdSyncService:
                     for r in records
                 ]
             device_count = sum(1 for r in records if r.device_name)
+
+            # Import the whole Computer-OU into the Magister-managed devices
+            # table by name+objectGUID. Bindings to persons/classes/schools are
+            # owned by Magister, not AD, so this only upserts the inventory.
+            computers = await self.ad.search_computers()
+            if computers:
+                devices_imported = await import_devices_from_ad(self.session, computers)
 
         synced = await self.repo.upsert_from_ad(records, school_id_resolver=resolver)
 
@@ -202,6 +211,7 @@ class AdSyncService:
                 "mode": effective_mode,
                 "synced_count": synced,
                 "device_count": device_count,
+                "devices_imported": devices_imported,
                 "school_partition": {str(k): v for k, v in partition.items()},
                 "cursor_before": cursor_before.isoformat() if cursor_before else None,
                 "cursor_after": cursor_after.isoformat() if cursor_after else None,

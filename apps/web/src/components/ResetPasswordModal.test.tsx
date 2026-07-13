@@ -6,7 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import i18n from "@/i18n";
 import type { AdUserOut } from "@/api/types";
-import { ResetPasswordModal } from "./ResetPasswordModal";
+import { ResetPasswordModal, type ResetTarget } from "./ResetPasswordModal";
 
 beforeAll(async () => {
   // Pin to DE so the regex assertions stay deterministic regardless of the
@@ -41,15 +41,22 @@ function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   });
 }
 
-function renderModal(props: { student?: AdUserOut | null; onClose?: () => void }): {
+function renderModal(props: { student?: ResetTarget | null; onClose?: () => void }): {
   onClose: ReturnType<typeof vi.fn>;
 } {
   const onClose = vi.fn(props.onClose);
+  const target: ResetTarget = props.student ?? {
+    ad_object_guid: STUDENT.ad_object_guid,
+    given_name: STUDENT.given_name,
+    surname: STUDENT.surname,
+    upn: STUDENT.upn,
+    kind: "student",
+  };
   // Each test gets a fresh QueryClient so mutation state doesn't leak between cases.
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <ResetPasswordModal student={props.student ?? STUDENT} onClose={onClose} />
+      <ResetPasswordModal student={target} onClose={onClose} />
     </QueryClientProvider>,
   );
   return { onClose };

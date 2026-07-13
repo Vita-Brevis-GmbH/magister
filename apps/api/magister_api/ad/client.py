@@ -599,6 +599,58 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def search_computers(self, *, search_base: str | None = None) -> list[tuple[str, str]]:
+        """Return ``[(object_guid, device_name), ...]`` for every ``Computer``
+        object in the Computer-OU.
+
+        Used by the full sync to import devices into Magister (the ``devices``
+        table). Unlike :meth:`search_managed_computers` this does *not* require
+        a ``managedBy`` link — Magister owns the person/class/school binding,
+        not AD. Empty / unset ``search_base`` is a soft-no-op (the feature is
+        optional): returns ``[]`` instead of raising.
+        """
+        base = search_base or self._settings.ad_computers_search_base
+        if not base:
+            return []
+        return await run_in_threadpool(self._sync_search_computers, base)
+
+    def _sync_search_computers(self, base: str) -> list[tuple[str, str]]:
+        conn, owned = self._acquire_connection()
+        try:
+            raw, result = self._paged_search(
+                conn,
+                base,
+                "(objectClass=computer)",
+                ["cn", "name", "objectGUID"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                # Device import is optional: a wrong or empty Computer-OU must
+                # never abort the user sync. Log the category and skip.
+                logger.warning("AD computer import skipped: %s", detail)
+                return []
+            out: list[tuple[str, str]] = []
+            for entry in raw:
+                attrs = entry.get("attributes", {})
+                raw_guid = _first_value(attrs.get("objectGUID"))
+                if raw_guid is None:
+                    continue
+                try:
+                    guid = _decode_object_guid(raw_guid)
+                except AdUserParseError:
+                    continue
+                name = _first_value(attrs.get("cn")) or _first_value(attrs.get("name"))
+                if not name:
+                    continue
+                out.append((guid, str(name)))
+            return out
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def find_user_dn(self, ad_object_guid: str) -> str | None:
         """Return the LDAP DN for a user identified by ``objectGUID``."""
         return await run_in_threadpool(self._sync_find_user_dn, ad_object_guid)

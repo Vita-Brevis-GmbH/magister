@@ -61,4 +61,4 @@ class TestMail:
 class TestExtraFields:
     def test_unknown_field_rejected(self) -> None:
         with pytest.raises(ValidationError):
-            UserAttributesUpdate.model_validate({"surname": "X"})  # surname not editable here
+            UserAttributesUpdate.model_validate({"nonexistent_field": "X"})  # not an editable attr

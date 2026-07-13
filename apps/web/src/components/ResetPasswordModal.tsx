@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useResetStudentPassword } from "@/api/hooks";
+import { useResetStudentPassword, useResetTeacherPassword } from "@/api/hooks";
 import type {
   AdUserOut,
   StudentPasswordResetMode,
@@ -24,6 +24,8 @@ import { Label } from "@/components/ui/label";
  *  upn is widened to nullable so a class-membership row (upn: string | null) fits. */
 export type ResetTarget = Pick<AdUserOut, "ad_object_guid" | "given_name" | "surname"> & {
   upn: string | null;
+  /** Which endpoint to hit. Defaults to "student" for existing call sites. */
+  kind?: "student" | "teacher";
 };
 
 interface Props {
@@ -36,16 +38,16 @@ const MIN_MANUAL_LENGTH = 12;
 
 function errorKey(err: ApiError): string {
   if (err.status === 403) return "errors.forbidden";
-  if (err.status === 404) return "password_reset.error_student_not_found";
+  if (err.status === 404) return "password_reset.error_not_found";
   if (err.status === 429) return "errors.rate_limited";
   if (err.status === 422) return "password_reset.error_password_policy";
   if (err.status === 503 && err.code === "ad_unavailable") return "errors.ad_unavailable";
-  if (err.status === 409 && err.code === "student_disabled")
-    return "password_reset.error_student_disabled";
-  if (err.status === 409 && err.code === "student_not_in_ad")
-    return "password_reset.error_student_not_in_ad";
-  if (err.status === 400 && err.code === "not_a_student")
-    return "password_reset.error_not_a_student";
+  if (err.status === 409 && (err.code === "student_disabled" || err.code === "teacher_disabled"))
+    return "password_reset.error_disabled";
+  if (err.status === 409 && (err.code === "student_not_in_ad" || err.code === "teacher_not_in_ad"))
+    return "password_reset.error_not_in_ad";
+  if (err.status === 400 && (err.code === "not_a_student" || err.code === "not_a_teacher"))
+    return "password_reset.error_wrong_kind";
   return "errors.generic";
 }
 
@@ -53,7 +55,9 @@ export function ResetPasswordModal({ student, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
   const open = student !== null;
   const guid = student?.ad_object_guid ?? "";
-  const reset = useResetStudentPassword(guid);
+  const resetStudent = useResetStudentPassword(guid);
+  const resetTeacher = useResetTeacherPassword(guid);
+  const reset = student?.kind === "teacher" ? resetTeacher : resetStudent;
 
   const [mode, setMode] = useState<StudentPasswordResetMode>("generate");
   const [manualPassword, setManualPassword] = useState("");

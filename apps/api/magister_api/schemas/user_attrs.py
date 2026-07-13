@@ -33,6 +33,8 @@ class UserAttributesUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, max_length=200)
+    given_name: str | None = Field(default=None, max_length=200)
+    surname: str | None = Field(default=None, max_length=200)
     upn: str | None = Field(default=None, max_length=320)
     sam_account_name: str | None = Field(default=None, max_length=20)
     mail: str | None = Field(default=None, max_length=320)
