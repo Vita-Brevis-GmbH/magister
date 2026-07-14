@@ -14,6 +14,7 @@ import {
   useUsers,
 } from "@/api/hooks";
 import type { DeviceAssignmentType, DeviceOut, SchoolOut, ClassOut, AdUserOut } from "@/api/types";
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { usePagedList } from "@/lib/usePagedList";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/devices")({
@@ -65,6 +67,7 @@ function DevicesPage(): JSX.Element {
   const [editTarget, setEditTarget] = useState<DeviceOut | null>(null);
   const [assignTarget, setAssignTarget] = useState<DeviceOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeviceOut | null>(null);
+  const paged = usePagedList(q.data ?? []);
 
   const schoolName = (id: number): string =>
     schools.data?.find((s) => s.id === id)?.name ?? String(id);
@@ -119,7 +122,7 @@ function DevicesPage(): JSX.Element {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(q.data ?? []).map((d) => (
+            {paged.pageItems.map((d) => (
               <TableRow key={d.id}>
                 <TableCell className="font-medium">{d.name}</TableCell>
                 <TableCell>{d.device_type ?? "—"}</TableCell>
@@ -154,6 +157,8 @@ function DevicesPage(): JSX.Element {
           </TableBody>
         </Table>
       )}
+
+      {!q.isLoading && !q.isError ? <Pagination paged={paged} /> : null}
 
       <CreateDeviceModal open={createOpen} onClose={() => setCreateOpen(false)} />
       <EditDeviceModal target={editTarget} onClose={() => setEditTarget(null)} />

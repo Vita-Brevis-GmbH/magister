@@ -657,7 +657,11 @@
     "loading": "Loading…",
     "retry": "Retry",
     "cancel": "Cancel",
-    "close": "Close"
+    "close": "Close",
+    "per_page": "per page:",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entries)",
+    "pagination_prev": "Previous",
+    "pagination_next": "Next"
   },
   "user_status": {
     "button_disable": "Disable",

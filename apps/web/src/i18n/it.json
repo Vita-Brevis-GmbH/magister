@@ -660,7 +660,11 @@
     "loading": "Caricamento…",
     "retry": "Riprova",
     "cancel": "Annulla",
-    "close": "Chiudi"
+    "close": "Chiudi",
+    "per_page": "per pagina:",
+    "pagination_info": "Pagina {{page}} / {{total}} ({{count}} voci)",
+    "pagination_prev": "Precedente",
+    "pagination_next": "Successivo"
   },
   "user_status": {
     "button_disable": "Disattiva",

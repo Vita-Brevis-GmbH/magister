@@ -14,6 +14,7 @@ import {
   useUpdateClass,
 } from "@/api/hooks";
 import type { ClassOut, ClassPromotionResult } from "@/api/types";
+import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { gradeRangeLabel } from "@/lib/grade";
+import { usePagedList } from "@/lib/usePagedList";
 
 export const Route = createFileRoute("/_app/classes")({
   component: ClassesPage,
@@ -55,6 +57,7 @@ function ClassesPage(): JSX.Element {
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
   const [promoteSource, setPromoteSource] = useState<ClassOut | null>(null);
+  const paged = usePagedList(q.data ?? []);
 
   if (childMatches.length > 0) return <Outlet />;
 
@@ -94,7 +97,7 @@ function ClassesPage(): JSX.Element {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(q.data ?? []).map((c) => (
+            {paged.pageItems.map((c) => (
               <TableRow key={c.id}>
                 <TableCell className="font-medium">
                   <Link
@@ -150,6 +153,8 @@ function ClassesPage(): JSX.Element {
           </TableBody>
         </Table>
       )}
+
+      {!q.isLoading && !q.isError ? <Pagination paged={paged} /> : null}
 
       <CreateClassModal
         open={createOpen}

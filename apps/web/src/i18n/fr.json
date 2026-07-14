@@ -660,7 +660,11 @@
     "loading": "Chargement…",
     "retry": "Réessayer",
     "cancel": "Annuler",
-    "close": "Fermer"
+    "close": "Fermer",
+    "per_page": "par page :",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entrées)",
+    "pagination_prev": "Précédent",
+    "pagination_next": "Suivant"
   },
   "user_status": {
     "button_disable": "Désactiver",
