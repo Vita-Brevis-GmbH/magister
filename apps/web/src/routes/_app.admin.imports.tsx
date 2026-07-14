@@ -31,7 +31,13 @@ export const Route = createFileRoute("/_app/admin/imports")({
   component: ImportsPage,
 });
 
-const ALL_KINDS: ImportKind[] = ["classes", "class_memberships", "class_teachers", "students"];
+const ALL_KINDS: ImportKind[] = [
+  "classes",
+  "class_memberships",
+  "class_teachers",
+  "students",
+  "teachers",
+];
 
 function ImportsPage(): JSX.Element {
   const { t } = useTranslation();

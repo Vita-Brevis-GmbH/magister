@@ -158,7 +158,10 @@
     "jahrgangsstufe_von": "Jahrgangsstufe (von)",
     "jahrgangsstufe_bis": "bis (optional)",
     "jahrgangsstufe_bis_placeholder": "—",
-    "jahrgangsstufe_hint": "Einzelklasse: nur „von“. Mehrjahrgang/Basisstufe: Bereich angeben. Kindergarten: −1 = 1. KG, 0 = 2. KG."
+    "jahrgangsstufe_hint": "Einzelklasse: nur „von“. Mehrjahrgang/Basisstufe: Bereich angeben. Kindergarten: −1 = 1. KG, 0 = 2. KG.",
+    "promote_bump_grade": "Jahrgangsstufe um +1 erhöhen",
+    "promote_grade_placeholder": "+1",
+    "promote_grade_hint": "Standard: jede/r Schüler/in steigt eine Stufe auf. Ausnahmen (bleiben/überspringen) rechts als Zahl eintragen; leer = +1."
   },
   "users": {
     "title": "User",
@@ -210,7 +213,9 @@
       "delete": "Löschen",
       "delete_confirm": "Benutzer wirklich löschen?",
       "delete_yes": "Löschen",
-      "delete_err_ad": "AD nicht erreichbar — Deaktivierung fehlgeschlagen."
+      "delete_err_ad": "AD nicht erreichbar — Deaktivierung fehlgeschlagen.",
+      "section_grade": "Jahrgangsstufe",
+      "section_grade_desc": "Eigene Jahrgangsstufe des Schülers (wird beim Klassenaufstieg angepasst)."
     },
     "field": {
       "display_name": "Anzeigename",
@@ -232,7 +237,9 @@
       "domain_empty": "— keine Domain —",
       "domains_missing": "Noch keine Mail-Domains konfiguriert. Administration → Systemeinstellungen.",
       "given_name": "Vorname",
-      "surname": "Nachname"
+      "surname": "Nachname",
+      "jahrgangsstufe": "Jahrgangsstufe",
+      "jahrgangsstufe_hint": "-1 = 1. Kindergarten, 0 = 2. Kindergarten, 1–13 = Klassen. Leer = nicht gesetzt."
     },
     "new_user": "Neuer Benutzer"
   },
@@ -521,7 +528,9 @@
     "school_label": "Schule",
     "school_placeholder": "Schule auswählen …",
     "school_hint": "Der Import wird dieser Schule zugeordnet.",
-    "error_school_required": "Bitte zuerst die Ziel-Schule auswählen."
+    "error_school_required": "Bitte zuerst die Ziel-Schule auswählen.",
+    "kind_teachers": "Lehrpersonen",
+    "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe."
   },
   "privacy": {
     "section_title": "Datenauskunft (revDSG Art. 25)",

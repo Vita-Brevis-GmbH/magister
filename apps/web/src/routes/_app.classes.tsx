@@ -560,6 +560,10 @@ function PromoteClassWizard({
   const [archiveSource, setArchiveSource] = useState(false);
   const [result, setResult] = useState<ClassPromotionResult | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Advance each student's grade by +1 (default). Per-student exceptions go in
+  // gradeOverrides (blank = +1 from the student's own grade; a number = exact).
+  const [bumpGrade, setBumpGrade] = useState(true);
+  const [gradeOverrides, setGradeOverrides] = useState<Record<string, string>>({});
 
   const promote = usePromoteClass(source?.id ?? 0);
   const memberships = useClassMemberships(source?.id ?? 0);
@@ -575,6 +579,8 @@ function PromoteClassWizard({
     setArchiveSource(false);
     setResult(null);
     setSelected(new Set());
+    setBumpGrade(true);
+    setGradeOverrides({});
     promote.reset();
   }
 
@@ -595,10 +601,20 @@ function PromoteClassWizard({
 
   function handleConfirm(): void {
     if (!source || !targetId) return;
+    // Explicit per-student exceptions: only the ones the user typed a grade for.
+    const overrides: Record<string, number> = {};
+    if (bumpGrade) {
+      for (const guid of selected) {
+        const raw = (gradeOverrides[guid] ?? "").trim();
+        if (raw !== "" && Number.isFinite(Number(raw))) overrides[guid] = Number(raw);
+      }
+    }
     promote.mutate(
       {
         target_class_id: Number(targetId),
         archive_source: archiveSource,
+        bump_grade: bumpGrade,
+        ...(Object.keys(overrides).length > 0 ? { grade_overrides: overrides } : {}),
         // Move all when every student is selected; otherwise the chosen subset.
         ...(allSelected ? {} : { student_guids: [...selected] }),
       },
@@ -714,22 +730,53 @@ function PromoteClassWizard({
                 <ul className="space-y-0.5">
                   {activeStudents.map((m) => (
                     <li key={m.id}>
-                      <label className="flex cursor-pointer items-center gap-2 text-xs">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(m.ad_object_guid)}
-                          onChange={() => toggle(m.ad_object_guid)}
-                          className="h-3.5 w-3.5 rounded border-input"
-                        />
-                        <span className="truncate">
-                          {m.display_name ?? m.upn ?? m.ad_object_guid}
-                        </span>
-                      </label>
+                      <div className="flex items-center gap-2 text-xs">
+                        <label className="flex flex-1 cursor-pointer items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(m.ad_object_guid)}
+                            onChange={() => toggle(m.ad_object_guid)}
+                            className="h-3.5 w-3.5 rounded border-input"
+                          />
+                          <span className="truncate">
+                            {m.display_name ?? m.upn ?? m.ad_object_guid}
+                          </span>
+                        </label>
+                        {bumpGrade && selected.has(m.ad_object_guid) ? (
+                          <input
+                            type="number"
+                            min={-1}
+                            max={13}
+                            value={gradeOverrides[m.ad_object_guid] ?? ""}
+                            placeholder={t("classes.promote_grade_placeholder")}
+                            onChange={(e) =>
+                              setGradeOverrides((prev) => ({
+                                ...prev,
+                                [m.ad_object_guid]: e.target.value,
+                              }))
+                            }
+                            className="h-6 w-16 rounded border border-input bg-background px-1 text-right"
+                            title={t("classes.promote_grade_hint")}
+                          />
+                        ) : null}
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </div>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={bumpGrade}
+                onChange={(e) => setBumpGrade(e.target.checked)}
+                className="h-4 w-4 rounded border-input"
+              />
+              {t("classes.promote_bump_grade")}
+            </label>
+            {bumpGrade ? (
+              <p className="text-xs text-muted-foreground">{t("classes.promote_grade_hint")}</p>
+            ) : null}
             {archiveSource && (
               <p className="text-xs text-amber-600">
                 {t("classes.promote_archive_warning", { name: source?.name })}

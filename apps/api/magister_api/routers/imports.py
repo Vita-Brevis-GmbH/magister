@@ -32,7 +32,11 @@ from magister_api.auth.rbac import (
 )
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
-from magister_api.models.import_job import ALLOWED_IMPORT_KINDS, IMPORT_KIND_STUDENTS
+from magister_api.models.import_job import (
+    ALLOWED_IMPORT_KINDS,
+    IMPORT_KIND_STUDENTS,
+    IMPORT_KIND_TEACHERS,
+)
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.imports import (
@@ -63,7 +67,8 @@ require_import_access = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI)
 
 def _authorize_kind(user: AuthenticatedUser, kind: str) -> None:
     """Enforce the per-kind role rule. Raises 403 on mismatch."""
-    if kind == IMPORT_KIND_STUDENTS:
+    # Provisioning imports create AD accounts → Admin + SMI only.
+    if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS):
         if not (user.is_admin or ROLE_SMI in user.roles):
             raise HTTPException(status_code=403, detail="forbidden")
     elif not (user.is_admin or ROLE_SCHULLEITUNG in user.roles):

@@ -30,6 +30,7 @@ const ENABLED_USER: AdUserOut = {
   country: null,
   device_name: null,
   temp_device_name: null,
+  jahrgangsstufe: null,
 };
 
 const DISABLED_USER: AdUserOut = { ...ENABLED_USER, enabled: false };

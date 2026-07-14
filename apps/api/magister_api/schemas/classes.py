@@ -71,6 +71,11 @@ class ClassPromotionRequest(BaseModel):
     target_class_id: int
     archive_source: bool = False
     student_guids: list[str] | None = None
+    # Advance each moved student's own grade by +1 (default). Set false to keep
+    # grades unchanged. ``grade_overrides`` maps ad_object_guid -> explicit new
+    # grade for exceptions (staying / skipping).
+    bump_grade: bool = True
+    grade_overrides: dict[str, int] | None = None
 
 
 class ClassPromotionError(BaseModel):

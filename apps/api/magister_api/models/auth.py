@@ -48,6 +48,11 @@ class AdUserCache(Base):
     # primary is in repair. Never written to AD.
     device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     temp_device_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Per-student grade level (Magister-only, not an AD attribute): -1 = 1. KG,
+    # 0 = 2. KG, 1..13 = Klassen. NULL for teachers/admins or unset students.
+    # Preserved across AD syncs (omitted from the sync upsert) and bumped during
+    # class promotion.
+    jahrgangsstufe: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 

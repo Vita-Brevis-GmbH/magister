@@ -161,7 +161,10 @@
     "jahrgangsstufe_von": "Année (de)",
     "jahrgangsstufe_bis": "à (facultatif)",
     "jahrgangsstufe_bis_placeholder": "—",
-    "jahrgangsstufe_hint": "Classe simple : uniquement « de ». Multi-degrés/Basisstufe : indiquer une plage. École enfantine : −1 = 1re, 0 = 2e."
+    "jahrgangsstufe_hint": "Classe simple : uniquement « de ». Multi-degrés/Basisstufe : indiquer une plage. École enfantine : −1 = 1re, 0 = 2e.",
+    "promote_bump_grade": "Augmenter l'année de +1",
+    "promote_grade_placeholder": "+1",
+    "promote_grade_hint": "Par défaut : chaque élève monte d'un degré. Pour les exceptions (rester/sauter), saisir un nombre à droite ; vide = +1."
   },
   "users": {
     "title": "Utilisateurs",
@@ -213,7 +216,9 @@
       "delete": "Supprimer",
       "delete_confirm": "Supprimer vraiment cet utilisateur ?",
       "delete_yes": "Supprimer",
-      "delete_err_ad": "AD injoignable — désactivation échouée."
+      "delete_err_ad": "AD injoignable — désactivation échouée.",
+      "section_grade": "Année scolaire",
+      "section_grade_desc": "Année scolaire propre à l'élève (ajustée lors du passage de classe)."
     },
     "field": {
       "display_name": "Nom affiché",
@@ -235,7 +240,9 @@
       "domain_empty": "— pas de domaine —",
       "domains_missing": "Aucun domaine e-mail configuré.",
       "given_name": "Prénom",
-      "surname": "Nom"
+      "surname": "Nom",
+      "jahrgangsstufe": "Année scolaire",
+      "jahrgangsstufe_hint": "-1 = 1re enfantine, 0 = 2e enfantine, 1–13 = degrés. Vide = non défini."
     },
     "new_user": "Nouvel utilisateur"
   },
@@ -524,7 +531,9 @@
     "school_label": "École",
     "school_placeholder": "Choisir l’école …",
     "school_hint": "L’import est attribué à cette école.",
-    "error_school_required": "Veuillez d’abord sélectionner l’école cible."
+    "error_school_required": "Veuillez d’abord sélectionner l’école cible.",
+    "kind_teachers": "Enseignants",
+    "kind_teachers_desc": "Créer de nouveaux comptes AD enseignants (dans l'OU enseignants). Colonnes : given_name, surname, display_name, upn, sam_account_name, force_change. Sans classe/degré."
   },
   "privacy": {
     "section_title": "Export de données (LPD art. 25)",

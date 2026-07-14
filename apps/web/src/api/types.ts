@@ -242,6 +242,7 @@ export interface AdUserOut {
   country: string | null;
   device_name: string | null;
   temp_device_name: string | null;
+  jahrgangsstufe: number | null;
 }
 
 /** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null
@@ -259,6 +260,7 @@ export interface UserAttributesUpdate {
   postal_code?: string | null;
   country?: string | null;
   temp_device_name?: string | null;
+  jahrgangsstufe?: number | null;
 }
 
 /** PATCH /users/{guid}/status — enable/disable an AD account. */
@@ -387,6 +389,10 @@ export interface ClassPromotionRequest {
   archive_source: boolean;
   /** Subset of student GUIDs to move; omit to move all active students. */
   student_guids?: string[] | null;
+  /** Advance each moved student's grade by +1 (default true). */
+  bump_grade?: boolean;
+  /** ad_object_guid -> explicit new grade (exceptions: stay/skip). */
+  grade_overrides?: Record<string, number> | null;
 }
 
 export interface ClassPromotionError {
@@ -547,7 +553,12 @@ export interface LetterRequest {
   temp_password?: string | null;
 }
 
-export type ImportKind = "classes" | "class_memberships" | "class_teachers" | "students";
+export type ImportKind =
+  | "classes"
+  | "class_memberships"
+  | "class_teachers"
+  | "students"
+  | "teachers";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";
 

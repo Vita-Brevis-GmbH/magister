@@ -176,6 +176,8 @@ async def promote_class(
             target_class_id=payload.target_class_id,
             archive_source=payload.archive_source,
             student_guids=payload.student_guids,
+            grade_overrides=payload.grade_overrides,
+            bump_grade=payload.bump_grade,
             ip=ip,
             request_id=request_id,
         )

@@ -28,6 +28,9 @@ from magister_api.routers.admin_sync import get_ad_client
 
 OU_OTHER = "OU=Schueler,OU=Volksschule,DC=schule,DC=local"
 OU_Z3 = "OU=SekI,OU=Volksschule,DC=schule,DC=local"
+OU_TEACHERS = "OU=Lehrpersonen,OU=Volksschule,DC=schule,DC=local"
+
+TEACHERS_HEADER = "given_name,surname,display_name,upn,sam_account_name,force_change"
 
 
 @pytest.fixture
@@ -41,6 +44,7 @@ async def _configure_ous(db_session: AsyncSession) -> None:
     assert row is not None
     row.ad_ou_students_zyklus3 = OU_Z3
     row.ad_ou_students_other = OU_OTHER
+    row.ad_ou_teachers = OU_TEACHERS
     await db_session.commit()
 
 
@@ -50,7 +54,7 @@ async def _seed_class(db_session: AsyncSession, school_id: int, name: str, jhg: 
 
 
 STUDENTS_HEADER = (
-    "given_name,surname,display_name,upn,sam_account_name,class,valid_from,force_change"
+    "given_name,surname,display_name,upn,sam_account_name,class,valid_from,force_change,jahrgangsstufe"
 )
 
 
@@ -136,6 +140,108 @@ async def test_provision_students_end_to_end(
         .all()
     )
     assert len(events) == 2
+
+
+@pytest.mark.asyncio
+async def test_student_import_sets_own_grade(
+    as_smi_a: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    school_a: int,
+    mock_ad: AdClient,
+) -> None:
+    # Multi-grade class (1–3); explicit per-student grade vs blank (→ class lower).
+    await _seed_class(db_session, school_a, "M13", 1)
+    csv = (
+        f"{STUDENTS_HEADER}\n"
+        "Anna,Muster,,anna.muster@schule.ch,,M13,2026-08-12,true,2\n"
+        "Ben,Beispiel,,ben.beispiel@schule.ch,,M13,2026-08-12,false,\n"
+    )
+    r = await as_smi_a.post("/imports?kind=students", files={"file": ("s.csv", csv, "text/csv")})
+    assert r.status_code == 201, r.text
+    job_id = r.json()["id"]
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    try:
+        r = await as_smi_a.post(f"/imports/{job_id}/apply")
+    finally:
+        app.dependency_overrides.pop(get_ad_client, None)
+    assert r.status_code == 200, r.text
+
+    rows = {
+        s.upn: s
+        for s in (
+            (await db_session.execute(select(AdUserCache).where(AdUserCache.kind == "student")))
+            .scalars()
+            .all()
+        )
+    }
+    assert rows["anna.muster@schule.ch"].jahrgangsstufe == 2  # explicit
+    assert rows["ben.beispiel@schule.ch"].jahrgangsstufe == 1  # class lower grade
+
+
+@pytest.mark.asyncio
+async def test_template_teachers_csv(as_smi_a: AsyncClient) -> None:
+    r = await as_smi_a.get("/imports/templates/teachers.csv")
+    assert r.status_code == 200
+    assert r.text.splitlines()[0] == TEACHERS_HEADER
+
+
+@pytest.mark.asyncio
+async def test_provision_teachers_end_to_end(
+    as_smi_a: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    school_a: int,
+    mock_ad: AdClient,
+) -> None:
+    csv = (
+        f"{TEACHERS_HEADER}\n"
+        "Erika,Lehrer,,erika.lehrer@schule.ch,,true\n"
+        "Max,Kollege,Max K.,max.kollege@schule.ch,max.kollege,false\n"
+    )
+    r = await as_smi_a.post("/imports?kind=teachers", files={"file": ("t.csv", csv, "text/csv")})
+    assert r.status_code == 201, r.text
+    assert r.json()["counts"]["create"] == 2
+    job_id = r.json()["id"]
+
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    try:
+        r = await as_smi_a.post(f"/imports/{job_id}/apply")
+    finally:
+        app.dependency_overrides.pop(get_ad_client, None)
+    assert r.status_code == 200, r.text
+    assert r.json()["summary"]["applied"]["created"] == 2
+
+    teachers = (
+        (await db_session.execute(select(AdUserCache).where(AdUserCache.kind == "teacher")))
+        .scalars()
+        .all()
+    )
+    # Subset check — the SMI fixture user is itself kind=teacher.
+    assert {"erika.lehrer@schule.ch", "max.kollege@schule.ch"} <= {tt.upn for tt in teachers}
+    # Teachers get no class membership from this import.
+    assert (
+        await db_session.execute(select(func.count()).select_from(ClassMembership))
+    ).scalar() == 0
+    events = (
+        (
+            await db_session.execute(
+                select(AuditEvent).where(AuditEvent.action == "teacher_provisioned")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(events) == 2
+
+
+@pytest.mark.asyncio
+async def test_schulleitung_cannot_stage_teachers(as_schulleitung_a: AsyncClient) -> None:
+    csv = f"{TEACHERS_HEADER}\nErika,Lehrer,,erika.lehrer@schule.ch,,true\n"
+    r = await as_schulleitung_a.post(
+        "/imports?kind=teachers", files={"file": ("t.csv", csv, "text/csv")}
+    )
+    assert r.status_code == 403, r.text
 
 
 @pytest.mark.asyncio

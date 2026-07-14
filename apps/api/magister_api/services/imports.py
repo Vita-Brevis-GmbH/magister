@@ -40,6 +40,7 @@ from magister_api.models.import_job import (
     IMPORT_KIND_CLASS_TEACHERS,
     IMPORT_KIND_CLASSES,
     IMPORT_KIND_STUDENTS,
+    IMPORT_KIND_TEACHERS,
     IMPORT_STATUS_APPLIED,
     IMPORT_STATUS_CANCELLED,
     IMPORT_STATUS_STAGED,
@@ -93,6 +94,8 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
     IMPORT_KIND_STUDENTS: (
         # Provisioning: creates NEW AD accounts. display_name/sam_account_name
         # are optional (derived when blank); mail is set equal to the UPN.
+        # jahrgangsstufe (optional, last column) sets the student's own grade;
+        # blank = the class's lower grade. -1 = 1. KG, 0 = 2. KG, 1..13.
         [
             "given_name",
             "surname",
@@ -102,9 +105,10 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "class",
             "valid_from",
             "force_change",
+            "jahrgangsstufe",
         ],
         [
-            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true"],
+            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true", "3"],
             [
                 "Ben",
                 "Beispiel",
@@ -114,8 +118,27 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
                 "3a",
                 "2026-08-12",
                 "false",
+                "3",
             ],
-            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", ""],
+            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", "", ""],
+        ],
+    ),
+    IMPORT_KIND_TEACHERS: (
+        # Provisioning: creates NEW AD teacher accounts in the teacher OU.
+        # No class membership and no grade — teachers are assigned to classes
+        # separately via the class_teachers import or the UI.
+        [
+            "given_name",
+            "surname",
+            "display_name",
+            "upn",
+            "sam_account_name",
+            "force_change",
+        ],
+        [
+            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true"],
+            ["Max", "Kollege", "Max K.", "max.kollege@schule.ch", "max.kollege", "false"],
+            ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", ""],
         ],
     ),
 }
@@ -125,6 +148,7 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
 # Old files without them still validate; the template ships them included.
 OPTIONAL_HEADERS: dict[str, list[str]] = {
     IMPORT_KIND_CLASSES: ["jahrgangsstufe_bis"],
+    IMPORT_KIND_STUDENTS: ["jahrgangsstufe"],
 }
 
 
@@ -339,6 +363,8 @@ class ImportService:
                 return await self._classify_teacher_role(school_id, row)
             if kind == IMPORT_KIND_STUDENTS:
                 return await self._classify_student(school_id, row)
+            if kind == IMPORT_KIND_TEACHERS:
+                return await self._classify_teacher_provision(row)
         except Exception as exc:  # noqa: BLE001 — defensive fallback
             return IMPORT_ACTION_ERROR, [str(exc)]
         return IMPORT_ACTION_ERROR, ["unsupported kind"]
@@ -499,6 +525,14 @@ class ImportService:
             errors.append("upn is required and must look like name@domain.tld")
         if not class_name:
             errors.append("class is required")
+        grade_raw = row.get("jahrgangsstufe", "").strip()
+        if grade_raw:
+            try:
+                grade = int(grade_raw)
+                if not -1 <= grade <= 13:
+                    errors.append("jahrgangsstufe must be -1..13")
+            except ValueError:
+                errors.append("jahrgangsstufe must be an integer")
         try:
             _parse_date(row.get("valid_from", ""))
         except ValueError as exc:
@@ -573,6 +607,68 @@ class ImportService:
 
         return IMPORT_ACTION_CREATE, []
 
+    async def _classify_teacher_provision(self, row: dict[str, str]) -> tuple[str, list[str]]:
+        """Validate a teacher-provisioning row (create a NEW AD teacher account).
+
+        Like students but without a class or grade; the account lands in the
+        configured teacher OU (``ad_ou_teachers``).
+        """
+        errors: list[str] = []
+        given = row.get("given_name", "").strip()
+        surname = row.get("surname", "").strip()
+        upn = row.get("upn", "").strip().lower()
+
+        if not given:
+            errors.append("given_name is required")
+        if not surname:
+            errors.append("surname is required")
+        if not upn or "@" not in upn or "." not in upn.split("@", 1)[1]:
+            errors.append("upn is required and must look like name@domain.tld")
+        try:
+            _parse_force_change(row.get("force_change", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+        if upn and "@" in upn:
+            sam = _derive_sam(upn, row.get("sam_account_name", ""))
+            if len(sam) > _SAM_MAX_LEN:
+                errors.append(
+                    f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
+                )
+        if errors:
+            return IMPORT_ACTION_ERROR, errors
+
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"duplicate upn {upn} in this file"]
+        self._seen_upns.add(upn)
+        if sam in self._seen_sams:
+            return IMPORT_ACTION_ERROR, [f"duplicate sam_account_name {sam!r} in this file"]
+        self._seen_sams.add(sam)
+
+        settings_row = await self._app_settings_row()
+        domain = upn.split("@", 1)[1]
+        if settings_row.mail_domains and domain not in settings_row.mail_domains:
+            return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
+        if not settings_row.ad_ou_teachers:
+            return IMPORT_ACTION_ERROR, ["teacher OU not configured in settings"]
+
+        # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
+        # checked across all schools, not just the import's school.
+        existing = (
+            await self.session.execute(select(AdUserCache).where(AdUserCache.upn == upn))
+        ).scalar_one_or_none()
+        if existing is not None:
+            return IMPORT_ACTION_ERROR, [f"upn {upn} already exists"]
+        existing_sam = (
+            await self.session.execute(
+                select(AdUserCache).where(AdUserCache.sam_account_name == sam)
+            )
+        ).scalar_one_or_none()
+        if existing_sam is not None:
+            return IMPORT_ACTION_ERROR, [f"sam_account_name {sam!r} already exists"]
+
+        return IMPORT_ACTION_CREATE, []
+
     async def _lookup_user(self, upn: str, *, kind: str) -> AdUserCache | None:
         stmt = select(AdUserCache).where(
             AdUserCache.upn == upn,
@@ -636,6 +732,10 @@ class ImportService:
                     await self._apply_teacher_role(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_STUDENTS:
                     cred = await self._apply_student(job.school_id, staged, ip, request_id)
+                elif job.kind == IMPORT_KIND_TEACHERS:
+                    cred = await self._apply_teacher_provision(
+                        job.school_id, staged, ip, request_id
+                    )
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
                 staged.applied_at = now
@@ -788,9 +888,13 @@ class ImportService:
         force_change = _parse_force_change(row.get("force_change", ""))
         valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
 
+        grade_raw = (row.get("jahrgangsstufe") or "").strip()
+
         cls = await self._lookup_class(school_id, class_name)
         if cls is None:
             raise ValueError(f"class {class_name!r} not found")
+        # Per-student grade: explicit value, else the class's lower/primary grade.
+        jahrgangsstufe = int(grade_raw) if grade_raw else cls.jahrgangsstufe
         settings_row = await self._app_settings_row()
         ou = select_student_ou(
             jahrgangsstufe=cls.jahrgangsstufe,
@@ -829,6 +933,7 @@ class ImportService:
                 kind="student",
                 enabled=True,
                 last_sync_at=utcnow(),
+                jahrgangsstufe=jahrgangsstufe,
             )
         )
         self.session.add(
@@ -856,6 +961,72 @@ class ImportService:
             upn=upn,
             display_name=display,
             class_name=class_name,
+            password=password,
+            force_change=force_change,
+        )
+
+    async def _apply_teacher_provision(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> ProvisionedCredential:
+        if self.ad is None:
+            raise ValueError("ad_client_unavailable")
+        row = staged.raw_data
+        given = row["given_name"].strip()
+        surname = row["surname"].strip()
+        upn = row["upn"].strip().lower()
+        display = (row.get("display_name") or "").strip() or f"{given} {surname}"
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        force_change = _parse_force_change(row.get("force_change", ""))
+
+        settings_row = await self._app_settings_row()
+        ou = settings_row.ad_ou_teachers
+        if not ou:
+            raise ValueError("teacher_ou_not_configured")
+
+        password = generate_readable_password()
+        guid = await self.ad.create_user(
+            ou_dn=ou,
+            common_name=display,
+            sam_account_name=sam,
+            user_principal_name=upn,
+            mail=upn,
+            given_name=given,
+            surname=surname,
+            display_name=display,
+            password=password,
+            force_change=force_change,
+        )
+
+        self.session.add(
+            AdUserCache(
+                ad_object_guid=guid,
+                school_id=school_id,
+                upn=upn,
+                sam_account_name=sam,
+                given_name=given,
+                surname=surname,
+                display_name=display,
+                mail=upn,
+                kind="teacher",
+                enabled=True,
+                last_sync_at=utcnow(),
+            )
+        )
+        await self.audit.emit(
+            action="teacher_provisioned",
+            target_kind="ad_user",
+            target_id=guid,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"upn": upn, "force_change": force_change},
+        )
+        return ProvisionedCredential(
+            upn=upn,
+            display_name=display,
+            class_name="",
             password=password,
             force_change=force_change,
         )

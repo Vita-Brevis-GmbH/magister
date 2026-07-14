@@ -27,6 +27,7 @@ class AdUserOut(BaseModel):
     country: str | None = None
     device_name: str | None = None
     temp_device_name: str | None = None
+    jahrgangsstufe: int | None = None
 
 
 class AdUserListResponse(BaseModel):

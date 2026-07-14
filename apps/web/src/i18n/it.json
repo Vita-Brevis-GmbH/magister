@@ -161,7 +161,10 @@
     "jahrgangsstufe_von": "Anno (da)",
     "jahrgangsstufe_bis": "a (opzionale)",
     "jahrgangsstufe_bis_placeholder": "—",
-    "jahrgangsstufe_hint": "Classe singola: solo « da ». Pluriclasse/Basisstufe: indicare un intervallo. Scuola dell'infanzia: −1 = 1º, 0 = 2º."
+    "jahrgangsstufe_hint": "Classe singola: solo « da ». Pluriclasse/Basisstufe: indicare un intervallo. Scuola dell'infanzia: −1 = 1º, 0 = 2º.",
+    "promote_bump_grade": "Aumenta l'anno di +1",
+    "promote_grade_placeholder": "+1",
+    "promote_grade_hint": "Predefinito: ogni allievo sale di un anno. Per le eccezioni (restare/saltare) inserire un numero a destra; vuoto = +1."
   },
   "users": {
     "title": "Utenti",
@@ -213,7 +216,9 @@
       "delete": "Elimina",
       "delete_confirm": "Eliminare davvero questo utente?",
       "delete_yes": "Elimina",
-      "delete_err_ad": "AD non raggiungibile — disattivazione fallita."
+      "delete_err_ad": "AD non raggiungibile — disattivazione fallita.",
+      "section_grade": "Anno scolastico",
+      "section_grade_desc": "Anno scolastico proprio dell'allievo (adeguato durante la promozione di classe)."
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -235,7 +240,9 @@
       "domain_empty": "— nessun dominio —",
       "domains_missing": "Nessun dominio e-mail configurato.",
       "given_name": "Nome",
-      "surname": "Cognome"
+      "surname": "Cognome",
+      "jahrgangsstufe": "Anno scolastico",
+      "jahrgangsstufe_hint": "-1 = 1º infanzia, 0 = 2º infanzia, 1–13 = classi. Vuoto = non impostato."
     },
     "new_user": "Nuovo utente"
   },
@@ -524,7 +531,9 @@
     "school_label": "Scuola",
     "school_placeholder": "Seleziona la scuola …",
     "school_hint": "L’importazione viene assegnata a questa scuola.",
-    "error_school_required": "Seleziona prima la scuola di destinazione."
+    "error_school_required": "Seleziona prima la scuola di destinazione.",
+    "kind_teachers": "Docenti",
+    "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno."
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",

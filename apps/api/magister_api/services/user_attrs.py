@@ -61,7 +61,7 @@ ADMIN_ONLY_FIELDS: frozenset[str] = frozenset({"upn", "sam_account_name"})
 
 # Fields that hit AD; the rest go to Magister-DB only.
 AD_FIELDS: frozenset[str] = frozenset(_PAYLOAD_TO_AD_ATTR.keys())
-MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset({"temp_device_name"})
+MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset({"temp_device_name", "jahrgangsstufe"})
 
 
 class DomainNotAllowedError(ValueError):

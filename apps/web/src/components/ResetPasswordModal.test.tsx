@@ -32,6 +32,7 @@ const STUDENT: AdUserOut = {
   country: null,
   device_name: null,
   temp_device_name: null,
+  jahrgangsstufe: null,
 };
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

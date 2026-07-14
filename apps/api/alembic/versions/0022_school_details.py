@@ -44,9 +44,7 @@ def upgrade() -> None:
     # Audit events reference the school only as a scoping hint. Keep the event
     # (content is retained) but drop the hard RESTRICT so an unused school can
     # be deleted; the link is cleared instead of blocking the delete.
-    op.drop_constraint(
-        "fk_audit_events_school_id_schools", "audit_events", type_="foreignkey"
-    )
+    op.drop_constraint("fk_audit_events_school_id_schools", "audit_events", type_="foreignkey")
     op.create_foreign_key(
         "fk_audit_events_school_id_schools",
         "audit_events",
@@ -58,9 +56,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "fk_audit_events_school_id_schools", "audit_events", type_="foreignkey"
-    )
+    op.drop_constraint("fk_audit_events_school_id_schools", "audit_events", type_="foreignkey")
     op.create_foreign_key(
         "fk_audit_events_school_id_schools",
         "audit_events",

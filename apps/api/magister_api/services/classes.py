@@ -9,12 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.class_memberships import ClassMembershipRepository
 from magister_api.repositories.classes import ClassRepository
+
+# Grade bounds: -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen.
+_GRADE_MIN = -1
+_GRADE_MAX = 13
 
 
 class ClassNotFoundError(LookupError):
@@ -181,6 +186,8 @@ class ClassService:
         target_class_id: int,
         archive_source: bool,
         student_guids: list[str] | None = None,
+        grade_overrides: dict[str, int] | None = None,
+        bump_grade: bool = True,
         ip: str | None,
         request_id: str,
     ) -> PromotionResult:
@@ -188,10 +195,16 @@ class ClassService:
 
         With ``student_guids`` only those (active) students are moved; None
         moves all active students. Uses savepoints per student (same as
-        bulk_add) so partial failures don't roll back the whole batch. After
-        the move an optional archive of the source class is performed and a
-        single audit event is emitted.
+        bulk_add) so partial failures don't roll back the whole batch.
+
+        Each moved student's own ``jahrgangsstufe`` is advanced when
+        ``bump_grade`` is set: by default +1 (from the student's grade, or the
+        source class's grade when the student has none), clamped to the valid
+        range. ``grade_overrides`` maps ``ad_object_guid -> explicit new grade``
+        for the exceptions (staying, skipping). After the move an optional
+        archive of the source class is performed and one audit event emitted.
         """
+        overrides = grade_overrides or {}
         source = await self.get(source_class_id)
         target = await self.get(target_class_id)
         membership_repo = ClassMembershipRepository(self.session)
@@ -243,6 +256,26 @@ class ClassService:
                 )
                 self.session.add(new_row)
                 await self.session.flush()
+
+                # Advance the student's own grade. Override wins; else +1 from
+                # the student's grade (fallback: the source class's grade).
+                # scope-bypass: the source class was already scope-checked via
+                # get(); we only touch students being promoted out of it.
+                if bump_grade or m.ad_object_guid in overrides:
+                    student = await self.session.get(AdUserCache, m.ad_object_guid)
+                    if student is not None:
+                        if m.ad_object_guid in overrides:
+                            new_grade = overrides[m.ad_object_guid]
+                        else:
+                            base = (
+                                student.jahrgangsstufe
+                                if student.jahrgangsstufe is not None
+                                else source.jahrgangsstufe
+                            )
+                            new_grade = base + 1
+                        student.jahrgangsstufe = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        await self.session.flush()
+
                 await sp.commit()
                 moved.append(new_row.id)
             except Exception:

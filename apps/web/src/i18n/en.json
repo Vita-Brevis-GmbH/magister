@@ -158,7 +158,10 @@
     "jahrgangsstufe_von": "Grade (from)",
     "jahrgangsstufe_bis": "to (optional)",
     "jahrgangsstufe_bis_placeholder": "—",
-    "jahrgangsstufe_hint": "Single class: ‘from’ only. Multi-grade/Basisstufe: enter a range. Kindergarten: −1 = 1st KG, 0 = 2nd KG."
+    "jahrgangsstufe_hint": "Single class: ‘from’ only. Multi-grade/Basisstufe: enter a range. Kindergarten: −1 = 1st KG, 0 = 2nd KG.",
+    "promote_bump_grade": "Advance grade by +1",
+    "promote_grade_placeholder": "+1",
+    "promote_grade_hint": "Default: each student moves up one grade. Enter a number on the right for exceptions (stay/skip); empty = +1."
   },
   "users": {
     "title": "Users",
@@ -210,7 +213,9 @@
       "delete": "Delete",
       "delete_confirm": "Really delete this user?",
       "delete_yes": "Delete",
-      "delete_err_ad": "AD unreachable — deactivation failed."
+      "delete_err_ad": "AD unreachable — deactivation failed.",
+      "section_grade": "Grade",
+      "section_grade_desc": "The student's own grade level (adjusted during class promotion)."
     },
     "field": {
       "display_name": "Display name",
@@ -232,7 +237,9 @@
       "domain_empty": "— no domain —",
       "domains_missing": "No mail domains configured. Administration → System settings.",
       "given_name": "First name",
-      "surname": "Last name"
+      "surname": "Last name",
+      "jahrgangsstufe": "Grade",
+      "jahrgangsstufe_hint": "-1 = 1st KG, 0 = 2nd KG, 1–13 = grades. Empty = unset."
     },
     "new_user": "New user"
   },
@@ -521,7 +528,9 @@
     "school_label": "School",
     "school_placeholder": "Select school …",
     "school_hint": "The import is assigned to this school.",
-    "error_school_required": "Please select the target school first."
+    "error_school_required": "Please select the target school first.",
+    "kind_teachers": "Teachers",
+    "kind_teachers_desc": "Create new AD teacher accounts (in the teacher OU). Columns: given_name, surname, display_name, upn, sam_account_name, force_change. No class/grade."
   },
   "privacy": {
     "section_title": "Data export (revDSG Art. 25)",

@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { gradeRangeLabel } from "@/lib/grade";
+import { gradeLabel, gradeRangeLabel } from "@/lib/grade";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/users/$guid")({
@@ -41,6 +41,7 @@ interface FormState {
   postal_code: string;
   country: string;
   temp_device_name: string;
+  jahrgangsstufe: string;
 }
 
 function emptyForm(): FormState {
@@ -58,6 +59,7 @@ function emptyForm(): FormState {
     postal_code: "",
     country: "",
     temp_device_name: "",
+    jahrgangsstufe: "",
   };
 }
 
@@ -107,6 +109,7 @@ function UserDetailPage(): JSX.Element {
       postal_code: userQ.data.postal_code ?? "",
       country: userQ.data.country ?? "",
       temp_device_name: userQ.data.temp_device_name ?? "",
+      jahrgangsstufe: userQ.data.jahrgangsstufe != null ? String(userQ.data.jahrgangsstufe) : "",
     });
   }, [userQ.data]);
 
@@ -165,18 +168,18 @@ function UserDetailPage(): JSX.Element {
         : null;
     if (mailNew !== current.mail) out.mail = mailNew;
 
-    const addressFields: Array<keyof FormState & keyof UserAttributesUpdate> = [
-      "street_address",
-      "locality",
-      "postal_code",
-      "country",
-      "temp_device_name",
-    ];
+    const addressFields: Array<
+      "street_address" | "locality" | "postal_code" | "country" | "temp_device_name"
+    > = ["street_address", "locality", "postal_code", "country", "temp_device_name"];
     for (const f of addressFields) {
       const next = trimOrNull(form[f]);
       const cur = (current as unknown as Record<string, string | null>)[f] ?? null;
       if (next !== cur) out[f] = next;
     }
+
+    // Per-student grade (Magister-only). Blank clears it.
+    const gradeNew = form.jahrgangsstufe.trim() === "" ? null : Number(form.jahrgangsstufe);
+    if (gradeNew !== current.jahrgangsstufe) out.jahrgangsstufe = gradeNew;
 
     return out;
   }
@@ -450,6 +453,24 @@ function UserDetailPage(): JSX.Element {
             </CardContent>
           </Card>
 
+          {user.kind === "student" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t("users.detail.section_grade")}</CardTitle>
+                <CardDescription>{t("users.detail.section_grade_desc")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Field
+                  id="jahrgangsstufe"
+                  label={t("users.field.jahrgangsstufe")}
+                  value={form.jahrgangsstufe}
+                  onChange={(v) => setField("jahrgangsstufe", v)}
+                  hint={t("users.field.jahrgangsstufe_hint")}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
@@ -549,6 +570,12 @@ function UserReadView({
           <InfoRow label={t("users.detail.section_address")} value={address || null} />
           <InfoRow label={t("users.field.device_name")} value={user.device_name} />
           <InfoRow label={t("users.field.temp_device_name")} value={user.temp_device_name} />
+          {user.kind === "student" ? (
+            <InfoRow
+              label={t("users.field.jahrgangsstufe")}
+              value={user.jahrgangsstufe != null ? gradeLabel(user.jahrgangsstufe) : null}
+            />
+          ) : null}
         </CardContent>
       </Card>
 
