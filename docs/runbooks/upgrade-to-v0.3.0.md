@@ -24,6 +24,9 @@
 | Zugewiesene, aber noch nicht gestartete Schüler:innen erscheinen auf der Klassenliste | `GET /classes/{id}/students` |
 | Globaler „Aktualisieren"-Button im Header | UI |
 | UI aufgeräumt: „Meine Schüler:innen" nur für Lehrpersonen; Admin-Punkte unter „Einstellungen" | `GET /auth/me` liefert neu `kind` |
+| AD-Flags „Passwort läuft nie ab" + „Benutzer kann Passwort nicht ändern" (pro User + CSV-Import) | `PATCH /users/{guid}`; Import-Typen `students`/`teachers` |
+| Zugangsdaten-PDF pro User (Gerät + optionaler Custom-Text; Lehrer ohne Klassenliste) | `POST /users/{guid}/credential-pdf` |
+| Mehrfach-Aktionen auf der User-Liste (aktivieren/deaktivieren/löschen/AD-Attribute) | UI (bestehende Einzel-Endpoints) |
 
 ---
 
@@ -94,13 +97,14 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml build magister-
 
 ## 4. Datenbank-Migrationen ausführen
 
-Dieser Release bringt **drei additive Migrationen** (keine Umbauten bestehender Daten):
+Dieser Release bringt **vier additive Migrationen** (keine Umbauten bestehender Daten):
 
 | Migration | Änderung |
 |---|---|
 | `0021_class_grade_range` | Spalte `classes.jahrgangsstufe_bis INT NULL` (Mehrjahrgang/Basisstufe) |
 | `0022_school_details` | Spalten `schools.street/postal_code/city/phone/description/latitude/longitude` + `schools.updated_at` |
 | `0023_student_jahrgangsstufe` | Spalte `ad_user_cache.jahrgangsstufe INT NULL`; erweitert den `import_jobs.kind`-Check um `teachers` |
+| `0024_ad_pw_flags` | Spalten `ad_user_cache.password_never_expires` + `cannot_change_password` (BOOL, default false) |
 
 Der Container-Entrypoint führt `alembic upgrade head` beim Start automatisch aus.
 Für einen kontrollierten Lauf vor dem Neustart:
@@ -115,7 +119,13 @@ Erwartete Ausgabe:
 Running upgrade 0020_devices          -> 0021_class_grade_range
 Running upgrade 0021_class_grade_range -> 0022_school_details
 Running upgrade 0022_school_details    -> 0023_student_jahrgangsstufe
+Running upgrade 0023_student_jahrgangsstufe -> 0024_ad_pw_flags
 ```
+
+> **AD-Validierung:** „Benutzer kann Passwort nicht ändern" wird im AD über den
+> Security-Descriptor (DACL) gesetzt und konnte nicht gegen echtes AD getestet
+> werden. Vor dem produktiven Einsatz an einem Testkonto prüfen. „Passwort läuft
+> nie ab" (UAC-Bit) ist unkritisch.
 
 > **Service-Name:** In der aktuellen `docker-compose.yml` heisst der API-Service `magister-api`.
 
