@@ -526,6 +526,32 @@ class AdClient:
         return str(result.get("description") or code)
 
     @staticmethod
+    def _write_result(res: object, conn: Connection) -> tuple[bool, str | None]:
+        """Normalise a modify/add result → ``(ok, failure_detail)``.
+
+        SAFE_SYNC returns ``(status, result, response, request)``; MOCK_SYNC
+        returns a bool with the outcome on ``conn.result``. On failure the
+        detail combines the LDAP description (e.g. ``insufficientAccessRights``,
+        ``referral``, ``unwillingToPerform``) with the server message, so the
+        real reason a write was refused ends up in the log instead of a generic
+        ``ldap_modify_failed``.
+        """
+        if isinstance(res, tuple):
+            ok = bool(res[0])
+            result: dict[str, Any] = res[1] or {}
+        else:
+            ok = bool(res)
+            result = conn.result or {}
+        if ok:
+            return True, None
+        desc = result.get("description") or result.get("result")
+        message = str(result.get("message") or "").strip()
+        detail = str(desc) if desc is not None else "unknown"
+        if message:
+            detail = f"{detail}: {message}"
+        return False, detail
+
+    @staticmethod
     def _single_search(
         conn: Connection,
         *,
@@ -935,12 +961,13 @@ class AdClient:
                 changes[attr] = [(MODIFY_REPLACE, [value])]
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.modify(user_dn, changes)
-            if isinstance(ok, tuple):
-                ok = ok[0]
+            res = conn.modify(user_dn, changes)
+            ok, detail = self._write_result(res, conn)
             if not ok:
-                raise AdUnavailableError("ldap_modify_failed")
+                logger.warning("ldap modify failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_modify_failed:{detail}")
         except LDAPException as exc:
+            logger.warning("ldap modify raised for %s: %s", user_dn, exc)
             raise AdUnavailableError("ldap_modify_failed") from exc
         finally:
             if owned:
@@ -991,13 +1018,14 @@ class AdClient:
                 current_uac & ~UAC_ACCOUNTDISABLE if enabled else current_uac | UAC_ACCOUNTDISABLE
             )
             changes = {"userAccountControl": [(MODIFY_REPLACE, [str(new_uac)])]}
-            ok = conn.modify(user_dn, changes)
-            if isinstance(ok, tuple):
-                ok = ok[0]
+            res = conn.modify(user_dn, changes)
+            ok, detail = self._write_result(res, conn)
             if not ok:
-                raise AdUnavailableError("ldap_modify_failed")
+                logger.warning("ldap enable/disable failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_modify_failed:{detail}")
             return previous_enabled, enabled
         except LDAPException as exc:
+            logger.warning("ldap enable/disable raised for %s: %s", user_dn, exc)
             raise AdUnavailableError("ldap_modify_failed") from exc
         finally:
             if owned:
@@ -1039,12 +1067,13 @@ class AdClient:
             new_uac = current_uac | bit if value else current_uac & ~bit
             if new_uac == current_uac:
                 return
-            ok = conn.modify(user_dn, {"userAccountControl": [(MODIFY_REPLACE, [str(new_uac)])]})
-            if isinstance(ok, tuple):
-                ok = ok[0]
+            res = conn.modify(user_dn, {"userAccountControl": [(MODIFY_REPLACE, [str(new_uac)])]})
+            ok, detail = self._write_result(res, conn)
             if not ok:
-                raise AdUnavailableError("ldap_modify_failed")
+                logger.warning("ldap UAC modify failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_modify_failed:{detail}")
         except LDAPException as exc:
+            logger.warning("ldap UAC modify raised for %s: %s", user_dn, exc)
             raise AdUnavailableError("ldap_modify_failed") from exc
         finally:
             if owned:
@@ -1088,16 +1117,17 @@ class AdClient:
             if not raw:
                 raise AdUnavailableError("ldap_read_sd_failed")
             new_sd = sd.set_cannot_change_password(bytes(raw), deny=value)
-            wok = conn.modify(
+            wres = conn.modify(
                 user_dn,
                 {"nTSecurityDescriptor": [(MODIFY_REPLACE, [new_sd])]},
                 controls=control,
             )
-            if isinstance(wok, tuple):
-                wok = wok[0]
+            wok, detail = self._write_result(wres, conn)
             if not wok:
-                raise AdUnavailableError("ldap_modify_failed")
+                logger.warning("ldap SD (cannot-change-pw) failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_modify_sd_failed:{detail}")
         except LDAPException as exc:
+            logger.warning("ldap SD (cannot-change-pw) modify raised for %s: %s", user_dn, exc)
             raise AdUnavailableError("ldap_modify_sd_failed") from exc
         finally:
             if owned:
@@ -1218,10 +1248,27 @@ class AdClient:
 
     @staticmethod
     def _require_ok(result: object) -> None:
-        """Raise :class:`AdUnavailableError` unless an ldap3 op reports success."""
-        ok = result[0] if isinstance(result, tuple) else result
-        if not ok:
-            raise AdUnavailableError("ldap_add_failed")
+        """Raise :class:`AdUnavailableError` unless an ldap3 op reports success.
+
+        On a SAFE_SYNC tuple the LDAP result description/message is folded into
+        the error (and logged) so a refused provisioning write names its reason
+        (e.g. ``insufficientAccessRights``) instead of a bare ``ldap_add_failed``.
+        """
+        if isinstance(result, tuple):
+            ok = bool(result[0])
+            res: dict[str, Any] = result[1] or {}
+        else:
+            ok = bool(result)
+            res = {}
+        if ok:
+            return
+        desc = res.get("description") or res.get("result")
+        message = str(res.get("message") or "").strip()
+        detail = str(desc) if desc is not None else "unknown"
+        if message:
+            detail = f"{detail}: {message}"
+        logger.warning("ldap write (create/provision) failed: %s", detail)
+        raise AdUnavailableError(f"ldap_add_failed:{detail}")
 
     def _read_object_guid(self, conn: Connection, dn: str) -> str:
         result, entries = self._single_search(
