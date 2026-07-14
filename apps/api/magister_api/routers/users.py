@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
@@ -23,6 +26,13 @@ from magister_api.schemas.user_dashboard import UserDashboardOut
 from magister_api.schemas.user_lifecycle import UserStatusUpdate
 from magister_api.services.ad_users import AdUsersService
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.credential_pdf import (
+    CredentialPdfService,
+    UserDisabledError,
+)
+from magister_api.services.credential_pdf import (
+    UserNotInAdError as CredentialUserNotInAdError,
+)
 from magister_api.services.user_attrs import (
     AdminOnlyFieldError,
     DomainAllowlistEmptyError,
@@ -241,6 +251,55 @@ async def patch_user_status(
         # consistency problem rather than a client error.
         raise HTTPException(status_code=500, detail="data_consistency_error")
     return AdUserOut.model_validate(refreshed)
+
+
+class CredentialPdfRequest(BaseModel):
+    custom_heading: str | None = Field(default=None, max_length=200)
+    custom_body: str | None = Field(default=None, max_length=4000)
+    language: str = Field(default="de", max_length=5)
+
+
+@router.post("/{ad_object_guid}/credential-pdf")
+async def user_credential_pdf(
+    request: Request,
+    payload: CredentialPdfRequest,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> Response:
+    """Render a per-user credential PDF (username + password) as a download.
+
+    For ``cannot_change_password`` accounts the password is reset (generated)
+    and printed in clear text; every other account gets a masked password.
+    Students additionally get their assigned devices; teachers get no roster.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    svc = CredentialPdfService(session, settings, actor.to_scope(), ad)
+    try:
+        pdf = await svc.generate(
+            target=target,
+            custom_heading=payload.custom_heading,
+            custom_body=payload.custom_body,
+            language=payload.language,
+            generated_on=datetime.now(UTC).strftime("%d.%m.%Y"),
+            ip=ip,
+            request_id=request_id,
+        )
+    except UserDisabledError as exc:
+        raise HTTPException(status_code=409, detail="user_disabled") from exc
+    except CredentialUserNotInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_not_in_ad") from exc
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+
+    filename = f"zugangsdaten-{target.sam_account_name or target.ad_object_guid}.pdf"
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 __all__ = ["router"]

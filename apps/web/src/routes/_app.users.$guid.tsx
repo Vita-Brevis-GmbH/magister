@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import {
+  downloadCredentialPdf,
+  saveBlob,
   useCurrentUser,
   useDeleteAdUser,
   useMailDomains,
@@ -18,6 +20,14 @@ import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { gradeLabel, gradeRangeLabel } from "@/lib/grade";
@@ -74,7 +84,7 @@ function splitMail(value: string | null | undefined): { local: string; domain: s
 }
 
 function UserDetailPage(): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { guid } = Route.useParams();
   const userQ = useUser(guid);
   const dashboardQ = useUserDashboard(guid);
@@ -92,6 +102,31 @@ function UserDetailPage(): JSX.Element {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfHeading, setPdfHeading] = useState("");
+  const [pdfBody, setPdfBody] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfError, setPdfError] = useState(false);
+
+  async function handleDownloadPdf(): Promise<void> {
+    setPdfBusy(true);
+    setPdfError(false);
+    try {
+      const { blob, filename } = await downloadCredentialPdf(guid, {
+        custom_heading: pdfHeading.trim() || null,
+        custom_body: pdfBody.trim() || null,
+        language: i18n.language,
+      });
+      saveBlob(blob, filename);
+      setPdfOpen(false);
+      setPdfHeading("");
+      setPdfBody("");
+    } catch {
+      setPdfError(true);
+    } finally {
+      setPdfBusy(false);
+    }
+  }
 
   // Re-hydrate the form from the loaded user. Runs on load and whenever we
   // (re-)enter edit mode, so Cancel + re-open always starts from server state.
@@ -249,6 +284,11 @@ function UserDetailPage(): JSX.Element {
           ) : (
             <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>
           )}
+          {!editing ? (
+            <Button type="button" variant="outline" onClick={() => setPdfOpen(true)}>
+              {t("users.detail.credential_pdf")}
+            </Button>
+          ) : null}
           {!editing ? (
             <Button type="button" onClick={startEditing}>
               {t("users.detail.edit")}
@@ -545,6 +585,54 @@ function UserDetailPage(): JSX.Element {
       )}
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
+
+      <Dialog open={pdfOpen} onOpenChange={(o) => !pdfBusy && setPdfOpen(o)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("users.detail.credential_pdf")}</DialogTitle>
+            <DialogDescription>
+              {user.cannot_change_password
+                ? t("users.detail.credential_pdf_reset_hint")
+                : t("users.detail.credential_pdf_masked_hint")}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label htmlFor="pdf_heading">{t("users.detail.credential_pdf_heading")}</Label>
+              <Input
+                id="pdf_heading"
+                value={pdfHeading}
+                maxLength={200}
+                onChange={(e) => setPdfHeading(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="pdf_body">{t("users.detail.credential_pdf_body")}</Label>
+              <textarea
+                id="pdf_body"
+                className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={pdfBody}
+                maxLength={4000}
+                onChange={(e) => setPdfBody(e.target.value)}
+              />
+            </div>
+            {pdfError ? <p className="text-sm text-destructive">{t("errors.generic")}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPdfOpen(false)}
+              disabled={pdfBusy}
+            >
+              {t("common.cancel")}
+            </Button>
+            <Button type="button" onClick={() => void handleDownloadPdf()} disabled={pdfBusy}>
+              {pdfBusy ? t("common.loading") : t("users.detail.credential_pdf_download")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

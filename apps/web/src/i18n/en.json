@@ -220,7 +220,13 @@
       "section_grade": "Grade",
       "section_grade_desc": "The student's own grade level (adjusted during class promotion).",
       "section_pwpolicy": "Account policy (AD)",
-      "section_pwpolicy_desc": "Password options of the AD account."
+      "section_pwpolicy_desc": "Password options of the AD account.",
+      "credential_pdf": "Credentials PDF",
+      "credential_pdf_reset_hint": "The download sets a new password and prints it in clear text (this account cannot change its own password).",
+      "credential_pdf_masked_hint": "The PDF contains the username; the password is masked. Use “Reset password” to hand over a real password.",
+      "credential_pdf_heading": "Extra heading (optional)",
+      "credential_pdf_body": "Extra text (optional)",
+      "credential_pdf_download": "Download PDF"
     },
     "field": {
       "display_name": "Display name",

@@ -223,7 +223,13 @@
       "section_grade": "Anno scolastico",
       "section_grade_desc": "Anno scolastico proprio dell'allievo (adeguato durante la promozione di classe).",
       "section_pwpolicy": "Criteri account (AD)",
-      "section_pwpolicy_desc": "Opzioni password dell'account AD."
+      "section_pwpolicy_desc": "Opzioni password dell'account AD.",
+      "credential_pdf": "PDF credenziali",
+      "credential_pdf_reset_hint": "Il download imposta una nuova password e la stampa in chiaro (questo account non può cambiare la propria password).",
+      "credential_pdf_masked_hint": "Il PDF contiene il nome utente; la password è mascherata. Usa «Reimposta password» per consegnare una password reale.",
+      "credential_pdf_heading": "Titolo aggiuntivo (facoltativo)",
+      "credential_pdf_body": "Testo aggiuntivo (facoltativo)",
+      "credential_pdf_download": "Scarica PDF"
     },
     "field": {
       "display_name": "Nome visualizzato",

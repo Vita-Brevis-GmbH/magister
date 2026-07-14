@@ -223,7 +223,13 @@
       "section_grade": "Année scolaire",
       "section_grade_desc": "Année scolaire propre à l'élève (ajustée lors du passage de classe).",
       "section_pwpolicy": "Règles du compte (AD)",
-      "section_pwpolicy_desc": "Options de mot de passe du compte AD."
+      "section_pwpolicy_desc": "Options de mot de passe du compte AD.",
+      "credential_pdf": "PDF des identifiants",
+      "credential_pdf_reset_hint": "Le téléchargement définit un nouveau mot de passe et l'imprime en clair (ce compte ne peut pas changer son mot de passe).",
+      "credential_pdf_masked_hint": "Le PDF contient le nom d'utilisateur ; le mot de passe est masqué. Utilisez « Réinitialiser le mot de passe » pour remettre un vrai mot de passe.",
+      "credential_pdf_heading": "Titre supplémentaire (facultatif)",
+      "credential_pdf_body": "Texte supplémentaire (facultatif)",
+      "credential_pdf_download": "Télécharger le PDF"
     },
     "field": {
       "display_name": "Nom affiché",

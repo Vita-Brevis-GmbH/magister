@@ -846,6 +846,40 @@ export async function downloadLetter(
   return { blob, filename: match?.[1] ?? `${template}.pdf` };
 }
 
+export async function downloadCredentialPdf(
+  guid: string,
+  body: { custom_heading?: string | null; custom_body?: string | null; language?: string },
+): Promise<{ blob: Blob; filename: string }> {
+  const csrf = document.cookie
+    .split("; ")
+    .find((c) => c.startsWith("magister_csrf="))
+    ?.slice("magister_csrf=".length);
+  const res = await fetch(`${API_BASE}/users/${guid}/credential-pdf`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/pdf",
+      ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j.detail || j.code || "";
+    } catch {
+      /* leave empty */
+    }
+    throw new ApiError(res.status, detail || String(res.status), "");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob, filename: match?.[1] ?? `zugangsdaten-${guid}.pdf` };
+}
+
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

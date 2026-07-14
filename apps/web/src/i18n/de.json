@@ -220,7 +220,13 @@
       "section_grade": "Jahrgangsstufe",
       "section_grade_desc": "Eigene Jahrgangsstufe des Schülers (wird beim Klassenaufstieg angepasst).",
       "section_pwpolicy": "Konto-Richtlinien (AD)",
-      "section_pwpolicy_desc": "Passwort-Optionen des AD-Kontos."
+      "section_pwpolicy_desc": "Passwort-Optionen des AD-Kontos.",
+      "credential_pdf": "Zugangsdaten-PDF",
+      "credential_pdf_reset_hint": "Beim Download wird ein neues Passwort gesetzt und im PDF im Klartext ausgegeben (Konto kann Passwort nicht selbst ändern).",
+      "credential_pdf_masked_hint": "Das PDF enthält den Benutzernamen; das Passwort wird maskiert. Für ein echtes Passwort «Passwort zurücksetzen» verwenden.",
+      "credential_pdf_heading": "Zusätzliche Überschrift (optional)",
+      "credential_pdf_body": "Zusätzlicher Text (optional)",
+      "credential_pdf_download": "PDF herunterladen"
     },
     "field": {
       "display_name": "Anzeigename",

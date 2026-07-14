@@ -66,6 +66,7 @@ async def _seed_user(
     guid: str,
     kind: str = "teacher",
     upn: str = "old@schule.example.ch",
+    cannot_change_password: bool = False,
 ) -> None:
     db_session.add(
         AdUserCache(
@@ -76,6 +77,7 @@ async def _seed_user(
             sam_account_name="old.sam",
             kind=kind,
             enabled=True,
+            cannot_change_password=cannot_change_password,
         )
     )
     await db_session.flush()
@@ -90,6 +92,72 @@ async def _set_mail_domains(db_session: AsyncSession, domains: list[str]) -> Non
         update(AppSettings).where(AppSettings.id == 1).values(mail_domains=domains)
     )
     await db_session.commit()
+
+
+class TestCredentialPdf:
+    @pytest.mark.asyncio
+    async def test_cannot_change_user_pdf_resets_password(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        engine: AsyncEngine,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(
+            db_session,
+            school_id=school_a,
+            guid=STUDENT_GUID,
+            kind="student",
+            cannot_change_password=True,
+        )
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.post(
+                f"/users/{STUDENT_GUID}/credential-pdf",
+                json={"custom_heading": "Hinweis", "custom_body": "Bitte aufbewahren."},
+            )
+            assert r.status_code == 200, r.text
+            assert r.headers["content-type"] == "application/pdf"
+            assert r.content[:4] == b"%PDF"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        # Audited as a reset (cannot-change → password was regenerated).
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            rows = (
+                (
+                    await s.execute(
+                        select(AuditEvent.action).where(
+                            AuditEvent.action == "credential_pdf_generated"
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        assert rows == ["credential_pdf_generated"]
+
+    @pytest.mark.asyncio
+    async def test_can_change_user_pdf_is_masked_no_reset(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        # A user who may change their own password: no reset, masked PDF.
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID, kind="teacher")
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.post(f"/users/{TEACHER_GUID}/credential-pdf", json={})
+            assert r.status_code == 200, r.text
+            assert r.content[:4] == b"%PDF"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
 
 
 class TestHappyPath:

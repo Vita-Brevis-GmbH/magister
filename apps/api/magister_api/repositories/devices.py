@@ -46,6 +46,13 @@ class DeviceRepository(BaseRepository):
         stmt = self._visible(select(Device).where(Device.id == device_id))
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def list_for_person(self, ad_object_guid: str) -> list[Device]:
+        """Devices assigned to one person (by AD objectGUID), scope-restricted."""
+        stmt = self._visible(
+            select(Device).where(Device.assigned_person_guid == ad_object_guid)
+        ).order_by(Device.name, Device.id)
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def create(
         self,
         *,
