@@ -197,6 +197,7 @@
     "pagination_info": "Pagina {{page}} / {{total}} ({{count}} voci)",
     "pagination_prev": "Precedente",
     "pagination_next": "Successivo",
+    "per_page": "per pagina:",
     "detail": {
       "edit": "Modifica",
       "section_classes": "Classi",

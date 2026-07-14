@@ -197,6 +197,7 @@
     "pagination_info": "Page {{page}} / {{total}} ({{count}} entrées)",
     "pagination_prev": "Précédent",
     "pagination_next": "Suivant",
+    "per_page": "par page :",
     "detail": {
       "edit": "Modifier",
       "section_classes": "Classes",

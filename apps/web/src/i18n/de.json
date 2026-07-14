@@ -194,6 +194,7 @@
     "pagination_info": "Seite {{page}} / {{total}} ({{count}} Einträge)",
     "pagination_prev": "Zurück",
     "pagination_next": "Weiter",
+    "per_page": "pro Seite:",
     "detail": {
       "edit": "Bearbeiten",
       "section_classes": "Klassen",

@@ -50,6 +50,7 @@ function UsersPage(): JSX.Element {
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
+  const [pageSize, setPageSize] = useState(50);
   const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -67,30 +68,47 @@ function UsersPage(): JSX.Element {
   const canToggleStatus = (u: AdUserOut): boolean =>
     !!me.data && u.ad_object_guid !== me.data.ad_object_guid;
 
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE_OPTIONS = [25, 50, 100, 200] as const;
   const params: UseUsersParams = {
-    limit: PAGE_SIZE,
+    limit: pageSize,
     offset,
     ...(kind !== "all" && { kind }),
     ...(search && { search }),
   };
   const q = useUsers(params);
 
-  // Changing a filter resets to the first page.
+  // Selection is per-page: any navigation or filter change clears it so a
+  // bulk action can never touch users the operator can't currently see.
+  function resetPaging(): void {
+    setOffset(0);
+    setSelected(new Set());
+    setBulkResult(null);
+    setConfirmBulkDelete(false);
+  }
   function changeKind(k: KindFilter): void {
     setKind(k);
-    setOffset(0);
+    resetPaging();
   }
   function changeSearch(v: string): void {
     setSearch(v);
-    setOffset(0);
+    resetPaging();
+  }
+  function goToOffset(next: number): void {
+    setOffset(next);
+    setSelected(new Set());
+    setBulkResult(null);
+    setConfirmBulkDelete(false);
+  }
+  function changePageSize(n: number): void {
+    setPageSize(n);
+    resetPaging();
   }
 
   const total = q.data?.total ?? 0;
-  const page = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const page = Math.floor(offset / pageSize) + 1;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const hasPrev = offset > 0;
-  const hasNext = offset + PAGE_SIZE < total;
+  const hasNext = offset + pageSize < total;
 
   const items = q.data?.items ?? [];
   const selectableGuids = items.map((u) => u.ad_object_guid);
@@ -391,18 +409,34 @@ function UsersPage(): JSX.Element {
         </div>
       )}
 
-      {!q.isLoading && total > PAGE_SIZE ? (
-        <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-muted-foreground">
-            {t("users.pagination_info", { page, total: totalPages, count: total })}
-          </span>
+      {!q.isLoading && total > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground">
+              {t("users.pagination_info", { page, total: totalPages, count: total })}
+            </span>
+            <label className="flex items-center gap-1.5 text-muted-foreground">
+              {t("users.per_page")}
+              <select
+                value={pageSize}
+                onChange={(e) => changePageSize(Number(e.target.value))}
+                className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              >
+                {PAGE_SIZE_OPTIONS.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={!hasPrev || q.isFetching}
-              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+              onClick={() => goToOffset(Math.max(0, offset - pageSize))}
             >
               {t("users.pagination_prev")}
             </Button>
@@ -411,7 +445,7 @@ function UsersPage(): JSX.Element {
               variant="outline"
               size="sm"
               disabled={!hasNext || q.isFetching}
-              onClick={() => setOffset(offset + PAGE_SIZE)}
+              onClick={() => goToOffset(offset + pageSize)}
             >
               {t("users.pagination_next")}
             </Button>
