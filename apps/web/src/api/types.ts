@@ -7,6 +7,8 @@ export interface CurrentUserOut {
   surname: string | null;
   display_name: string | null;
   is_admin: boolean;
+  /** AD classification: teacher | student | admin. null for the local admin. */
+  kind: "teacher" | "student" | "admin" | null;
   school_scope: number[];
   roles: string[];
   expires_at: string;

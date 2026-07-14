@@ -20,6 +20,9 @@
     "roles": "Ruoli",
     "devices": "Dispositivi",
     "schools": "Scuole",
+    "settings": "Impostazioni",
+    "usermanagement": "Gestione utenti",
+    "system_settings": "Impostazioni di sistema",
     "refresh": "Aggiorna"
   },
   "auth": {

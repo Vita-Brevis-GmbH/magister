@@ -17,6 +17,9 @@
     "roles": "Roles",
     "devices": "Devices",
     "schools": "Schools",
+    "settings": "Settings",
+    "usermanagement": "User management",
+    "system_settings": "System settings",
     "refresh": "Refresh"
   },
   "auth": {

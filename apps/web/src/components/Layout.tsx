@@ -1,7 +1,7 @@
 import { useIsFetching, useQueryClient } from "@tanstack/react-query";
-import { Link, Outlet } from "@tanstack/react-router";
-import { RefreshCw } from "lucide-react";
-import { useEffect } from "react";
+import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { ChevronDown, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useCurrentUser, useLogout, useMyPreferences } from "@/api/hooks";
@@ -19,14 +19,47 @@ export function Layout() {
   // >0 while any query is refetching — drives the spinner on the refresh button.
   const fetching = useIsFetching();
 
+  // Settings dropdown open state; closes on outside click or route change.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
   // Apply the user's saved language once it loads (overrides browser default).
   useEffect(() => {
     if (prefs.data && i18n.language !== prefs.data.language) {
       void i18n.changeLanguage(prefs.data.language);
     }
   }, [prefs.data]);
+
+  // Close the settings menu whenever the route changes.
+  useEffect(() => {
+    setSettingsOpen(false);
+  }, [pathname]);
+
+  // Close the settings menu on a click outside of it.
+  useEffect(() => {
+    if (!settingsOpen) return;
+    function onDocMouseDown(e: MouseEvent): void {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, [settingsOpen]);
+
   const navActive = "rounded-md bg-accent px-3 py-1.5 text-foreground";
   const navIdle = "rounded-md px-3 py-1.5 text-muted-foreground hover:text-foreground";
+  const menuActive = "block rounded-md bg-accent px-3 py-2 text-sm text-foreground";
+  const menuIdle =
+    "block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground";
+
+  const isAdmin = me.data?.is_admin ?? false;
+  const isSchulleitung = me.data?.roles.includes("schulleitung") ?? false;
+  const isSmi = me.data?.roles.includes("smi") ?? false;
+  const isTeacher = me.data?.kind === "teacher";
+  // Anyone with a management capability can open the Einstellungen menu.
+  const canManage = isAdmin || isSchulleitung || isSmi;
 
   return (
     <div className="min-h-screen bg-background">
@@ -46,21 +79,16 @@ export function Layout() {
             >
               {t("nav.classes")}
             </Link>
-            <Link
-              to="/users"
-              activeProps={{ className: navActive }}
-              inactiveProps={{ className: navIdle }}
-            >
-              {t("nav.users")}
-            </Link>
-            <Link
-              to="/my-students"
-              activeProps={{ className: navActive }}
-              inactiveProps={{ className: navIdle }}
-            >
-              {t("nav.my_students")}
-            </Link>
-            {me.data?.is_admin || me.data?.roles.includes("smi") ? (
+            {isTeacher ? (
+              <Link
+                to="/my-students"
+                activeProps={{ className: navActive }}
+                inactiveProps={{ className: navIdle }}
+              >
+                {t("nav.my_students")}
+              </Link>
+            ) : null}
+            {isAdmin || isSmi ? (
               <Link
                 to="/devices"
                 activeProps={{ className: navActive }}
@@ -69,42 +97,8 @@ export function Layout() {
                 {t("nav.devices")}
               </Link>
             ) : null}
-            {me.data?.is_admin ? (
+            {canManage ? (
               <>
-                <Link
-                  to="/admin/schools"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.schools")}
-                </Link>
-                <Link
-                  to="/admin/settings"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.admin")}
-                </Link>
-                <Link
-                  to="/admin/roles"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.roles")}
-                </Link>
-              </>
-            ) : null}
-            {me.data?.is_admin ||
-            me.data?.roles.includes("schulleitung") ||
-            me.data?.roles.includes("smi") ? (
-              <>
-                <Link
-                  to="/admin/substitutions"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.substitutions")}
-                </Link>
                 <Link
                   to="/admin/imports"
                   activeProps={{ className: navActive }}
@@ -119,14 +113,84 @@ export function Layout() {
                 >
                   {t("nav.reports")}
                 </Link>
-                <Link
-                  to="/admin/audit"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.audit")}
-                </Link>
               </>
+            ) : null}
+            {canManage ? (
+              <div className="relative" ref={settingsRef}>
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={settingsOpen}
+                  className={`flex items-center gap-1 ${
+                    settingsOpen ? navActive : navIdle
+                  }`}
+                >
+                  {t("nav.settings")}
+                  <ChevronDown className="h-4 w-4" />
+                </button>
+                {settingsOpen ? (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border bg-card p-1 shadow-md"
+                  >
+                    <Link
+                      to="/users"
+                      role="menuitem"
+                      activeProps={{ className: menuActive }}
+                      inactiveProps={{ className: menuIdle }}
+                    >
+                      {t("nav.usermanagement")}
+                    </Link>
+                    {isAdmin ? (
+                      <Link
+                        to="/admin/schools"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.schools")}
+                      </Link>
+                    ) : null}
+                    <Link
+                      to="/admin/audit"
+                      role="menuitem"
+                      activeProps={{ className: menuActive }}
+                      inactiveProps={{ className: menuIdle }}
+                    >
+                      {t("nav.audit")}
+                    </Link>
+                    {isAdmin ? (
+                      <Link
+                        to="/admin/roles"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.roles")}
+                      </Link>
+                    ) : null}
+                    <Link
+                      to="/admin/substitutions"
+                      role="menuitem"
+                      activeProps={{ className: menuActive }}
+                      inactiveProps={{ className: menuIdle }}
+                    >
+                      {t("nav.substitutions")}
+                    </Link>
+                    {isAdmin ? (
+                      <Link
+                        to="/admin/settings"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.system_settings")}
+                      </Link>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </nav>
 

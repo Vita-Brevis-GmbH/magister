@@ -17,6 +17,9 @@
     "roles": "Rollen",
     "devices": "Geräte",
     "schools": "Schulen",
+    "settings": "Einstellungen",
+    "usermanagement": "Benutzerverwaltung",
+    "system_settings": "Systemeinstellungen",
     "refresh": "Aktualisieren"
   },
   "auth": {

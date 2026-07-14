@@ -25,6 +25,10 @@ class CurrentUserOut(BaseModel):
     surname: str | None = None
     display_name: str | None = None
     is_admin: bool
+    kind: str | None = Field(
+        default=None,
+        description="AD classification: 'teacher' | 'student' | 'admin'. None for the local admin.",
+    )
     school_scope: list[int] = Field(
         default_factory=list,
         description="School IDs the user has Schulleitung-or-above scope on. Empty for KL-only.",

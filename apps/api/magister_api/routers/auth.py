@@ -221,6 +221,7 @@ async def me(
         surname=cache.surname if cache else None,
         display_name=cache.display_name if cache else None,
         is_admin=user.is_admin,
+        kind=cache.kind if cache else None,
         school_scope=list(user.school_scope),
         roles=list(user.roles),
         expires_at=user.expires_at,  # type: ignore[arg-type]
