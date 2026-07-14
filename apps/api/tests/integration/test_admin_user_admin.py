@@ -96,35 +96,70 @@ async def test_create_user_ou_not_configured(
 async def test_delete_user_success(
     as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession
 ) -> None:
+    # Step 2 of the lifecycle: only a *disabled* account may be deleted, and
+    # the AD object is removed outright.
     guid = "77777777-7777-7777-7777-777777777777"
+    dn = "CN=Tom,OU=Users,DC=schule,DC=local"
     db_session.add(
         AdUserCache(
             ad_object_guid=guid,
             school_id=None,
             upn="tom@schule.ch",
             kind="student",
-            enabled=True,
+            enabled=False,
         )
     )
     await db_session.commit()
-    mock_ad.mock_connection().strategy.add_entry(
-        "CN=Tom,OU=Users,DC=schule,DC=local",
+    conn = mock_ad.mock_connection()
+    conn.strategy.add_entry(
+        dn,
         {
             "objectClass": ["user"],
             "objectGUID": uuid.UUID(guid).bytes_le,
             "userPrincipalName": "tom@schule.ch",
-            "userAccountControl": 512,
+            "userAccountControl": 514,  # disabled
         },
     )
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
 
     r = await as_admin.request("DELETE", f"/admin/ad-users/{guid}")
     assert r.status_code == 200, r.text
-    assert r.json()["ad_disabled"] is True
+    assert r.json()["ad_removed"] is True
     gone = (
         await db_session.execute(select(AdUserCache).where(AdUserCache.ad_object_guid == guid))
     ).scalar_one_or_none()
     assert gone is None
+    # The AD object was actually deleted from the (mock) directory.
+    conn.search(dn, "(objectClass=user)", search_scope="BASE", attributes=["cn"])
+    assert not [e for e in (conn.response or []) if e.get("type") == "searchResEntry"]
+
+
+@pytest.mark.asyncio
+async def test_delete_user_requires_disabled(
+    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession
+) -> None:
+    # An enabled account cannot be permanently deleted — deactivate first.
+    guid = "88888888-8888-8888-8888-888888888888"
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=guid,
+            school_id=None,
+            upn="stillon@schule.ch",
+            kind="student",
+            enabled=True,
+        )
+    )
+    await db_session.commit()
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+
+    r = await as_admin.request("DELETE", f"/admin/ad-users/{guid}")
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "user_not_disabled"
+    # Row is untouched.
+    still = (
+        await db_session.execute(select(AdUserCache).where(AdUserCache.ad_object_guid == guid))
+    ).scalar_one_or_none()
+    assert still is not None
 
 
 @pytest.mark.asyncio

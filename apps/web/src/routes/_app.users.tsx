@@ -113,6 +113,10 @@ function UsersPage(): JSX.Element {
   const items = q.data?.items ?? [];
   const selectableGuids = items.map((u) => u.ad_object_guid);
   const allSelected = selectableGuids.length > 0 && selectableGuids.every((g) => selected.has(g));
+  // Permanent delete is step 2 — only offered when every selected account is
+  // already deactivated.
+  const selectedUsers = items.filter((u) => selected.has(u.ad_object_guid));
+  const allSelectedDisabled = selectedUsers.length > 0 && selectedUsers.every((u) => !u.enabled);
 
   function toggle(guid: string): void {
     setSelected((prev) => {
@@ -238,7 +242,7 @@ function UsersPage(): JSX.Element {
           >
             {t("users.bulk.attrs_button")}
           </Button>
-          {isAdmin ? (
+          {isAdmin && allSelectedDisabled ? (
             confirmBulkDelete ? (
               <span className="flex items-center gap-2">
                 <span className="text-destructive">{t("users.bulk.delete_confirm")}</span>
@@ -268,7 +272,7 @@ function UsersPage(): JSX.Element {
                 disabled={bulk.isPending}
                 onClick={() => setConfirmBulkDelete(true)}
               >
-                {t("users.detail.delete")}
+                {t("users.detail.delete_permanent")}
               </Button>
             )
           ) : null}

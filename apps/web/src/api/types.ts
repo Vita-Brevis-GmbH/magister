@@ -362,7 +362,7 @@ export interface AdUserCreateResponse {
 
 export interface AdUserDeleteResponse {
   ad_object_guid: string;
-  ad_disabled: boolean;
+  ad_removed: boolean;
 }
 
 export interface DemoPurgeResponse {

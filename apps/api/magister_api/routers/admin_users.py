@@ -29,6 +29,7 @@ router = APIRouter(prefix="/admin/ad-users", tags=["admin"])
 
 _ERROR_STATUS = {
     "user_not_found": status.HTTP_404_NOT_FOUND,
+    "user_not_disabled": status.HTTP_409_CONFLICT,
     "ou_not_configured": status.HTTP_409_CONFLICT,
     "invalid_ou_choice": status.HTTP_422_UNPROCESSABLE_ENTITY,
 }
@@ -83,7 +84,7 @@ async def delete_ad_user(
     svc = UserAdminService(session, settings, ad)
     ip, request_id = _ip_request_id(request)
     try:
-        ad_disabled = await svc.delete_user(
+        ad_removed = await svc.delete_user(
             ad_object_guid=ad_object_guid,
             actor_upn=user.upn,
             actor_object_guid=user.ad_object_guid,
@@ -97,7 +98,7 @@ async def delete_ad_user(
         ) from exc
     except AdUnavailableError as exc:
         raise HTTPException(status_code=503, detail="ad_unavailable") from exc
-    return AdUserDeleteResponse(ad_object_guid=ad_object_guid, ad_disabled=ad_disabled)
+    return AdUserDeleteResponse(ad_object_guid=ad_object_guid, ad_removed=ad_removed)
 
 
 __all__ = ["router"]

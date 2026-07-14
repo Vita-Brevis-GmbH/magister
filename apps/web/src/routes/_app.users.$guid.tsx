@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
+import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -102,6 +103,7 @@ function UserDetailPage(): JSX.Element {
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHeading, setPdfHeading] = useState("");
   const [pdfBody, setPdfBody] = useState("");
@@ -294,10 +296,21 @@ function UserDetailPage(): JSX.Element {
               {t("users.detail.edit")}
             </Button>
           ) : null}
-          {!editing && me.data?.is_admin ? (
+          {/* Step 1: (de)activate. Not for one's own account. */}
+          {!editing && me.data && me.data.ad_object_guid !== guid ? (
+            <Button type="button" variant="outline" onClick={() => setStatusOpen(true)}>
+              {user.enabled
+                ? t("user_status.button_disable")
+                : t("user_status.button_enable")}
+            </Button>
+          ) : null}
+          {/* Step 2: permanent delete — only for already-deactivated accounts. */}
+          {!editing && me.data?.is_admin && !user.enabled ? (
             confirmDelete ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-destructive">{t("users.detail.delete_confirm")}</span>
+                <span className="text-sm text-destructive">
+                  {t("users.detail.delete_confirm_permanent")}
+                </span>
                 <Button
                   type="button"
                   variant="destructive"
@@ -317,8 +330,12 @@ function UserDetailPage(): JSX.Element {
                 </Button>
               </div>
             ) : (
-              <Button type="button" variant="outline" onClick={() => setConfirmDelete(true)}>
-                {t("users.detail.delete")}
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => setConfirmDelete(true)}
+              >
+                {t("users.detail.delete_permanent")}
               </Button>
             )
           ) : null}
@@ -585,6 +602,7 @@ function UserDetailPage(): JSX.Element {
       )}
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
+      <UserStatusModal user={statusOpen ? user : null} onClose={() => setStatusOpen(false)} />
 
       <Dialog open={pdfOpen} onOpenChange={(o) => !pdfBusy && setPdfOpen(o)}>
         <DialogContent>

@@ -25,7 +25,8 @@ class AdUserCreateResponse(BaseModel):
 
 class AdUserDeleteResponse(BaseModel):
     ad_object_guid: str
-    ad_disabled: bool
+    # True when the AD object was removed (False for a stale cache row).
+    ad_removed: bool
 
 
 class DemoPurgeResponse(BaseModel):

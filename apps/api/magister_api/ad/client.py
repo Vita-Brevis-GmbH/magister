@@ -1136,6 +1136,34 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def delete_user_object(self, *, user_dn: str) -> None:
+        """Delete the AD user object outright (``conn.delete``).
+
+        Used by the two-step lifecycle's second step (permanent delete of an
+        already-disabled account). With the AD Recycle Bin enabled the object
+        is recoverable. No-op-safe: a missing object surfaces as
+        :class:`AdUnavailableError` with the LDAP reason logged.
+        """
+        await run_in_threadpool(self._sync_delete_user_object, user_dn)
+
+    def _sync_delete_user_object(self, user_dn: str) -> None:
+        conn, owned = self._acquire_connection()
+        try:
+            res = conn.delete(user_dn)
+            ok, detail = self._write_result(res, conn)
+            if not ok:
+                logger.warning("ldap delete failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_delete_failed:{detail}")
+        except LDAPException as exc:
+            logger.warning("ldap delete raised for %s: %s", user_dn, exc)
+            raise AdUnavailableError("ldap_delete_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def create_user(
         self,
         *,

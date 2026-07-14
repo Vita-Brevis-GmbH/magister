@@ -2,8 +2,10 @@
 
 Create provisions an actual AD object (chosen target OU, temp password, forced
 change) and immediately mirrors it into ``ad_user_cache`` so it shows up without
-waiting for the next sync. Delete disables the AD account and removes the
-Magister-side rows. Both are admin-only and audited (never the password).
+waiting for the next sync. Delete is the second step of the two-step lifecycle:
+it permanently removes the AD object (Recycle-Bin-recoverable) and the
+Magister-side rows, and only accepts an already-disabled account. Both are
+admin-only and audited (never the password).
 """
 
 from __future__ import annotations
@@ -163,25 +165,32 @@ class UserAdminService:
         ip: str | None,
         request_id: str,
     ) -> bool:
-        """Disable the AD account (if present) and remove the Magister rows.
+        """Permanently delete a *disabled* user: remove the AD object and the
+        Magister rows.
 
-        Returns whether an AD account was disabled. Raises ``UserAdminError``
-        if the user is unknown; AD-unavailability bubbles up as
-        :class:`AdUnavailableError` (the router maps it to 503).
+        This is step 2 of the two-step lifecycle — step 1 (deactivate) runs via
+        ``PATCH /users/{guid}/status``. Refuses an account that is still enabled
+        (``user_not_disabled``). Returns whether an AD object was removed
+        (``False`` for a stale cache row with no AD object). With the AD Recycle
+        Bin the deletion is recoverable. AD-unavailability / a refused delete
+        bubble up as :class:`AdUnavailableError` (router → 503).
         """
         cache = await self.session.get(AdUserCache, ad_object_guid)
         if cache is None:
             raise UserAdminError("user_not_found")
+        if cache.enabled:
+            # Guard: only deactivated accounts may be permanently deleted.
+            raise UserAdminError("user_not_disabled")
         kind = cache.kind
         upn = cache.upn
 
-        # Disable in AD when the object still exists (find_user_dn → None means
-        # there is nothing to disable, e.g. a stale cache row).
+        # Delete the AD object when it still exists (find_user_dn → None means a
+        # stale cache row with nothing left to delete in AD).
         dn = await self.ad.find_user_dn(ad_object_guid)
-        ad_disabled = False
+        ad_removed = False
         if dn is not None:
-            await self.ad.set_account_enabled(user_dn=dn, enabled=False)
-            ad_disabled = True
+            await self.ad.delete_user_object(user_dn=dn)
+            ad_removed = True
 
         for stmt in (
             delete(SubjectTeacherRole).where(SubjectTeacherRole.ad_object_guid == ad_object_guid),
@@ -204,9 +213,9 @@ class UserAdminService:
             school_id=None,
             ip=ip,
             request_id=request_id,
-            payload={"kind": kind, "upn": upn, "ad_disabled": ad_disabled},
+            payload={"kind": kind, "upn": upn, "ad_removed": ad_removed},
         )
-        return ad_disabled
+        return ad_removed
 
 
 __all__ = ["OU_CHOICES", "CreatedUser", "UserAdminError", "UserAdminService"]
