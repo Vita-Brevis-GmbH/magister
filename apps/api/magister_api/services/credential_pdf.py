@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from weasyprint import HTML
 
 from magister_api.ad.client import AdClient
-from magister_api.ad.password import generate_password, passes_default_complexity
+from magister_api.ad.password import generate_readable_password, passes_default_complexity
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
@@ -135,7 +135,9 @@ class CredentialPdfService:
             user_dn = await self.ad.find_user_dn(target.ad_object_guid)
             if not user_dn:
                 raise UserNotInAdError(target.ad_object_guid)
-            new_password = generate_password()
+            # Readable ("Tiger-Wolke-47"): easy for students to read + type,
+            # matching the provisioning hand-out style.
+            new_password = generate_readable_password()
             assert passes_default_complexity(new_password)
             # force_change=False: the account may not change its password.
             await self.ad.modify_password(
