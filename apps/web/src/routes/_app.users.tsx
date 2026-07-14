@@ -275,13 +275,14 @@ function UsersPage(): JSX.Element {
                 <TableHead>{t("users.name")}</TableHead>
                 <TableHead>{t("users.kind")}</TableHead>
                 <TableHead>{t("users.status")}</TableHead>
+                <TableHead>{t("users.col_policy")}</TableHead>
                 <TableHead className="text-right">{t("users.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.isLoading
                 ? Array.from({ length: 5 }).map((_, i) => (
-                    <SkeletonRow key={i} columns={canEditUsers ? 5 : 4} />
+                    <SkeletonRow key={i} columns={canEditUsers ? 6 : 5} />
                   ))
                 : q.data?.items.map((u) => (
                     <TableRow key={u.ad_object_guid}>
@@ -325,6 +326,9 @@ function UsersPage(): JSX.Element {
                         ) : (
                           <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>
                         )}
+                      </TableCell>
+                      <TableCell>
+                        <PolicyBadges user={u} />
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -480,6 +484,28 @@ function TriField({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PolicyBadges({ user }: { user: AdUserOut }): JSX.Element {
+  const { t } = useTranslation();
+  if (!user.cannot_change_password && !user.password_never_expires) {
+    return <span className="text-xs text-muted-foreground">–</span>;
+  }
+  const badge = "rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground";
+  return (
+    <div className="flex flex-wrap gap-1">
+      {user.cannot_change_password ? (
+        <span className={badge} title={t("users.field.cannot_change_password")}>
+          {t("users.policy_cannot_change_short")}
+        </span>
+      ) : null}
+      {user.password_never_expires ? (
+        <span className={badge} title={t("users.field.password_never_expires")}>
+          {t("users.policy_never_expires_short")}
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -191,6 +191,9 @@
     "never_synced": "jamais synchronisé",
     "empty": "Aucun utilisateur.",
     "actions": "Actions",
+    "col_policy": "Règles AD",
+    "policy_cannot_change_short": "MdP verrouillé",
+    "policy_never_expires_short": "MdP illimité",
     "detail": {
       "edit": "Modifier",
       "section_classes": "Classes",

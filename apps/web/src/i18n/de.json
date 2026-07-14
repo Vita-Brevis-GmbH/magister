@@ -188,6 +188,9 @@
     "never_synced": "noch nicht synchronisiert",
     "empty": "Keine User gefunden.",
     "actions": "Aktionen",
+    "col_policy": "AD-Richtlinien",
+    "policy_cannot_change_short": "PW gesperrt",
+    "policy_never_expires_short": "PW unbefristet",
     "detail": {
       "edit": "Bearbeiten",
       "section_classes": "Klassen",

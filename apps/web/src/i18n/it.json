@@ -191,6 +191,9 @@
     "never_synced": "mai sincronizzato",
     "empty": "Nessun utente.",
     "actions": "Azioni",
+    "col_policy": "Criteri AD",
+    "policy_cannot_change_short": "PW bloccata",
+    "policy_never_expires_short": "PW illimitata",
     "detail": {
       "edit": "Modifica",
       "section_classes": "Classi",

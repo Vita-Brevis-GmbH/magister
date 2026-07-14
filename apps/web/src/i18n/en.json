@@ -188,6 +188,9 @@
     "never_synced": "never synced",
     "empty": "No users.",
     "actions": "Actions",
+    "col_policy": "AD policy",
+    "policy_cannot_change_short": "PW locked",
+    "policy_never_expires_short": "PW no expiry",
     "detail": {
       "edit": "Edit",
       "section_classes": "Classes",
