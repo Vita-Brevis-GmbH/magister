@@ -1,4 +1,6 @@
+import { useIsFetching, useQueryClient } from "@tanstack/react-query";
 import { Link, Outlet } from "@tanstack/react-router";
+import { RefreshCw } from "lucide-react";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,6 +15,9 @@ export function Layout() {
   const me = useCurrentUser();
   const logout = useLogout();
   const prefs = useMyPreferences();
+  const qc = useQueryClient();
+  // >0 while any query is refetching — drives the spinner on the refresh button.
+  const fetching = useIsFetching();
 
   // Apply the user's saved language once it loads (overrides browser default).
   useEffect(() => {
@@ -126,6 +131,17 @@ export function Layout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void qc.invalidateQueries()}
+              aria-busy={fetching > 0}
+              title={t("nav.refresh")}
+              aria-label={t("nav.refresh")}
+            >
+              <RefreshCw className={`h-4 w-4 ${fetching > 0 ? "animate-spin" : ""}`} />
+              <span className="ml-1.5 hidden md:inline">{t("nav.refresh")}</span>
+            </Button>
             {me.data ? (
               <Link
                 to="/me"

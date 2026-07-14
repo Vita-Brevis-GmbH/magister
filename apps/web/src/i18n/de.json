@@ -16,7 +16,8 @@
     "my_students": "Meine Schüler:innen",
     "roles": "Rollen",
     "devices": "Geräte",
-    "schools": "Schulen"
+    "schools": "Schulen",
+    "refresh": "Aktualisieren"
   },
   "auth": {
     "login_title": "Anmeldung",

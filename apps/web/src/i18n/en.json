@@ -16,7 +16,8 @@
     "my_students": "My students",
     "roles": "Roles",
     "devices": "Devices",
-    "schools": "Schools"
+    "schools": "Schools",
+    "refresh": "Refresh"
   },
   "auth": {
     "login_title": "Sign in",

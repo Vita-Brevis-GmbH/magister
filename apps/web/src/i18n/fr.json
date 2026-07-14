@@ -19,7 +19,8 @@
     "my_students": "Mes élèves",
     "roles": "Rôles",
     "devices": "Appareils",
-    "schools": "Écoles"
+    "schools": "Écoles",
+    "refresh": "Actualiser"
   },
   "auth": {
     "login_title": "Connexion",
