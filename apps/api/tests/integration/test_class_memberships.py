@@ -86,6 +86,24 @@ class TestSchulleitungAddListRemove:
         assert "student_removed_from_class" in actions
 
     @pytest.mark.asyncio
+    async def test_future_dated_membership_shows_on_roster(
+        self, as_schulleitung_a: AsyncClient
+    ) -> None:
+        # A student assigned now but starting later (e.g. imported before the
+        # school year) must still appear on the class roster.
+        cid = await _create_class(as_schulleitung_a, name="5a")
+        future = datetime.now(UTC) + timedelta(days=30)
+        r = await as_schulleitung_a.post(
+            f"/classes/{cid}/students",
+            json={"ad_object_guid": STUDENT_GUID, "valid_from": _iso(future)},
+        )
+        assert r.status_code == 201, r.text
+
+        r = await as_schulleitung_a.get(f"/classes/{cid}/students")
+        assert r.status_code == 200
+        assert [m["ad_object_guid"] for m in r.json()] == [STUDENT_GUID]
+
+    @pytest.mark.asyncio
     async def test_remove_unknown_membership_404(self, as_schulleitung_a: AsyncClient) -> None:
         cid = await _create_class(as_schulleitung_a)
         r = await as_schulleitung_a.delete(f"/classes/{cid}/students/9999")

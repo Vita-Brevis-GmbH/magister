@@ -54,7 +54,8 @@ async def _seed_class(db_session: AsyncSession, school_id: int, name: str, jhg: 
 
 
 STUDENTS_HEADER = (
-    "given_name,surname,display_name,upn,sam_account_name,class,valid_from,force_change,jahrgangsstufe"
+    "given_name,surname,display_name,upn,sam_account_name,"
+    "class,valid_from,force_change,jahrgangsstufe"
 )
 
 

@@ -43,7 +43,9 @@ async def list_class_students(
 ) -> list[ClassMembershipOut]:
     svc = ClassMembershipService(session, settings, user.to_scope())
     try:
-        rows = await svc.list_active(class_id)
+        # Include upcoming (future-dated) memberships so students assigned now
+        # with a later start — e.g. imported before the school year — are shown.
+        rows = await svc.list_active(class_id, include_upcoming=True)
     except ClassNotInScopeError as exc:
         raise HTTPException(status_code=404, detail="class_not_found") from exc
     labels = await fetch_user_labels(session, (r.ad_object_guid for r in rows))

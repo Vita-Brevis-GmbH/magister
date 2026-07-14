@@ -25,6 +25,16 @@ def _active_window_predicate(now: datetime):
     )
 
 
+def _current_or_upcoming_predicate(now: datetime):
+    """Not-yet-ended memberships, including future starts (roster view).
+
+    Drops the ``valid_from <= now`` bound so a student assigned now with a
+    future start date (e.g. imported before the school year begins) still shows
+    on the class roster. Ended memberships (``valid_to <= now``) are excluded.
+    """
+    return or_(ClassMembership.valid_to.is_(None), ClassMembership.valid_to > now)
+
+
 def _windows_overlap(
     a_from: datetime,
     a_to: datetime | None,
@@ -46,12 +56,22 @@ class ClassMembershipRepository:
     # --- Reads ---------------------------------------------------------------
 
     async def list_for_class(
-        self, class_id: int, *, only_active: bool = True, now: datetime | None = None
+        self,
+        class_id: int,
+        *,
+        only_active: bool = True,
+        include_upcoming: bool = False,
+        now: datetime | None = None,
     ) -> list[ClassMembership]:
         ts = now or utcnow()
         stmt = select(ClassMembership).where(ClassMembership.class_id == class_id)
         if only_active:
-            stmt = stmt.where(_active_window_predicate(ts))
+            predicate = (
+                _current_or_upcoming_predicate(ts)
+                if include_upcoming
+                else _active_window_predicate(ts)
+            )
+            stmt = stmt.where(predicate)
         stmt = stmt.order_by(ClassMembership.valid_from, ClassMembership.id)
         return list((await self.session.execute(stmt)).scalars().all())
 

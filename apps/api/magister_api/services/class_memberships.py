@@ -60,9 +60,13 @@ class ClassMembershipService:
             raise ClassNotInScopeError(str(class_id))
         return cls
 
-    async def list_active(self, class_id: int) -> list[ClassMembership]:
+    async def list_active(
+        self, class_id: int, *, include_upcoming: bool = False
+    ) -> list[ClassMembership]:
         await self._class_or_404(class_id)
-        return await self.repo.list_for_class(class_id, only_active=True)
+        return await self.repo.list_for_class(
+            class_id, only_active=True, include_upcoming=include_upcoming
+        )
 
     async def add_student(
         self,
