@@ -259,7 +259,22 @@
       "password_never_expires": "Le mot de passe n'expire jamais",
       "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD."
     },
-    "new_user": "Nouvel utilisateur"
+    "new_user": "Nouvel utilisateur",
+    "bulk": {
+      "selected": "{{count}} sélectionné(s)",
+      "select_all": "Tout sélectionner",
+      "select_one": "Sélectionner",
+      "clear": "Annuler la sélection",
+      "attrs_button": "Attributs AD …",
+      "delete_confirm": "Supprimer les comptes sélectionnés ?",
+      "result": "{{ok}} réussi(s), {{failed}} échec(s).",
+      "attrs_title": "Définir les attributs AD",
+      "attrs_desc": "Appliquer à {{count}} comptes sélectionnés.",
+      "attrs_apply": "Appliquer",
+      "tri_keep": "inchangé",
+      "tri_yes": "Oui",
+      "tri_no": "Non"
+    }
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",

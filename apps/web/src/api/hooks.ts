@@ -621,6 +621,52 @@ export function useDeleteAdUser() {
   });
 }
 
+export type BulkUserAction =
+  | { type: "enable" }
+  | { type: "disable" }
+  | { type: "delete" }
+  | { type: "attrs"; payload: UserAttributesUpdate };
+
+export interface BulkUserResult {
+  ok: string[];
+  failed: { guid: string; detail: string }[];
+}
+
+/** Apply an action to many users sequentially (reuses the single-user
+ *  endpoints). Never rejects on a per-user failure — collects them instead. */
+export function useBulkUserAction() {
+  const qc = useQueryClient();
+  return useMutation<BulkUserResult, ApiError, { guids: string[]; action: BulkUserAction }>({
+    mutationFn: async ({ guids, action }) => {
+      const ok: string[] = [];
+      const failed: { guid: string; detail: string }[] = [];
+      for (const guid of guids) {
+        const g = encodeURIComponent(guid);
+        try {
+          if (action.type === "delete") {
+            await apiFetch(`/admin/ad-users/${g}`, { method: "DELETE" });
+          } else if (action.type === "attrs") {
+            await apiFetch(`/users/${g}`, { method: "PATCH", body: action.payload });
+          } else {
+            await apiFetch(`/users/${g}/status`, {
+              method: "PATCH",
+              body: { enabled: action.type === "enable" },
+            });
+          }
+          ok.push(guid);
+        } catch (e) {
+          failed.push({ guid, detail: e instanceof ApiError ? e.code : "error" });
+        }
+      }
+      return { ok, failed };
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["users"] });
+      qc.invalidateQueries({ queryKey: queryKeys.roles });
+    },
+  });
+}
+
 export function usePurgeDemoData() {
   const qc = useQueryClient();
   return useMutation<DemoPurgeResponse, ApiError, void>({

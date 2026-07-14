@@ -259,7 +259,22 @@
       "password_never_expires": "La password non scade mai",
       "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD."
     },
-    "new_user": "Nuovo utente"
+    "new_user": "Nuovo utente",
+    "bulk": {
+      "selected": "{{count}} selezionati",
+      "select_all": "Seleziona tutti",
+      "select_one": "Seleziona",
+      "clear": "Annulla selezione",
+      "attrs_button": "Attributi AD …",
+      "delete_confirm": "Eliminare gli account selezionati?",
+      "result": "{{ok}} riusciti, {{failed}} falliti.",
+      "attrs_title": "Imposta attributi AD",
+      "attrs_desc": "Applica a {{count}} account selezionati.",
+      "attrs_apply": "Applica",
+      "tri_keep": "invariato",
+      "tri_yes": "Sì",
+      "tri_no": "No"
+    }
   },
   "password_reset": {
     "button": "Reimposta password",

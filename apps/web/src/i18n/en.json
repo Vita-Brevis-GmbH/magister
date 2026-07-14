@@ -256,7 +256,22 @@
       "password_never_expires": "Password never expires",
       "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag."
     },
-    "new_user": "New user"
+    "new_user": "New user",
+    "bulk": {
+      "selected": "{{count}} selected",
+      "select_all": "Select all",
+      "select_one": "Select",
+      "clear": "Clear selection",
+      "attrs_button": "AD attributes …",
+      "delete_confirm": "Delete selected accounts?",
+      "result": "{{ok}} succeeded, {{failed}} failed.",
+      "attrs_title": "Set AD attributes",
+      "attrs_desc": "Apply to {{count}} selected accounts.",
+      "attrs_apply": "Apply",
+      "tri_keep": "unchanged",
+      "tri_yes": "Yes",
+      "tri_no": "No"
+    }
   },
   "password_reset": {
     "button": "Reset password",

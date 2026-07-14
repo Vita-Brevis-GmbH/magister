@@ -256,7 +256,22 @@
       "password_never_expires": "Passwort läuft nie ab",
       "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD."
     },
-    "new_user": "Neuer Benutzer"
+    "new_user": "Neuer Benutzer",
+    "bulk": {
+      "selected": "{{count}} ausgewählt",
+      "select_all": "Alle auswählen",
+      "select_one": "Auswählen",
+      "clear": "Auswahl aufheben",
+      "attrs_button": "AD-Attribute …",
+      "delete_confirm": "Ausgewählte Konten löschen?",
+      "result": "{{ok}} erfolgreich, {{failed}} fehlgeschlagen.",
+      "attrs_title": "AD-Attribute setzen",
+      "attrs_desc": "Auf {{count}} ausgewählte Konten anwenden.",
+      "attrs_apply": "Anwenden",
+      "tri_keep": "unverändert",
+      "tri_yes": "Ja",
+      "tri_no": "Nein"
+    }
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",
