@@ -95,3 +95,38 @@ def test_clear_on_already_clear_is_noop_equivalent() -> None:
     _, _, _, _, _, _, off = _SD_HEADER.unpack_from(cleared, 0)
     _, _, _, count, _ = _ACL_HEADER.unpack_from(cleared, off)
     assert count == 1
+
+
+def test_client_reads_sd_from_safe_sync_tuple() -> None:
+    """Regression: under SAFE_SYNC the SD read must come from the returned
+    tuple (res[2]), not conn.response — otherwise it mis-reports
+    ldap_read_sd_failed on real AD (the mock keeps state on the connection)."""
+    from types import SimpleNamespace
+
+    from magister_api.ad.client import AdClient
+    from magister_api.ad.security_descriptor import has_cannot_change_password
+
+    sd_bytes = _dacl_only_sd([_allow_ace("S-1-5-21-1-2-3-1000")])
+
+    class _FakeConn:
+        def __init__(self) -> None:
+            self.modified: bytes | None = None
+
+        def search(self, *_a: object, **_k: object) -> tuple:
+            entry = {
+                "type": "searchResEntry",
+                "raw_attributes": {"nTSecurityDescriptor": [sd_bytes]},
+            }
+            return (True, {"result": 0}, [entry], None)
+
+        def modify(self, _dn: str, changes: dict, controls: object = None) -> tuple:
+            self.modified = changes["nTSecurityDescriptor"][0][1][0]
+            return (True, {"result": 0}, [], None)
+
+    client = AdClient(SimpleNamespace(ad_use_mock=False))  # type: ignore[arg-type]
+    fake = _FakeConn()
+    client._acquire_connection = lambda: (fake, False)  # type: ignore[assignment,method-assign]
+    client._sync_set_cannot_change_password("CN=x,DC=t", True)
+
+    assert fake.modified is not None
+    assert has_cannot_change_password(fake.modified) is True

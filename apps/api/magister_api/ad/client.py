@@ -1099,23 +1099,33 @@ class AdClient:
         control = security_descriptor_control(sdflags=_SD_FLAG_DACL)
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.search(
+            res = conn.search(
                 user_dn,
                 "(objectClass=*)",
                 search_scope=BASE,
                 attributes=["nTSecurityDescriptor"],
                 controls=control,
             )
-            if isinstance(ok, tuple):
-                ok = ok[0]
-            if not ok or not conn.response:
-                raise AdUnavailableError("ldap_read_sd_failed")
-            attrs = (conn.response[0].get("raw_attributes") or {}) if conn.response else {}
+            # SAFE_SYNC returns the response in the tuple (res[2]); reading
+            # conn.response would be empty and mis-report a failure. MOCK_SYNC
+            # keeps state on the connection. Mirror _single_search.
+            if isinstance(res, tuple):
+                result, response = (res[1] or {}), (res[2] or [])
+            else:
+                result, response = (conn.result or {}), (conn.response or [])
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                logger.warning("ldap read SD failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_read_sd_failed:{detail}")
+            entries = [e for e in response if e.get("type") == "searchResEntry"]
+            if not entries:
+                raise AdUnavailableError("ldap_read_sd_failed:no_entry")
+            attrs = entries[0].get("raw_attributes") or {}
             raw = attrs.get("nTSecurityDescriptor")
             if isinstance(raw, list):
                 raw = raw[0] if raw else None
             if not raw:
-                raise AdUnavailableError("ldap_read_sd_failed")
+                raise AdUnavailableError("ldap_read_sd_failed:no_sd")
             new_sd = sd.set_cannot_change_password(bytes(raw), deny=value)
             wres = conn.modify(
                 user_dn,
@@ -1262,8 +1272,16 @@ class AdClient:
                 new_guid = self._read_object_guid(conn, dn)
                 if cannot_change_password:
                     # DACL edit on the fresh object (real AD only; the mock
-                    # LDAP server has no security descriptor).
-                    self._sync_set_cannot_change_password(dn, True)
+                    # LDAP server has no security descriptor). Best-effort: the
+                    # account already exists, so a refused SD write (e.g. no
+                    # WRITE_DAC right) must NOT abort creation and orphan the
+                    # object — log it and let the caller keep the account.
+                    try:
+                        self._sync_set_cannot_change_password(dn, True)
+                    except AdUnavailableError as exc:
+                        logger.warning(
+                            "cannot-change-password not applied to new %s: %s", dn, exc
+                        )
             return new_guid
         except LDAPException as exc:
             raise AdUnavailableError("ldap_add_failed") from exc
