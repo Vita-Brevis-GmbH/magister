@@ -48,6 +48,8 @@ class UserAttributesUpdate(BaseModel):
     # AD account-policy flags (omitted = leave alone).
     password_never_expires: bool | None = Field(default=None)
     cannot_change_password: bool | None = Field(default=None)
+    # Password vault opt-in (Magister-only). Turning it off clears any stored PW.
+    store_password: bool | None = Field(default=None)
 
     @field_validator("upn")
     @classmethod

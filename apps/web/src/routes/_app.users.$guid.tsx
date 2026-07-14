@@ -55,6 +55,7 @@ interface FormState {
   jahrgangsstufe: string;
   password_never_expires: boolean;
   cannot_change_password: boolean;
+  store_password: boolean;
 }
 
 function emptyForm(): FormState {
@@ -75,6 +76,7 @@ function emptyForm(): FormState {
     jahrgangsstufe: "",
     password_never_expires: false,
     cannot_change_password: false,
+    store_password: false,
   };
 }
 
@@ -153,6 +155,7 @@ function UserDetailPage(): JSX.Element {
       jahrgangsstufe: userQ.data.jahrgangsstufe != null ? String(userQ.data.jahrgangsstufe) : "",
       password_never_expires: userQ.data.password_never_expires,
       cannot_change_password: userQ.data.cannot_change_password,
+      store_password: userQ.data.store_password,
     });
   }, [userQ.data]);
 
@@ -229,6 +232,8 @@ function UserDetailPage(): JSX.Element {
       out.password_never_expires = form.password_never_expires;
     if (form.cannot_change_password !== current.cannot_change_password)
       out.cannot_change_password = form.cannot_change_password;
+    if (form.store_password !== current.store_password)
+      out.store_password = form.store_password;
 
     return out;
   }
@@ -554,6 +559,20 @@ function UserDetailPage(): JSX.Element {
                   {t("users.field.password_never_expires")}
                   <span className="block text-xs text-muted-foreground">
                     {t("users.field.password_never_expires_hint")}
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                  checked={form.store_password}
+                  onChange={(e) => setField("store_password", e.target.checked)}
+                />
+                <span>
+                  {t("users.field.store_password")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t("users.field.store_password_hint")}
                   </span>
                 </span>
               </label>

@@ -167,7 +167,8 @@
     "jahrgangsstufe_hint": "Classe simple : uniquement « de ». Multi-degrés/Basisstufe : indiquer une plage. École enfantine : −1 = 1re, 0 = 2e.",
     "promote_bump_grade": "Augmenter l'année de +1",
     "promote_grade_placeholder": "+1",
-    "promote_grade_hint": "Par défaut : chaque élève monte d'un degré. Pour les exceptions (rester/sauter), saisir un nombre à droite ; vide = +1."
+    "promote_grade_hint": "Par défaut : chaque élève monte d'un degré. Pour les exceptions (rester/sauter), saisir un nombre à droite ; vide = +1.",
+    "password_list": "Liste des mots de passe (PDF)"
   },
   "users": {
     "title": "Utilisateurs",
@@ -266,7 +267,9 @@
       "cannot_change_password": "L'utilisateur ne peut pas changer le mot de passe",
       "cannot_change_password_hint": "Appliqué dans l'AD via les autorisations de l'objet (DACL). Pour les comptes à mot de passe fixe.",
       "password_never_expires": "Le mot de passe n'expire jamais",
-      "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD."
+      "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD.",
+      "store_password": "Enregistrer le mot de passe dans Magister",
+      "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres."
     },
     "new_user": "Nouvel utilisateur",
     "bulk": {
@@ -405,6 +408,9 @@
       "provisioning_title": "Provisionnement (nouveaux comptes)",
       "provisioning_hint": "OU cibles pour les comptes AD créés via l'import d'élèves. L'OU des élèves suit le cycle de la classe. Laisser vide désactive le provisionnement pour cette catégorie.",
       "zyklus_hint": "Limites des cycles par année : cycle 1 jusqu'au premier nombre inclus, cycle 2 jusqu'au second, cycle 3 au-delà (par défaut 2 / 6 → C1 : 1–2, C2 : 3–6, C3 : 7+).",
+      "password_store_title": "Stockage des mots de passe",
+      "password_store_enabled": "Enregistrer les mots de passe chiffrés dans Magister",
+      "password_store_hint": "Permet de conserver les mots de passe par utilisateur (chiffrés avec la clé serveur MAGISTER_AUDIT_KEY, pas dans la base). Base des listes de mots de passe par classe, p. ex. cycle 2.",
       "ad_login_title": "Connexion AD",
       "ad_login_enabled_hint": "Permet la connexion avec un nom d'utilisateur et un mot de passe AD (LDAPS) en plus d'Entra ID. Pas de MFA sur cette voie.",
       "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe.",

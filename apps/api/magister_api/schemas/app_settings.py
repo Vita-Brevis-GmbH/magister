@@ -53,6 +53,9 @@ class AppSettingsOut(BaseModel):
     zyklus1_max_grade: int
     zyklus2_max_grade: int
 
+    # Password vault master switch.
+    password_store_enabled: bool
+
     # Audit fingerprint
     updated_at: datetime
     updated_by_upn: str | None
@@ -120,6 +123,8 @@ class AppSettingsUpdate(BaseModel):
     # Zyklus boundaries (grade 1..13). z1_max < z2_max.
     zyklus1_max_grade: int | None = Field(default=None, ge=1, le=13)
     zyklus2_max_grade: int | None = Field(default=None, ge=1, le=13)
+
+    password_store_enabled: bool | None = Field(default=None)
 
     @field_validator("ad_bind_mode")
     @classmethod

@@ -14,6 +14,7 @@ SMI sending one of the login-relevant fields is refused here with 403.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import update as sqla_update
 from sqlalchemy.exc import IntegrityError
@@ -66,7 +67,9 @@ AD_FIELDS: frozenset[str] = frozenset(_PAYLOAD_TO_AD_ATTR.keys())
 AD_FLAG_FIELDS: frozenset[str] = frozenset(
     {"password_never_expires", "cannot_change_password"}
 )
-MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset({"temp_device_name", "jahrgangsstufe"})
+MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset(
+    {"temp_device_name", "jahrgangsstufe", "store_password"}
+)
 
 
 class DomainNotAllowedError(ValueError):
@@ -154,7 +157,7 @@ class UserAttributesService:
         # 4) Drop no-op changes (value identical to current cache row).
         #    For UPN: also check the upn unique-conflict before touching AD.
         # ------------------------------------------------------------------
-        actual_changes: dict[str, str | None] = {}
+        actual_changes: dict[str, Any] = {}
         for field, new_val in provided.items():
             current_val = getattr(target, field, None)
             # Treat empty string as None for comparison (cache stores None).
@@ -214,6 +217,12 @@ class UserAttributesService:
             )
         except IntegrityError as exc:
             raise UpnConflictError("upn") from exc
+
+        # Turning off the vault flag drops any stored password.
+        if actual_changes.get("store_password") is False:
+            from magister_api.services.password_vault import PasswordVaultService
+
+            await PasswordVaultService(self.session, self.settings).clear(target.ad_object_guid)
 
         # ------------------------------------------------------------------
         # 7) Audit. Payload carries only the *list* of changed keys — no

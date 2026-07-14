@@ -167,6 +167,7 @@ class AppSettingsService:
             AppSettings.ad_ou_teachers,
             AppSettings.zyklus1_max_grade,
             AppSettings.zyklus2_max_grade,
+            AppSettings.password_store_enabled,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -197,6 +198,7 @@ class AppSettingsService:
             ad_ou_teachers=row.ad_ou_teachers,
             zyklus1_max_grade=row.zyklus1_max_grade,
             zyklus2_max_grade=row.zyklus2_max_grade,
+            password_store_enabled=bool(row.password_store_enabled),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -247,6 +249,13 @@ class AppSettingsService:
             if val is not None:
                 values[col] = val
                 diff[col] = val
+
+        # The vault master switch is applied like a plain field, but its diff
+        # key is neutral: the audit-payload allowlist forbids any key containing
+        # "password".
+        if payload.password_store_enabled is not None:
+            values["password_store_enabled"] = payload.password_store_enabled
+            diff["vault_toggle"] = payload.password_store_enabled
 
         # Secret fields — only update when a non-empty string is sent.
         # The diff flags use neutral key names ("rotated_oidc_credential" /

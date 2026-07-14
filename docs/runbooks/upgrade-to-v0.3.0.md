@@ -105,6 +105,7 @@ Dieser Release bringt **vier additive Migrationen** (keine Umbauten bestehender 
 | `0022_school_details` | Spalten `schools.street/postal_code/city/phone/description/latitude/longitude` + `schools.updated_at` |
 | `0023_student_jahrgangsstufe` | Spalte `ad_user_cache.jahrgangsstufe INT NULL`; erweitert den `import_jobs.kind`-Check um `teachers` |
 | `0024_ad_pw_flags` | Spalten `ad_user_cache.password_never_expires` + `cannot_change_password` (BOOL, default false) |
+| `0025_password_vault` | `ad_user_cache.store_password` (BOOL) + `password_enc` (BYTEA), `app_settings.password_store_enabled` (BOOL) |
 
 Der Container-Entrypoint führt `alembic upgrade head` beim Start automatisch aus.
 Für einen kontrollierten Lauf vor dem Neustart:
@@ -120,7 +121,13 @@ Running upgrade 0020_devices          -> 0021_class_grade_range
 Running upgrade 0021_class_grade_range -> 0022_school_details
 Running upgrade 0022_school_details    -> 0023_student_jahrgangsstufe
 Running upgrade 0023_student_jahrgangsstufe -> 0024_ad_pw_flags
+Running upgrade 0024_ad_pw_flags        -> 0025_password_vault
 ```
+
+> **Passwort-Tresor:** Die optionale Passwort-Speicherung (pro User + globaler
+> Schalter unter Einstellungen) verschlüsselt mit `MAGISTER_AUDIT_KEY` (bzw.
+> `MAGISTER_SECRETS_KEY`) — server-seitig, nicht in der DB. Ohne gesetzten
+> Schlüssel bleibt das Feature ungenutzt; keine neue Env-Var nötig.
 
 > **AD-Validierung:** „Benutzer kann Passwort nicht ändern" wird im AD über den
 > Security-Descriptor (DACL) gesetzt und konnte nicht gegen echtes AD getestet

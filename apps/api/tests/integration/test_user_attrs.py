@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
 from magister_api.ad.client import AdClient
@@ -67,6 +67,7 @@ async def _seed_user(
     kind: str = "teacher",
     upn: str = "old@schule.example.ch",
     cannot_change_password: bool = False,
+    store_password: bool = False,
 ) -> None:
     db_session.add(
         AdUserCache(
@@ -78,9 +79,17 @@ async def _seed_user(
             kind=kind,
             enabled=True,
             cannot_change_password=cannot_change_password,
+            store_password=store_password,
         )
     )
     await db_session.flush()
+    await db_session.commit()
+
+
+async def _enable_vault(db_session: AsyncSession) -> None:
+    await db_session.execute(
+        update(AppSettings).where(AppSettings.id == 1).values(password_store_enabled=True)
+    )
     await db_session.commit()
 
 
@@ -139,6 +148,50 @@ class TestCredentialPdf:
                 .all()
             )
         assert rows == ["credential_pdf_generated"]
+
+    @pytest.mark.asyncio
+    async def test_vault_user_pdf_stores_then_reuses_password(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        # store_password + global vault on: first PDF sets & stores a password,
+        # the second reuses the stored one without touching AD again.
+        await _enable_vault(db_session)
+        await _seed_user(
+            db_session,
+            school_id=school_a,
+            guid=STUDENT_GUID,
+            kind="student",
+            store_password=True,
+        )
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r1 = await as_smi_a.post(f"/users/{STUDENT_GUID}/credential-pdf", json={})
+            assert r1.status_code == 200, r1.text
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        # A password is now stored (encrypted).
+        row = await db_session.get(AdUserCache, STUDENT_GUID)
+        assert row is not None
+        await db_session.refresh(row)
+        assert row.password_enc is not None
+        stored_before = row.password_enc
+
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r2 = await as_smi_a.post(f"/users/{STUDENT_GUID}/credential-pdf", json={})
+            assert r2.status_code == 200, r2.text
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        # Reused — the stored ciphertext is unchanged.
+        await db_session.refresh(row)
+        assert row.password_enc == stored_before
 
     @pytest.mark.asyncio
     async def test_can_change_user_pdf_is_masked_no_reset(

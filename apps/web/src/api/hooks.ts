@@ -926,6 +926,30 @@ export async function downloadCredentialPdf(
   return { blob, filename: match?.[1] ?? `zugangsdaten-${guid}.pdf` };
 }
 
+export async function downloadClassPasswordList(
+  classId: number,
+  language = "de",
+): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(
+    `${API_BASE}/classes/${classId}/password-list?lang=${encodeURIComponent(language)}`,
+    { credentials: "include", headers: { Accept: "application/pdf" } },
+  );
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const j = await res.json();
+      detail = j.detail || j.code || "";
+    } catch {
+      /* leave empty */
+    }
+    throw new ApiError(res.status, detail || String(res.status), "");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  return { blob, filename: match?.[1] ?? `passwortliste-${classId}.pdf` };
+}
+
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");

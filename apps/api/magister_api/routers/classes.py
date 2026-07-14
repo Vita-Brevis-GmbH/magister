@@ -9,9 +9,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.auth.class_perm import require_class_writer
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
@@ -189,6 +193,41 @@ async def promote_class(
         students_failed=result.students_failed,
         errors=[ClassPromotionErrorSchema(ad_object_guid=g, detail=d) for g, d in result.errors],
         source_archived=result.source_archived,
+    )
+
+
+@router.get("/{class_id}/password-list")
+async def class_password_list(
+    class_id: int,
+    user: AuthenticatedUser = Depends(require_class_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    lang: str = Query(default="de", max_length=5),
+) -> Response:
+    """Confidential PDF of the class's students + their stored passwords.
+
+    Admin / Schulleitung / KL of the class. Shows the vault password where one
+    is stored (see the per-user "Passwort speichern" option), otherwise a
+    placeholder.
+    """
+    from magister_api.services.class_password_list import (
+        ClassNotFoundError as PwListClassNotFound,
+    )
+    from magister_api.services.class_password_list import ClassPasswordListService
+
+    svc = ClassPasswordListService(session, settings, user.to_scope())
+    try:
+        pdf, filename = await svc.render(
+            class_id=class_id,
+            language=lang,
+            generated_on=datetime.now(UTC).strftime("%d.%m.%Y"),
+        )
+    except PwListClassNotFound as exc:
+        raise HTTPException(status_code=404, detail="class_not_found") from exc
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

@@ -44,6 +44,7 @@ interface FormState {
   ad_ou_teachers: string;
   zyklus1_max_grade: string;
   zyklus2_max_grade: string;
+  password_store_enabled: boolean;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -71,6 +72,7 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_ou_teachers: data.ad_ou_teachers ?? "",
     zyklus1_max_grade: String(data.zyklus1_max_grade),
     zyklus2_max_grade: String(data.zyklus2_max_grade),
+    password_store_enabled: data.password_store_enabled,
   };
 }
 
@@ -156,6 +158,9 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const z2 = Number(form.zyklus2_max_grade);
   if (Number.isFinite(z2) && z2 !== current.zyklus2_max_grade) {
     payload.zyklus2_max_grade = z2;
+  }
+  if (form.password_store_enabled !== current.password_store_enabled) {
+    payload.password_store_enabled = form.password_store_enabled;
   }
   return payload;
 }
@@ -500,6 +505,26 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+          </div>
+
+          <div className="space-y-2 border-t pt-4">
+            <h2 className="font-medium">{t("admin.settings.password_store_title")}</h2>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-input"
+                checked={form.password_store_enabled}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, password_store_enabled: e.target.checked }))
+                }
+              />
+              <span>
+                {t("admin.settings.password_store_enabled")}
+                <span className="block text-xs text-muted-foreground">
+                  {t("admin.settings.password_store_hint")}
+                </span>
+              </span>
+            </label>
           </div>
 
           <div className="space-y-2 border-t pt-4">

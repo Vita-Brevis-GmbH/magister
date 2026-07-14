@@ -32,6 +32,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.devices import DeviceRepository
+from magister_api.services.password_vault import PasswordVaultService
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "letters" / "templates"
 
@@ -125,25 +126,42 @@ class CredentialPdfService:
         ip: str | None,
         request_id: str,
     ) -> bytes:
-        # Reset only for accounts that cannot change their own password; those
-        # keep this password permanently so it must be printed in clear text.
-        do_reset = bool(target.cannot_change_password)
+        # Decide the printed password:
+        #  1) vault user with a stored PW → reuse it, DO NOT touch AD;
+        #  2) vault user without one yet → set a readable PW once + store it;
+        #  3) cannot-change user → reset to a readable PW + print it;
+        #  4) otherwise → mask.
+        vault = PasswordVaultService(self.session, self.settings)
+        store_active = bool(target.store_password) and await vault.enabled()
+        do_reset = False
+        used_stored = False
         shown_password: str | None = None
-        if do_reset:
+
+        async def _reset_readable() -> str:
             if not target.enabled:
                 raise UserDisabledError(target.ad_object_guid)
             user_dn = await self.ad.find_user_dn(target.ad_object_guid)
             if not user_dn:
                 raise UserNotInAdError(target.ad_object_guid)
-            # Readable ("Tiger-Wolke-47"): easy for students to read + type,
-            # matching the provisioning hand-out style.
-            new_password = generate_readable_password()
-            assert passes_default_complexity(new_password)
-            # force_change=False: the account may not change its password.
-            await self.ad.modify_password(
-                user_dn=user_dn, new_password=new_password, force_change=False
-            )
-            shown_password = new_password
+            # Readable ("Tiger-Wolke-47"): easy for students to read + type.
+            pw = generate_readable_password()
+            assert passes_default_complexity(pw)
+            # force_change=False: stored/cannot-change PWs must stay put.
+            await self.ad.modify_password(user_dn=user_dn, new_password=pw, force_change=False)
+            return pw
+
+        if store_active:
+            existing = await vault.get(target.ad_object_guid)
+            if existing is not None:
+                shown_password = existing
+                used_stored = True
+            else:
+                shown_password = await _reset_readable()
+                await vault.store(target.ad_object_guid, shown_password)
+                do_reset = True
+        elif target.cannot_change_password:
+            shown_password = await _reset_readable()
+            do_reset = True
 
         # Devices only for students; teachers never get a device/roster block.
         devices: list[_DeviceRow] = []
@@ -185,6 +203,7 @@ class CredentialPdfService:
             payload={
                 "kind": target.kind,
                 "did_reset": do_reset,
+                "used_stored": used_stored,
                 "device_count": len(devices),
                 "custom_text": bool(custom_heading or custom_body),
             },

@@ -164,7 +164,8 @@
     "jahrgangsstufe_hint": "Single class: ‘from’ only. Multi-grade/Basisstufe: enter a range. Kindergarten: −1 = 1st KG, 0 = 2nd KG.",
     "promote_bump_grade": "Advance grade by +1",
     "promote_grade_placeholder": "+1",
-    "promote_grade_hint": "Default: each student moves up one grade. Enter a number on the right for exceptions (stay/skip); empty = +1."
+    "promote_grade_hint": "Default: each student moves up one grade. Enter a number on the right for exceptions (stay/skip); empty = +1.",
+    "password_list": "Password list (PDF)"
   },
   "users": {
     "title": "Users",
@@ -263,7 +264,9 @@
       "cannot_change_password": "User cannot change password",
       "cannot_change_password_hint": "Enforced in AD via the object permissions (DACL). For accounts with a fixed password.",
       "password_never_expires": "Password never expires",
-      "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag."
+      "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag.",
+      "store_password": "Store password in Magister",
+      "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings."
     },
     "new_user": "New user",
     "bulk": {
@@ -402,6 +405,9 @@
       "provisioning_title": "Provisioning (new accounts)",
       "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus. Leaving one empty disables provisioning for that bucket.",
       "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
+      "password_store_title": "Password storage",
+      "password_store_enabled": "Store passwords encrypted in Magister",
+      "password_store_hint": "Allows keeping passwords per user (encrypted with the server key MAGISTER_AUDIT_KEY, not in the DB). Basis for class password lists, e.g. Zyklus 2.",
       "ad_login_title": "AD sign-in",
       "ad_login_enabled_hint": "Allows signing in with an AD username and password (LDAPS) in addition to Entra ID. No MFA on this path.",
       "ad_login_group_required": "Without a group nobody can sign in via AD. Please provide a group.",

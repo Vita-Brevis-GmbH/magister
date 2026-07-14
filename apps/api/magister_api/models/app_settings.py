@@ -109,6 +109,12 @@ class AppSettings(Base):
         Integer, nullable=False, default=6, server_default="6"
     )
 
+    # Master switch for the per-user password vault. When off, stored passwords
+    # are ignored (never read/written) regardless of the per-user flag.
+    password_store_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

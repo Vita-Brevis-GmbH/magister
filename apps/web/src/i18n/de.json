@@ -164,7 +164,8 @@
     "jahrgangsstufe_hint": "Einzelklasse: nur „von“. Mehrjahrgang/Basisstufe: Bereich angeben. Kindergarten: −1 = 1. KG, 0 = 2. KG.",
     "promote_bump_grade": "Jahrgangsstufe um +1 erhöhen",
     "promote_grade_placeholder": "+1",
-    "promote_grade_hint": "Standard: jede/r Schüler/in steigt eine Stufe auf. Ausnahmen (bleiben/überspringen) rechts als Zahl eintragen; leer = +1."
+    "promote_grade_hint": "Standard: jede/r Schüler/in steigt eine Stufe auf. Ausnahmen (bleiben/überspringen) rechts als Zahl eintragen; leer = +1.",
+    "password_list": "Passwortliste (PDF)"
   },
   "users": {
     "title": "User",
@@ -263,7 +264,9 @@
       "cannot_change_password": "Benutzer kann Passwort nicht ändern",
       "cannot_change_password_hint": "Wird im AD über die Objekt-Berechtigungen (DACL) erzwungen. Für Konten mit festem Passwort.",
       "password_never_expires": "Passwort läuft nie ab",
-      "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD."
+      "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD.",
+      "store_password": "Passwort in Magister speichern",
+      "store_password_hint": "Verschlüsselt (Server-Schlüssel). Beim Ausgeben der Zugangsdaten wird dieses PW verwendet statt eines neuen. Benötigt die globale Freigabe in den Einstellungen."
     },
     "new_user": "Neuer Benutzer",
     "bulk": {
@@ -402,6 +405,9 @@
       "provisioning_title": "Provisioning (neue Accounts)",
       "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
       "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
+      "password_store_title": "Passwort-Speicherung",
+      "password_store_enabled": "Passwörter verschlüsselt in Magister speichern",
+      "password_store_hint": "Erlaubt das Ablegen von Passwörtern pro User (verschlüsselt mit dem Server-Schlüssel MAGISTER_AUDIT_KEY, nicht in der DB). Grundlage für Klassen-Passwortlisten, z. B. Zyklus 2.",
       "ad_login_title": "AD-Anmeldung",
       "ad_login_enabled_hint": "Erlaubt die Anmeldung mit AD-Benutzername und Passwort (LDAPS) zusätzlich zu Entra ID. Kein MFA auf diesem Weg.",
       "ad_login_group_required": "Ohne Gruppe kann sich niemand per AD anmelden. Bitte eine Gruppe angeben.",

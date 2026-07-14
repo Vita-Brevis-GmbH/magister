@@ -30,6 +30,7 @@ class AdUserOut(BaseModel):
     jahrgangsstufe: int | None = None
     password_never_expires: bool = False
     cannot_change_password: bool = False
+    store_password: bool = False
 
 
 class AdUserListResponse(BaseModel):

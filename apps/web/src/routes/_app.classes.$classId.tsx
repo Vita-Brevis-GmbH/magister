@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "@/api/client";
 import {
+  downloadClassPasswordList,
+  saveBlob,
   useAddClassMembership,
   useAssignClassTeacher,
   useAssignSubjectTeacher,
@@ -59,13 +61,26 @@ export const Route = createFileRoute("/_app/classes/$classId")({
 });
 
 function ClassDetailPage(): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { classId: classIdStr } = Route.useParams();
   const classId = Number(classIdStr);
 
   const me = useCurrentUser();
   const klass = useClass(classId);
   const canManageTeachers = me.data?.is_admin || (me.data?.roles ?? []).includes("schulleitung");
+  const [pwListBusy, setPwListBusy] = useState(false);
+
+  async function handlePasswordList(): Promise<void> {
+    setPwListBusy(true);
+    try {
+      const { blob, filename } = await downloadClassPasswordList(classId, i18n.language);
+      saveBlob(blob, filename);
+    } catch {
+      /* surfaced by the disabled state resetting; keep it simple */
+    } finally {
+      setPwListBusy(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -102,6 +117,17 @@ function ClassDetailPage(): JSX.Element {
                   {klass.data.details}
                 </p>
               ) : null}
+              <div className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pwListBusy}
+                  onClick={() => void handlePasswordList()}
+                >
+                  {pwListBusy ? t("common.loading") : t("classes.password_list")}
+                </Button>
+              </div>
             </CardHeader>
           </Card>
 

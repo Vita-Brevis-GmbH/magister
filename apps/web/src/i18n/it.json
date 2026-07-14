@@ -167,7 +167,8 @@
     "jahrgangsstufe_hint": "Classe singola: solo « da ». Pluriclasse/Basisstufe: indicare un intervallo. Scuola dell'infanzia: −1 = 1º, 0 = 2º.",
     "promote_bump_grade": "Aumenta l'anno di +1",
     "promote_grade_placeholder": "+1",
-    "promote_grade_hint": "Predefinito: ogni allievo sale di un anno. Per le eccezioni (restare/saltare) inserire un numero a destra; vuoto = +1."
+    "promote_grade_hint": "Predefinito: ogni allievo sale di un anno. Per le eccezioni (restare/saltare) inserire un numero a destra; vuoto = +1.",
+    "password_list": "Elenco password (PDF)"
   },
   "users": {
     "title": "Utenti",
@@ -266,7 +267,9 @@
       "cannot_change_password": "L'utente non può cambiare la password",
       "cannot_change_password_hint": "Applicato in AD tramite le autorizzazioni dell'oggetto (DACL). Per account con password fissa.",
       "password_never_expires": "La password non scade mai",
-      "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD."
+      "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD.",
+      "store_password": "Salva la password in Magister",
+      "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni."
     },
     "new_user": "Nuovo utente",
     "bulk": {
@@ -405,6 +408,9 @@
       "provisioning_title": "Provisioning (nuovi account)",
       "provisioning_hint": "OU di destinazione per gli account AD creati tramite l'importazione studenti. L'OU degli studenti segue il ciclo della classe. Lasciare vuoto disattiva il provisioning per quel gruppo.",
       "zyklus_hint": "Limiti dei cicli per anno: ciclo 1 fino al primo numero incluso, ciclo 2 fino al secondo, ciclo 3 oltre (predefinito 2 / 6 → C1: 1–2, C2: 3–6, C3: 7+).",
+      "password_store_title": "Archiviazione password",
+      "password_store_enabled": "Salva le password cifrate in Magister",
+      "password_store_hint": "Consente di conservare le password per utente (cifrate con la chiave del server MAGISTER_AUDIT_KEY, non nel DB). Base per gli elenchi password per classe, es. ciclo 2.",
       "ad_login_title": "Accesso AD",
       "ad_login_enabled_hint": "Consente l'accesso con nome utente e password AD (LDAPS) oltre a Entra ID. Nessun MFA su questa via.",
       "ad_login_group_required": "Senza un gruppo nessuno può accedere tramite AD. Indicare un gruppo.",

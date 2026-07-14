@@ -129,6 +129,14 @@ class TeacherPasswordResetService:
             },
         )
 
+        # Keep the password vault in sync for opt-in users (global switch gated).
+        if teacher.store_password:
+            from magister_api.services.password_vault import PasswordVaultService
+
+            vault = PasswordVaultService(self.session, self.settings)
+            if await vault.enabled():
+                await vault.store(teacher.ad_object_guid, new_password)
+
         return TeacherPasswordResetResult(
             mode=mode,
             force_change=force_change,

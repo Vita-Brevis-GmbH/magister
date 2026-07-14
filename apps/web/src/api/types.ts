@@ -249,6 +249,8 @@ export interface AdUserOut {
   password_never_expires: boolean;
   /** AD: "user cannot change password" (enforced via the object's DACL). */
   cannot_change_password: boolean;
+  /** Vault: keep the last set password encrypted in Magister. */
+  store_password: boolean;
 }
 
 /** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null
@@ -269,6 +271,7 @@ export interface UserAttributesUpdate {
   jahrgangsstufe?: number | null;
   password_never_expires?: boolean | null;
   cannot_change_password?: boolean | null;
+  store_password?: boolean | null;
 }
 
 /** PATCH /users/{guid}/status — enable/disable an AD account. */
@@ -329,6 +332,7 @@ export interface AppSettingsOut {
   ad_ou_teachers: string | null;
   zyklus1_max_grade: number;
   zyklus2_max_grade: number;
+  password_store_enabled: boolean;
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -633,4 +637,5 @@ export interface AppSettingsUpdate {
   ad_ou_teachers?: string | null;
   zyklus1_max_grade?: number | null;
   zyklus2_max_grade?: number | null;
+  password_store_enabled?: boolean | null;
 }

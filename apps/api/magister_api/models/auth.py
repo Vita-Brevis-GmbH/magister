@@ -4,7 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    LargeBinary,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -64,6 +73,13 @@ class AdUserCache(Base):
     cannot_change_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Password vault (opt-in per user; global toggle in app_settings). When on,
+    # Magister keeps the last set password, encrypted at rest via pgcrypto
+    # (``password_enc``) with the app-secrets key — never stored in plaintext.
+    store_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 

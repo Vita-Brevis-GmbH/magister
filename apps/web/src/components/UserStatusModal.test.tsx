@@ -33,6 +33,7 @@ const ENABLED_USER: AdUserOut = {
   jahrgangsstufe: null,
   password_never_expires: false,
   cannot_change_password: false,
+  store_password: false,
 };
 
 const DISABLED_USER: AdUserOut = { ...ENABLED_USER, enabled: false };

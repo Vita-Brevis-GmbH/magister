@@ -110,6 +110,25 @@ class TestSchulleitungAddListRemove:
         assert r.status_code == 404
 
 
+class TestPasswordList:
+    @pytest.mark.asyncio
+    async def test_password_list_pdf(self, as_schulleitung_a: AsyncClient) -> None:
+        cid = await _create_class(as_schulleitung_a, name="6a")
+        r = await as_schulleitung_a.post(
+            f"/classes/{cid}/students", json={"ad_object_guid": STUDENT_GUID}
+        )
+        assert r.status_code == 201, r.text
+        r = await as_schulleitung_a.get(f"/classes/{cid}/password-list")
+        assert r.status_code == 200, r.text
+        assert r.headers["content-type"] == "application/pdf"
+        assert r.content[:4] == b"%PDF"
+
+    @pytest.mark.asyncio
+    async def test_password_list_unknown_class_404(self, as_schulleitung_a: AsyncClient) -> None:
+        r = await as_schulleitung_a.get("/classes/999999/password-list")
+        assert r.status_code == 404
+
+
 class TestMidYearSwitch:
     @pytest.mark.asyncio
     async def test_old_membership_closed_new_active(
