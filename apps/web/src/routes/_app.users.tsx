@@ -489,22 +489,33 @@ function BulkAttrsModal({
   count: number;
   busy: boolean;
   onClose: () => void;
-  onApply: (payload: { cannot_change_password?: boolean; password_never_expires?: boolean }) => void;
+  onApply: (payload: {
+    cannot_change_password?: boolean;
+    password_never_expires?: boolean;
+    store_password?: boolean;
+  }) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const [cannot, setCannot] = useState<TriState>("keep");
   const [neverExp, setNeverExp] = useState<TriState>("keep");
+  const [store, setStore] = useState<TriState>("keep");
 
   function apply(): void {
-    const payload: { cannot_change_password?: boolean; password_never_expires?: boolean } = {};
+    const payload: {
+      cannot_change_password?: boolean;
+      password_never_expires?: boolean;
+      store_password?: boolean;
+    } = {};
     const c = triToValue(cannot);
     const n = triToValue(neverExp);
+    const s = triToValue(store);
     if (c !== undefined) payload.cannot_change_password = c;
     if (n !== undefined) payload.password_never_expires = n;
+    if (s !== undefined) payload.store_password = s;
     onApply(payload);
   }
 
-  const nothingChosen = cannot === "keep" && neverExp === "keep";
+  const nothingChosen = cannot === "keep" && neverExp === "keep" && store === "keep";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && !o && onClose()}>
@@ -523,6 +534,11 @@ function BulkAttrsModal({
             label={t("users.field.password_never_expires")}
             value={neverExp}
             onChange={setNeverExp}
+          />
+          <TriField
+            label={t("users.field.store_password")}
+            value={store}
+            onChange={setStore}
           />
         </div>
         <DialogFooter>
