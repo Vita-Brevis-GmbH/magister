@@ -191,6 +191,9 @@
     "col_policy": "AD policy",
     "policy_cannot_change_short": "PW locked",
     "policy_never_expires_short": "PW no expiry",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entries)",
+    "pagination_prev": "Previous",
+    "pagination_next": "Next",
     "detail": {
       "edit": "Edit",
       "section_classes": "Classes",

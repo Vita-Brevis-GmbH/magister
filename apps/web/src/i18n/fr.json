@@ -194,6 +194,9 @@
     "col_policy": "Règles AD",
     "policy_cannot_change_short": "MdP verrouillé",
     "policy_never_expires_short": "MdP illimité",
+    "pagination_info": "Page {{page}} / {{total}} ({{count}} entrées)",
+    "pagination_prev": "Précédent",
+    "pagination_next": "Suivant",
     "detail": {
       "edit": "Modifier",
       "section_classes": "Classes",

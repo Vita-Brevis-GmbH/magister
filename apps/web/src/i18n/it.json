@@ -194,6 +194,9 @@
     "col_policy": "Criteri AD",
     "policy_cannot_change_short": "PW bloccata",
     "policy_never_expires_short": "PW illimitata",
+    "pagination_info": "Pagina {{page}} / {{total}} ({{count}} voci)",
+    "pagination_prev": "Precedente",
+    "pagination_next": "Successivo",
     "detail": {
       "edit": "Modifica",
       "section_classes": "Classi",

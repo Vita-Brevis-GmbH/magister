@@ -49,6 +49,7 @@ function UsersPage(): JSX.Element {
   const fmt = useFormatters();
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
+  const [offset, setOffset] = useState(0);
   const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -66,12 +67,30 @@ function UsersPage(): JSX.Element {
   const canToggleStatus = (u: AdUserOut): boolean =>
     !!me.data && u.ad_object_guid !== me.data.ad_object_guid;
 
+  const PAGE_SIZE = 50;
   const params: UseUsersParams = {
-    limit: 50,
+    limit: PAGE_SIZE,
+    offset,
     ...(kind !== "all" && { kind }),
     ...(search && { search }),
   };
   const q = useUsers(params);
+
+  // Changing a filter resets to the first page.
+  function changeKind(k: KindFilter): void {
+    setKind(k);
+    setOffset(0);
+  }
+  function changeSearch(v: string): void {
+    setSearch(v);
+    setOffset(0);
+  }
+
+  const total = q.data?.total ?? 0;
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const hasPrev = offset > 0;
+  const hasNext = offset + PAGE_SIZE < total;
 
   const items = q.data?.items ?? [];
   const selectableGuids = items.map((u) => u.ad_object_guid);
@@ -150,7 +169,7 @@ function UsersPage(): JSX.Element {
               key={k}
               role="tab"
               aria-selected={kind === k}
-              onClick={() => setKind(k)}
+              onClick={() => changeKind(k)}
               className={cn(
                 "rounded px-3 py-1.5 text-sm font-medium transition-colors",
                 kind === k
@@ -166,7 +185,7 @@ function UsersPage(): JSX.Element {
           type="search"
           placeholder={t("users.search_placeholder")}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => changeSearch(e.target.value)}
           className="h-9 min-w-[16rem] flex-1 rounded-md border border-input bg-background px-3 text-sm"
         />
       </div>
@@ -371,6 +390,34 @@ function UsersPage(): JSX.Element {
           </Table>
         </div>
       )}
+
+      {!q.isLoading && total > PAGE_SIZE ? (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-muted-foreground">
+            {t("users.pagination_info", { page, total: totalPages, count: total })}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!hasPrev || q.isFetching}
+              onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
+            >
+              {t("users.pagination_prev")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!hasNext || q.isFetching}
+              onClick={() => setOffset(offset + PAGE_SIZE)}
+            >
+              {t("users.pagination_next")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
       <UserStatusModal user={statusTarget} onClose={() => setStatusTarget(null)} />

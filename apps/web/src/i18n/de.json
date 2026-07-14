@@ -191,6 +191,9 @@
     "col_policy": "AD-Richtlinien",
     "policy_cannot_change_short": "PW gesperrt",
     "policy_never_expires_short": "PW unbefristet",
+    "pagination_info": "Seite {{page}} / {{total}} ({{count}} Einträge)",
+    "pagination_prev": "Zurück",
+    "pagination_next": "Weiter",
     "detail": {
       "edit": "Bearbeiten",
       "section_classes": "Klassen",
