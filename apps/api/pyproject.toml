@@ -1,6 +1,6 @@
 [project]
 name = "magister-api"
-version = "0.2.0"
+version = "0.3.0"
 description = "Magister backend — user & class management for schools (Schola Levis / Vita Brevis)"
 requires-python = ">=3.12"
 license = { text = "AGPL-3.0-or-later" }
