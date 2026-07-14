@@ -45,6 +45,9 @@ class UserAttributesUpdate(BaseModel):
     temp_device_name: str | None = Field(default=None, max_length=100)
     # Magister-only per-student grade (-1..13); null clears it.
     jahrgangsstufe: int | None = Field(default=None, ge=-1, le=13)
+    # AD account-policy flags (omitted = leave alone).
+    password_never_expires: bool | None = Field(default=None)
+    cannot_change_password: bool | None = Field(default=None)
 
     @field_validator("upn")
     @classmethod

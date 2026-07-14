@@ -53,6 +53,17 @@ class AdUserCache(Base):
     # Preserved across AD syncs (omitted from the sync upsert) and bumped during
     # class promotion.
     jahrgangsstufe: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # AD account-policy flags. ``password_never_expires`` mirrors the
+    # userAccountControl DONT_EXPIRE_PASSWD bit (round-tripped by the sync).
+    # ``cannot_change_password`` is Magister-tracked intent: it is enforced in
+    # AD via the object's DACL (deny Change-Password), which the sync does not
+    # read back — so it is preserved across syncs like ``jahrgangsstufe``.
+    password_never_expires: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    cannot_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 

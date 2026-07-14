@@ -42,6 +42,8 @@ interface FormState {
   country: string;
   temp_device_name: string;
   jahrgangsstufe: string;
+  password_never_expires: boolean;
+  cannot_change_password: boolean;
 }
 
 function emptyForm(): FormState {
@@ -60,6 +62,8 @@ function emptyForm(): FormState {
     country: "",
     temp_device_name: "",
     jahrgangsstufe: "",
+    password_never_expires: false,
+    cannot_change_password: false,
   };
 }
 
@@ -110,6 +114,8 @@ function UserDetailPage(): JSX.Element {
       country: userQ.data.country ?? "",
       temp_device_name: userQ.data.temp_device_name ?? "",
       jahrgangsstufe: userQ.data.jahrgangsstufe != null ? String(userQ.data.jahrgangsstufe) : "",
+      password_never_expires: userQ.data.password_never_expires,
+      cannot_change_password: userQ.data.cannot_change_password,
     });
   }, [userQ.data]);
 
@@ -180,6 +186,12 @@ function UserDetailPage(): JSX.Element {
     // Per-student grade (Magister-only). Blank clears it.
     const gradeNew = form.jahrgangsstufe.trim() === "" ? null : Number(form.jahrgangsstufe);
     if (gradeNew !== current.jahrgangsstufe) out.jahrgangsstufe = gradeNew;
+
+    // AD account-policy flags.
+    if (form.password_never_expires !== current.password_never_expires)
+      out.password_never_expires = form.password_never_expires;
+    if (form.cannot_change_password !== current.cannot_change_password)
+      out.cannot_change_password = form.cannot_change_password;
 
     return out;
   }
@@ -453,6 +465,44 @@ function UserDetailPage(): JSX.Element {
             </CardContent>
           </Card>
 
+          {/* AD-Konto-Richtlinien */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_pwpolicy")}</CardTitle>
+              <CardDescription>{t("users.detail.section_pwpolicy_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                  checked={form.cannot_change_password}
+                  onChange={(e) => setField("cannot_change_password", e.target.checked)}
+                />
+                <span>
+                  {t("users.field.cannot_change_password")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t("users.field.cannot_change_password_hint")}
+                  </span>
+                </span>
+              </label>
+              <label className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                  checked={form.password_never_expires}
+                  onChange={(e) => setField("password_never_expires", e.target.checked)}
+                />
+                <span>
+                  {t("users.field.password_never_expires")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t("users.field.password_never_expires_hint")}
+                  </span>
+                </span>
+              </label>
+            </CardContent>
+          </Card>
+
           {user.kind === "student" ? (
             <Card>
               <CardHeader>
@@ -576,6 +626,14 @@ function UserReadView({
               value={user.jahrgangsstufe != null ? gradeLabel(user.jahrgangsstufe) : null}
             />
           ) : null}
+          <InfoRow
+            label={t("users.field.cannot_change_password")}
+            value={user.cannot_change_password ? t("users.yes") : t("users.no")}
+          />
+          <InfoRow
+            label={t("users.field.password_never_expires")}
+            value={user.password_never_expires ? t("users.yes") : t("users.no")}
+          />
         </CardContent>
       </Card>
 

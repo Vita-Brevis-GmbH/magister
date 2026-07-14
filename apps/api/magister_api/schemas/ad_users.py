@@ -28,6 +28,8 @@ class AdUserOut(BaseModel):
     device_name: str | None = None
     temp_device_name: str | None = None
     jahrgangsstufe: int | None = None
+    password_never_expires: bool = False
+    cannot_change_password: bool = False
 
 
 class AdUserListResponse(BaseModel):

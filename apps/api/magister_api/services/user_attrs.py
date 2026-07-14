@@ -59,8 +59,13 @@ _PAYLOAD_TO_AD_ATTR: dict[str, str] = {
 # Fields a non-admin (SMI) is NOT allowed to change — login-relevant.
 ADMIN_ONLY_FIELDS: frozenset[str] = frozenset({"upn", "sam_account_name"})
 
-# Fields that hit AD; the rest go to Magister-DB only.
+# Fields that hit AD via a plain MODIFY_REPLACE; the rest go elsewhere.
 AD_FIELDS: frozenset[str] = frozenset(_PAYLOAD_TO_AD_ATTR.keys())
+# AD account-policy flags: written via dedicated AD-client calls (UAC bit /
+# DACL edit), then mirrored to the cache column of the same name.
+AD_FLAG_FIELDS: frozenset[str] = frozenset(
+    {"password_never_expires", "cannot_change_password"}
+)
 MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset({"temp_device_name", "jahrgangsstufe"})
 
 
@@ -165,17 +170,29 @@ class UserAttributesService:
             await self._check_upn_unique(actual_changes["upn"], target.ad_object_guid)
 
         # ------------------------------------------------------------------
-        # 5) Write AD-bound fields via LDAP MODIFY (if any).
+        # 5) Write AD-bound fields. Plain attributes go via one MODIFY_REPLACE;
+        #    the account-policy flags use dedicated AD-client calls (UAC bit /
+        #    DACL edit). A single DN lookup covers both.
         # ------------------------------------------------------------------
         ad_changes = {
             _PAYLOAD_TO_AD_ATTR[f]: v for f, v in actual_changes.items() if f in AD_FIELDS
         }
-        if ad_changes:
+        flag_changes = {f: v for f, v in actual_changes.items() if f in AD_FLAG_FIELDS}
+        if ad_changes or flag_changes:
             user_dn = await self.ad.find_user_dn(target.ad_object_guid)
             if not user_dn:
                 raise UserNotInAdError(target.ad_object_guid)
             try:
-                await self.ad.modify_user_attributes(user_dn=user_dn, attributes=ad_changes)
+                if ad_changes:
+                    await self.ad.modify_user_attributes(user_dn=user_dn, attributes=ad_changes)
+                if "password_never_expires" in flag_changes:
+                    await self.ad.set_password_never_expires(
+                        user_dn=user_dn, value=bool(flag_changes["password_never_expires"])
+                    )
+                if "cannot_change_password" in flag_changes:
+                    await self.ad.set_cannot_change_password(
+                        user_dn=user_dn, value=bool(flag_changes["cannot_change_password"])
+                    )
             except AdUnavailableError:
                 await self._emit_audit_failed(
                     target=target,

@@ -221,7 +221,9 @@
       "delete_yes": "Supprimer",
       "delete_err_ad": "AD injoignable — désactivation échouée.",
       "section_grade": "Année scolaire",
-      "section_grade_desc": "Année scolaire propre à l'élève (ajustée lors du passage de classe)."
+      "section_grade_desc": "Année scolaire propre à l'élève (ajustée lors du passage de classe).",
+      "section_pwpolicy": "Règles du compte (AD)",
+      "section_pwpolicy_desc": "Options de mot de passe du compte AD."
     },
     "field": {
       "display_name": "Nom affiché",
@@ -245,7 +247,11 @@
       "given_name": "Prénom",
       "surname": "Nom",
       "jahrgangsstufe": "Année scolaire",
-      "jahrgangsstufe_hint": "-1 = 1re enfantine, 0 = 2e enfantine, 1–13 = degrés. Vide = non défini."
+      "jahrgangsstufe_hint": "-1 = 1re enfantine, 0 = 2e enfantine, 1–13 = degrés. Vide = non défini.",
+      "cannot_change_password": "L'utilisateur ne peut pas changer le mot de passe",
+      "cannot_change_password_hint": "Appliqué dans l'AD via les autorisations de l'objet (DACL). Pour les comptes à mot de passe fixe.",
+      "password_never_expires": "Le mot de passe n'expire jamais",
+      "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD."
     },
     "new_user": "Nouvel utilisateur"
   },

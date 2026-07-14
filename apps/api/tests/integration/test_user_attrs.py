@@ -125,6 +125,48 @@ class TestHappyPath:
             app.dependency_overrides.pop(get_ad_client, None)
 
     @pytest.mark.asyncio
+    async def test_smi_can_set_ad_policy_flags(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        # password_never_expires flips the UAC bit in (mock) AD;
+        # cannot_change_password is a DACL no-op under the mock but is still
+        # mirrored into the cache. Both round-trip through the response.
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={"password_never_expires": True, "cannot_change_password": True},
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["password_never_expires"] is True
+            assert body["cannot_change_password"] is True
+
+            row = await db_session.get(AdUserCache, TEACHER_GUID)
+            assert row is not None
+            await db_session.refresh(row)
+            assert row.password_never_expires is True
+            assert row.cannot_change_password is True
+
+            # The mock AD entry now carries the DONT_EXPIRE_PASSWD bit (0x10000).
+            conn = mock_ad.mock_connection()
+            conn.search(
+                "CN=Anna,OU=Teachers,DC=schule,DC=local",
+                "(objectClass=user)",
+                attributes=["userAccountControl"],
+            )
+            uac = int(conn.entries[0].userAccountControl.value)
+            assert uac & 0x10000
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+    @pytest.mark.asyncio
     async def test_admin_can_change_upn(
         self,
         app: FastAPI,

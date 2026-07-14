@@ -245,6 +245,10 @@ export interface AdUserOut {
   device_name: string | null;
   temp_device_name: string | null;
   jahrgangsstufe: number | null;
+  /** AD: DONT_EXPIRE_PASSWD (userAccountControl bit). */
+  password_never_expires: boolean;
+  /** AD: "user cannot change password" (enforced via the object's DACL). */
+  cannot_change_password: boolean;
 }
 
 /** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null
@@ -263,6 +267,8 @@ export interface UserAttributesUpdate {
   country?: string | null;
   temp_device_name?: string | null;
   jahrgangsstufe?: number | null;
+  password_never_expires?: boolean | null;
+  cannot_change_password?: boolean | null;
 }
 
 /** PATCH /users/{guid}/status — enable/disable an AD account. */

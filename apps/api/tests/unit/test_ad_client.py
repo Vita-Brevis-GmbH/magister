@@ -220,6 +220,12 @@ class TestParseAdEntry:
         )
         assert rec.enabled is False
 
+    def test_password_never_expires_flag(self) -> None:
+        plain = parse_ad_entry(self._attrs(userAccountControl=0x200), "CN=X")
+        assert plain.password_never_expires is False
+        never = parse_ad_entry(self._attrs(userAccountControl=0x200 | 0x10000), "CN=X")
+        assert never.password_never_expires is True
+
     def test_missing_upn_raises(self) -> None:
         with pytest.raises(AdUserParseError):
             parse_ad_entry(self._attrs(userPrincipalName=None), "CN=X")

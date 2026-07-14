@@ -37,9 +37,11 @@ from ldap3 import (
     Tls,
 )
 from ldap3.core.exceptions import LDAPException
+from ldap3.protocol.microsoft import security_descriptor_control
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import escape_rdn
 
+from magister_api.ad import security_descriptor as sd
 from magister_api.ad.errors import (
     REASON_CONFIG,
     AdUnavailableError,
@@ -54,6 +56,10 @@ logger = logging.getLogger(__name__)
 UAC_ACCOUNTDISABLE = 0x0002
 # `userAccountControl` for a normal, enabled user account (NORMAL_ACCOUNT).
 UAC_NORMAL_ACCOUNT = 0x0200
+# `userAccountControl` bit 0x10000 = DONT_EXPIRE_PASSWD ("Password never expires").
+UAC_DONT_EXPIRE_PASSWD = 0x10000
+# LDAP_SERVER_SD_FLAGS: read/write only the DACL portion of nTSecurityDescriptor.
+_SD_FLAG_DACL = 0x04
 
 DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "objectGUID",
@@ -91,6 +97,8 @@ class AdUserRecord:
     mail: str | None
     enabled: bool
     kind: str
+    # "Password never expires" — derived from userAccountControl bit 0x10000.
+    password_never_expires: bool
     ms_ds_consistency_guid: str | None
     distinguished_name: str
     street_address: str | None
@@ -267,6 +275,7 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         mail=_first_value(entry_attrs.get("mail")),
         enabled=bool(uac & UAC_ACCOUNTDISABLE) is False,
         kind=_kind_from_member_of(member_of),
+        password_never_expires=bool(uac & UAC_DONT_EXPIRE_PASSWD),
         ms_ds_consistency_guid=consistency_guid,
         distinguished_name=dn,
         street_address=_first_value(entry_attrs.get("streetAddress")),
@@ -997,6 +1006,106 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def set_password_never_expires(self, *, user_dn: str, value: bool) -> None:
+        """Set/clear the ``DONT_EXPIRE_PASSWD`` (0x10000) bit on userAccountControl.
+
+        Fresh read-modify-write so other UAC bits are preserved. Idempotent.
+        """
+        await run_in_threadpool(self._sync_set_uac_bit, user_dn, UAC_DONT_EXPIRE_PASSWD, value)
+
+    def _sync_set_uac_bit(self, user_dn: str, bit: int, value: bool) -> None:
+        conn, owned = self._acquire_connection()
+        try:
+            result, entries = self._single_search(
+                conn,
+                base=user_dn,
+                search_filter="(objectClass=user)",
+                scope=BASE,
+                attributes=["userAccountControl"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                raise AdUnavailableError(f"ldap_read_uac_failed:{detail}")
+            current_uac: int | None = None
+            for entry in entries:
+                raw = (entry.get("attributes") or {}).get("userAccountControl")
+                if isinstance(raw, list):
+                    raw = raw[0] if raw else None
+                if raw is not None:
+                    current_uac = int(raw)
+                break
+            if current_uac is None:
+                raise AdUnavailableError("ldap_user_not_found")
+            new_uac = current_uac | bit if value else current_uac & ~bit
+            if new_uac == current_uac:
+                return
+            ok = conn.modify(user_dn, {"userAccountControl": [(MODIFY_REPLACE, [str(new_uac)])]})
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok:
+                raise AdUnavailableError("ldap_modify_failed")
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def set_cannot_change_password(self, *, user_dn: str, value: bool) -> None:
+        """Set/clear "user cannot change password" via the object's DACL.
+
+        Reads the DACL only (``LDAP_SERVER_SD_FLAGS`` = DACL), adds/removes the
+        two deny-``Change-Password`` ACEs for SELF + Everyone (see
+        :mod:`magister_api.ad.security_descriptor`), and writes the DACL back
+        with the same control. No-op under MOCK_SYNC (the mock LDAP server does
+        not implement security descriptors).
+        """
+        if self._settings.ad_use_mock:
+            return
+        await run_in_threadpool(self._sync_set_cannot_change_password, user_dn, value)
+
+    def _sync_set_cannot_change_password(self, user_dn: str, value: bool) -> None:
+        control = security_descriptor_control(sdflags=_SD_FLAG_DACL)
+        conn, owned = self._acquire_connection()
+        try:
+            ok = conn.search(
+                user_dn,
+                "(objectClass=*)",
+                search_scope=BASE,
+                attributes=["nTSecurityDescriptor"],
+                controls=control,
+            )
+            if isinstance(ok, tuple):
+                ok = ok[0]
+            if not ok or not conn.response:
+                raise AdUnavailableError("ldap_read_sd_failed")
+            attrs = (conn.response[0].get("raw_attributes") or {}) if conn.response else {}
+            raw = attrs.get("nTSecurityDescriptor")
+            if isinstance(raw, list):
+                raw = raw[0] if raw else None
+            if not raw:
+                raise AdUnavailableError("ldap_read_sd_failed")
+            new_sd = sd.set_cannot_change_password(bytes(raw), deny=value)
+            wok = conn.modify(
+                user_dn,
+                {"nTSecurityDescriptor": [(MODIFY_REPLACE, [new_sd])]},
+                controls=control,
+            )
+            if isinstance(wok, tuple):
+                wok = wok[0]
+            if not wok:
+                raise AdUnavailableError("ldap_modify_failed")
+        except LDAPException as exc:
+            raise AdUnavailableError("ldap_modify_sd_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def create_user(
         self,
         *,
@@ -1010,15 +1119,20 @@ class AdClient:
         display_name: str,
         password: str,
         force_change: bool,
+        password_never_expires: bool = False,
+        cannot_change_password: bool = False,
     ) -> str:
         """Create an enabled AD user account and return its ``objectGUID``.
 
         Real AD: the object is added disabled (UAC 514), the password is set via
-        ``unicodePwd``, the account is then enabled (UAC 512) and — when
+        ``unicodePwd``, the account is then enabled (UAC 512, plus the
+        DONT_EXPIRE_PASSWD bit when ``password_never_expires``) and — when
         ``force_change`` — ``pwdLastSet=0`` forces a change at first logon.
-        objectGUID is server-generated and read back. AD-side conflicts (a
-        duplicate DN / UPN / sAMAccountName) surface as
-        :class:`AdUnavailableError`, which the import maps to a per-row failure.
+        When ``cannot_change_password`` the deny-Change-Password ACEs are added
+        to the fresh object's DACL. objectGUID is server-generated and read
+        back. AD-side conflicts (a duplicate DN / UPN / sAMAccountName) surface
+        as :class:`AdUnavailableError`, which the import maps to a per-row
+        failure.
         """
         return await run_in_threadpool(
             self._sync_create_user,
@@ -1032,6 +1146,8 @@ class AdClient:
             display_name,
             password,
             force_change,
+            password_never_expires,
+            cannot_change_password,
         )
 
     def _sync_create_user(
@@ -1046,6 +1162,8 @@ class AdClient:
         display_name: str,
         password: str,
         force_change: bool,
+        password_never_expires: bool = False,
+        cannot_change_password: bool = False,
     ) -> str:
         dn = f"CN={escape_rdn(common_name)},{ou_dn}"
         attrs: dict[str, Any] = {
@@ -1058,12 +1176,13 @@ class AdClient:
         if mail:
             attrs["mail"] = mail
         mock = self._settings.ad_use_mock
+        enabled_uac = UAC_NORMAL_ACCOUNT | (UAC_DONT_EXPIRE_PASSWD if password_never_expires else 0)
         new_guid = str(uuid.uuid4())
         if mock:
             # MOCK_SYNC never generates objectGUID or enforces AD password
             # semantics, so we seed a GUID and an already-enabled account.
             attrs["objectGUID"] = uuid.UUID(new_guid).bytes_le
-            attrs["userAccountControl"] = UAC_NORMAL_ACCOUNT
+            attrs["userAccountControl"] = enabled_uac
         else:
             # Real AD: create disabled, set password, then enable.
             attrs["userAccountControl"] = str(UAC_NORMAL_ACCOUNT | UAC_ACCOUNTDISABLE)
@@ -1077,12 +1196,16 @@ class AdClient:
                 self._require_ok(
                     conn.modify(
                         dn,
-                        {"userAccountControl": [(MODIFY_REPLACE, [str(UAC_NORMAL_ACCOUNT)])]},
+                        {"userAccountControl": [(MODIFY_REPLACE, [str(enabled_uac)])]},
                     )
                 )
                 if force_change:
                     self._require_ok(conn.modify(dn, {"pwdLastSet": [(MODIFY_REPLACE, ["0"])]}))
                 new_guid = self._read_object_guid(conn, dn)
+                if cannot_change_password:
+                    # DACL edit on the fresh object (real AD only; the mock
+                    # LDAP server has no security descriptor).
+                    self._sync_set_cannot_change_password(dn, True)
             return new_guid
         except LDAPException as exc:
             raise AdUnavailableError("ldap_add_failed") from exc

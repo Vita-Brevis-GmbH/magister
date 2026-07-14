@@ -128,6 +128,7 @@ class UserAdminService:
             mail=mail,
             enabled=True,
             kind=kind,
+            password_never_expires=False,
             ms_ds_consistency_guid=None,
             distinguished_name=f"CN={display_name},{ou_dn}",
             street_address=None,

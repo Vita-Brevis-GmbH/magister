@@ -140,10 +140,13 @@ class AdUserCacheSyncRepository:
                     "postal_code": r.postal_code,
                     "country": r.country,
                     "device_name": r.device_name,
-                    # temp_device_name is Magister-only — do NOT overwrite on
-                    # AD sync. We omit it from both VALUES and the ON-CONFLICT
-                    # set; existing rows keep whatever was set via the
-                    # PATCH-user endpoint.
+                    "password_never_expires": r.password_never_expires,
+                    # temp_device_name, jahrgangsstufe and cannot_change_password
+                    # are Magister-only — do NOT overwrite on AD sync. We omit
+                    # them from both VALUES and the ON-CONFLICT set; existing
+                    # rows keep whatever was set via the PATCH-user endpoint.
+                    # (cannot_change_password lives in the object's DACL, which
+                    # the sync does not read back.)
                 }
             )
         stmt = (
@@ -170,6 +173,9 @@ class AdUserCacheSyncRepository:
                     "postal_code": pg_insert(AdUserCache).excluded.postal_code,
                     "country": pg_insert(AdUserCache).excluded.country,
                     "device_name": pg_insert(AdUserCache).excluded.device_name,
+                    "password_never_expires": pg_insert(
+                        AdUserCache
+                    ).excluded.password_never_expires,
                 },
             )
         )

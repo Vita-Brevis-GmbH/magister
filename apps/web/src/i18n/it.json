@@ -221,7 +221,9 @@
       "delete_yes": "Elimina",
       "delete_err_ad": "AD non raggiungibile — disattivazione fallita.",
       "section_grade": "Anno scolastico",
-      "section_grade_desc": "Anno scolastico proprio dell'allievo (adeguato durante la promozione di classe)."
+      "section_grade_desc": "Anno scolastico proprio dell'allievo (adeguato durante la promozione di classe).",
+      "section_pwpolicy": "Criteri account (AD)",
+      "section_pwpolicy_desc": "Opzioni password dell'account AD."
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -245,7 +247,11 @@
       "given_name": "Nome",
       "surname": "Cognome",
       "jahrgangsstufe": "Anno scolastico",
-      "jahrgangsstufe_hint": "-1 = 1º infanzia, 0 = 2º infanzia, 1–13 = classi. Vuoto = non impostato."
+      "jahrgangsstufe_hint": "-1 = 1º infanzia, 0 = 2º infanzia, 1–13 = classi. Vuoto = non impostato.",
+      "cannot_change_password": "L'utente non può cambiare la password",
+      "cannot_change_password_hint": "Applicato in AD tramite le autorizzazioni dell'oggetto (DACL). Per account con password fissa.",
+      "password_never_expires": "La password non scade mai",
+      "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD."
     },
     "new_user": "Nuovo utente"
   },

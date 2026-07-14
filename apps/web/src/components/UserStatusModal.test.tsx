@@ -31,6 +31,8 @@ const ENABLED_USER: AdUserOut = {
   device_name: null,
   temp_device_name: null,
   jahrgangsstufe: null,
+  password_never_expires: false,
+  cannot_change_password: false,
 };
 
 const DISABLED_USER: AdUserOut = { ...ENABLED_USER, enabled: false };

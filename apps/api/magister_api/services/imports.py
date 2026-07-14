@@ -106,9 +106,11 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "valid_from",
             "force_change",
             "jahrgangsstufe",
+            "cannot_change_password",
+            "password_never_expires",
         ],
         [
-            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true", "3"],
+            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true", "3", "", ""],  # noqa: E501
             [
                 "Ben",
                 "Beispiel",
@@ -119,8 +121,10 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
                 "2026-08-12",
                 "false",
                 "3",
+                "true",
+                "true",
             ],
-            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", "", ""],
+            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", "", "", "", ""],
         ],
     ),
     IMPORT_KIND_TEACHERS: (
@@ -134,11 +138,13 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "upn",
             "sam_account_name",
             "force_change",
+            "cannot_change_password",
+            "password_never_expires",
         ],
         [
-            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true"],
-            ["Max", "Kollege", "Max K.", "max.kollege@schule.ch", "max.kollege", "false"],
-            ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", ""],
+            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", ""],
+            ["Max", "Kollege", "Max K.", "max.kollege@schule.ch", "max.kollege", "false", "", "true"],  # noqa: E501
+            ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", "", "", ""],
         ],
     ),
 }
@@ -148,7 +154,12 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
 # Old files without them still validate; the template ships them included.
 OPTIONAL_HEADERS: dict[str, list[str]] = {
     IMPORT_KIND_CLASSES: ["jahrgangsstufe_bis"],
-    IMPORT_KIND_STUDENTS: ["jahrgangsstufe"],
+    IMPORT_KIND_STUDENTS: [
+        "jahrgangsstufe",
+        "cannot_change_password",
+        "password_never_expires",
+    ],
+    IMPORT_KIND_TEACHERS: ["cannot_change_password", "password_never_expires"],
 }
 
 
@@ -231,6 +242,18 @@ def _parse_force_change(s: str) -> bool:
     if v in _FORCE_CHANGE_FALSE:
         return False
     raise ValueError(f"force_change must be true/false, got {s!r}")
+
+
+def _parse_bool_flag(s: str, *, column: str) -> bool:
+    """Parse an optional boolean CSV column. Empty defaults to False."""
+    v = (s or "").strip().lower()
+    if not v:
+        return False
+    if v in _FORCE_CHANGE_TRUE:
+        return True
+    if v in _FORCE_CHANGE_FALSE:
+        return False
+    raise ValueError(f"{column} must be true/false, got {s!r}")
 
 
 def _derive_sam(upn: str, explicit: str) -> str:
@@ -541,6 +564,11 @@ class ImportService:
             _parse_force_change(row.get("force_change", ""))
         except ValueError as exc:
             errors.append(str(exc))
+        for flag_col in ("cannot_change_password", "password_never_expires"):
+            try:
+                _parse_bool_flag(row.get(flag_col, ""), column=flag_col)
+            except ValueError as exc:
+                errors.append(str(exc))
         if upn and "@" in upn:
             sam = _derive_sam(upn, row.get("sam_account_name", ""))
             if len(sam) > _SAM_MAX_LEN:
@@ -628,6 +656,11 @@ class ImportService:
             _parse_force_change(row.get("force_change", ""))
         except ValueError as exc:
             errors.append(str(exc))
+        for flag_col in ("cannot_change_password", "password_never_expires"):
+            try:
+                _parse_bool_flag(row.get(flag_col, ""), column=flag_col)
+            except ValueError as exc:
+                errors.append(str(exc))
         if upn and "@" in upn:
             sam = _derive_sam(upn, row.get("sam_account_name", ""))
             if len(sam) > _SAM_MAX_LEN:
@@ -886,6 +919,12 @@ class ImportService:
         display = (row.get("display_name") or "").strip() or f"{given} {surname}"
         sam = _derive_sam(upn, row.get("sam_account_name", ""))
         force_change = _parse_force_change(row.get("force_change", ""))
+        cannot_change_password = _parse_bool_flag(
+            row.get("cannot_change_password", ""), column="cannot_change_password"
+        )
+        password_never_expires = _parse_bool_flag(
+            row.get("password_never_expires", ""), column="password_never_expires"
+        )
         valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
 
         grade_raw = (row.get("jahrgangsstufe") or "").strip()
@@ -918,6 +957,8 @@ class ImportService:
             display_name=display,
             password=password,
             force_change=force_change,
+            password_never_expires=password_never_expires,
+            cannot_change_password=cannot_change_password,
         )
 
         self.session.add(
@@ -934,6 +975,8 @@ class ImportService:
                 enabled=True,
                 last_sync_at=utcnow(),
                 jahrgangsstufe=jahrgangsstufe,
+                password_never_expires=password_never_expires,
+                cannot_change_password=cannot_change_password,
             )
         )
         self.session.add(
@@ -977,6 +1020,12 @@ class ImportService:
         display = (row.get("display_name") or "").strip() or f"{given} {surname}"
         sam = _derive_sam(upn, row.get("sam_account_name", ""))
         force_change = _parse_force_change(row.get("force_change", ""))
+        cannot_change_password = _parse_bool_flag(
+            row.get("cannot_change_password", ""), column="cannot_change_password"
+        )
+        password_never_expires = _parse_bool_flag(
+            row.get("password_never_expires", ""), column="password_never_expires"
+        )
 
         settings_row = await self._app_settings_row()
         ou = settings_row.ad_ou_teachers
@@ -995,6 +1044,8 @@ class ImportService:
             display_name=display,
             password=password,
             force_change=force_change,
+            password_never_expires=password_never_expires,
+            cannot_change_password=cannot_change_password,
         )
 
         self.session.add(
@@ -1010,6 +1061,8 @@ class ImportService:
                 kind="teacher",
                 enabled=True,
                 last_sync_at=utcnow(),
+                password_never_expires=password_never_expires,
+                cannot_change_password=cannot_change_password,
             )
         )
         await self.audit.emit(

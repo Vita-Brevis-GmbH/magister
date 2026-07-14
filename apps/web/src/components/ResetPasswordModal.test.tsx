@@ -33,6 +33,8 @@ const STUDENT: AdUserOut = {
   device_name: null,
   temp_device_name: null,
   jahrgangsstufe: null,
+  password_never_expires: false,
+  cannot_change_password: false,
 };
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

@@ -218,7 +218,9 @@
       "delete_yes": "Löschen",
       "delete_err_ad": "AD nicht erreichbar — Deaktivierung fehlgeschlagen.",
       "section_grade": "Jahrgangsstufe",
-      "section_grade_desc": "Eigene Jahrgangsstufe des Schülers (wird beim Klassenaufstieg angepasst)."
+      "section_grade_desc": "Eigene Jahrgangsstufe des Schülers (wird beim Klassenaufstieg angepasst).",
+      "section_pwpolicy": "Konto-Richtlinien (AD)",
+      "section_pwpolicy_desc": "Passwort-Optionen des AD-Kontos."
     },
     "field": {
       "display_name": "Anzeigename",
@@ -242,7 +244,11 @@
       "given_name": "Vorname",
       "surname": "Nachname",
       "jahrgangsstufe": "Jahrgangsstufe",
-      "jahrgangsstufe_hint": "-1 = 1. Kindergarten, 0 = 2. Kindergarten, 1–13 = Klassen. Leer = nicht gesetzt."
+      "jahrgangsstufe_hint": "-1 = 1. Kindergarten, 0 = 2. Kindergarten, 1–13 = Klassen. Leer = nicht gesetzt.",
+      "cannot_change_password": "Benutzer kann Passwort nicht ändern",
+      "cannot_change_password_hint": "Wird im AD über die Objekt-Berechtigungen (DACL) erzwungen. Für Konten mit festem Passwort.",
+      "password_never_expires": "Passwort läuft nie ab",
+      "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD."
     },
     "new_user": "Neuer Benutzer"
   },

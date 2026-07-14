@@ -218,7 +218,9 @@
       "delete_yes": "Delete",
       "delete_err_ad": "AD unreachable — deactivation failed.",
       "section_grade": "Grade",
-      "section_grade_desc": "The student's own grade level (adjusted during class promotion)."
+      "section_grade_desc": "The student's own grade level (adjusted during class promotion).",
+      "section_pwpolicy": "Account policy (AD)",
+      "section_pwpolicy_desc": "Password options of the AD account."
     },
     "field": {
       "display_name": "Display name",
@@ -242,7 +244,11 @@
       "given_name": "First name",
       "surname": "Last name",
       "jahrgangsstufe": "Grade",
-      "jahrgangsstufe_hint": "-1 = 1st KG, 0 = 2nd KG, 1–13 = grades. Empty = unset."
+      "jahrgangsstufe_hint": "-1 = 1st KG, 0 = 2nd KG, 1–13 = grades. Empty = unset.",
+      "cannot_change_password": "User cannot change password",
+      "cannot_change_password_hint": "Enforced in AD via the object permissions (DACL). For accounts with a fixed password.",
+      "password_never_expires": "Password never expires",
+      "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag."
     },
     "new_user": "New user"
   },
