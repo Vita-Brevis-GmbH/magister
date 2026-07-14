@@ -63,7 +63,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card/40 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+      <header className="relative z-50 border-b bg-card/40 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto flex h-14 items-center justify-between px-4">
           <Link to="/" className="flex items-center gap-2">
             <span className="font-serif text-lg font-semibold tracking-tight">
