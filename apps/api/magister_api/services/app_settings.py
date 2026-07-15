@@ -168,6 +168,10 @@ class AppSettingsService:
             AppSettings.zyklus1_max_grade,
             AppSettings.zyklus2_max_grade,
             AppSettings.password_store_enabled,
+            AppSettings.ad_groups_teacher,
+            AppSettings.ad_groups_student_zyklus1,
+            AppSettings.ad_groups_student_zyklus2,
+            AppSettings.ad_groups_student_zyklus3,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -199,6 +203,10 @@ class AppSettingsService:
             zyklus1_max_grade=row.zyklus1_max_grade,
             zyklus2_max_grade=row.zyklus2_max_grade,
             password_store_enabled=bool(row.password_store_enabled),
+            ad_groups_teacher=list(row.ad_groups_teacher or []),
+            ad_groups_student_zyklus1=list(row.ad_groups_student_zyklus1 or []),
+            ad_groups_student_zyklus2=list(row.ad_groups_student_zyklus2 or []),
+            ad_groups_student_zyklus3=list(row.ad_groups_student_zyklus3 or []),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -244,6 +252,10 @@ class AppSettingsService:
             "ad_ou_teachers": payload.ad_ou_teachers,
             "zyklus1_max_grade": payload.zyklus1_max_grade,
             "zyklus2_max_grade": payload.zyklus2_max_grade,
+            "ad_groups_teacher": payload.ad_groups_teacher,
+            "ad_groups_student_zyklus1": payload.ad_groups_student_zyklus1,
+            "ad_groups_student_zyklus2": payload.ad_groups_student_zyklus2,
+            "ad_groups_student_zyklus3": payload.ad_groups_student_zyklus3,
         }
         for col, val in plain_fields.items():
             if val is not None:

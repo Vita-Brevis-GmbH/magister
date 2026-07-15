@@ -266,7 +266,8 @@
       "password_never_expires": "Password never expires",
       "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag.",
       "store_password": "Store password in Magister",
-      "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings."
+      "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings.",
+      "ad_groups": "AD groups"
     },
     "new_user": "New user",
     "bulk": {
@@ -392,6 +393,10 @@
         "ad_ou_students_zyklus3": "Target OU students Zyklus 3",
         "ad_ou_students_other": "Target OU students (others)",
         "ad_ou_teachers": "Target OU teachers",
+        "ad_groups_teacher": "Default groups teachers",
+        "ad_groups_student_zyklus1": "Default groups students cycle 1",
+        "ad_groups_student_zyklus2": "Default groups students cycle 2",
+        "ad_groups_student_zyklus3": "Default groups students cycle 3",
         "zyklus1_max_grade": "Zyklus 1 up to grade",
         "zyklus2_max_grade": "Zyklus 2 up to grade",
         "ad_login_enabled": "Enable AD login",
@@ -408,6 +413,8 @@
       "password_store_title": "Password storage",
       "password_store_enabled": "Store passwords encrypted in Magister",
       "password_store_hint": "Allows keeping passwords per user (encrypted with the server key MAGISTER_AUDIT_KEY, not in the DB). Basis for class password lists, e.g. Zyklus 2.",
+      "userconfig_title": "User configuration – default AD groups",
+      "userconfig_hint": "Newly created accounts (import + single create) are automatically added to these AD groups — one group DN per line. Affects newly created users only.",
       "ad_login_title": "AD sign-in",
       "ad_login_enabled_hint": "Allows signing in with an AD username and password (LDAPS) in addition to Entra ID. No MFA on this path.",
       "ad_login_group_required": "Without a group nobody can sign in via AD. Please provide a group.",
@@ -476,6 +483,8 @@
       "ou": "Target OU / role",
       "ou_hint": "Determines the OU and the classification. The OUs come from the provisioning settings.",
       "ou_teacher": "Teacher",
+      "ou_student_zyklus1": "Student (cycle 1)",
+      "ou_student_zyklus2": "Student (cycle 2)",
       "ou_student_zyklus3": "Student (cycle 3)",
       "ou_student_other": "Student (other)",
       "submit": "Create",

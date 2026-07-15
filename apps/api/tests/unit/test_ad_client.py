@@ -226,6 +226,15 @@ class TestParseAdEntry:
         never = parse_ad_entry(self._attrs(userAccountControl=0x200 | 0x10000), "CN=X")
         assert never.password_never_expires is True
 
+    def test_groups_from_member_of(self) -> None:
+        rec = parse_ad_entry(
+            self._attrs(memberOf=["CN=Lehrer,OU=Groups,DC=x", "CN=Alle,OU=Groups,DC=x"]),
+            "CN=X",
+        )
+        assert rec.groups == ("CN=Lehrer,OU=Groups,DC=x", "CN=Alle,OU=Groups,DC=x")
+        empty = parse_ad_entry(self._attrs(), "CN=X")
+        assert empty.groups == ()
+
     def test_missing_upn_raises(self) -> None:
         with pytest.raises(AdUserParseError):
             parse_ad_entry(self._attrs(userPrincipalName=None), "CN=X")

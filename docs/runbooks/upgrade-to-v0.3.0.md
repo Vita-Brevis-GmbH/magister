@@ -2,11 +2,11 @@
 
 **Gilt für:** Magister-Instanzen auf `v0.2.0`
 **Ziel-Version:** `v0.3.0`
-**Aufwand:** ~10 Minuten Downtime (Image-Tausch + 3 additive Migrationen)
+**Aufwand:** ~10 Minuten Downtime (Image-Tausch + 6 additive Migrationen)
 
 > Hinweis: Ältere Runbooks (`upgrade-to-m3.md`, `upgrade-to-extensions-2026-06.md`)
 > nennen abweichende Migrations-Nummern aus einer früheren Nummerierung. Für dieses
-> Upgrade gelten ausschliesslich die unten aufgeführten Revisionen (`0021`–`0023`).
+> Upgrade gelten ausschliesslich die unten aufgeführten Revisionen (`0021`–`0026`).
 
 ---
 
@@ -97,7 +97,7 @@ docker compose -f docker-compose.yml -f docker-compose.build.yml build magister-
 
 ## 4. Datenbank-Migrationen ausführen
 
-Dieser Release bringt **vier additive Migrationen** (keine Umbauten bestehender Daten):
+Dieser Release bringt **sechs additive Migrationen** (keine Umbauten bestehender Daten):
 
 | Migration | Änderung |
 |---|---|
@@ -106,6 +106,7 @@ Dieser Release bringt **vier additive Migrationen** (keine Umbauten bestehender 
 | `0023_student_jahrgangsstufe` | Spalte `ad_user_cache.jahrgangsstufe INT NULL`; erweitert den `import_jobs.kind`-Check um `teachers` |
 | `0024_ad_pw_flags` | Spalten `ad_user_cache.password_never_expires` + `cannot_change_password` (BOOL, default false) |
 | `0025_password_vault` | `ad_user_cache.store_password` (BOOL) + `password_enc` (BYTEA), `app_settings.password_store_enabled` (BOOL) |
+| `0026_ad_group_templates` | `app_settings.ad_groups_teacher/student_zyklus1/2/3` (JSONB, default `[]`) + `ad_user_cache.ad_groups` (JSONB, default `[]`) |
 
 Der Container-Entrypoint führt `alembic upgrade head` beim Start automatisch aus.
 Für einen kontrollierten Lauf vor dem Neustart:
@@ -122,6 +123,7 @@ Running upgrade 0021_class_grade_range -> 0022_school_details
 Running upgrade 0022_school_details    -> 0023_student_jahrgangsstufe
 Running upgrade 0023_student_jahrgangsstufe -> 0024_ad_pw_flags
 Running upgrade 0024_ad_pw_flags        -> 0025_password_vault
+Running upgrade 0025_password_vault      -> 0026_ad_group_templates
 ```
 
 > **Passwort-Tresor:** Die optionale Passwort-Speicherung (pro User + globaler

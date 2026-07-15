@@ -26,6 +26,7 @@ from ldap3 import (
     FIRST,
     GSSAPI,
     MOCK_SYNC,
+    MODIFY_ADD,
     MODIFY_REPLACE,
     SAFE_SYNC,
     SASL,
@@ -110,6 +111,8 @@ class AdUserRecord:
     device_name: str | None = None
     # AD replicated change timestamp; drives the incremental sync cursor.
     when_changed: datetime | None = None
+    # AD group memberships (memberOf DNs); refreshed on every sync.
+    groups: tuple[str, ...] = ()
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -283,6 +286,7 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         postal_code=_first_value(entry_attrs.get("postalCode")),
         country=_first_value(entry_attrs.get("co")),
         when_changed=_parse_generalized_time(_first_value(entry_attrs.get("whenChanged"))),
+        groups=tuple(str(m) for m in member_of),
     )
 
 
@@ -1174,6 +1178,49 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def add_user_to_groups(self, *, user_dn: str, group_dns: list[str]) -> list[str]:
+        """Add a user to each group (modify the group's ``member``).
+
+        Best-effort: returns the DNs that could NOT be set (logged), so the
+        caller keeps the account even if some group writes were refused
+        (e.g. no "write member" right). Already-member is treated as success.
+        No-op under MOCK_SYNC (no real directory of groups).
+        """
+        if self._settings.ad_use_mock or not group_dns:
+            return []
+        return await run_in_threadpool(self._sync_add_user_to_groups, user_dn, list(group_dns))
+
+    def _sync_add_user_to_groups(self, user_dn: str, group_dns: list[str]) -> list[str]:
+        conn, owned = self._acquire_connection()
+        failed: list[str] = []
+        try:
+            for gdn in group_dns:
+                gdn = gdn.strip()
+                if not gdn:
+                    continue
+                try:
+                    res = conn.modify(gdn, {"member": [(MODIFY_ADD, [user_dn])]})
+                    ok, detail = self._write_result(res, conn)
+                    if ok:
+                        continue
+                    # Already a member → success (idempotent).
+                    if detail and (
+                        "ALREADY" in detail.upper() or "attributeOrValueExists" in detail
+                    ):
+                        continue
+                    logger.warning("add to group %s failed: %s", gdn, detail)
+                    failed.append(gdn)
+                except LDAPException as exc:
+                    logger.warning("add to group %s raised: %s", gdn, exc)
+                    failed.append(gdn)
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+        return failed
+
     async def create_user(
         self,
         *,
@@ -1189,6 +1236,7 @@ class AdClient:
         force_change: bool,
         password_never_expires: bool = False,
         cannot_change_password: bool = False,
+        group_dns: list[str] | None = None,
     ) -> str:
         """Create an enabled AD user account and return its ``objectGUID``.
 
@@ -1216,6 +1264,7 @@ class AdClient:
             force_change,
             password_never_expires,
             cannot_change_password,
+            list(group_dns or []),
         )
 
     def _sync_create_user(
@@ -1232,6 +1281,7 @@ class AdClient:
         force_change: bool,
         password_never_expires: bool = False,
         cannot_change_password: bool = False,
+        group_dns: list[str] | None = None,
     ) -> str:
         dn = f"CN={escape_rdn(common_name)},{ou_dn}"
         attrs: dict[str, Any] = {
@@ -1282,6 +1332,11 @@ class AdClient:
                         logger.warning(
                             "cannot-change-password not applied to new %s: %s", dn, exc
                         )
+                if group_dns:
+                    # Best-effort default-group assignment; refused groups are
+                    # logged (see _sync_add_user_to_groups) but never fail the
+                    # account creation.
+                    self._sync_add_user_to_groups(dn, group_dns)
             return new_guid
         except LDAPException as exc:
             raise AdUnavailableError("ldap_add_failed") from exc

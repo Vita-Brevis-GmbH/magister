@@ -13,7 +13,9 @@ class AdUserCreateRequest(BaseModel):
     sam_account_name: str = Field(min_length=1, max_length=20)
     user_principal_name: Upn
     mail: str | None = Field(default=None, max_length=320)
-    ou_key: str = Field(description="teacher | student_zyklus3 | student_other")
+    ou_key: str = Field(
+        description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3"
+    )
 
 
 class AdUserCreateResponse(BaseModel):

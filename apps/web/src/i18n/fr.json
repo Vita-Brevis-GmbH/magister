@@ -269,7 +269,8 @@
       "password_never_expires": "Le mot de passe n'expire jamais",
       "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD.",
       "store_password": "Enregistrer le mot de passe dans Magister",
-      "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres."
+      "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres.",
+      "ad_groups": "Groupes AD"
     },
     "new_user": "Nouvel utilisateur",
     "bulk": {
@@ -395,6 +396,10 @@
         "ad_ou_students_zyklus3": "OU cible élèves cycle 3",
         "ad_ou_students_other": "OU cible élèves (autres)",
         "ad_ou_teachers": "OU cible enseignants",
+        "ad_groups_teacher": "Groupes par défaut enseignants",
+        "ad_groups_student_zyklus1": "Groupes par défaut élèves cycle 1",
+        "ad_groups_student_zyklus2": "Groupes par défaut élèves cycle 2",
+        "ad_groups_student_zyklus3": "Groupes par défaut élèves cycle 3",
         "zyklus1_max_grade": "Cycle 1 jusqu'à l'année",
         "zyklus2_max_grade": "Cycle 2 jusqu'à l'année",
         "ad_login_enabled": "Activer la connexion AD",
@@ -411,6 +416,8 @@
       "password_store_title": "Stockage des mots de passe",
       "password_store_enabled": "Enregistrer les mots de passe chiffrés dans Magister",
       "password_store_hint": "Permet de conserver les mots de passe par utilisateur (chiffrés avec la clé serveur MAGISTER_AUDIT_KEY, pas dans la base). Base des listes de mots de passe par classe, p. ex. cycle 2.",
+      "userconfig_title": "Configuration utilisateur – groupes AD par défaut",
+      "userconfig_hint": "Les comptes nouvellement créés (import + création unique) sont automatiquement ajoutés à ces groupes AD — une DN de groupe par ligne. N'affecte que les nouveaux comptes.",
       "ad_login_title": "Connexion AD",
       "ad_login_enabled_hint": "Permet la connexion avec un nom d'utilisateur et un mot de passe AD (LDAPS) en plus d'Entra ID. Pas de MFA sur cette voie.",
       "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe.",
@@ -479,6 +486,8 @@
       "ou": "OU cible / rôle",
       "ou_hint": "Détermine l'OU et la classification. Les OU proviennent des paramètres de provisionnement.",
       "ou_teacher": "Enseignant·e",
+      "ou_student_zyklus1": "Élève (cycle 1)",
+      "ou_student_zyklus2": "Élève (cycle 2)",
       "ou_student_zyklus3": "Élève (cycle 3)",
       "ou_student_other": "Élève (autres)",
       "submit": "Créer",

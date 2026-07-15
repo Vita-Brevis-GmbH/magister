@@ -14,7 +14,12 @@ export const Route = createFileRoute("/_app/admin/user-new")({
   component: NewUserPage,
 });
 
-const OU_KEYS: AdUserOuKey[] = ["teacher", "student_zyklus3", "student_other"];
+const OU_KEYS: AdUserOuKey[] = [
+  "teacher",
+  "student_zyklus1",
+  "student_zyklus2",
+  "student_zyklus3",
+];
 
 const selectClasses =
   "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";

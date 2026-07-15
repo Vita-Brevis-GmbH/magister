@@ -759,6 +759,16 @@ function UserReadView({
             label={t("users.field.password_never_expires")}
             value={user.password_never_expires ? t("users.yes") : t("users.no")}
           />
+          <div className="flex gap-2 text-sm">
+            <span className="w-40 shrink-0 text-muted-foreground">
+              {t("users.field.ad_groups")}
+            </span>
+            <span className="font-medium">
+              {user.ad_groups.length > 0
+                ? user.ad_groups.map((dn) => groupCn(dn)).join(", ")
+                : "–"}
+            </span>
+          </div>
         </CardContent>
       </Card>
 
@@ -775,6 +785,12 @@ function UserReadView({
       </Card>
     </div>
   );
+}
+
+/** "CN=Lehrer,OU=Groups,DC=x" → "Lehrer" (falls back to the raw DN). */
+function groupCn(dn: string): string {
+  const first = dn.split(",")[0] ?? dn;
+  return first.replace(/^CN=/i, "") || dn;
 }
 
 function InfoRow({

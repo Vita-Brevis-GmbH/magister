@@ -34,6 +34,7 @@ const ENABLED_USER: AdUserOut = {
   password_never_expires: false,
   cannot_change_password: false,
   store_password: false,
+  ad_groups: [],
 };
 
 const DISABLED_USER: AdUserOut = { ...ENABLED_USER, enabled: false };

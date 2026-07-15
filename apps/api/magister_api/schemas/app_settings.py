@@ -56,6 +56,12 @@ class AppSettingsOut(BaseModel):
     # Password vault master switch.
     password_store_enabled: bool
 
+    # Default AD groups per provisioning category (lists of group DNs).
+    ad_groups_teacher: list[str]
+    ad_groups_student_zyklus1: list[str]
+    ad_groups_student_zyklus2: list[str]
+    ad_groups_student_zyklus3: list[str]
+
     # Audit fingerprint
     updated_at: datetime
     updated_by_upn: str | None
@@ -125,6 +131,11 @@ class AppSettingsUpdate(BaseModel):
     zyklus2_max_grade: int | None = Field(default=None, ge=1, le=13)
 
     password_store_enabled: bool | None = Field(default=None)
+
+    ad_groups_teacher: list[str] | None = Field(default=None)
+    ad_groups_student_zyklus1: list[str] | None = Field(default=None)
+    ad_groups_student_zyklus2: list[str] | None = Field(default=None)
+    ad_groups_student_zyklus3: list[str] | None = Field(default=None)
 
     @field_validator("ad_bind_mode")
     @classmethod

@@ -16,6 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient, AdUserRecord
+from magister_api.ad.ou import select_provision_groups
 from magister_api.ad.password import generate_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
@@ -28,8 +29,10 @@ from magister_api.models.subject_teacher_role import SubjectTeacherRole
 from magister_api.models.user_preferences import UserPreference
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
 
-# OU choices offered to the admin, mapped to the configured provisioning OUs.
-OU_CHOICES = ("teacher", "student_zyklus3", "student_other")
+# Categories offered to the admin. Determine both the target OU and the default
+# AD groups. Students are split by Zyklus (1/2/3); the OU still only has two
+# student buckets (Zyklus 3 vs the rest), the groups have three.
+OU_CHOICES = ("teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3")
 
 
 class UserAdminError(Exception):
@@ -53,26 +56,32 @@ class UserAdminService:
         self.ad = ad
         self.audit = AuditService(session, settings)
 
-    async def _target_ou(self, ou_key: str) -> str:
+    async def _provision_target(self, ou_key: str) -> tuple[str, list[str]]:
+        """Resolve ``(ou_dn, default_group_dns)`` for a provisioning category."""
         row = (
-            await self.session.execute(
-                select(
-                    AppSettings.ad_ou_teachers,
-                    AppSettings.ad_ou_students_zyklus3,
-                    AppSettings.ad_ou_students_other,
-                ).where(AppSettings.id == 1)
-            )
-        ).one_or_none()
-        ou = None
-        if row is not None:
-            ou = {
-                "teacher": row.ad_ou_teachers,
-                "student_zyklus3": row.ad_ou_students_zyklus3,
-                "student_other": row.ad_ou_students_other,
-            }.get(ou_key)
+            await self.session.execute(select(AppSettings).where(AppSettings.id == 1))
+        ).scalar_one_or_none()
+        if row is None:
+            raise UserAdminError("ou_not_configured")
+        ou = {
+            "teacher": row.ad_ou_teachers,
+            "student_zyklus1": row.ad_ou_students_other,
+            "student_zyklus2": row.ad_ou_students_other,
+            "student_zyklus3": row.ad_ou_students_zyklus3,
+        }.get(ou_key)
         if not ou:
             raise UserAdminError("ou_not_configured")
-        return ou
+        kind = "teacher" if ou_key == "teacher" else "student"
+        zyklus = None if kind == "teacher" else int(ou_key[-1])
+        groups = select_provision_groups(
+            kind=kind,
+            zyklus=zyklus,
+            groups_teacher=row.ad_groups_teacher,
+            groups_student_zyklus1=row.ad_groups_student_zyklus1,
+            groups_student_zyklus2=row.ad_groups_student_zyklus2,
+            groups_student_zyklus3=row.ad_groups_student_zyklus3,
+        )
+        return ou, groups
 
     async def _school_resolver(self):
         # scope-bypass: provisioning runs as the admin service, not a scoped user.
@@ -102,7 +111,7 @@ class UserAdminService:
     ) -> CreatedUser:
         if ou_key not in OU_CHOICES:
             raise UserAdminError("invalid_ou_choice")
-        ou_dn = await self._target_ou(ou_key)
+        ou_dn, group_dns = await self._provision_target(ou_key)
         kind = "teacher" if ou_key == "teacher" else "student"
         display_name = f"{given_name} {surname}".strip() or sam_account_name
         password = generate_password()
@@ -118,6 +127,7 @@ class UserAdminService:
             display_name=display_name,
             password=password,
             force_change=True,
+            group_dns=group_dns,
         )
 
         record = AdUserRecord(

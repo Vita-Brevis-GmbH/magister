@@ -141,6 +141,7 @@ class AdUserCacheSyncRepository:
                     "country": r.country,
                     "device_name": r.device_name,
                     "password_never_expires": r.password_never_expires,
+                    "ad_groups": list(r.groups),
                     # temp_device_name, jahrgangsstufe and cannot_change_password
                     # are Magister-only — do NOT overwrite on AD sync. We omit
                     # them from both VALUES and the ON-CONFLICT set; existing
@@ -176,6 +177,7 @@ class AdUserCacheSyncRepository:
                     "password_never_expires": pg_insert(
                         AdUserCache
                     ).excluded.password_never_expires,
+                    "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
                 },
             )
         )

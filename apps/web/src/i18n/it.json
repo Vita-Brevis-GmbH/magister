@@ -269,7 +269,8 @@
       "password_never_expires": "La password non scade mai",
       "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD.",
       "store_password": "Salva la password in Magister",
-      "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni."
+      "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni.",
+      "ad_groups": "Gruppi AD"
     },
     "new_user": "Nuovo utente",
     "bulk": {
@@ -395,6 +396,10 @@
         "ad_ou_students_zyklus3": "OU di destinazione studenti ciclo 3",
         "ad_ou_students_other": "OU di destinazione studenti (altri)",
         "ad_ou_teachers": "OU di destinazione insegnanti",
+        "ad_groups_teacher": "Gruppi predefiniti insegnanti",
+        "ad_groups_student_zyklus1": "Gruppi predefiniti allievi ciclo 1",
+        "ad_groups_student_zyklus2": "Gruppi predefiniti allievi ciclo 2",
+        "ad_groups_student_zyklus3": "Gruppi predefiniti allievi ciclo 3",
         "zyklus1_max_grade": "Ciclo 1 fino all'anno",
         "zyklus2_max_grade": "Ciclo 2 fino all'anno",
         "ad_login_enabled": "Abilita accesso AD",
@@ -411,6 +416,8 @@
       "password_store_title": "Archiviazione password",
       "password_store_enabled": "Salva le password cifrate in Magister",
       "password_store_hint": "Consente di conservare le password per utente (cifrate con la chiave del server MAGISTER_AUDIT_KEY, non nel DB). Base per gli elenchi password per classe, es. ciclo 2.",
+      "userconfig_title": "Configurazione utenti – gruppi AD predefiniti",
+      "userconfig_hint": "Gli account appena creati (import + creazione singola) vengono aggiunti automaticamente a questi gruppi AD — una DN di gruppo per riga. Vale solo per i nuovi account.",
       "ad_login_title": "Accesso AD",
       "ad_login_enabled_hint": "Consente l'accesso con nome utente e password AD (LDAPS) oltre a Entra ID. Nessun MFA su questa via.",
       "ad_login_group_required": "Senza un gruppo nessuno può accedere tramite AD. Indicare un gruppo.",
@@ -479,6 +486,8 @@
       "ou": "OU di destinazione / ruolo",
       "ou_hint": "Determina l'OU e la classificazione. Le OU provengono dalle impostazioni di provisioning.",
       "ou_teacher": "Docente",
+      "ou_student_zyklus1": "Studente (ciclo 1)",
+      "ou_student_zyklus2": "Studente (ciclo 2)",
       "ou_student_zyklus3": "Studente (ciclo 3)",
       "ou_student_other": "Studente (altri)",
       "submit": "Crea",

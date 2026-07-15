@@ -4,7 +4,24 @@ from __future__ import annotations
 
 import pytest
 
-from magister_api.ad.ou import select_student_ou, zyklus_for_jahrgangsstufe
+from magister_api.ad.ou import (
+    select_provision_groups,
+    select_student_ou,
+    zyklus_for_jahrgangsstufe,
+)
+
+
+def test_select_provision_groups() -> None:
+    kw = {
+        "groups_teacher": ["CN=T"],
+        "groups_student_zyklus1": ["CN=Z1"],
+        "groups_student_zyklus2": ["CN=Z2"],
+        "groups_student_zyklus3": ["CN=Z3"],
+    }
+    assert select_provision_groups(kind="teacher", zyklus=None, **kw) == ["CN=T"]
+    assert select_provision_groups(kind="student", zyklus=1, **kw) == ["CN=Z1"]
+    assert select_provision_groups(kind="student", zyklus=2, **kw) == ["CN=Z2"]
+    assert select_provision_groups(kind="student", zyklus=3, **kw) == ["CN=Z3"]
 
 
 @pytest.mark.parametrize(

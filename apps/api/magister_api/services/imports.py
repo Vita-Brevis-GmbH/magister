@@ -19,7 +19,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
-from magister_api.ad.ou import select_student_ou, zyklus_for_jahrgangsstufe
+from magister_api.ad.ou import (
+    select_provision_groups,
+    select_student_ou,
+    zyklus_for_jahrgangsstufe,
+)
 from magister_api.ad.password import generate_readable_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
@@ -945,6 +949,20 @@ class ImportService:
         if not ou:
             raise ValueError("target_ou_not_configured")
 
+        zyklus = zyklus_for_jahrgangsstufe(
+            jahrgangsstufe,
+            zyklus1_max=settings_row.zyklus1_max_grade,
+            zyklus2_max=settings_row.zyklus2_max_grade,
+        )
+        group_dns = select_provision_groups(
+            kind="student",
+            zyklus=zyklus,
+            groups_teacher=settings_row.ad_groups_teacher,
+            groups_student_zyklus1=settings_row.ad_groups_student_zyklus1,
+            groups_student_zyklus2=settings_row.ad_groups_student_zyklus2,
+            groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
+        )
+
         password = generate_readable_password()
         guid = await self.ad.create_user(
             ou_dn=ou,
@@ -959,6 +977,7 @@ class ImportService:
             force_change=force_change,
             password_never_expires=password_never_expires,
             cannot_change_password=cannot_change_password,
+            group_dns=group_dns,
         )
 
         self.session.add(
@@ -1032,6 +1051,15 @@ class ImportService:
         if not ou:
             raise ValueError("teacher_ou_not_configured")
 
+        group_dns = select_provision_groups(
+            kind="teacher",
+            zyklus=None,
+            groups_teacher=settings_row.ad_groups_teacher,
+            groups_student_zyklus1=settings_row.ad_groups_student_zyklus1,
+            groups_student_zyklus2=settings_row.ad_groups_student_zyklus2,
+            groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
+        )
+
         password = generate_readable_password()
         guid = await self.ad.create_user(
             ou_dn=ou,
@@ -1046,6 +1074,7 @@ class ImportService:
             force_change=force_change,
             password_never_expires=password_never_expires,
             cannot_change_password=cannot_change_password,
+            group_dns=group_dns,
         )
 
         self.session.add(

@@ -266,7 +266,8 @@
       "password_never_expires": "Passwort läuft nie ab",
       "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD.",
       "store_password": "Passwort in Magister speichern",
-      "store_password_hint": "Verschlüsselt (Server-Schlüssel). Beim Ausgeben der Zugangsdaten wird dieses PW verwendet statt eines neuen. Benötigt die globale Freigabe in den Einstellungen."
+      "store_password_hint": "Verschlüsselt (Server-Schlüssel). Beim Ausgeben der Zugangsdaten wird dieses PW verwendet statt eines neuen. Benötigt die globale Freigabe in den Einstellungen.",
+      "ad_groups": "AD-Gruppen"
     },
     "new_user": "Neuer Benutzer",
     "bulk": {
@@ -392,6 +393,10 @@
         "ad_ou_students_zyklus3": "Ziel-OU Schüler:innen Zyklus 3",
         "ad_ou_students_other": "Ziel-OU Schüler:innen (übrige)",
         "ad_ou_teachers": "Ziel-OU Lehrpersonen",
+        "ad_groups_teacher": "Standard-Gruppen Lehrpersonen",
+        "ad_groups_student_zyklus1": "Standard-Gruppen Schüler:innen Zyklus 1",
+        "ad_groups_student_zyklus2": "Standard-Gruppen Schüler:innen Zyklus 2",
+        "ad_groups_student_zyklus3": "Standard-Gruppen Schüler:innen Zyklus 3",
         "zyklus1_max_grade": "Zyklus 1 bis Jahrgangsstufe",
         "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe",
         "ad_login_enabled": "AD-Login aktivieren",
@@ -408,6 +413,8 @@
       "password_store_title": "Passwort-Speicherung",
       "password_store_enabled": "Passwörter verschlüsselt in Magister speichern",
       "password_store_hint": "Erlaubt das Ablegen von Passwörtern pro User (verschlüsselt mit dem Server-Schlüssel MAGISTER_AUDIT_KEY, nicht in der DB). Grundlage für Klassen-Passwortlisten, z. B. Zyklus 2.",
+      "userconfig_title": "Userkonfiguration – Standard-AD-Gruppen",
+      "userconfig_hint": "Neu angelegte Konten (Import + Einzel-Anlegen) werden automatisch diesen AD-Gruppen zugefügt — eine Gruppen-DN pro Zeile. Wirkt nur auf neu angelegte User.",
       "ad_login_title": "AD-Anmeldung",
       "ad_login_enabled_hint": "Erlaubt die Anmeldung mit AD-Benutzername und Passwort (LDAPS) zusätzlich zu Entra ID. Kein MFA auf diesem Weg.",
       "ad_login_group_required": "Ohne Gruppe kann sich niemand per AD anmelden. Bitte eine Gruppe angeben.",
@@ -476,6 +483,8 @@
       "ou": "Ziel-OU / Rolle",
       "ou_hint": "Bestimmt OU und Klassifizierung. Die OUs stammen aus den Provisioning-Einstellungen.",
       "ou_teacher": "Lehrperson",
+      "ou_student_zyklus1": "Schüler:in (Zyklus 1)",
+      "ou_student_zyklus2": "Schüler:in (Zyklus 2)",
       "ou_student_zyklus3": "Schüler:in (Zyklus 3)",
       "ou_student_other": "Schüler:in (übrige)",
       "submit": "Anlegen",

@@ -251,6 +251,8 @@ export interface AdUserOut {
   cannot_change_password: boolean;
   /** Vault: keep the last set password encrypted in Magister. */
   store_password: boolean;
+  /** Synced AD group memberships (memberOf DNs). */
+  ad_groups: string[];
 }
 
 /** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null
@@ -333,6 +335,10 @@ export interface AppSettingsOut {
   zyklus1_max_grade: number;
   zyklus2_max_grade: number;
   password_store_enabled: boolean;
+  ad_groups_teacher: string[];
+  ad_groups_student_zyklus1: string[];
+  ad_groups_student_zyklus2: string[];
+  ad_groups_student_zyklus3: string[];
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -347,7 +353,11 @@ export interface AdSyncResultOut {
   school_partition: Record<string, number>;
 }
 
-export type AdUserOuKey = "teacher" | "student_zyklus3" | "student_other";
+export type AdUserOuKey =
+  | "teacher"
+  | "student_zyklus1"
+  | "student_zyklus2"
+  | "student_zyklus3";
 
 export interface AdUserCreateRequest {
   given_name: string;
@@ -638,4 +648,8 @@ export interface AppSettingsUpdate {
   zyklus1_max_grade?: number | null;
   zyklus2_max_grade?: number | null;
   password_store_enabled?: boolean | null;
+  ad_groups_teacher?: string[] | null;
+  ad_groups_student_zyklus1?: string[] | null;
+  ad_groups_student_zyklus2?: string[] | null;
+  ad_groups_student_zyklus3?: string[] | null;
 }

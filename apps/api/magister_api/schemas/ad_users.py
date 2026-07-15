@@ -31,6 +31,7 @@ class AdUserOut(BaseModel):
     password_never_expires: bool = False
     cannot_change_password: bool = False
     store_password: bool = False
+    ad_groups: list[str] = Field(default_factory=list)
 
 
 class AdUserListResponse(BaseModel):

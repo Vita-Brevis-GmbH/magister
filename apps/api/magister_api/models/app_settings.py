@@ -115,6 +115,21 @@ class AppSettings(Base):
         Boolean, nullable=False, default=False, server_default=false()
     )
 
+    # Default AD groups assigned to newly provisioned accounts, per category
+    # (teacher / student by Zyklus). Each a JSON list of group DNs. Empty = none.
+    ad_groups_teacher: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    ad_groups_student_zyklus1: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    ad_groups_student_zyklus2: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    ad_groups_student_zyklus3: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

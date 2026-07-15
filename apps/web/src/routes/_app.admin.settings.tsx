@@ -45,6 +45,10 @@ interface FormState {
   zyklus1_max_grade: string;
   zyklus2_max_grade: string;
   password_store_enabled: boolean;
+  ad_groups_teacher: string;
+  ad_groups_student_zyklus1: string;
+  ad_groups_student_zyklus2: string;
+  ad_groups_student_zyklus3: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -73,7 +77,19 @@ function fromOut(data: AppSettingsOut): FormState {
     zyklus1_max_grade: String(data.zyklus1_max_grade),
     zyklus2_max_grade: String(data.zyklus2_max_grade),
     password_store_enabled: data.password_store_enabled,
+    ad_groups_teacher: data.ad_groups_teacher.join("\n"),
+    ad_groups_student_zyklus1: data.ad_groups_student_zyklus1.join("\n"),
+    ad_groups_student_zyklus2: data.ad_groups_student_zyklus2.join("\n"),
+    ad_groups_student_zyklus3: data.ad_groups_student_zyklus3.join("\n"),
   };
+}
+
+/** One group DN per line; trims + drops blanks. */
+function splitLines(s: string): string[] {
+  return s
+    .split("\n")
+    .map((v) => v.trim())
+    .filter(Boolean);
 }
 
 function splitCsv(s: string): string[] {
@@ -161,6 +177,16 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   if (form.password_store_enabled !== current.password_store_enabled) {
     payload.password_store_enabled = form.password_store_enabled;
+  }
+  const groupFields = [
+    "ad_groups_teacher",
+    "ad_groups_student_zyklus1",
+    "ad_groups_student_zyklus2",
+    "ad_groups_student_zyklus3",
+  ] as const;
+  for (const f of groupFields) {
+    const next = splitLines(form[f]);
+    if (next.join("\n") !== current[f].join("\n")) payload[f] = next;
   }
   return payload;
 }
@@ -525,6 +551,35 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
                 </span>
               </span>
             </label>
+          </div>
+
+          <div className="space-y-3 border-t pt-4">
+            <div>
+              <h2 className="font-medium">{t("admin.settings.userconfig_title")}</h2>
+              <p className="text-xs text-muted-foreground">
+                {t("admin.settings.userconfig_hint")}
+              </p>
+            </div>
+            {(
+              [
+                ["ad_groups_teacher", "field.ad_groups_teacher"],
+                ["ad_groups_student_zyklus1", "field.ad_groups_student_zyklus1"],
+                ["ad_groups_student_zyklus2", "field.ad_groups_student_zyklus2"],
+                ["ad_groups_student_zyklus3", "field.ad_groups_student_zyklus3"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <Label htmlFor={key}>{t(`admin.settings.${label}`)}</Label>
+                <textarea
+                  id={key}
+                  rows={3}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                  placeholder="CN=Gruppe,OU=Groups,DC=schule,DC=local"
+                  value={form[key]}
+                  onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                />
+              </div>
+            ))}
           </div>
 
           <div className="space-y-2 border-t pt-4">

@@ -112,14 +112,19 @@ def test_client_reads_sd_from_safe_sync_tuple() -> None:
         def __init__(self) -> None:
             self.modified: bytes | None = None
 
-        def search(self, *_a: object, **_k: object) -> tuple:
+        def search(self, *_a: object, **_k: object) -> tuple[object, ...]:
             entry = {
                 "type": "searchResEntry",
                 "raw_attributes": {"nTSecurityDescriptor": [sd_bytes]},
             }
             return (True, {"result": 0}, [entry], None)
 
-        def modify(self, _dn: str, changes: dict, controls: object = None) -> tuple:
+        def modify(
+            self,
+            _dn: str,
+            changes: dict[str, list[tuple[object, list[bytes]]]],
+            controls: object = None,
+        ) -> tuple[object, ...]:
             self.modified = changes["nTSecurityDescriptor"][0][1][0]
             return (True, {"result": 0}, [], None)
 

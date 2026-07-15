@@ -53,9 +53,33 @@ def select_student_ou(
     return ou_other or None
 
 
+def select_provision_groups(
+    *,
+    kind: str,
+    zyklus: int | None,
+    groups_teacher: list[str],
+    groups_student_zyklus1: list[str],
+    groups_student_zyklus2: list[str],
+    groups_student_zyklus3: list[str],
+) -> list[str]:
+    """Default AD groups for a newly provisioned account.
+
+    Teachers get the teacher template; students get the template for their
+    Zyklus (1/2/3). ``zyklus`` is ignored for teachers.
+    """
+    if kind == "teacher":
+        return list(groups_teacher)
+    if zyklus == 1:
+        return list(groups_student_zyklus1)
+    if zyklus == 2:
+        return list(groups_student_zyklus2)
+    return list(groups_student_zyklus3)
+
+
 __all__ = [
     "DEFAULT_ZYKLUS1_MAX",
     "DEFAULT_ZYKLUS2_MAX",
+    "select_provision_groups",
     "select_student_ou",
     "zyklus_for_jahrgangsstufe",
 ]

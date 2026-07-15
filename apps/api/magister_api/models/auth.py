@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -80,6 +81,11 @@ class AdUserCache(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # AD group memberships (``memberOf`` DNs), refreshed on every sync. Purely
+    # informational in Magister — display only.
+    ad_groups: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 
