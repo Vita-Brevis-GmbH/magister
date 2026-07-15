@@ -87,6 +87,10 @@ class AppSettings(Base):
     # Optional: subtree to walk for ``Computer`` objects whose ``managedBy``
     # points at a user. Unset = device sync is skipped silently.
     ad_computers_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Optional: subtree to walk for ``group`` objects (the group catalog the
+    # Userkonfiguration checkbox-picker reads). Unset = fall back to the users
+    # search base.
+    ad_groups_search_base: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_sync_interval_minutes: Mapped[int] = mapped_column(
         Integer, nullable=False, default=15, server_default="15"
     )

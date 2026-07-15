@@ -235,6 +235,36 @@ class TestParseAdEntry:
         empty = parse_ad_entry(self._attrs(), "CN=X")
         assert empty.groups == ()
 
+    def test_search_groups_parses_catalog(self) -> None:
+        """_sync_search_groups maps group entries to AdGroupRecord."""
+        import uuid
+
+        from magister_api.ad.client import AdClient
+
+        guid_bytes = uuid.UUID("22222222-2222-2222-2222-222222222222").bytes_le
+
+        class _FakeConn:
+            def search(self, *_a: object, **_k: object) -> tuple[object, ...]:
+                entry = {
+                    "type": "searchResEntry",
+                    "dn": "CN=Klasse3a,OU=Groups,DC=x",
+                    "attributes": {
+                        "objectGUID": guid_bytes,
+                        "cn": "Klasse3a",
+                        "sAMAccountName": "Klasse3a",
+                        "description": "Schülergruppe",
+                    },
+                }
+                return (True, {"result": 0}, [entry], None)
+
+        client = AdClient(Settings(ad_users_search_base="DC=schule,DC=local"))
+        client._acquire_connection = lambda: (_FakeConn(), False)  # type: ignore[assignment,method-assign]
+        groups = client._sync_search_groups("OU=Groups,DC=x")
+        assert len(groups) == 1
+        assert groups[0].cn == "Klasse3a"
+        assert groups[0].distinguished_name == "CN=Klasse3a,OU=Groups,DC=x"
+        assert groups[0].ad_object_guid == "22222222-2222-2222-2222-222222222222"
+
     def test_missing_upn_raises(self) -> None:
         with pytest.raises(AdUserParseError):
             parse_ad_entry(self._attrs(userPrincipalName=None), "CN=X")

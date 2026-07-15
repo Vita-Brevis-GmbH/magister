@@ -51,3 +51,7 @@ def require_role(
 require_admin = require_role(ROLE_ADMIN)
 require_schulleitung = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG)
 require_smi = require_role(ROLE_ADMIN, ROLE_SMI)
+# Any management tier (admin / Schulleitung / SMI). Used for the user-config
+# surface (provisioning OUs, group templates, password-vault switch), which the
+# Schulträger-IT and Schulleitung maintain — not just the system admin.
+require_manage = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI)

@@ -20,7 +20,8 @@
     "settings": "Einstellungen",
     "usermanagement": "Benutzerverwaltung",
     "system_settings": "Systemeinstellungen",
-    "refresh": "Aktualisieren"
+    "refresh": "Aktualisieren",
+    "user_settings": "Userkonfiguration"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -424,7 +425,8 @@
       "purge_demo_confirm": "Beispieldaten wirklich löschen?",
       "purge_demo_yes": "Endgültig löschen",
       "purge_demo_ok": "Gelöscht: {{classes}} Klassen, {{users}} Personen.",
-      "purge_demo_none": "Keine Beispieldaten gefunden."
+      "purge_demo_none": "Keine Beispieldaten gefunden.",
+      "userconfig_moved_hint": "Userkonfiguration (Ziel-OUs, AD-Gruppen, Passwortspeicherung) findest du nun unter Einstellungen → Userkonfiguration."
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",
@@ -496,7 +498,38 @@
       "create_another": "Weiteren anlegen",
       "err_ou_not_configured": "Ziel-OU nicht konfiguriert. Bitte unter Einstellungen die Provisioning-OUs setzen.",
       "err_ad": "AD nicht erreichbar oder Konflikt (UPN/Anmeldename existiert bereits).",
-      "err_invalid": "Eingabe ungültig. Bitte prüfen."
+      "err_invalid": "Eingabe ungültig. Bitte prüfen.",
+      "display_name": "Anzeigename",
+      "display_name_hint": "Optional — wird sonst aus Vor- und Nachname gebildet.",
+      "jahrgangsstufe": "Jahrgangsstufe",
+      "class": "Klasse",
+      "class_none": "— keine —",
+      "force_change": "Passwortänderung bei erster Anmeldung erzwingen",
+      "cannot_change_password": "Benutzer kann Passwort nicht ändern",
+      "password_never_expires": "Passwort läuft nie ab",
+      "class_assign_failed": "Konto erstellt, aber die Klassenzuweisung ist fehlgeschlagen. Bitte manuell zuweisen."
+    },
+    "user_settings": {
+      "title": "Userkonfiguration",
+      "description": "Ziel-OUs, AD-Gruppen-Vorlagen und Passwortspeicherung für neu angelegte Benutzer.",
+      "ou_section": "Ziel-OUs für neue Benutzer",
+      "ou_section_desc": "In welcher OU neue Konten angelegt werden — nach Zyklus für Schüler:innen und separat für Lehrpersonen.",
+      "groups_section": "AD-Gruppen-Vorlagen",
+      "groups_section_desc": "Gruppen, die neuen Konten automatisch zugewiesen werden. Auswahl aus den gesyncten AD-Gruppen.",
+      "field": {
+        "ad_groups_search_base": "Such-Basis für Gruppen (optional)",
+        "ad_groups_teacher": "Gruppen für Lehrpersonen",
+        "ad_groups_student_zyklus1": "Gruppen für Schüler:innen Zyklus 1",
+        "ad_groups_student_zyklus2": "Gruppen für Schüler:innen Zyklus 2",
+        "ad_groups_student_zyklus3": "Gruppen für Schüler:innen Zyklus 3"
+      },
+      "groups_base_hint": "OU/Teilbaum, in dem nach AD-Gruppen gesucht wird. Leer = Benutzer-Such-Basis.",
+      "group_pick_hint": "Gewünschte Gruppen anhaken.",
+      "group_filter": "Gruppen filtern…",
+      "group_empty": "Keine AD-Gruppen gesynct. Bitte einen vollständigen AD-Sync ausführen.",
+      "group_no_match": "Keine Treffer.",
+      "group_not_synced": "(nicht gesynct)",
+      "group_selected_count": "{{count}} ausgewählt"
     }
   },
   "substitutions": {

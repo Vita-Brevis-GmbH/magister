@@ -12,6 +12,9 @@ import type {
   AdUserDeleteResponse,
   AdUserListResponse,
   AdUserOut,
+  AdGroupOut,
+  AdUserSettingsOut,
+  AdUserSettingsUpdate,
   DemoPurgeResponse,
   AppSettingsOut,
   AppSettingsUpdate,
@@ -82,6 +85,8 @@ export const queryKeys = {
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
+  userSettings: ["user-settings"] as const,
+  adGroups: ["ad-groups"] as const,
   myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
@@ -595,6 +600,33 @@ export function useUpdateAppSettings() {
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
     mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+  });
+}
+
+export function useUserSettings() {
+  return useQuery<AdUserSettingsOut>({
+    queryKey: queryKeys.userSettings,
+    queryFn: () => apiFetch<AdUserSettingsOut>("/admin/user-settings"),
+  });
+}
+
+export function useUpdateUserSettings() {
+  const qc = useQueryClient();
+  return useMutation<AdUserSettingsOut, ApiError, AdUserSettingsUpdate>({
+    mutationFn: (body) =>
+      apiFetch<AdUserSettingsOut>("/admin/user-settings", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.userSettings, data);
+      qc.invalidateQueries({ queryKey: queryKeys.appSettings });
+    },
+  });
+}
+
+/** Synced AD group catalog for the group-template checkbox picker. */
+export function useAdGroups() {
+  return useQuery<AdGroupOut[]>({
+    queryKey: queryKeys.adGroups,
+    queryFn: () => apiFetch<AdGroupOut[]>("/admin/ad-groups"),
   });
 }
 

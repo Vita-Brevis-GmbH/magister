@@ -120,6 +120,17 @@ class AdUserRecord:
         return needle in self.distinguished_name.upper()
 
 
+@dataclass(frozen=True)
+class AdGroupRecord:
+    """Parsed AD ``group`` object, ready to upsert into ``ad_group_cache``."""
+
+    ad_object_guid: str
+    distinguished_name: str
+    cn: str
+    sam_account_name: str | None
+    description: str | None
+
+
 def _decode_object_guid(raw: Any) -> str:
     """Convert an AD ``objectGUID`` blob to lowercase 8-4-4-4-12.
 
@@ -713,6 +724,73 @@ class AdClient:
                 if not name:
                     continue
                 out.append((guid, str(name)))
+            return out
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def search_groups(self, *, search_base: str | None = None) -> list[AdGroupRecord]:
+        """Return every ``group`` object below ``search_base``.
+
+        Feeds the ``ad_group_cache`` catalog that the Userkonfiguration GUI
+        offers as checkboxes. ``search_base`` falls back to the users search
+        base; an empty/unset base is a soft-no-op (returns ``[]``) so a
+        partially-configured deployment never aborts the sync.
+        """
+        base = search_base or self._settings.ad_users_search_base
+        if not base:
+            return []
+        return await run_in_threadpool(self._sync_search_groups, base)
+
+    def _sync_search_groups(self, base: str) -> list[AdGroupRecord]:
+        conn, owned = self._acquire_connection()
+        try:
+            raw, result = self._paged_search(
+                conn,
+                base,
+                "(objectClass=group)",
+                ["cn", "sAMAccountName", "objectGUID", "distinguishedName", "description"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                # Group catalog is a convenience feature: a wrong or empty base
+                # must never abort the user sync. Log the category and skip.
+                logger.warning("AD group catalog sync skipped: %s", detail)
+                return []
+            out: list[AdGroupRecord] = []
+            for entry in raw:
+                attrs = entry.get("attributes", {})
+                raw_guid = _first_value(attrs.get("objectGUID"))
+                if raw_guid is None:
+                    continue
+                try:
+                    guid = _decode_object_guid(raw_guid)
+                except AdUserParseError:
+                    continue
+                dn = entry.get("dn") or _first_value(attrs.get("distinguishedName")) or ""
+                cn = _first_value(attrs.get("cn"))
+                if not cn:
+                    continue
+                out.append(
+                    AdGroupRecord(
+                        ad_object_guid=guid,
+                        distinguished_name=str(dn),
+                        cn=str(cn),
+                        sam_account_name=(
+                            str(_first_value(attrs.get("sAMAccountName")))
+                            if _first_value(attrs.get("sAMAccountName"))
+                            else None
+                        ),
+                        description=(
+                            str(_first_value(attrs.get("description")))
+                            if _first_value(attrs.get("description"))
+                            else None
+                        ),
+                    )
+                )
             return out
         finally:
             if owned:
@@ -1329,9 +1407,7 @@ class AdClient:
                     try:
                         self._sync_set_cannot_change_password(dn, True)
                     except AdUnavailableError as exc:
-                        logger.warning(
-                            "cannot-change-password not applied to new %s: %s", dn, exc
-                        )
+                        logger.warning("cannot-change-password not applied to new %s: %s", dn, exc)
                 if group_dns:
                     # Best-effort default-group assignment; refused groups are
                     # logged (see _sync_add_user_to_groups) but never fail the
@@ -1414,6 +1490,7 @@ __all__ = [
     "BASE",
     "DEFAULT_USER_ATTRIBUTES",
     "AdClient",
+    "AdGroupRecord",
     "AdUserRecord",
     "classify_kind_by_ou",
     "parse_ad_entry",

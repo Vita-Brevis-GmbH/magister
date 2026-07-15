@@ -13,9 +13,16 @@ class AdUserCreateRequest(BaseModel):
     sam_account_name: str = Field(min_length=1, max_length=20)
     user_principal_name: Upn
     mail: str | None = Field(default=None, max_length=320)
-    ou_key: str = Field(
-        description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3"
-    )
+    ou_key: str = Field(description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3")
+    # Optional display name; derived from given+surname when blank.
+    display_name: str | None = Field(default=None, max_length=128)
+    # AD account flags (parity with the bulk import). Defaults are the safe /
+    # most common choices for a freshly provisioned account.
+    force_change: bool = True
+    cannot_change_password: bool = False
+    password_never_expires: bool = False
+    # Per-student grade (-1 = 1. KG, 0 = 2. KG, 1..13). Ignored for teachers.
+    jahrgangsstufe: int | None = Field(default=None, ge=-1, le=13)
 
 
 class AdUserCreateResponse(BaseModel):

@@ -23,7 +23,8 @@
     "settings": "Paramètres",
     "usermanagement": "Gestion des utilisateurs",
     "system_settings": "Paramètres système",
-    "refresh": "Actualiser"
+    "refresh": "Actualiser",
+    "user_settings": "Configuration utilisateur"
   },
   "auth": {
     "login_title": "Connexion",
@@ -427,7 +428,8 @@
       "purge_demo_confirm": "Supprimer vraiment les données de démo ?",
       "purge_demo_yes": "Supprimer définitivement",
       "purge_demo_ok": "Supprimé : {{classes}} classes, {{users}} personnes.",
-      "purge_demo_none": "Aucune donnée de démo trouvée."
+      "purge_demo_none": "Aucune donnée de démo trouvée.",
+      "userconfig_moved_hint": "La configuration utilisateur (OU cibles, groupes AD, stockage des mots de passe) se trouve désormais sous Paramètres → Configuration utilisateur."
     },
     "local_admin": {
       "title": "Compte administrateur local",
@@ -499,7 +501,38 @@
       "create_another": "En créer un autre",
       "err_ou_not_configured": "OU cible non configurée. Définissez les OU de provisionnement dans les Paramètres.",
       "err_ad": "AD injoignable ou conflit (UPN/nom de connexion déjà existant).",
-      "err_invalid": "Saisie invalide. Veuillez vérifier."
+      "err_invalid": "Saisie invalide. Veuillez vérifier.",
+      "display_name": "Nom affiché",
+      "display_name_hint": "Optionnel — sinon dérivé du prénom et du nom.",
+      "jahrgangsstufe": "Année scolaire",
+      "class": "Classe",
+      "class_none": "— aucune —",
+      "force_change": "Forcer le changement de mot de passe à la première connexion",
+      "cannot_change_password": "L'utilisateur ne peut pas changer le mot de passe",
+      "password_never_expires": "Le mot de passe n'expire jamais",
+      "class_assign_failed": "Compte créé, mais l'affectation à la classe a échoué. Veuillez l'affecter manuellement."
+    },
+    "user_settings": {
+      "title": "Configuration utilisateur",
+      "description": "OU cibles, modèles de groupes AD et stockage des mots de passe pour les nouveaux utilisateurs.",
+      "ou_section": "OU cibles pour les nouveaux utilisateurs",
+      "ou_section_desc": "OU dans laquelle les nouveaux comptes sont créés — par cycle pour les élèves et séparément pour les enseignants.",
+      "groups_section": "Modèles de groupes AD",
+      "groups_section_desc": "Groupes attribués automatiquement aux nouveaux comptes. Sélection parmi les groupes AD synchronisés.",
+      "field": {
+        "ad_groups_search_base": "Base de recherche des groupes (optionnel)",
+        "ad_groups_teacher": "Groupes pour les enseignants",
+        "ad_groups_student_zyklus1": "Groupes pour les élèves cycle 1",
+        "ad_groups_student_zyklus2": "Groupes pour les élèves cycle 2",
+        "ad_groups_student_zyklus3": "Groupes pour les élèves cycle 3"
+      },
+      "groups_base_hint": "OU/sous-arbre où rechercher les groupes AD. Vide = base de recherche des utilisateurs.",
+      "group_pick_hint": "Cochez les groupes souhaités.",
+      "group_filter": "Filtrer les groupes…",
+      "group_empty": "Aucun groupe AD synchronisé. Veuillez lancer une synchronisation AD complète.",
+      "group_no_match": "Aucun résultat.",
+      "group_not_synced": "(non synchronisé)",
+      "group_selected_count": "{{count}} sélectionné(s)"
     }
   },
   "substitutions": {

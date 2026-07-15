@@ -39,16 +39,6 @@ interface FormState {
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
-  ad_ou_students_zyklus3: string;
-  ad_ou_students_other: string;
-  ad_ou_teachers: string;
-  zyklus1_max_grade: string;
-  zyklus2_max_grade: string;
-  password_store_enabled: boolean;
-  ad_groups_teacher: string;
-  ad_groups_student_zyklus1: string;
-  ad_groups_student_zyklus2: string;
-  ad_groups_student_zyklus3: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -71,25 +61,7 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
-    ad_ou_students_zyklus3: data.ad_ou_students_zyklus3 ?? "",
-    ad_ou_students_other: data.ad_ou_students_other ?? "",
-    ad_ou_teachers: data.ad_ou_teachers ?? "",
-    zyklus1_max_grade: String(data.zyklus1_max_grade),
-    zyklus2_max_grade: String(data.zyklus2_max_grade),
-    password_store_enabled: data.password_store_enabled,
-    ad_groups_teacher: data.ad_groups_teacher.join("\n"),
-    ad_groups_student_zyklus1: data.ad_groups_student_zyklus1.join("\n"),
-    ad_groups_student_zyklus2: data.ad_groups_student_zyklus2.join("\n"),
-    ad_groups_student_zyklus3: data.ad_groups_student_zyklus3.join("\n"),
   };
-}
-
-/** One group DN per line; trims + drops blanks. */
-function splitLines(s: string): string[] {
-  return s
-    .split("\n")
-    .map((v) => v.trim())
-    .filter(Boolean);
 }
 
 function splitCsv(s: string): string[] {
@@ -157,36 +129,6 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const interval = Number(form.ad_sync_interval_minutes);
   if (Number.isFinite(interval) && interval !== current.ad_sync_interval_minutes) {
     payload.ad_sync_interval_minutes = interval;
-  }
-  if (form.ad_ou_students_zyklus3 !== (current.ad_ou_students_zyklus3 ?? "")) {
-    payload.ad_ou_students_zyklus3 = form.ad_ou_students_zyklus3;
-  }
-  if (form.ad_ou_students_other !== (current.ad_ou_students_other ?? "")) {
-    payload.ad_ou_students_other = form.ad_ou_students_other;
-  }
-  if (form.ad_ou_teachers !== (current.ad_ou_teachers ?? "")) {
-    payload.ad_ou_teachers = form.ad_ou_teachers;
-  }
-  const z1 = Number(form.zyklus1_max_grade);
-  if (Number.isFinite(z1) && z1 !== current.zyklus1_max_grade) {
-    payload.zyklus1_max_grade = z1;
-  }
-  const z2 = Number(form.zyklus2_max_grade);
-  if (Number.isFinite(z2) && z2 !== current.zyklus2_max_grade) {
-    payload.zyklus2_max_grade = z2;
-  }
-  if (form.password_store_enabled !== current.password_store_enabled) {
-    payload.password_store_enabled = form.password_store_enabled;
-  }
-  const groupFields = [
-    "ad_groups_teacher",
-    "ad_groups_student_zyklus1",
-    "ad_groups_student_zyklus2",
-    "ad_groups_student_zyklus3",
-  ] as const;
-  for (const f of groupFields) {
-    const next = splitLines(form[f]);
-    if (next.join("\n") !== current[f].join("\n")) payload[f] = next;
   }
   return payload;
 }
@@ -493,93 +435,10 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
             />
           </div>
 
-          <div className="space-y-3 border-t pt-4">
-            <p className="text-sm font-medium">{t("admin.settings.provisioning_title")}</p>
-            <p className="text-xs text-muted-foreground">{t("admin.settings.provisioning_hint")}</p>
-            <div className="space-y-1">
-              <Label htmlFor="ou-z3">{t("admin.settings.field.ad_ou_students_zyklus3")}</Label>
-              <Input
-                id="ou-z3"
-                placeholder="OU=SekI,OU=Schule,DC=…"
-                {...field("ad_ou_students_zyklus3")}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ou-other">{t("admin.settings.field.ad_ou_students_other")}</Label>
-              <Input
-                id="ou-other"
-                placeholder="OU=Schueler,OU=Schule,DC=…"
-                {...field("ad_ou_students_other")}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ou-teachers">{t("admin.settings.field.ad_ou_teachers")}</Label>
-              <Input
-                id="ou-teachers"
-                placeholder="OU=Lehrer,OU=Schule,DC=…"
-                {...field("ad_ou_teachers")}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
-                <Input id="z1max" type="number" min={1} max={13} {...field("zyklus1_max_grade")} />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
-                <Input id="z2max" type="number" min={1} max={13} {...field("zyklus2_max_grade")} />
-              </div>
-            </div>
-            <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
-          </div>
-
           <div className="space-y-2 border-t pt-4">
-            <h2 className="font-medium">{t("admin.settings.password_store_title")}</h2>
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-0.5 h-4 w-4 rounded border-input"
-                checked={form.password_store_enabled}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, password_store_enabled: e.target.checked }))
-                }
-              />
-              <span>
-                {t("admin.settings.password_store_enabled")}
-                <span className="block text-xs text-muted-foreground">
-                  {t("admin.settings.password_store_hint")}
-                </span>
-              </span>
-            </label>
-          </div>
-
-          <div className="space-y-3 border-t pt-4">
-            <div>
-              <h2 className="font-medium">{t("admin.settings.userconfig_title")}</h2>
-              <p className="text-xs text-muted-foreground">
-                {t("admin.settings.userconfig_hint")}
-              </p>
-            </div>
-            {(
-              [
-                ["ad_groups_teacher", "field.ad_groups_teacher"],
-                ["ad_groups_student_zyklus1", "field.ad_groups_student_zyklus1"],
-                ["ad_groups_student_zyklus2", "field.ad_groups_student_zyklus2"],
-                ["ad_groups_student_zyklus3", "field.ad_groups_student_zyklus3"],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="space-y-1">
-                <Label htmlFor={key}>{t(`admin.settings.${label}`)}</Label>
-                <textarea
-                  id={key}
-                  rows={3}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
-                  placeholder="CN=Gruppe,OU=Groups,DC=schule,DC=local"
-                  value={form[key]}
-                  onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                />
-              </div>
-            ))}
+            <p className="text-xs text-muted-foreground">
+              {t("admin.settings.userconfig_moved_hint")}
+            </p>
           </div>
 
           <div className="space-y-2 border-t pt-4">

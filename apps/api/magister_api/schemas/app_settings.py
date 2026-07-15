@@ -132,6 +132,9 @@ class AppSettingsUpdate(BaseModel):
 
     password_store_enabled: bool | None = Field(default=None)
 
+    # Optional subtree to walk for the group catalog. Empty string clears.
+    ad_groups_search_base: str | None = None
+
     ad_groups_teacher: list[str] | None = Field(default=None)
     ad_groups_student_zyklus1: list[str] | None = Field(default=None)
     ad_groups_student_zyklus2: list[str] | None = Field(default=None)

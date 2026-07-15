@@ -26,6 +26,7 @@ from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
+from magister_api.schemas.user_settings import AdUserSettingsOut, AdUserSettingsUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +212,76 @@ class AppSettingsService:
             updated_by_upn=row.updated_by_upn,
         )
 
+    async def get_user_config(self) -> AdUserSettingsOut:
+        """User-configuration subset — safe for the manage tier (no secrets).
+
+        # scope-bypass: app_settings is a global singleton (no school scope).
+        """
+        stmt = select(
+            AppSettings.version,
+            AppSettings.ad_ou_students_zyklus3,
+            AppSettings.ad_ou_students_other,
+            AppSettings.ad_ou_teachers,
+            AppSettings.zyklus1_max_grade,
+            AppSettings.zyklus2_max_grade,
+            AppSettings.password_store_enabled,
+            AppSettings.ad_groups_search_base,
+            AppSettings.ad_groups_teacher,
+            AppSettings.ad_groups_student_zyklus1,
+            AppSettings.ad_groups_student_zyklus2,
+            AppSettings.ad_groups_student_zyklus3,
+        ).where(AppSettings.id == 1)
+        row = (await self.session.execute(stmt)).one()
+        return AdUserSettingsOut(
+            version=row.version,
+            ad_ou_students_zyklus3=row.ad_ou_students_zyklus3,
+            ad_ou_students_other=row.ad_ou_students_other,
+            ad_ou_teachers=row.ad_ou_teachers,
+            zyklus1_max_grade=row.zyklus1_max_grade,
+            zyklus2_max_grade=row.zyklus2_max_grade,
+            password_store_enabled=bool(row.password_store_enabled),
+            ad_groups_search_base=row.ad_groups_search_base,
+            ad_groups_teacher=list(row.ad_groups_teacher or []),
+            ad_groups_student_zyklus1=list(row.ad_groups_student_zyklus1 or []),
+            ad_groups_student_zyklus2=list(row.ad_groups_student_zyklus2 or []),
+            ad_groups_student_zyklus3=list(row.ad_groups_student_zyklus3 or []),
+        )
+
+    async def update_user_config(
+        self,
+        payload: AdUserSettingsUpdate,
+        *,
+        actor_upn: str,
+        actor_object_guid: str | None,
+        ip: str | None,
+        request_id: str,
+    ) -> AdUserSettingsOut:
+        """Write only the user-config subset. Reuses :meth:`update` so the
+        version bump + audit trail stay identical; secret/AD-connection fields
+        are never touched because they are left ``None`` on the mapped payload.
+        """
+        mapped = AppSettingsUpdate(
+            ad_ou_students_zyklus3=payload.ad_ou_students_zyklus3,
+            ad_ou_students_other=payload.ad_ou_students_other,
+            ad_ou_teachers=payload.ad_ou_teachers,
+            zyklus1_max_grade=payload.zyklus1_max_grade,
+            zyklus2_max_grade=payload.zyklus2_max_grade,
+            password_store_enabled=payload.password_store_enabled,
+            ad_groups_search_base=payload.ad_groups_search_base,
+            ad_groups_teacher=payload.ad_groups_teacher,
+            ad_groups_student_zyklus1=payload.ad_groups_student_zyklus1,
+            ad_groups_student_zyklus2=payload.ad_groups_student_zyklus2,
+            ad_groups_student_zyklus3=payload.ad_groups_student_zyklus3,
+        )
+        await self.update(
+            mapped,
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            ip=ip,
+            request_id=request_id,
+        )
+        return await self.get_user_config()
+
     # ---------- writes ----------
 
     async def update(
@@ -252,6 +323,7 @@ class AppSettingsService:
             "ad_ou_teachers": payload.ad_ou_teachers,
             "zyklus1_max_grade": payload.zyklus1_max_grade,
             "zyklus2_max_grade": payload.zyklus2_max_grade,
+            "ad_groups_search_base": payload.ad_groups_search_base,
             "ad_groups_teacher": payload.ad_groups_teacher,
             "ad_groups_student_zyklus1": payload.ad_groups_student_zyklus1,
             "ad_groups_student_zyklus2": payload.ad_groups_student_zyklus2,

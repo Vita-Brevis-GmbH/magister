@@ -23,7 +23,8 @@
     "settings": "Impostazioni",
     "usermanagement": "Gestione utenti",
     "system_settings": "Impostazioni di sistema",
-    "refresh": "Aggiorna"
+    "refresh": "Aggiorna",
+    "user_settings": "Configurazione utenti"
   },
   "auth": {
     "login_title": "Accedi",
@@ -427,7 +428,8 @@
       "purge_demo_confirm": "Eliminare davvero i dati demo?",
       "purge_demo_yes": "Elimina definitivamente",
       "purge_demo_ok": "Eliminati: {{classes}} classi, {{users}} persone.",
-      "purge_demo_none": "Nessun dato demo trovato."
+      "purge_demo_none": "Nessun dato demo trovato.",
+      "userconfig_moved_hint": "La configurazione utenti (OU di destinazione, gruppi AD, memorizzazione password) si trova ora in Impostazioni → Configurazione utenti."
     },
     "local_admin": {
       "title": "Account amministratore locale",
@@ -499,7 +501,38 @@
       "create_another": "Creane un altro",
       "err_ou_not_configured": "OU di destinazione non configurata. Imposta le OU di provisioning nelle Impostazioni.",
       "err_ad": "AD non raggiungibile o conflitto (UPN/nome di accesso già esistente).",
-      "err_invalid": "Input non valido. Verificare."
+      "err_invalid": "Input non valido. Verificare.",
+      "display_name": "Nome visualizzato",
+      "display_name_hint": "Opzionale — altrimenti derivato da nome e cognome.",
+      "jahrgangsstufe": "Anno scolastico",
+      "class": "Classe",
+      "class_none": "— nessuna —",
+      "force_change": "Forza il cambio password al primo accesso",
+      "cannot_change_password": "L'utente non può cambiare la password",
+      "password_never_expires": "La password non scade mai",
+      "class_assign_failed": "Account creato, ma l'assegnazione alla classe non è riuscita. Assegnare manualmente."
+    },
+    "user_settings": {
+      "title": "Configurazione utenti",
+      "description": "OU di destinazione, modelli di gruppi AD e memorizzazione delle password per i nuovi utenti.",
+      "ou_section": "OU di destinazione per i nuovi utenti",
+      "ou_section_desc": "OU in cui vengono creati i nuovi account — per ciclo per gli studenti e separatamente per i docenti.",
+      "groups_section": "Modelli di gruppi AD",
+      "groups_section_desc": "Gruppi assegnati automaticamente ai nuovi account. Selezione dai gruppi AD sincronizzati.",
+      "field": {
+        "ad_groups_search_base": "Base di ricerca dei gruppi (opzionale)",
+        "ad_groups_teacher": "Gruppi per i docenti",
+        "ad_groups_student_zyklus1": "Gruppi per gli studenti ciclo 1",
+        "ad_groups_student_zyklus2": "Gruppi per gli studenti ciclo 2",
+        "ad_groups_student_zyklus3": "Gruppi per gli studenti ciclo 3"
+      },
+      "groups_base_hint": "OU/sottoalbero in cui cercare i gruppi AD. Vuoto = base di ricerca degli utenti.",
+      "group_pick_hint": "Selezionare i gruppi desiderati.",
+      "group_filter": "Filtra gruppi…",
+      "group_empty": "Nessun gruppo AD sincronizzato. Eseguire una sincronizzazione AD completa.",
+      "group_no_match": "Nessun risultato.",
+      "group_not_synced": "(non sincronizzato)",
+      "group_selected_count": "{{count}} selezionati"
     }
   },
   "substitutions": {

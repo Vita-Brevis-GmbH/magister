@@ -41,6 +41,7 @@ from magister_api.routers.student_password_reset import router as student_pw_res
 from magister_api.routers.subject_teachers import router as subject_teachers_router
 from magister_api.routers.substitutions import router as substitutions_router
 from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
+from magister_api.routers.user_settings import router as user_settings_router
 from magister_api.routers.users import router as users_router
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_sync_router)
     app.include_router(admin_local_admin_router)
     app.include_router(admin_settings_router)
+    app.include_router(user_settings_router)
     app.include_router(admin_roles_router)
     app.include_router(admin_users_router)
     app.include_router(admin_maintenance_router)

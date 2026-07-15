@@ -20,7 +20,8 @@
     "settings": "Settings",
     "usermanagement": "User management",
     "system_settings": "System settings",
-    "refresh": "Refresh"
+    "refresh": "Refresh",
+    "user_settings": "User configuration"
   },
   "auth": {
     "login_title": "Sign in",
@@ -424,7 +425,8 @@
       "purge_demo_confirm": "Really delete the demo data?",
       "purge_demo_yes": "Delete permanently",
       "purge_demo_ok": "Deleted: {{classes}} classes, {{users}} people.",
-      "purge_demo_none": "No demo data found."
+      "purge_demo_none": "No demo data found.",
+      "userconfig_moved_hint": "User configuration (target OUs, AD groups, password storage) has moved to Settings → User configuration."
     },
     "local_admin": {
       "title": "Local admin account",
@@ -496,7 +498,38 @@
       "create_another": "Create another",
       "err_ou_not_configured": "Target OU not configured. Set the provisioning OUs under Settings.",
       "err_ad": "AD unreachable or conflict (UPN/sign-in name already exists).",
-      "err_invalid": "Invalid input. Please check."
+      "err_invalid": "Invalid input. Please check.",
+      "display_name": "Display name",
+      "display_name_hint": "Optional — otherwise derived from given and surname.",
+      "jahrgangsstufe": "Grade",
+      "class": "Class",
+      "class_none": "— none —",
+      "force_change": "Force password change at first logon",
+      "cannot_change_password": "User cannot change password",
+      "password_never_expires": "Password never expires",
+      "class_assign_failed": "Account created, but the class assignment failed. Please assign it manually."
+    },
+    "user_settings": {
+      "title": "User configuration",
+      "description": "Target OUs, AD group templates and password storage for newly created users.",
+      "ou_section": "Target OUs for new users",
+      "ou_section_desc": "Which OU new accounts are created in — by Zyklus for students and separately for teachers.",
+      "groups_section": "AD group templates",
+      "groups_section_desc": "Groups automatically assigned to new accounts. Pick from the synced AD groups.",
+      "field": {
+        "ad_groups_search_base": "Group search base (optional)",
+        "ad_groups_teacher": "Groups for teachers",
+        "ad_groups_student_zyklus1": "Groups for students Zyklus 1",
+        "ad_groups_student_zyklus2": "Groups for students Zyklus 2",
+        "ad_groups_student_zyklus3": "Groups for students Zyklus 3"
+      },
+      "groups_base_hint": "OU/subtree to search for AD groups. Empty = users search base.",
+      "group_pick_hint": "Check the groups you want.",
+      "group_filter": "Filter groups…",
+      "group_empty": "No AD groups synced. Please run a full AD sync.",
+      "group_no_match": "No matches.",
+      "group_not_synced": "(not synced)",
+      "group_selected_count": "{{count}} selected"
     }
   },
   "substitutions": {

@@ -31,6 +31,7 @@ from magister_api.config import Settings
 from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.school import School
+from magister_api.repositories.ad_groups import AdGroupCatalogRepository
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
 from magister_api.services.devices import import_devices_from_ad
 
@@ -121,6 +122,27 @@ class AdSyncService:
         await self.session.flush()
         return state
 
+    async def _sync_group_catalog(self) -> int:
+        """Refresh ``ad_group_cache`` from AD. Returns the number of groups seen.
+
+        # scope-bypass: AD groups are global (no school scope).
+        """
+        row = (
+            await self.session.execute(
+                select(
+                    AppSettings.ad_groups_search_base,
+                    AppSettings.ad_users_search_base,
+                ).where(AppSettings.id == 1)
+            )
+        ).one_or_none()
+        base = None
+        if row is not None:
+            base = row.ad_groups_search_base or row.ad_users_search_base
+        groups = await self.ad.search_groups(search_base=base)
+        if not groups:
+            return 0
+        return await AdGroupCatalogRepository(self.session).upsert_from_ad(groups)
+
     async def sync_all(
         self,
         *,
@@ -169,6 +191,7 @@ class AdSyncService:
         # until the next full sync runs.
         device_count = 0
         devices_imported = 0
+        groups_imported = 0
         if effective_mode == "full":
             device_map = await self.ad.search_managed_computers()
             if device_map:
@@ -184,6 +207,10 @@ class AdSyncService:
             computers = await self.ad.search_computers()
             if computers:
                 devices_imported = await import_devices_from_ad(self.session, computers)
+
+            # Group catalog (Userkonfiguration checkbox-picker). Full-sync only;
+            # a wrong/empty base is a soft-no-op inside search_groups().
+            groups_imported = await self._sync_group_catalog()
 
         synced = await self.repo.upsert_from_ad(records, school_id_resolver=resolver)
 
@@ -212,6 +239,7 @@ class AdSyncService:
                 "synced_count": synced,
                 "device_count": device_count,
                 "devices_imported": devices_imported,
+                "groups_imported": groups_imported,
                 "school_partition": {str(k): v for k, v in partition.items()},
                 "cursor_before": cursor_before.isoformat() if cursor_before else None,
                 "cursor_after": cursor_after.isoformat() if cursor_after else None,

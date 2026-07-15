@@ -114,7 +114,19 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "password_never_expires",
         ],
         [
-            ["Anna", "Muster", "", "anna.muster@schule.ch", "", "3a", "2026-08-12", "true", "3", "", ""],  # noqa: E501
+            [
+                "Anna",
+                "Muster",
+                "",
+                "anna.muster@schule.ch",
+                "",
+                "3a",
+                "2026-08-12",
+                "true",
+                "3",
+                "",
+                "",
+            ],  # noqa: E501
             [
                 "Ben",
                 "Beispiel",
@@ -147,7 +159,16 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
         ],
         [
             ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", ""],
-            ["Max", "Kollege", "Max K.", "max.kollege@schule.ch", "max.kollege", "false", "", "true"],  # noqa: E501
+            [
+                "Max",
+                "Kollege",
+                "Max K.",
+                "max.kollege@schule.ch",
+                "max.kollege",
+                "false",
+                "",
+                "true",
+            ],  # noqa: E501
             ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", "", "", ""],
         ],
     ),

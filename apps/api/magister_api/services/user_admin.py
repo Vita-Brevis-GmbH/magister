@@ -47,6 +47,7 @@ class UserAdminError(Exception):
 class CreatedUser:
     ad_object_guid: str
     temp_password: str
+    force_change: bool = True
 
 
 class UserAdminService:
@@ -104,6 +105,11 @@ class UserAdminService:
         user_principal_name: str,
         mail: str | None,
         ou_key: str,
+        display_name: str | None = None,
+        force_change: bool = True,
+        cannot_change_password: bool = False,
+        password_never_expires: bool = False,
+        jahrgangsstufe: int | None = None,
         actor_upn: str,
         actor_object_guid: str | None,
         ip: str | None,
@@ -113,20 +119,24 @@ class UserAdminService:
             raise UserAdminError("invalid_ou_choice")
         ou_dn, group_dns = await self._provision_target(ou_key)
         kind = "teacher" if ou_key == "teacher" else "student"
-        display_name = f"{given_name} {surname}".strip() or sam_account_name
+        display = (
+            (display_name or "").strip() or f"{given_name} {surname}".strip() or sam_account_name
+        )
         password = generate_password()
 
         guid = await self.ad.create_user(
             ou_dn=ou_dn,
-            common_name=display_name,
+            common_name=display,
             sam_account_name=sam_account_name,
             user_principal_name=user_principal_name,
             mail=mail,
             given_name=given_name,
             surname=surname,
-            display_name=display_name,
+            display_name=display,
             password=password,
-            force_change=True,
+            force_change=force_change,
+            password_never_expires=password_never_expires,
+            cannot_change_password=cannot_change_password,
             group_dns=group_dns,
         )
 
@@ -136,13 +146,13 @@ class UserAdminService:
             sam_account_name=sam_account_name,
             given_name=given_name,
             surname=surname,
-            display_name=display_name,
+            display_name=display,
             mail=mail,
             enabled=True,
             kind=kind,
-            password_never_expires=False,
+            password_never_expires=password_never_expires,
             ms_ds_consistency_guid=None,
-            distinguished_name=f"CN={display_name},{ou_dn}",
+            distinguished_name=f"CN={display},{ou_dn}",
             street_address=None,
             locality=None,
             postal_code=None,
@@ -152,6 +162,16 @@ class UserAdminService:
         await AdUserCacheSyncRepository(self.session).upsert_from_ad(
             [record], school_id_resolver=resolver
         )
+
+        # jahrgangsstufe + cannot_change_password are Magister-only fields the
+        # sync upsert deliberately does not touch — set them directly on the
+        # freshly created cache row (students only for the grade).
+        cache = await self.session.get(AdUserCache, guid)
+        if cache is not None:
+            cache.cannot_change_password = cannot_change_password
+            if kind == "student" and jahrgangsstufe is not None:
+                cache.jahrgangsstufe = jahrgangsstufe
+            await self.session.flush()
 
         await self.audit.emit(
             action="ad_user_created",
@@ -164,7 +184,7 @@ class UserAdminService:
             request_id=request_id,
             payload={"kind": kind, "upn": record.upn, "ou_key": ou_key},
         )
-        return CreatedUser(ad_object_guid=guid, temp_password=password)
+        return CreatedUser(ad_object_guid=guid, temp_password=password, force_change=force_change)
 
     async def delete_user(
         self,

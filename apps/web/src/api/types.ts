@@ -366,6 +366,48 @@ export interface AdUserCreateRequest {
   user_principal_name: string;
   mail?: string | null;
   ou_key: AdUserOuKey;
+  display_name?: string | null;
+  force_change?: boolean;
+  cannot_change_password?: boolean;
+  password_never_expires?: boolean;
+  jahrgangsstufe?: number | null;
+}
+
+export interface AdGroupOut {
+  ad_object_guid: string;
+  distinguished_name: string;
+  cn: string;
+  sam_account_name: string | null;
+  description: string | null;
+}
+
+export interface AdUserSettingsOut {
+  version: number;
+  ad_ou_students_zyklus3: string | null;
+  ad_ou_students_other: string | null;
+  ad_ou_teachers: string | null;
+  zyklus1_max_grade: number;
+  zyklus2_max_grade: number;
+  password_store_enabled: boolean;
+  ad_groups_search_base: string | null;
+  ad_groups_teacher: string[];
+  ad_groups_student_zyklus1: string[];
+  ad_groups_student_zyklus2: string[];
+  ad_groups_student_zyklus3: string[];
+}
+
+export interface AdUserSettingsUpdate {
+  ad_ou_students_zyklus3?: string | null;
+  ad_ou_students_other?: string | null;
+  ad_ou_teachers?: string | null;
+  zyklus1_max_grade?: number | null;
+  zyklus2_max_grade?: number | null;
+  password_store_enabled?: boolean | null;
+  ad_groups_search_base?: string | null;
+  ad_groups_teacher?: string[] | null;
+  ad_groups_student_zyklus1?: string[] | null;
+  ad_groups_student_zyklus2?: string[] | null;
+  ad_groups_student_zyklus3?: string[] | null;
 }
 
 export interface AdUserCreateResponse {
