@@ -208,7 +208,7 @@ Checkout, kein `pip install` nötig; Plaintext geht nirgends auf Disk):
 ```bash
 printf '%s' 'DEIN_PASSWORT' | docker run --rm -i --entrypoint python \
     ghcr.io/vita-brevis-gmbh/magister-api:latest \
-    -m magister_api.cli.hash_password
+    -c 'import sys; from magister_api.auth.passwords import hash_password; print(hash_password(sys.stdin.readline().rstrip("\n")))'
 # → $argon2id$v=19$m=65536,t=3,p=4$...
 ```
 

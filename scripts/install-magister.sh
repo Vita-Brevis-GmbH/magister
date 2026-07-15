@@ -193,11 +193,15 @@ secret_preserve_or_gen() {
 }
 
 # Hasht ein Passwort (stdin) via API-Image zu argon2id. --entrypoint python
-# umgeht den `alembic upgrade head`-Entrypoint.
+# umgeht den `alembic upgrade head`-Entrypoint. Wir importieren direkt
+# auth.passwords (statt -m magister_api.cli.hash_password), damit das auch auf
+# veröffentlichten Images funktioniert, die das cli-Modul noch nicht enthalten
+# (z.B. ein :latest, das älter ist als dieser Commit). Die >=12-Zeichen-Regel
+# ist im Installer bereits vor dem Aufruf geprüft.
 hash_password_via_image() {
     local pw="$1"
     printf '%s' "$pw" | docker run --rm -i --entrypoint python "$API_IMAGE" \
-        -m magister_api.cli.hash_password
+        -c 'import sys; from magister_api.auth.passwords import hash_password; print(hash_password(sys.stdin.readline().rstrip("\n")))'
 }
 
 prompt_default() {  # prompt_default "Frage" "default" -> echo Antwort

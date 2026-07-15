@@ -1,8 +1,8 @@
 """Hash a local-admin password to seed ``MAGISTER_LOCAL_ADMIN_PASSWORD_HASH``.
 
 Run as ``python -m magister_api.cli.hash_password`` inside the API container or
-venv. The plaintext is read from **stdin** (one line, never echoed) so the
-installer can pipe it without it landing in a shell history or process list:
+venv. The plaintext is read from **stdin** (one line, never echoed) so it can
+be piped without landing in a shell history or process list:
 
     printf '%s' "$PW" | docker run --rm -i --entrypoint python \\
         ghcr.io/vita-brevis-gmbh/magister-api:latest \\
@@ -13,6 +13,11 @@ parameters the login path verifies against — so the emitted hash never
 triggers a rehash-on-first-login. The ``magister-cli hash-password`` wrapper
 stays available for repo checkouts; this module is the image-only path that
 needs neither a checkout nor ``uv``.
+
+Note: this module only exists in images built from this commit onward.
+``scripts/install-magister.sh`` deliberately imports ``auth.passwords``
+inline instead of shelling out to this module, so it also works against an
+older published image that predates it.
 """
 
 from __future__ import annotations

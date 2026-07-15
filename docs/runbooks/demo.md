@@ -40,7 +40,8 @@ URL is printed. Skip to step 2 (seed demo data).
 > the admin password with the image (no checkout needed):
 > ```bash
 > printf '%s' 'YOUR_PASSWORD' | docker run --rm -i --entrypoint python \
->   ghcr.io/vita-brevis-gmbh/magister-api:latest -m magister_api.cli.hash_password
+>   ghcr.io/vita-brevis-gmbh/magister-api:latest \
+>   -c 'import sys; from magister_api.auth.passwords import hash_password; print(hash_password(sys.stdin.readline().rstrip("\n")))'
 > ```
 > **Double every `$` to `$$`** when pasting the hash into `.env` — docker
 > compose interpolates `$`, and an unescaped argon2 hash arrives corrupted
