@@ -535,11 +535,7 @@ function BulkAttrsModal({
             value={neverExp}
             onChange={setNeverExp}
           />
-          <TriField
-            label={t("users.field.store_password")}
-            value={store}
-            onChange={setStore}
-          />
+          <TriField label={t("users.field.store_password")} value={store} onChange={setStore} />
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>

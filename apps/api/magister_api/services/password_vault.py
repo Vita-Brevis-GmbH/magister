@@ -53,9 +53,7 @@ class PasswordVaultService:
 
     async def get(self, ad_object_guid: str) -> str | None:
         """Decrypt and return the stored password, or ``None`` if unset."""
-        stmt = select(
-            func.pgp_sym_decrypt(AdUserCache.password_enc, self._key)
-        ).where(
+        stmt = select(func.pgp_sym_decrypt(AdUserCache.password_enc, self._key)).where(
             AdUserCache.ad_object_guid == ad_object_guid,
             AdUserCache.password_enc.is_not(None),
         )

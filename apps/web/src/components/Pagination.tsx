@@ -5,7 +5,13 @@ import { PAGE_SIZE_OPTIONS, type PagedList } from "@/lib/usePagedList";
 
 /** Prev/next pager + page-size selector for a {@link usePagedList} result.
  *  Renders nothing when there are no items. */
-export function Pagination<T>({ paged, busy }: { paged: PagedList<T>; busy?: boolean }): JSX.Element {
+export function Pagination<T>({
+  paged,
+  busy,
+}: {
+  paged: PagedList<T>;
+  busy?: boolean;
+}): JSX.Element {
   const { t } = useTranslation();
   if (paged.total === 0) return <></>;
   return (

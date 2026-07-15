@@ -232,8 +232,7 @@ function UserDetailPage(): JSX.Element {
       out.password_never_expires = form.password_never_expires;
     if (form.cannot_change_password !== current.cannot_change_password)
       out.cannot_change_password = form.cannot_change_password;
-    if (form.store_password !== current.store_password)
-      out.store_password = form.store_password;
+    if (form.store_password !== current.store_password) out.store_password = form.store_password;
 
     return out;
   }
@@ -304,9 +303,7 @@ function UserDetailPage(): JSX.Element {
           {/* Step 1: (de)activate. Not for one's own account. */}
           {!editing && me.data && me.data.ad_object_guid !== guid ? (
             <Button type="button" variant="outline" onClick={() => setStatusOpen(true)}>
-              {user.enabled
-                ? t("user_status.button_disable")
-                : t("user_status.button_enable")}
+              {user.enabled ? t("user_status.button_disable") : t("user_status.button_enable")}
             </Button>
           ) : null}
           {/* Step 2: permanent delete — only for already-deactivated accounts. */}
@@ -335,11 +332,7 @@ function UserDetailPage(): JSX.Element {
                 </Button>
               </div>
             ) : (
-              <Button
-                type="button"
-                variant="destructive"
-                onClick={() => setConfirmDelete(true)}
-              >
+              <Button type="button" variant="destructive" onClick={() => setConfirmDelete(true)}>
                 {t("users.detail.delete_permanent")}
               </Button>
             )
@@ -764,9 +757,7 @@ function UserReadView({
               {t("users.field.ad_groups")}
             </span>
             <span className="font-medium">
-              {user.ad_groups.length > 0
-                ? user.ad_groups.map((dn) => groupCn(dn)).join(", ")
-                : "–"}
+              {user.ad_groups.length > 0 ? user.ad_groups.map((dn) => groupCn(dn)).join(", ") : "–"}
             </span>
           </div>
         </CardContent>

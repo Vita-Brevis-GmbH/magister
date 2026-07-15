@@ -122,9 +122,7 @@ export function Layout() {
                   onClick={() => setSettingsOpen((v) => !v)}
                   aria-haspopup="menu"
                   aria-expanded={settingsOpen}
-                  className={`flex items-center gap-1 ${
-                    settingsOpen ? navActive : navIdle
-                  }`}
+                  className={`flex items-center gap-1 ${settingsOpen ? navActive : navIdle}`}
                 >
                   {t("nav.settings")}
                   <ChevronDown className="h-4 w-4" />

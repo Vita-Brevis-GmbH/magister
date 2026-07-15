@@ -148,8 +148,7 @@ def set_cannot_change_password(sd: bytes, *, deny: bool) -> bytes:
         a
         for a in aces
         if not (
-            _ace_is_change_password_deny(a, SID_SELF)
-            or _ace_is_change_password_deny(a, SID_WORLD)
+            _ace_is_change_password_deny(a, SID_SELF) or _ace_is_change_password_deny(a, SID_WORLD)
         )
     ]
 

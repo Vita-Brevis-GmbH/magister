@@ -64,9 +64,7 @@ ADMIN_ONLY_FIELDS: frozenset[str] = frozenset({"upn", "sam_account_name"})
 AD_FIELDS: frozenset[str] = frozenset(_PAYLOAD_TO_AD_ATTR.keys())
 # AD account-policy flags: written via dedicated AD-client calls (UAC bit /
 # DACL edit), then mirrored to the cache column of the same name.
-AD_FLAG_FIELDS: frozenset[str] = frozenset(
-    {"password_never_expires", "cannot_change_password"}
-)
+AD_FLAG_FIELDS: frozenset[str] = frozenset({"password_never_expires", "cannot_change_password"})
 MAGISTER_ONLY_FIELDS: frozenset[str] = frozenset(
     {"temp_device_name", "jahrgangsstufe", "store_password"}
 )

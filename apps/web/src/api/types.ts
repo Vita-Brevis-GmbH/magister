@@ -353,11 +353,7 @@ export interface AdSyncResultOut {
   school_partition: Record<string, number>;
 }
 
-export type AdUserOuKey =
-  | "teacher"
-  | "student_zyklus1"
-  | "student_zyklus2"
-  | "student_zyklus3";
+export type AdUserOuKey = "teacher" | "student_zyklus1" | "student_zyklus2" | "student_zyklus3";
 
 export interface AdUserCreateRequest {
   given_name: string;

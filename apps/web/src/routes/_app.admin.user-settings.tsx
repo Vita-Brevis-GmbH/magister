@@ -277,7 +277,11 @@ function UserSettingsForm({
         <CardContent className="space-y-4">
           <div className="space-y-1">
             <Label htmlFor="ou-z3">{t("admin.settings.field.ad_ou_students_zyklus3")}</Label>
-            <Input id="ou-z3" placeholder="OU=SekI,OU=Schule,DC=…" {...field("ad_ou_students_zyklus3")} />
+            <Input
+              id="ou-z3"
+              placeholder="OU=SekI,OU=Schule,DC=…"
+              {...field("ad_ou_students_zyklus3")}
+            />
           </div>
           <div className="space-y-1">
             <Label htmlFor="ou-other">{t("admin.settings.field.ad_ou_students_other")}</Label>
@@ -289,7 +293,11 @@ function UserSettingsForm({
           </div>
           <div className="space-y-1">
             <Label htmlFor="ou-teachers">{t("admin.settings.field.ad_ou_teachers")}</Label>
-            <Input id="ou-teachers" placeholder="OU=Lehrer,OU=Schule,DC=…" {...field("ad_ou_teachers")} />
+            <Input
+              id="ou-teachers"
+              placeholder="OU=Lehrer,OU=Schule,DC=…"
+              {...field("ad_ou_teachers")}
+            />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">

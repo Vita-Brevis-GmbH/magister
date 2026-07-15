@@ -27,12 +27,7 @@ def _allow_ace(sid: str) -> bytes:
     """A plain ACCESS_ALLOWED_ACE (type 0) granting some mask to ``sid``."""
     sid_bytes = encode_sid(sid)
     size = 4 + 4 + len(sid_bytes)
-    return (
-        bytes([0x00, 0x00])
-        + struct.pack("<H", size)
-        + struct.pack("<I", 0x00020000)
-        + sid_bytes
-    )
+    return bytes([0x00, 0x00]) + struct.pack("<H", size) + struct.pack("<I", 0x00020000) + sid_bytes
 
 
 def _dacl_only_sd(aces: list[bytes]) -> bytes:
