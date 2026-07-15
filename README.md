@@ -144,7 +144,8 @@ liegt im `.env`:
 cd ../../apps/api && uv run ../../scripts/magister-cli hash-password
 # ODER nur mit dem Image (kein Checkout/uv nötig):
 printf '%s' 'DEIN_PASSWORT' | docker run --rm -i --entrypoint python \
-  ghcr.io/vita-brevis-gmbh/magister-api:latest -m magister_api.cli.hash_password
+  ghcr.io/vita-brevis-gmbh/magister-api:latest \
+  -c 'import sys; from magister_api.auth.passwords import hash_password; print(hash_password(sys.stdin.readline().rstrip("\n")))'
 # -> $argon2id$v=19$m=65536,t=3,p=4$...
 ```
 
