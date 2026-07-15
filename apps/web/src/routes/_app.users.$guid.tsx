@@ -6,19 +6,21 @@ import { ApiError } from "@/api/client";
 import {
   downloadCredentialPdf,
   saveBlob,
+  useAdGroups,
   useCurrentUser,
   useDeleteAdUser,
   useMailDomains,
   useUpdateUser,
+  useUpdateUserGroups,
   useUser,
   useUserDashboard,
 } from "@/api/hooks";
 import type { AdUserOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
+import { GroupPicker } from "@/components/GroupPicker";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
-import { UserGroupsModal } from "@/components/UserGroupsModal";
 import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -96,6 +98,8 @@ function UserDetailPage(): JSX.Element {
   const me = useCurrentUser();
   const update = useUpdateUser(guid);
   const del = useDeleteAdUser();
+  const groupsCatalog = useAdGroups();
+  const updateGroups = useUpdateUserGroups(guid);
   const navigate = useNavigate();
 
   const canChangeLogin = me.data?.is_admin ?? false;
@@ -107,7 +111,12 @@ function UserDetailPage(): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
-  const [groupsOpen, setGroupsOpen] = useState(false);
+  // Per-user AD group membership (edited inline in the edit form). Kept
+  // separate from the attribute form because it writes via its own endpoint
+  // (best-effort AD group modify), with its own save button + status.
+  const [groupSel, setGroupSel] = useState<string[]>([]);
+  const [groupFailed, setGroupFailed] = useState<string[]>([]);
+  const [groupSaved, setGroupSaved] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHeading, setPdfHeading] = useState("");
   const [pdfBody, setPdfBody] = useState("");
@@ -159,6 +168,9 @@ function UserDetailPage(): JSX.Element {
       cannot_change_password: userQ.data.cannot_change_password,
       store_password: userQ.data.store_password,
     });
+    setGroupSel([...userQ.data.ad_groups]);
+    setGroupFailed([]);
+    setGroupSaved(false);
   }, [userQ.data]);
 
   useEffect(() => {
@@ -367,7 +379,6 @@ function UserDetailPage(): JSX.Element {
           user={user}
           dashboard={dashboardQ.data}
           onOpenPrivacy={() => setPrivacyOpen(true)}
-          onEditGroups={() => setGroupsOpen(true)}
         />
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -595,6 +606,64 @@ function UserDetailPage(): JSX.Element {
 
           <Card>
             <CardHeader>
+              <CardTitle className="text-base">{t("user_groups.section_title")}</CardTitle>
+              <CardDescription>{t("user_groups.section_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {updateGroups.isError ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {t("errors.generic")}
+                </div>
+              ) : null}
+              {groupFailed.length > 0 ? (
+                <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                  {t("user_groups.partial_failed", { count: groupFailed.length })}
+                </div>
+              ) : groupSaved ? (
+                <div
+                  role="status"
+                  className="rounded-md border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300"
+                >
+                  {t("user_groups.saved")}
+                </div>
+              ) : null}
+              <GroupPicker
+                hint={t("user_groups.pick_hint")}
+                catalog={groupsCatalog.data ?? []}
+                selected={groupSel}
+                onChange={(next) => {
+                  setGroupSel(next);
+                  setGroupFailed([]);
+                  setGroupSaved(false);
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={updateGroups.isPending}
+                onClick={() =>
+                  updateGroups.mutate(
+                    { groups: groupSel },
+                    {
+                      onSuccess: (res) => {
+                        setGroupFailed(res.failed);
+                        setGroupSel(res.groups);
+                        setGroupSaved(res.failed.length === 0);
+                      },
+                    },
+                  )
+                }
+              >
+                {updateGroups.isPending ? t("common.loading") : t("user_groups.save")}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="text-base">{t("privacy.section_title")}</CardTitle>
               <CardDescription>{t("privacy.section_desc")}</CardDescription>
             </CardHeader>
@@ -618,7 +687,6 @@ function UserDetailPage(): JSX.Element {
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
       <UserStatusModal user={statusOpen ? user : null} onClose={() => setStatusOpen(false)} />
-      <UserGroupsModal user={groupsOpen ? user : null} onClose={() => setGroupsOpen(false)} />
 
       <Dialog open={pdfOpen} onOpenChange={(o) => !pdfBusy && setPdfOpen(o)}>
         <DialogContent>
@@ -677,12 +745,10 @@ function UserReadView({
   user,
   dashboard,
   onOpenPrivacy,
-  onEditGroups,
 }: {
   user: AdUserOut;
   dashboard: UserDashboardOut | undefined;
   onOpenPrivacy: () => void;
-  onEditGroups: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const address = [
@@ -758,22 +824,13 @@ function UserReadView({
             label={t("users.field.password_never_expires")}
             value={user.password_never_expires ? t("users.yes") : t("users.no")}
           />
-          <div className="flex items-start gap-2 text-sm">
+          <div className="flex gap-2 text-sm">
             <span className="w-40 shrink-0 text-muted-foreground">
               {t("users.field.ad_groups")}
             </span>
-            <span className="min-w-0 flex-1 font-medium">
+            <span className="font-medium">
               {user.ad_groups.length > 0 ? user.ad_groups.map((dn) => groupCn(dn)).join(", ") : "–"}
             </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="shrink-0"
-              onClick={onEditGroups}
-            >
-              {t("common.edit")}
-            </Button>
           </div>
         </CardContent>
       </Card>

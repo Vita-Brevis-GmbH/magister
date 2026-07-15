@@ -839,6 +839,10 @@
     "title": "Edit AD groups",
     "pick_hint": "Check or uncheck groups — membership is updated in AD accordingly.",
     "partial_failed": "{{count}} group(s) could not be changed (missing AD permission). The rest were saved.",
-    "error_not_in_ad": "User not found in AD."
+    "error_not_in_ad": "User not found in AD.",
+    "section_title": "AD groups",
+    "section_desc": "Check or uncheck groups — membership is updated in AD.",
+    "save": "Save groups",
+    "saved": "Groups saved."
   }
 }

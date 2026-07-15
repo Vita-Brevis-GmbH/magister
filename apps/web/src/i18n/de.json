@@ -839,6 +839,10 @@
     "title": "AD-Gruppen bearbeiten",
     "pick_hint": "Gruppen anhaken oder abwählen — die Mitgliedschaft wird im AD entsprechend gesetzt.",
     "partial_failed": "{{count}} Gruppe(n) konnten nicht geändert werden (fehlende Berechtigung im AD). Die übrigen wurden gespeichert.",
-    "error_not_in_ad": "Benutzer im AD nicht gefunden."
+    "error_not_in_ad": "Benutzer im AD nicht gefunden.",
+    "section_title": "AD-Gruppen",
+    "section_desc": "Gruppen anhaken oder abwählen — die Mitgliedschaft wird im AD gesetzt.",
+    "save": "Gruppen speichern",
+    "saved": "Gruppen gespeichert."
   }
 }
