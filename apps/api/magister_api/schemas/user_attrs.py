@@ -93,4 +93,30 @@ class UserAttributesUpdate(BaseModel):
         return v
 
 
-__all__ = ["UserAttributesUpdate", "SAM_ACCOUNT_RE", "UPN_LOCAL_RE"]
+class UserGroupsUpdate(BaseModel):
+    """Body for ``PUT /users/{guid}/groups`` — the desired set of AD group DNs.
+
+    The service diffs this against the user's current ``memberOf`` and adds /
+    removes membership accordingly. Sending an empty list removes the user from
+    all (Magister-visible) groups.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    groups: list[str] = Field(default_factory=list, max_length=200)
+
+
+class UserGroupsResult(BaseModel):
+    added: list[str]
+    removed: list[str]
+    failed: list[str]
+    groups: list[str]
+
+
+__all__ = [
+    "UserAttributesUpdate",
+    "UserGroupsUpdate",
+    "UserGroupsResult",
+    "SAM_ACCOUNT_RE",
+    "UPN_LOCAL_RE",
+]

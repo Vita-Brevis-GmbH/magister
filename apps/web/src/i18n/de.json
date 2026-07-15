@@ -711,7 +711,9 @@
     "per_page": "pro Seite:",
     "pagination_info": "Seite {{page}} / {{total}} ({{count}} Einträge)",
     "pagination_prev": "Zurück",
-    "pagination_next": "Weiter"
+    "pagination_next": "Weiter",
+    "edit": "Bearbeiten",
+    "save": "Speichern"
   },
   "user_status": {
     "button_disable": "Deaktivieren",
@@ -832,5 +834,11 @@
       "phone": "Telefon",
       "actions": "Aktionen"
     }
+  },
+  "user_groups": {
+    "title": "AD-Gruppen bearbeiten",
+    "pick_hint": "Gruppen anhaken oder abwählen — die Mitgliedschaft wird im AD entsprechend gesetzt.",
+    "partial_failed": "{{count}} Gruppe(n) konnten nicht geändert werden (fehlende Berechtigung im AD). Die übrigen wurden gespeichert.",
+    "error_not_in_ad": "Benutzer im AD nicht gefunden."
   }
 }

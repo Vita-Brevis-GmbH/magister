@@ -714,7 +714,9 @@
     "per_page": "par page :",
     "pagination_info": "Page {{page}} / {{total}} ({{count}} entrées)",
     "pagination_prev": "Précédent",
-    "pagination_next": "Suivant"
+    "pagination_next": "Suivant",
+    "edit": "Modifier",
+    "save": "Enregistrer"
   },
   "user_status": {
     "button_disable": "Désactiver",
@@ -835,5 +837,11 @@
       "phone": "Téléphone",
       "actions": "Actions"
     }
+  },
+  "user_groups": {
+    "title": "Modifier les groupes AD",
+    "pick_hint": "Cochez ou décochez les groupes — l'appartenance est mise à jour dans l'AD.",
+    "partial_failed": "{{count}} groupe(s) n'ont pas pu être modifiés (autorisation manquante dans l'AD). Les autres ont été enregistrés.",
+    "error_not_in_ad": "Utilisateur introuvable dans l'AD."
   }
 }

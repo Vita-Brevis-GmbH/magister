@@ -714,7 +714,9 @@
     "per_page": "per pagina:",
     "pagination_info": "Pagina {{page}} / {{total}} ({{count}} voci)",
     "pagination_prev": "Precedente",
-    "pagination_next": "Successivo"
+    "pagination_next": "Successivo",
+    "edit": "Modifica",
+    "save": "Salva"
   },
   "user_status": {
     "button_disable": "Disattiva",
@@ -835,5 +837,11 @@
       "phone": "Telefono",
       "actions": "Azioni"
     }
+  },
+  "user_groups": {
+    "title": "Modifica gruppi AD",
+    "pick_hint": "Selezionare o deselezionare i gruppi — l'appartenenza viene aggiornata in AD.",
+    "partial_failed": "{{count}} gruppo/i non è stato possibile modificare (autorizzazione mancante in AD). Gli altri sono stati salvati.",
+    "error_not_in_ad": "Utente non trovato in AD."
   }
 }

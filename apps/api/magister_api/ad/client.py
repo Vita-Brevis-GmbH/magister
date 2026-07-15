@@ -27,6 +27,7 @@ from ldap3 import (
     GSSAPI,
     MOCK_SYNC,
     MODIFY_ADD,
+    MODIFY_DELETE,
     MODIFY_REPLACE,
     SAFE_SYNC,
     SASL,
@@ -1290,6 +1291,46 @@ class AdClient:
                     failed.append(gdn)
                 except LDAPException as exc:
                     logger.warning("add to group %s raised: %s", gdn, exc)
+                    failed.append(gdn)
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+        return failed
+
+    async def remove_user_from_groups(self, *, user_dn: str, group_dns: list[str]) -> list[str]:
+        """Remove a user from each group (modify the group's ``member``).
+
+        Best-effort mirror of :meth:`add_user_to_groups`: returns the DNs that
+        could NOT be removed (logged). "Not a member" is treated as success so
+        the operation is idempotent. No-op under MOCK_SYNC.
+        """
+        if self._settings.ad_use_mock or not group_dns:
+            return []
+        return await run_in_threadpool(self._sync_remove_user_from_groups, user_dn, list(group_dns))
+
+    def _sync_remove_user_from_groups(self, user_dn: str, group_dns: list[str]) -> list[str]:
+        conn, owned = self._acquire_connection()
+        failed: list[str] = []
+        try:
+            for gdn in group_dns:
+                gdn = gdn.strip()
+                if not gdn:
+                    continue
+                try:
+                    res = conn.modify(gdn, {"member": [(MODIFY_DELETE, [user_dn])]})
+                    ok, detail = self._write_result(res, conn)
+                    if ok:
+                        continue
+                    # Not a member (any longer) → success (idempotent).
+                    if detail and ("NO SUCH" in detail.upper() or "noSuchAttribute" in detail):
+                        continue
+                    logger.warning("remove from group %s failed: %s", gdn, detail)
+                    failed.append(gdn)
+                except LDAPException as exc:
+                    logger.warning("remove from group %s raised: %s", gdn, exc)
                     failed.append(gdn)
         finally:
             if owned:

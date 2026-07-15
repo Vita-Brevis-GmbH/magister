@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
+import { UserGroupsModal } from "@/components/UserGroupsModal";
 import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -106,6 +107,7 @@ function UserDetailPage(): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [groupsOpen, setGroupsOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHeading, setPdfHeading] = useState("");
   const [pdfBody, setPdfBody] = useState("");
@@ -365,6 +367,7 @@ function UserDetailPage(): JSX.Element {
           user={user}
           dashboard={dashboardQ.data}
           onOpenPrivacy={() => setPrivacyOpen(true)}
+          onEditGroups={() => setGroupsOpen(true)}
         />
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -615,6 +618,7 @@ function UserDetailPage(): JSX.Element {
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
       <UserStatusModal user={statusOpen ? user : null} onClose={() => setStatusOpen(false)} />
+      <UserGroupsModal user={groupsOpen ? user : null} onClose={() => setGroupsOpen(false)} />
 
       <Dialog open={pdfOpen} onOpenChange={(o) => !pdfBusy && setPdfOpen(o)}>
         <DialogContent>
@@ -673,10 +677,12 @@ function UserReadView({
   user,
   dashboard,
   onOpenPrivacy,
+  onEditGroups,
 }: {
   user: AdUserOut;
   dashboard: UserDashboardOut | undefined;
   onOpenPrivacy: () => void;
+  onEditGroups: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const address = [
@@ -752,13 +758,22 @@ function UserReadView({
             label={t("users.field.password_never_expires")}
             value={user.password_never_expires ? t("users.yes") : t("users.no")}
           />
-          <div className="flex gap-2 text-sm">
+          <div className="flex items-start gap-2 text-sm">
             <span className="w-40 shrink-0 text-muted-foreground">
               {t("users.field.ad_groups")}
             </span>
-            <span className="font-medium">
+            <span className="min-w-0 flex-1 font-medium">
               {user.ad_groups.length > 0 ? user.ad_groups.map((dn) => groupCn(dn)).join(", ") : "–"}
             </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={onEditGroups}
+            >
+              {t("common.edit")}
+            </Button>
           </div>
         </CardContent>
       </Card>

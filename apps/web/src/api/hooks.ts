@@ -15,6 +15,8 @@ import type {
   AdGroupOut,
   AdUserSettingsOut,
   AdUserSettingsUpdate,
+  UserGroupsResult,
+  UserGroupsUpdate,
   DemoPurgeResponse,
   AppSettingsOut,
   AppSettingsUpdate,
@@ -627,6 +629,22 @@ export function useAdGroups() {
   return useQuery<AdGroupOut[]>({
     queryKey: queryKeys.adGroups,
     queryFn: () => apiFetch<AdGroupOut[]>("/admin/ad-groups"),
+  });
+}
+
+/** Set a single user's AD group membership (add/remove to match the given set). */
+export function useUpdateUserGroups(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<UserGroupsResult, ApiError, UserGroupsUpdate>({
+    mutationFn: (body) =>
+      apiFetch<UserGroupsResult>(`/users/${encodeURIComponent(guid)}/groups`, {
+        method: "PUT",
+        body,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.user(guid) });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
   });
 }
 

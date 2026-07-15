@@ -377,6 +377,17 @@ export interface AdGroupOut {
   description: string | null;
 }
 
+export interface UserGroupsUpdate {
+  groups: string[];
+}
+
+export interface UserGroupsResult {
+  added: string[];
+  removed: string[];
+  failed: string[];
+  groups: string[];
+}
+
 export interface AdUserSettingsOut {
   version: number;
   ad_ou_students_zyklus3: string | null;

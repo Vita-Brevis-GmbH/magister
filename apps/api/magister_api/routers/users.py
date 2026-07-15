@@ -21,7 +21,11 @@ from magister_api.models.auth import AdUserCache
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.ad_users import AdUserListResponse, AdUserOut
-from magister_api.schemas.user_attrs import UserAttributesUpdate
+from magister_api.schemas.user_attrs import (
+    UserAttributesUpdate,
+    UserGroupsResult,
+    UserGroupsUpdate,
+)
 from magister_api.schemas.user_dashboard import UserDashboardOut
 from magister_api.schemas.user_lifecycle import UserStatusUpdate
 from magister_api.services.ad_users import AdUsersService
@@ -42,6 +46,12 @@ from magister_api.services.user_attrs import (
     UserNotInAdError,
 )
 from magister_api.services.user_dashboard import UserDashboardService
+from magister_api.services.user_groups import (
+    UserGroupsService,
+)
+from magister_api.services.user_groups import (
+    UserNotInAdError as GroupsUserNotInAdError,
+)
 from magister_api.services.user_lifecycle import (
     CannotDisableSelfError,
     UserLifecycleService,
@@ -210,6 +220,45 @@ async def patch_user_attributes(
         # consistency problem rather than a client error.
         raise HTTPException(status_code=500, detail="data_consistency_error")
     return AdUserOut.model_validate(refreshed)
+
+
+@router.put("/{ad_object_guid}/groups", response_model=UserGroupsResult)
+async def put_user_groups(
+    request: Request,
+    payload: UserGroupsUpdate,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> UserGroupsResult:
+    """Set the user's AD group membership to the given set of group DNs.
+
+    Same RBAC as the attribute edit (admin or SMI of the user's school). The
+    service diffs against the cached ``memberOf`` and adds/removes membership
+    best-effort; refused group writes are returned in ``failed`` (HTTP 200) so
+    the operator sees which ones need directory-side permissions, while the
+    ones that succeeded still take effect.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    svc = UserGroupsService(session, settings, actor.to_scope(), ad)
+    try:
+        result = await svc.set_groups(
+            target=target,
+            desired=payload.groups,
+            ip=ip,
+            request_id=request_id,
+        )
+    except GroupsUserNotInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_not_in_ad") from exc
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+    return UserGroupsResult(
+        added=result.added,
+        removed=result.removed,
+        failed=result.failed,
+        groups=result.groups,
+    )
 
 
 @router.patch("/{ad_object_guid}/status", response_model=AdUserOut)

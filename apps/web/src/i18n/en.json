@@ -711,7 +711,9 @@
     "per_page": "per page:",
     "pagination_info": "Page {{page}} / {{total}} ({{count}} entries)",
     "pagination_prev": "Previous",
-    "pagination_next": "Next"
+    "pagination_next": "Next",
+    "edit": "Edit",
+    "save": "Save"
   },
   "user_status": {
     "button_disable": "Disable",
@@ -832,5 +834,11 @@
       "phone": "Phone",
       "actions": "Actions"
     }
+  },
+  "user_groups": {
+    "title": "Edit AD groups",
+    "pick_hint": "Check or uncheck groups — membership is updated in AD accordingly.",
+    "partial_failed": "{{count}} group(s) could not be changed (missing AD permission). The rest were saved.",
+    "error_not_in_ad": "User not found in AD."
   }
 }
