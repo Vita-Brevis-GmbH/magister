@@ -810,7 +810,10 @@
     },
     "person_selected": "selected",
     "person_no_results": "No people found — refine the search.",
-    "person_more_hint": "Showing {{shown}} of {{total}} — narrow the search to find more."
+    "person_more_hint": "Showing {{shown}} of {{total}} — narrow the search to find more.",
+    "is_loan": "Loaner device",
+    "is_loan_hint": "Mark as a loaner (e.g. while the main device is being repaired).",
+    "loan_badge": "loaner"
   },
   "schools": {
     "title": "Schools",

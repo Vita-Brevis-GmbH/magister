@@ -153,6 +153,7 @@ class DeviceService:
         person_guid: str | None,
         class_id: int | None,
         school_id: int | None,
+        is_loan: bool = False,
         ip: str | None,
         request_id: str,
     ) -> Device:
@@ -173,6 +174,7 @@ class DeviceService:
             school_id=resolved_school,
             class_id=resolved_class,
             assigned_person_guid=resolved_person,
+            is_loan=is_loan,
         )
         await self._emit(
             "device_assigned",
@@ -183,6 +185,7 @@ class DeviceService:
                 "assignment_type": assignment_type,
                 "person_guid": resolved_person,
                 "class_id": resolved_class,
+                "is_loan": row.is_loan,
             },
         )
         return row

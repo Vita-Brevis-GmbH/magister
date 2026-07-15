@@ -40,6 +40,9 @@ class DeviceAssign(BaseModel):
     person_guid: str | None = None
     class_id: int | None = None
     school_id: int | None = None
+    # Mark a person-assignment as a loaner (Leihgerät). Ignored for non-person
+    # assignment types (reset to False on unassign).
+    is_loan: bool = False
 
 
 class DeviceOut(BaseModel):
@@ -56,6 +59,7 @@ class DeviceOut(BaseModel):
     # Resolved display name of the assigned person (None when unassigned or the
     # person is not in the cache). Purely for display so the UI never shows a GUID.
     assigned_person_name: str | None = None
+    is_loan: bool = False
     ad_object_guid: str | None
     source: str
     created_at: datetime

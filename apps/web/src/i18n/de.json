@@ -810,7 +810,10 @@
     },
     "person_selected": "ausgewählt",
     "person_no_results": "Keine Personen gefunden — Suche anpassen.",
-    "person_more_hint": "{{shown}} von {{total}} angezeigt — Suche eingrenzen, um weitere zu finden."
+    "person_more_hint": "{{shown}} von {{total}} angezeigt — Suche eingrenzen, um weitere zu finden.",
+    "is_loan": "Leihgerät",
+    "is_loan_hint": "Als Leihgerät markieren (z. B. während das Hauptgerät in Reparatur ist).",
+    "loan_badge": "Leihgerät"
   },
   "schools": {
     "title": "Schulen",

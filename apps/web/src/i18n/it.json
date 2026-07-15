@@ -813,7 +813,10 @@
     },
     "person_selected": "selezionato",
     "person_no_results": "Nessuna persona trovata — modificare la ricerca.",
-    "person_more_hint": "Visualizzati {{shown}} di {{total}} — restringere la ricerca per trovarne altri."
+    "person_more_hint": "Visualizzati {{shown}} di {{total}} — restringere la ricerca per trovarne altri.",
+    "is_loan": "Dispositivo in prestito",
+    "is_loan_hint": "Contrassegna come dispositivo in prestito (ad es. mentre il dispositivo principale è in riparazione).",
+    "loan_badge": "in prestito"
   },
   "schools": {
     "title": "Scuole",

@@ -99,10 +99,13 @@ class DeviceRepository(BaseRepository):
         school_id: int | None,
         class_id: int | None,
         assigned_person_guid: str | None,
+        is_loan: bool = False,
     ) -> Device:
         device.school_id = school_id
         device.class_id = class_id
         device.assigned_person_guid = assigned_person_guid
+        # Loaner status is only meaningful while bound to a person.
+        device.is_loan = is_loan if assigned_person_guid is not None else False
         await self.session.flush()
         return device
 

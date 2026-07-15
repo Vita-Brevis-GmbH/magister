@@ -123,10 +123,11 @@ function UserDetailPage(): JSX.Element {
   const devicesQ = useDevices();
   const qc = useQueryClient();
   const [deviceToAdd, setDeviceToAdd] = useState("");
+  const [deviceLoan, setDeviceLoan] = useState(false);
   const [deviceBusy, setDeviceBusy] = useState(false);
   const [deviceError, setDeviceError] = useState(false);
 
-  async function bindDevice(deviceId: number, toPerson: boolean): Promise<void> {
+  async function bindDevice(deviceId: number, toPerson: boolean, loan = false): Promise<void> {
     setDeviceBusy(true);
     setDeviceError(false);
     try {
@@ -137,10 +138,12 @@ function UserDetailPage(): JSX.Element {
           person_guid: toPerson ? guid : null,
           class_id: null,
           school_id: null,
+          is_loan: toPerson ? loan : false,
         },
       });
       await qc.invalidateQueries({ queryKey: queryKeys.devices });
       setDeviceToAdd("");
+      setDeviceLoan(false);
     } catch {
       setDeviceError(true);
     } finally {
@@ -572,31 +575,6 @@ function UserDetailPage(): JSX.Element {
             </CardContent>
           </Card>
 
-          {/* Gerät */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{t("users.detail.section_device")}</CardTitle>
-              <CardDescription>{t("users.detail.section_device_desc")}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Field
-                id="device_name"
-                label={t("users.field.device_name")}
-                value={user.device_name ?? ""}
-                onChange={() => {}}
-                readOnly
-                hint={t("users.field.device_name_hint")}
-              />
-              <Field
-                id="temp_device_name"
-                label={t("users.field.temp_device_name")}
-                value={form.temp_device_name}
-                onChange={(v) => setField("temp_device_name", v)}
-                hint={t("users.field.temp_device_name_hint")}
-              />
-            </CardContent>
-          </Card>
-
           {/* AD-Konto-Richtlinien */}
           <Card>
             <CardHeader>
@@ -715,6 +693,11 @@ function UserDetailPage(): JSX.Element {
                         {d.device_type ? (
                           <span className="text-muted-foreground"> · {d.device_type}</span>
                         ) : null}
+                        {d.is_loan ? (
+                          <span className="ml-1 text-xs text-amber-600">
+                            ({t("devices.loan_badge")})
+                          </span>
+                        ) : null}
                       </span>
                       <Button
                         type="button"
@@ -734,30 +717,41 @@ function UserDetailPage(): JSX.Element {
                 {freeDevices.length === 0 ? (
                   <p className="text-xs text-muted-foreground">{t("users.devices.none_free")}</p>
                 ) : (
-                  <div className="flex gap-2">
-                    <select
-                      id="assign-free-device"
-                      value={deviceToAdd}
-                      onChange={(e) => setDeviceToAdd(e.target.value)}
-                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                    >
-                      <option value="">{t("users.devices.assign_placeholder")}</option>
-                      {freeDevices.map((d) => (
-                        <option key={d.id} value={String(d.id)}>
-                          {d.name}
-                          {d.device_type ? ` · ${d.device_type}` : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      disabled={deviceBusy || !deviceToAdd}
-                      onClick={() => void bindDevice(Number(deviceToAdd), true)}
-                    >
-                      {t("users.devices.assign_button")}
-                    </Button>
-                  </div>
+                  <>
+                    <div className="flex gap-2">
+                      <select
+                        id="assign-free-device"
+                        value={deviceToAdd}
+                        onChange={(e) => setDeviceToAdd(e.target.value)}
+                        className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        <option value="">{t("users.devices.assign_placeholder")}</option>
+                        {freeDevices.map((d) => (
+                          <option key={d.id} value={String(d.id)}>
+                            {d.name}
+                            {d.device_type ? ` · ${d.device_type}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={deviceBusy || !deviceToAdd}
+                        onClick={() => void bindDevice(Number(deviceToAdd), true, deviceLoan)}
+                      >
+                        {t("users.devices.assign_button")}
+                      </Button>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-input"
+                        checked={deviceLoan}
+                        onChange={(e) => setDeviceLoan(e.target.checked)}
+                      />
+                      {t("devices.is_loan")}
+                    </label>
+                  </>
                 )}
               </div>
             </CardContent>
@@ -956,6 +950,9 @@ function UserReadView({
                   ) : null}
                   {d.serial_number ? (
                     <span className="text-muted-foreground">· {d.serial_number}</span>
+                  ) : null}
+                  {d.is_loan ? (
+                    <span className="text-amber-600">· {t("devices.loan_badge")}</span>
                   ) : null}
                 </li>
               ))}

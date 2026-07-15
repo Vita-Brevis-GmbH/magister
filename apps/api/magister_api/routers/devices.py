@@ -139,6 +139,7 @@ async def assign_device(
             person_guid=payload.person_guid,
             class_id=payload.class_id,
             school_id=payload.school_id,
+            is_loan=payload.is_loan,
             ip=ip,
             request_id=request_id,
         )

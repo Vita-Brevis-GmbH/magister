@@ -147,18 +147,24 @@ class TestDeviceAssignment:
         did = (await as_admin.post("/devices", json={"name": "D3"})).json()["id"]
         resp = await as_admin.post(
             f"/devices/{did}/assign",
-            json={"assignment_type": "person", "person_guid": guid},
+            json={"assignment_type": "person", "person_guid": guid, "is_loan": True},
         )
         assert resp.status_code == 200, resp.text
         assert resp.json()["assigned_person_guid"] == guid
         assert resp.json()["school_id"] == school_a
+        assert resp.json()["is_loan"] is True
         # The response resolves the assignee's display name (never a bare GUID).
         assert resp.json()["assigned_person_name"] == "Pia Pupil"
 
-        # The list endpoint resolves it too.
+        # The list endpoint resolves the name too (while still assigned).
         listed = await as_admin.get("/devices")
         row = next(d for d in listed.json() if d["id"] == did)
         assert row["assigned_person_name"] == "Pia Pupil"
+
+        # Unassigning (free) clears the loaner flag.
+        resp = await as_admin.post(f"/devices/{did}/assign", json={"assignment_type": "free"})
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["is_loan"] is False
 
     @pytest.mark.asyncio
     async def test_assign_person_requires_guid(self, as_admin: AsyncClient) -> None:

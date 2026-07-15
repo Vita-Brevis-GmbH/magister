@@ -74,9 +74,9 @@ function DevicesPage(): JSX.Element {
 
   function assignmentText(d: DeviceOut): string {
     if (d.assigned_person_guid) {
-      return t("devices.assigned_person", {
-        name: d.assigned_person_name ?? d.assigned_person_guid,
-      });
+      const name = d.assigned_person_name ?? d.assigned_person_guid;
+      const base = t("devices.assigned_person", { name });
+      return d.is_loan ? `${base} · ${t("devices.loan_badge")}` : base;
     }
     if (d.class_id !== null) {
       return t("devices.assigned_class", { name: className(d.class_id) });
@@ -419,6 +419,7 @@ export function AssignDeviceModal({
   const [type, setType] = useState<DeviceAssignmentType>("free");
   const [personGuid, setPersonGuid] = useState("");
   const [personLabel, setPersonLabel] = useState("");
+  const [isLoan, setIsLoan] = useState(false);
   const [classId, setClassId] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [search, setSearch] = useState("");
@@ -439,7 +440,8 @@ export function AssignDeviceModal({
             : "free",
     );
     setPersonGuid(target.assigned_person_guid ?? "");
-    setPersonLabel("");
+    setPersonLabel(target.assigned_person_name ?? "");
+    setIsLoan(target.is_loan);
     setClassId(target.class_id !== null ? String(target.class_id) : "");
     setSchoolId(target.school_id !== null ? String(target.school_id) : "");
     setSearch("");
@@ -460,6 +462,7 @@ export function AssignDeviceModal({
         person_guid: type === "person" ? personGuid : null,
         class_id: type === "class" && classId ? Number(classId) : null,
         school_id: type === "school" && schoolId ? Number(schoolId) : null,
+        is_loan: type === "person" ? isLoan : false,
       },
       { onSuccess: close },
     );
@@ -576,6 +579,20 @@ export function AssignDeviceModal({
                   </>
                 );
               })()}
+              <label className="mt-2 flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input"
+                  checked={isLoan}
+                  onChange={(e) => setIsLoan(e.target.checked)}
+                />
+                <span>
+                  {t("devices.is_loan")}
+                  <span className="block text-xs text-muted-foreground">
+                    {t("devices.is_loan_hint")}
+                  </span>
+                </span>
+              </label>
             </div>
           ) : null}
 

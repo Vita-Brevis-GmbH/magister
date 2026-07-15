@@ -21,15 +21,17 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from typing import Literal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient, AdUserRecord, classify_kind_by_ou
 from magister_api.ad.errors import AdUnavailableError
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.ad_group import AdGroupCache
 from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.app_settings import AppSettings
+from magister_api.models.device import Device
 from magister_api.models.school import School
 from magister_api.repositories.ad_groups import AdGroupCatalogRepository
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
@@ -196,6 +198,8 @@ class AdSyncService:
         device_count = 0
         devices_imported = 0
         groups_imported = 0
+        device_total = 0
+        group_total = 0
         if effective_mode == "full":
             device_map = await self.ad.search_managed_computers()
             if device_map:
@@ -215,6 +219,18 @@ class AdSyncService:
             # Group catalog (Userkonfiguration checkbox-picker). Full-sync only;
             # a wrong/empty base is a soft-no-op inside search_groups().
             groups_imported = await self._sync_group_catalog()
+
+            # Report the *inventory totals* to the operator (not "created this
+            # run"), so "N Geräte / M Gruppen" matches what the device list and
+            # the group picker actually show.
+            device_total = int(
+                (await self.session.execute(select(func.count()).select_from(Device))).scalar_one()
+            )
+            group_total = int(
+                (
+                    await self.session.execute(select(func.count()).select_from(AdGroupCache))
+                ).scalar_one()
+            )
 
         synced = await self.repo.upsert_from_ad(records, school_id_resolver=resolver)
 
@@ -253,8 +269,11 @@ class AdSyncService:
             synced_count=synced,
             school_partition=partition,
             device_count=device_count,
-            devices_imported=devices_imported,
-            group_count=groups_imported,
+            # UI-facing counts are the inventory/catalog totals (see above), so
+            # they match the device list and group picker; the audit payload
+            # keeps the "created this run" figures.
+            devices_imported=device_total,
+            group_count=group_total,
             mode=effective_mode,
             cursor_before=cursor_before,
             cursor_after=cursor_after,

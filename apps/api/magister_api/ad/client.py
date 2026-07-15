@@ -1452,8 +1452,13 @@ class AdClient:
                 if group_dns:
                     # Best-effort default-group assignment; refused groups are
                     # logged (see _sync_add_user_to_groups) but never fail the
-                    # account creation.
-                    self._sync_add_user_to_groups(dn, group_dns)
+                    # account creation. Wrap it so a transient bind/connection
+                    # error (raised before the per-group loop) can't propagate
+                    # and orphan the just-created account with no cache row.
+                    try:
+                        self._sync_add_user_to_groups(dn, group_dns)
+                    except AdUnavailableError as exc:
+                        logger.warning("default groups not applied to new %s: %s", dn, exc)
             return new_guid
         except LDAPException as exc:
             raise AdUnavailableError("ldap_add_failed") from exc

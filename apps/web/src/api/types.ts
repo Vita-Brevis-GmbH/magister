@@ -508,6 +508,7 @@ export interface DeviceOut {
   class_id: number | null;
   assigned_person_guid: string | null;
   assigned_person_name: string | null;
+  is_loan: boolean;
   ad_object_guid: string | null;
   source: string;
   created_at: string;
@@ -535,6 +536,7 @@ export interface DeviceAssign {
   person_guid?: string | null;
   class_id?: number | null;
   school_id?: number | null;
+  is_loan?: boolean;
 }
 
 export interface AuditEventOut {

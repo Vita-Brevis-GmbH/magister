@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -51,6 +51,13 @@ class Device(Base):
     )
     # Person-assignment mirrors the other tables: ad_object_guid string, no FK.
     assigned_person_guid: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+
+    # Whether this device is a *loaner* (Leihgerät) rather than the person's
+    # fixed device — lets a person hold a loaner alongside a device that is in
+    # repair. Only meaningful while assigned to a person; reset on unassign.
+    is_loan: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
     # Stable identity for AD-imported devices (the Computer object's
     # objectGUID). NULL for manually created devices. Unique so the importer

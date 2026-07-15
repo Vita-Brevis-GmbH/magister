@@ -46,6 +46,7 @@ const DEVICE: DeviceOut = {
   class_id: null,
   assigned_person_guid: null,
   assigned_person_name: null,
+  is_loan: false,
   ad_object_guid: null,
   source: "manual",
   created_at: "2026-07-13T00:00:00+00:00",
@@ -117,6 +118,7 @@ describe("AssignDeviceModal", () => {
       person_guid: null,
       class_id: null,
       school_id: 3,
+      is_loan: false,
     });
   });
 
