@@ -271,7 +271,8 @@
       "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD.",
       "store_password": "Enregistrer le mot de passe dans Magister",
       "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres.",
-      "ad_groups": "Groupes AD"
+      "ad_groups": "Groupes AD",
+      "can_change_password": "L'utilisateur peut changer le mot de passe"
     },
     "new_user": "Nouvel utilisateur",
     "bulk": {
@@ -288,6 +289,17 @@
       "tri_keep": "inchangé",
       "tri_yes": "Oui",
       "tri_no": "Non"
+    },
+    "devices": {
+      "section_title": "Appareils",
+      "section_desc": "Appareils attribués à cette personne (depuis la gestion des appareils).",
+      "none": "Aucun appareil attribué.",
+      "remove": "Retirer",
+      "assign_label": "Attribuer un appareil libre",
+      "assign_placeholder": "— choisir un appareil —",
+      "assign_button": "Attribuer",
+      "none_free": "Aucun appareil libre disponible.",
+      "error": "Échec de l'attribution."
     }
   },
   "password_reset": {
@@ -354,7 +366,7 @@
       "test_ad_hint": "Teste le compte de service enregistré sur l'AD. Enregistrez d'abord.",
       "sync_ad_button": "Synchroniser maintenant",
       "sync_ad_running": "Synchronisation …",
-      "sync_ad_ok": "{{count}} utilisateurs synchronisés.",
+      "sync_ad_ok": "{{count}} utilisateurs, {{groups}} groupes et {{devices}} appareils synchronisés.",
       "sync_ad_unavailable": "AD injoignable.",
       "sync_ad_hint": "Lance immédiatement une synchronisation AD complète. Sinon automatique selon l'intervalle configuré.",
       "sync_ad_reason": {
@@ -510,7 +522,8 @@
       "force_change": "Forcer le changement de mot de passe à la première connexion",
       "cannot_change_password": "L'utilisateur ne peut pas changer le mot de passe",
       "password_never_expires": "Le mot de passe n'expire jamais",
-      "class_assign_failed": "Compte créé, mais l'affectation à la classe a échoué. Veuillez l'affecter manuellement."
+      "class_assign_failed": "Compte créé, mais l'affectation à la classe a échoué. Veuillez l'affecter manuellement.",
+      "can_change_password": "L'utilisateur peut changer le mot de passe"
     },
     "user_settings": {
       "title": "Configuration utilisateur",
@@ -797,7 +810,10 @@
     "error": {
       "out_of_scope": "L'attribution hors de votre périmètre scolaire n'est pas autorisée.",
       "assignment_invalid": "Cible d'attribution invalide."
-    }
+    },
+    "person_selected": "sélectionné",
+    "person_no_results": "Aucune personne trouvée — affinez la recherche.",
+    "person_more_hint": "{{shown}} sur {{total}} affichés — affinez la recherche pour en voir plus."
   },
   "schools": {
     "title": "Écoles",

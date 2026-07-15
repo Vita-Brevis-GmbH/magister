@@ -2,20 +2,24 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError } from "@/api/client";
+import { useQueryClient } from "@tanstack/react-query";
+
+import { ApiError, apiFetch } from "@/api/client";
 import {
   downloadCredentialPdf,
+  queryKeys,
   saveBlob,
   useAdGroups,
   useCurrentUser,
   useDeleteAdUser,
+  useDevices,
   useMailDomains,
   useUpdateUser,
   useUpdateUserGroups,
   useUser,
   useUserDashboard,
 } from "@/api/hooks";
-import type { AdUserOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
+import type { AdUserOut, DeviceOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
@@ -116,7 +120,33 @@ function UserDetailPage(): JSX.Element {
   // (best-effort AD group modify), with its own save button + status.
   const [groupSel, setGroupSel] = useState<string[]>([]);
   const [groupFailed, setGroupFailed] = useState<string[]>([]);
-  const [groupSaved, setGroupSaved] = useState(false);
+  const devicesQ = useDevices();
+  const qc = useQueryClient();
+  const [deviceToAdd, setDeviceToAdd] = useState("");
+  const [deviceBusy, setDeviceBusy] = useState(false);
+  const [deviceError, setDeviceError] = useState(false);
+
+  async function bindDevice(deviceId: number, toPerson: boolean): Promise<void> {
+    setDeviceBusy(true);
+    setDeviceError(false);
+    try {
+      await apiFetch(`/devices/${deviceId}/assign`, {
+        method: "POST",
+        body: {
+          assignment_type: toPerson ? "person" : "free",
+          person_guid: toPerson ? guid : null,
+          class_id: null,
+          school_id: null,
+        },
+      });
+      await qc.invalidateQueries({ queryKey: queryKeys.devices });
+      setDeviceToAdd("");
+    } catch {
+      setDeviceError(true);
+    } finally {
+      setDeviceBusy(false);
+    }
+  }
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfHeading, setPdfHeading] = useState("");
   const [pdfBody, setPdfBody] = useState("");
@@ -170,7 +200,6 @@ function UserDetailPage(): JSX.Element {
     });
     setGroupSel([...userQ.data.ad_groups]);
     setGroupFailed([]);
-    setGroupSaved(false);
   }, [userQ.data]);
 
   useEffect(() => {
@@ -251,16 +280,43 @@ function UserDetailPage(): JSX.Element {
     return out;
   }
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+  function groupsDirty(): boolean {
+    if (!userQ.data) return false;
+    const cur = userQ.data.ad_groups;
+    return (
+      groupSel.length !== cur.length ||
+      groupSel.some((g) => !cur.includes(g)) ||
+      cur.some((g) => !groupSel.includes(g))
+    );
+  }
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
     const payload = buildPayload();
-    if (Object.keys(payload).length === 0) return;
-    update.mutate(payload, {
-      onSuccess: () => {
-        setSavedFlash(true);
-        setEditing(false);
-      },
-    });
+    const grpChanged = groupsDirty();
+    if (Object.keys(payload).length === 0 && !grpChanged) return;
+    setGroupFailed([]);
+    try {
+      // Attribute changes and group membership are two separate writes (own
+      // endpoints); the single "Speichern" runs both. Attributes first so a
+      // group-write partial failure doesn't roll back a valid attribute edit.
+      if (Object.keys(payload).length > 0) {
+        await update.mutateAsync(payload);
+      }
+      let failedGroups: string[] = [];
+      if (grpChanged) {
+        const res = await updateGroups.mutateAsync({ groups: groupSel });
+        failedGroups = res.failed;
+        setGroupFailed(res.failed);
+        setGroupSel(res.groups);
+      }
+      setSavedFlash(true);
+      // Keep the form open when some group writes were refused, so the
+      // operator sees which ones need directory-side permission.
+      if (failedGroups.length === 0) setEditing(false);
+    } catch {
+      // Surfaced via update.isError / updateGroups.isError below.
+    }
   }
 
   if (userQ.isLoading) {
@@ -287,6 +343,12 @@ function UserDetailPage(): JSX.Element {
 
   const user = userQ.data;
   const errorDetail = update.isError ? renderPatchError(update.error, t) : null;
+
+  const allDevices = devicesQ.data ?? [];
+  const assignedDevices = allDevices.filter((d) => d.assigned_person_guid === guid);
+  const freeDevices = allDevices.filter(
+    (d) => !d.assigned_person_guid && d.class_id === null && d.school_id === null,
+  );
 
   return (
     <div className="space-y-6">
@@ -378,6 +440,7 @@ function UserDetailPage(): JSX.Element {
         <UserReadView
           user={user}
           dashboard={dashboardQ.data}
+          devices={assignedDevices}
           onOpenPrivacy={() => setPrivacyOpen(true)}
         />
       ) : (
@@ -545,11 +608,11 @@ function UserDetailPage(): JSX.Element {
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 rounded border-input"
-                  checked={form.cannot_change_password}
-                  onChange={(e) => setField("cannot_change_password", e.target.checked)}
+                  checked={!form.cannot_change_password}
+                  onChange={(e) => setField("cannot_change_password", !e.target.checked)}
                 />
                 <span>
-                  {t("users.field.cannot_change_password")}
+                  {t("users.field.can_change_password")}
                   <span className="block text-xs text-muted-foreground">
                     {t("users.field.cannot_change_password_hint")}
                   </span>
@@ -610,24 +673,9 @@ function UserDetailPage(): JSX.Element {
               <CardDescription>{t("user_groups.section_desc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {updateGroups.isError ? (
-                <div
-                  role="alert"
-                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-                >
-                  {t("errors.generic")}
-                </div>
-              ) : null}
               {groupFailed.length > 0 ? (
                 <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
                   {t("user_groups.partial_failed", { count: groupFailed.length })}
-                </div>
-              ) : groupSaved ? (
-                <div
-                  role="status"
-                  className="rounded-md border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300"
-                >
-                  {t("user_groups.saved")}
                 </div>
               ) : null}
               <GroupPicker
@@ -637,28 +685,81 @@ function UserDetailPage(): JSX.Element {
                 onChange={(next) => {
                   setGroupSel(next);
                   setGroupFailed([]);
-                  setGroupSaved(false);
                 }}
               />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={updateGroups.isPending}
-                onClick={() =>
-                  updateGroups.mutate(
-                    { groups: groupSel },
-                    {
-                      onSuccess: (res) => {
-                        setGroupFailed(res.failed);
-                        setGroupSel(res.groups);
-                        setGroupSaved(res.failed.length === 0);
-                      },
-                    },
-                  )
-                }
-              >
-                {updateGroups.isPending ? t("common.loading") : t("user_groups.save")}
-              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.devices.section_title")}</CardTitle>
+              <CardDescription>{t("users.devices.section_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {deviceError ? (
+                <div
+                  role="alert"
+                  className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  {t("users.devices.error")}
+                </div>
+              ) : null}
+              {assignedDevices.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("users.devices.none")}</p>
+              ) : (
+                <ul className="space-y-1 text-sm">
+                  {assignedDevices.map((d) => (
+                    <li key={d.id} className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate">
+                        <span className="font-medium">{d.name}</span>
+                        {d.device_type ? (
+                          <span className="text-muted-foreground"> · {d.device_type}</span>
+                        ) : null}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={deviceBusy}
+                        onClick={() => void bindDevice(d.id, false)}
+                      >
+                        {t("users.devices.remove")}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="space-y-1 border-t pt-3">
+                <Label htmlFor="assign-free-device">{t("users.devices.assign_label")}</Label>
+                {freeDevices.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">{t("users.devices.none_free")}</p>
+                ) : (
+                  <div className="flex gap-2">
+                    <select
+                      id="assign-free-device"
+                      value={deviceToAdd}
+                      onChange={(e) => setDeviceToAdd(e.target.value)}
+                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                    >
+                      <option value="">{t("users.devices.assign_placeholder")}</option>
+                      {freeDevices.map((d) => (
+                        <option key={d.id} value={String(d.id)}>
+                          {d.name}
+                          {d.device_type ? ` · ${d.device_type}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={deviceBusy || !deviceToAdd}
+                      onClick={() => void bindDevice(Number(deviceToAdd), true)}
+                    >
+                      {t("users.devices.assign_button")}
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -744,10 +845,12 @@ function UserDetailPage(): JSX.Element {
 function UserReadView({
   user,
   dashboard,
+  devices,
   onOpenPrivacy,
 }: {
   user: AdUserOut;
   dashboard: UserDashboardOut | undefined;
+  devices: DeviceOut[];
   onOpenPrivacy: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
@@ -817,8 +920,8 @@ function UserReadView({
             />
           ) : null}
           <InfoRow
-            label={t("users.field.cannot_change_password")}
-            value={user.cannot_change_password ? t("users.yes") : t("users.no")}
+            label={t("users.field.can_change_password")}
+            value={user.cannot_change_password ? t("users.no") : t("users.yes")}
           />
           <InfoRow
             label={t("users.field.password_never_expires")}
@@ -832,6 +935,32 @@ function UserReadView({
               {user.ad_groups.length > 0 ? user.ad_groups.map((dn) => groupCn(dn)).join(", ") : "–"}
             </span>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("users.devices.section_title")}</CardTitle>
+          <CardDescription>{t("users.devices.section_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {devices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("users.devices.none")}</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {devices.map((d) => (
+                <li key={d.id} className="flex flex-wrap gap-x-2">
+                  <span className="font-medium">{d.name}</span>
+                  {d.device_type ? (
+                    <span className="text-muted-foreground">· {d.device_type}</span>
+                  ) : null}
+                  {d.serial_number ? (
+                    <span className="text-muted-foreground">· {d.serial_number}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
 

@@ -137,6 +137,7 @@ class TestDeviceAssignment:
                 ad_object_guid=guid,
                 school_id=school_a,
                 upn="pupil@schule.ch",
+                display_name="Pia Pupil",
                 kind="student",
                 enabled=True,
             )
@@ -151,6 +152,13 @@ class TestDeviceAssignment:
         assert resp.status_code == 200, resp.text
         assert resp.json()["assigned_person_guid"] == guid
         assert resp.json()["school_id"] == school_a
+        # The response resolves the assignee's display name (never a bare GUID).
+        assert resp.json()["assigned_person_name"] == "Pia Pupil"
+
+        # The list endpoint resolves it too.
+        listed = await as_admin.get("/devices")
+        row = next(d for d in listed.json() if d["id"] == did)
+        assert row["assigned_person_name"] == "Pia Pupil"
 
     @pytest.mark.asyncio
     async def test_assign_person_requires_guid(self, as_admin: AsyncClient) -> None:

@@ -77,6 +77,8 @@ async def trigger_ad_sync(
     return AdSyncResultOut(
         synced_count=result.synced_count,
         school_partition={str(k): v for k, v in result.school_partition.items()},
+        device_count=result.devices_imported,
+        group_count=result.group_count,
     )
 
 

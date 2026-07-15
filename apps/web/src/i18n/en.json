@@ -268,7 +268,8 @@
       "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag.",
       "store_password": "Store password in Magister",
       "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings.",
-      "ad_groups": "AD groups"
+      "ad_groups": "AD groups",
+      "can_change_password": "User can change password"
     },
     "new_user": "New user",
     "bulk": {
@@ -285,6 +286,17 @@
       "tri_keep": "unchanged",
       "tri_yes": "Yes",
       "tri_no": "No"
+    },
+    "devices": {
+      "section_title": "Devices",
+      "section_desc": "Devices assigned to this person (from device management).",
+      "none": "No devices assigned.",
+      "remove": "Remove",
+      "assign_label": "Assign a free device",
+      "assign_placeholder": "— choose device —",
+      "assign_button": "Assign",
+      "none_free": "No free devices available.",
+      "error": "Device assignment failed."
     }
   },
   "password_reset": {
@@ -351,7 +363,7 @@
       "test_ad_hint": "Tests the saved service account against AD. Save first.",
       "sync_ad_button": "Sync now",
       "sync_ad_running": "Syncing …",
-      "sync_ad_ok": "{{count}} users synced.",
+      "sync_ad_ok": "{{count}} users, {{groups}} groups and {{devices}} devices synced.",
       "sync_ad_unavailable": "AD unreachable.",
       "sync_ad_hint": "Runs a full AD sync immediately. Otherwise it runs automatically at the configured interval.",
       "sync_ad_reason": {
@@ -507,7 +519,8 @@
       "force_change": "Force password change at first logon",
       "cannot_change_password": "User cannot change password",
       "password_never_expires": "Password never expires",
-      "class_assign_failed": "Account created, but the class assignment failed. Please assign it manually."
+      "class_assign_failed": "Account created, but the class assignment failed. Please assign it manually.",
+      "can_change_password": "User can change password"
     },
     "user_settings": {
       "title": "User configuration",
@@ -794,7 +807,10 @@
     "error": {
       "out_of_scope": "Assignment outside your school scope is not allowed.",
       "assignment_invalid": "Invalid assignment target."
-    }
+    },
+    "person_selected": "selected",
+    "person_no_results": "No people found — refine the search.",
+    "person_more_hint": "Showing {{shown}} of {{total}} — narrow the search to find more."
   },
   "schools": {
     "title": "Schools",

@@ -60,8 +60,6 @@ function DevicesPage(): JSX.Element {
   const q = useDevices();
   const schools = useSchools();
   const classes = useClasses();
-  // Load a generous page of users once to resolve person-assignment labels.
-  const users = useUsers({ limit: 1000 });
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<DeviceOut | null>(null);
@@ -73,14 +71,12 @@ function DevicesPage(): JSX.Element {
     schools.data?.find((s) => s.id === id)?.name ?? String(id);
   const className = (id: number): string =>
     classes.data?.find((c) => c.id === id)?.name ?? String(id);
-  const personLabel = (guid: string): string => {
-    const u = users.data?.items.find((it) => it.ad_object_guid === guid);
-    return u ? displayLabel(u) : guid;
-  };
 
   function assignmentText(d: DeviceOut): string {
     if (d.assigned_person_guid) {
-      return t("devices.assigned_person", { name: personLabel(d.assigned_person_guid) });
+      return t("devices.assigned_person", {
+        name: d.assigned_person_name ?? d.assigned_person_guid,
+      });
     }
     if (d.class_id !== null) {
       return t("devices.assigned_class", { name: className(d.class_id) });
@@ -422,12 +418,15 @@ export function AssignDeviceModal({
   const { t } = useTranslation();
   const [type, setType] = useState<DeviceAssignmentType>("free");
   const [personGuid, setPersonGuid] = useState("");
+  const [personLabel, setPersonLabel] = useState("");
   const [classId, setClassId] = useState("");
   const [schoolId, setSchoolId] = useState("");
   const [search, setSearch] = useState("");
   const [hydratedId, setHydratedId] = useState<number | null>(null);
   const assign = useAssignDevice(target?.id ?? 0);
-  const personResults = useUsers({ search: search.trim(), limit: 20 });
+  // keepPrevious so the list doesn't blank while typing (a click can't land on
+  // an empty list); limit generous but capped — a hint nudges to search.
+  const personResults = useUsers({ search: search.trim(), limit: 25 }, { keepPrevious: true });
 
   if (target && hydratedId !== target.id) {
     setType(
@@ -440,6 +439,7 @@ export function AssignDeviceModal({
             : "free",
     );
     setPersonGuid(target.assigned_person_guid ?? "");
+    setPersonLabel("");
     setClassId(target.class_id !== null ? String(target.class_id) : "");
     setSchoolId(target.school_id !== null ? String(target.school_id) : "");
     setSearch("");
@@ -511,19 +511,71 @@ export function AssignDeviceModal({
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("devices.person_search_placeholder")}
               />
-              <select
-                aria-label={t("devices.select_person")}
-                value={personGuid}
-                onChange={(e) => setPersonGuid(e.target.value)}
-                size={5}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                {(personResults.data?.items ?? []).map((u: AdUserOut) => (
-                  <option key={u.ad_object_guid} value={u.ad_object_guid}>
-                    {displayLabel(u)} · {u.upn}
-                  </option>
-                ))}
-              </select>
+              {(() => {
+                const items = personResults.data?.items ?? [];
+                const total = personResults.data?.total ?? items.length;
+                const selectedInList = items.some((u) => u.ad_object_guid === personGuid);
+                return (
+                  <>
+                    {/* Currently-selected person stays pinned + visible even when
+                        filtered out of the results, so a selection is never lost. */}
+                    {personGuid && !selectedInList ? (
+                      <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                        <input
+                          type="radio"
+                          name="assign-person"
+                          checked
+                          readOnly
+                          className="h-4 w-4"
+                        />
+                        <span className="min-w-0 truncate">
+                          {personLabel || personGuid}
+                          <span className="ml-1 text-xs text-muted-foreground">
+                            ({t("devices.person_selected")})
+                          </span>
+                        </span>
+                      </div>
+                    ) : null}
+                    <div
+                      role="radiogroup"
+                      aria-label={t("devices.select_person")}
+                      className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2"
+                    >
+                      {items.length === 0 ? (
+                        <p className="px-1 py-2 text-xs text-muted-foreground">
+                          {t("devices.person_no_results")}
+                        </p>
+                      ) : (
+                        items.map((u: AdUserOut) => (
+                          <label key={u.ad_object_guid} className="flex items-start gap-2 text-sm">
+                            <input
+                              type="radio"
+                              name="assign-person"
+                              className="mt-0.5 h-4 w-4"
+                              checked={personGuid === u.ad_object_guid}
+                              onChange={() => {
+                                setPersonGuid(u.ad_object_guid);
+                                setPersonLabel(`${displayLabel(u)} · ${u.upn}`);
+                              }}
+                            />
+                            <span className="min-w-0">
+                              <span className="font-medium">{displayLabel(u)}</span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {u.upn}
+                              </span>
+                            </span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                    {total > items.length ? (
+                      <p className="text-xs text-muted-foreground">
+                        {t("devices.person_more_hint", { shown: items.length, total })}
+                      </p>
+                    ) : null}
+                  </>
+                );
+              })()}
             </div>
           ) : null}
 

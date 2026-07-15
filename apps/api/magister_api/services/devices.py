@@ -8,6 +8,7 @@ and refuses cross-scope binds for non-admin writers.
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
@@ -41,6 +42,37 @@ class DeviceService:
 
     async def list_all(self) -> list[Device]:
         return await self.repo.list_all()
+
+    async def person_names(self, guids: set[str]) -> dict[str, str]:
+        """Map ``objectGUID → display label`` for assigned persons.
+
+        Display-only resolution so the device UI shows a name, not a GUID.
+
+        # scope-bypass: the device rows are already scope-authorized; this only
+        # reads the assignee's label (display_name / name / UPN) for rendering.
+        """
+        clean = {g for g in guids if g}
+        if not clean:
+            return {}
+        rows = (
+            (
+                await self.session.execute(
+                    select(AdUserCache).where(AdUserCache.ad_object_guid.in_(clean))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        out: dict[str, str] = {}
+        for u in rows:
+            label = (
+                u.display_name
+                or f"{u.given_name or ''} {u.surname or ''}".strip()
+                or u.upn
+                or u.ad_object_guid
+            )
+            out[u.ad_object_guid] = label
+        return out
 
     async def get(self, device_id: int) -> Device:
         row = await self.repo.get(device_id)

@@ -45,6 +45,10 @@ class SyncResult:
     """{school_id → count}; key 0 = unmatched (no school)."""
     device_count: int = 0
     """Number of users that received a device_name from the Computer-OU walk."""
+    devices_imported: int = 0
+    """Number of Computer objects upserted into the device inventory."""
+    group_count: int = 0
+    """Number of AD groups mirrored into the group catalog."""
     mode: SyncMode = "full"
     cursor_before: datetime | None = None
     cursor_after: datetime | None = None
@@ -249,6 +253,8 @@ class AdSyncService:
             synced_count=synced,
             school_partition=partition,
             device_count=device_count,
+            devices_imported=devices_imported,
+            group_count=groups_imported,
             mode=effective_mode,
             cursor_before=cursor_before,
             cursor_after=cursor_after,

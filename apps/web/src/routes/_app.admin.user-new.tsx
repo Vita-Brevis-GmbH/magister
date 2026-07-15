@@ -253,12 +253,12 @@ function NewUserPage(): JSX.Element {
                 <input
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 rounded border-input"
-                  checked={form.cannot_change_password}
+                  checked={!form.cannot_change_password}
                   onChange={(e) =>
-                    setForm((prev) => ({ ...prev, cannot_change_password: e.target.checked }))
+                    setForm((prev) => ({ ...prev, cannot_change_password: !e.target.checked }))
                   }
                 />
-                <span>{t("admin.user_new.cannot_change_password")}</span>
+                <span>{t("admin.user_new.can_change_password")}</span>
               </label>
               <label className="flex items-start gap-2 text-sm">
                 <input

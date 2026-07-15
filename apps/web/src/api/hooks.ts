@@ -1,6 +1,6 @@
 /** React-Query hooks per backend resource. */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
@@ -424,7 +424,7 @@ export interface UseUsersParams {
   limit?: number;
 }
 
-export function useUsers(params: UseUsersParams = {}) {
+export function useUsers(params: UseUsersParams = {}, opts: { keepPrevious?: boolean } = {}) {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
@@ -433,6 +433,10 @@ export function useUsers(params: UseUsersParams = {}) {
   return useQuery<AdUserListResponse>({
     queryKey: queryKeys.users(params),
     queryFn: () => apiFetch<AdUserListResponse>(path),
+    // For the device-assign person search: keep the previous result on screen
+    // while a new search is in flight, so the list never blanks out and a
+    // click can't land on a momentarily-empty list.
+    ...(opts.keepPrevious ? { placeholderData: keepPreviousData } : {}),
   });
 }
 

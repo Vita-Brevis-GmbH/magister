@@ -48,6 +48,10 @@ class AdUserListResponse(BaseModel):
 class AdSyncResultOut(BaseModel):
     synced_count: int
     school_partition: dict[str, int]
+    # Full-sync side counts (0 on incremental): devices imported from the
+    # Computer-OU and groups mirrored into the group catalog.
+    device_count: int = 0
+    group_count: int = 0
 
 
 class AdConnectionTestOut(BaseModel):

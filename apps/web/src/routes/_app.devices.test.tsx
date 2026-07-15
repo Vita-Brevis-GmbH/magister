@@ -45,6 +45,7 @@ const DEVICE: DeviceOut = {
   school_id: null,
   class_id: null,
   assigned_person_guid: null,
+  assigned_person_name: null,
   ad_object_guid: null,
   source: "manual",
   created_at: "2026-07-13T00:00:00+00:00",

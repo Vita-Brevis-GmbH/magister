@@ -268,7 +268,8 @@
       "password_never_expires_hint": "Setzt das AD-Flag DONT_EXPIRE_PASSWD.",
       "store_password": "Passwort in Magister speichern",
       "store_password_hint": "Verschlüsselt (Server-Schlüssel). Beim Ausgeben der Zugangsdaten wird dieses PW verwendet statt eines neuen. Benötigt die globale Freigabe in den Einstellungen.",
-      "ad_groups": "AD-Gruppen"
+      "ad_groups": "AD-Gruppen",
+      "can_change_password": "Benutzer kann Passwort ändern"
     },
     "new_user": "Neuer Benutzer",
     "bulk": {
@@ -285,6 +286,17 @@
       "tri_keep": "unverändert",
       "tri_yes": "Ja",
       "tri_no": "Nein"
+    },
+    "devices": {
+      "section_title": "Geräte",
+      "section_desc": "Dieser Person zugewiesene Geräte (aus der Geräteverwaltung).",
+      "none": "Keine Geräte zugewiesen.",
+      "remove": "Entfernen",
+      "assign_label": "Freies Gerät zuweisen",
+      "assign_placeholder": "— Gerät wählen —",
+      "assign_button": "Zuweisen",
+      "none_free": "Keine freien Geräte verfügbar.",
+      "error": "Geräte-Zuweisung fehlgeschlagen."
     }
   },
   "password_reset": {
@@ -349,7 +361,7 @@
       "test_ad_hint": "Testet den gespeicherten Service-Account gegen das AD. Bitte zuerst speichern.",
       "sync_ad_button": "Jetzt synchronisieren",
       "sync_ad_running": "Synchronisiere …",
-      "sync_ad_ok": "{{count}} Benutzer synchronisiert.",
+      "sync_ad_ok": "{{count}} Benutzer, {{groups}} Gruppen und {{devices}} Geräte synchronisiert.",
       "sync_ad_unavailable": "AD nicht erreichbar.",
       "sync_ad_hint": "Startet sofort einen vollständigen AD-Sync. Läuft sonst automatisch im eingestellten Intervall.",
       "sync_ad_reason": {
@@ -507,7 +519,8 @@
       "force_change": "Passwortänderung bei erster Anmeldung erzwingen",
       "cannot_change_password": "Benutzer kann Passwort nicht ändern",
       "password_never_expires": "Passwort läuft nie ab",
-      "class_assign_failed": "Konto erstellt, aber die Klassenzuweisung ist fehlgeschlagen. Bitte manuell zuweisen."
+      "class_assign_failed": "Konto erstellt, aber die Klassenzuweisung ist fehlgeschlagen. Bitte manuell zuweisen.",
+      "can_change_password": "Benutzer kann Passwort ändern"
     },
     "user_settings": {
       "title": "Userkonfiguration",
@@ -794,7 +807,10 @@
     "error": {
       "out_of_scope": "Zuweisung ausserhalb Ihres Schul-Bereichs nicht erlaubt.",
       "assignment_invalid": "Ungültiges Zuweisungsziel."
-    }
+    },
+    "person_selected": "ausgewählt",
+    "person_no_results": "Keine Personen gefunden — Suche anpassen.",
+    "person_more_hint": "{{shown}} von {{total}} angezeigt — Suche eingrenzen, um weitere zu finden."
   },
   "schools": {
     "title": "Schulen",

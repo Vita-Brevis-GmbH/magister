@@ -485,7 +485,11 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
               </Button>
               {syncAd.data ? (
                 <span className="text-sm text-emerald-700">
-                  {t("admin.settings.sync_ad_ok", { count: syncAd.data.synced_count })}
+                  {t("admin.settings.sync_ad_ok", {
+                    count: syncAd.data.synced_count,
+                    groups: syncAd.data.group_count,
+                    devices: syncAd.data.device_count,
+                  })}
                 </span>
               ) : syncAd.isError ? (
                 <span className="text-sm text-destructive">

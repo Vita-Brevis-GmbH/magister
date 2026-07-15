@@ -53,6 +53,9 @@ class DeviceOut(BaseModel):
     school_id: int | None
     class_id: int | None
     assigned_person_guid: str | None
+    # Resolved display name of the assigned person (None when unassigned or the
+    # person is not in the cache). Purely for display so the UI never shows a GUID.
+    assigned_person_name: str | None = None
     ad_object_guid: str | None
     source: str
     created_at: datetime

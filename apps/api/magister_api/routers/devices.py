@@ -34,6 +34,19 @@ from magister_api.services.devices import (
 router = APIRouter(prefix="/devices", tags=["devices"])
 
 
+def _to_out(row: object, names: dict[str, str]) -> DeviceOut:
+    out = DeviceOut.model_validate(row)
+    if out.assigned_person_guid:
+        out.assigned_person_name = names.get(out.assigned_person_guid)
+    return out
+
+
+async def _one_out(svc: DeviceService, row: object) -> DeviceOut:
+    guid = getattr(row, "assigned_person_guid", None)
+    names = await svc.person_names({guid}) if guid else {}
+    return _to_out(row, names)
+
+
 @router.get("", response_model=list[DeviceOut])
 async def list_devices(
     user: AuthenticatedUser = Depends(require_smi),
@@ -42,7 +55,8 @@ async def list_devices(
 ) -> list[DeviceOut]:
     svc = DeviceService(session, settings, user.to_scope())
     rows = await svc.list_all()
-    return [DeviceOut.model_validate(r) for r in rows]
+    names = await svc.person_names({r.assigned_person_guid for r in rows if r.assigned_person_guid})
+    return [_to_out(r, names) for r in rows]
 
 
 @router.post("", response_model=DeviceOut, status_code=status.HTTP_201_CREATED)
@@ -63,7 +77,7 @@ async def create_device(
         ip=ip,
         request_id=request_id,
     )
-    return DeviceOut.model_validate(row)
+    return await _one_out(svc, row)
 
 
 @router.get("/{device_id}", response_model=DeviceOut)
@@ -78,7 +92,7 @@ async def get_device(
         row = await svc.get(device_id)
     except DeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="device_not_found") from exc
-    return DeviceOut.model_validate(row)
+    return await _one_out(svc, row)
 
 
 @router.patch("/{device_id}", response_model=DeviceOut)
@@ -104,7 +118,7 @@ async def patch_device(
         )
     except DeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="device_not_found") from exc
-    return DeviceOut.model_validate(row)
+    return await _one_out(svc, row)
 
 
 @router.post("/{device_id}/assign", response_model=DeviceOut)
@@ -134,7 +148,7 @@ async def assign_device(
         raise HTTPException(status_code=403, detail="school_out_of_scope") from exc
     except DeviceAssignmentError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return DeviceOut.model_validate(row)
+    return await _one_out(svc, row)
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)

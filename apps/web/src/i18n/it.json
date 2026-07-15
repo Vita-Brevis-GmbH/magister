@@ -271,7 +271,8 @@
       "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD.",
       "store_password": "Salva la password in Magister",
       "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni.",
-      "ad_groups": "Gruppi AD"
+      "ad_groups": "Gruppi AD",
+      "can_change_password": "L'utente può cambiare la password"
     },
     "new_user": "Nuovo utente",
     "bulk": {
@@ -288,6 +289,17 @@
       "tri_keep": "invariato",
       "tri_yes": "Sì",
       "tri_no": "No"
+    },
+    "devices": {
+      "section_title": "Dispositivi",
+      "section_desc": "Dispositivi assegnati a questa persona (dalla gestione dispositivi).",
+      "none": "Nessun dispositivo assegnato.",
+      "remove": "Rimuovi",
+      "assign_label": "Assegna dispositivo libero",
+      "assign_placeholder": "— scegli dispositivo —",
+      "assign_button": "Assegna",
+      "none_free": "Nessun dispositivo libero disponibile.",
+      "error": "Assegnazione non riuscita."
     }
   },
   "password_reset": {
@@ -354,7 +366,7 @@
       "test_ad_hint": "Verifica l'account di servizio salvato contro l'AD. Salva prima.",
       "sync_ad_button": "Sincronizza ora",
       "sync_ad_running": "Sincronizzazione …",
-      "sync_ad_ok": "{{count}} utenti sincronizzati.",
+      "sync_ad_ok": "{{count}} utenti, {{groups}} gruppi e {{devices}} dispositivi sincronizzati.",
       "sync_ad_unavailable": "AD non raggiungibile.",
       "sync_ad_hint": "Avvia subito una sincronizzazione AD completa. Altrimenti automatica secondo l'intervallo configurato.",
       "sync_ad_reason": {
@@ -510,7 +522,8 @@
       "force_change": "Forza il cambio password al primo accesso",
       "cannot_change_password": "L'utente non può cambiare la password",
       "password_never_expires": "La password non scade mai",
-      "class_assign_failed": "Account creato, ma l'assegnazione alla classe non è riuscita. Assegnare manualmente."
+      "class_assign_failed": "Account creato, ma l'assegnazione alla classe non è riuscita. Assegnare manualmente.",
+      "can_change_password": "L'utente può cambiare la password"
     },
     "user_settings": {
       "title": "Configurazione utenti",
@@ -797,7 +810,10 @@
     "error": {
       "out_of_scope": "Assegnazione fuori dal tuo ambito scolastico non consentita.",
       "assignment_invalid": "Destinazione di assegnazione non valida."
-    }
+    },
+    "person_selected": "selezionato",
+    "person_no_results": "Nessuna persona trovata — modificare la ricerca.",
+    "person_more_hint": "Visualizzati {{shown}} di {{total}} — restringere la ricerca per trovarne altri."
   },
   "schools": {
     "title": "Scuole",

@@ -351,6 +351,8 @@ export interface AdConnectionTestOut {
 export interface AdSyncResultOut {
   synced_count: number;
   school_partition: Record<string, number>;
+  device_count: number;
+  group_count: number;
 }
 
 export type AdUserOuKey = "teacher" | "student_zyklus1" | "student_zyklus2" | "student_zyklus3";
@@ -505,6 +507,7 @@ export interface DeviceOut {
   school_id: number | null;
   class_id: number | null;
   assigned_person_guid: string | null;
+  assigned_person_name: string | null;
   ad_object_guid: string | null;
   source: string;
   created_at: string;
