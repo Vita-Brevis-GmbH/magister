@@ -1442,22 +1442,26 @@ class AdClient:
                 if cannot_change_password:
                     # DACL edit on the fresh object (real AD only; the mock
                     # LDAP server has no security descriptor). Best-effort: the
-                    # account already exists, so a refused SD write (e.g. no
-                    # WRITE_DAC right) must NOT abort creation and orphan the
-                    # object — log it and let the caller keep the account.
+                    # account already exists, so a refused/failed SD write (e.g.
+                    # no WRITE_DAC right, or an SD the parser trips on) must NOT
+                    # abort creation and orphan the object. Catch *everything*
+                    # here — the security-descriptor path was never exercised
+                    # against real AD, so an unexpected exception type must not
+                    # bubble up and fail the whole import row.
                     try:
                         self._sync_set_cannot_change_password(dn, True)
-                    except AdUnavailableError as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.warning("cannot-change-password not applied to new %s: %s", dn, exc)
                 if group_dns:
                     # Best-effort default-group assignment; refused groups are
                     # logged (see _sync_add_user_to_groups) but never fail the
-                    # account creation. Wrap it so a transient bind/connection
-                    # error (raised before the per-group loop) can't propagate
-                    # and orphan the just-created account with no cache row.
+                    # account creation. Catch *everything* so a transient
+                    # bind/connection error — or any unexpected error raised
+                    # before/around the per-group loop — can't propagate and
+                    # orphan the just-created account with no cache row.
                     try:
                         self._sync_add_user_to_groups(dn, group_dns)
-                    except AdUnavailableError as exc:
+                    except Exception as exc:  # noqa: BLE001
                         logger.warning("default groups not applied to new %s: %s", dn, exc)
             return new_guid
         except LDAPException as exc:

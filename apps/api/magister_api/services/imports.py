@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.ou import (
@@ -56,6 +57,8 @@ from magister_api.models.school_class import (
     SchoolClass,
 )
 from magister_api.repositories.base import ScopeContext
+
+logger = logging.getLogger(__name__)
 
 # sAMAccountName is capped at 20 chars in AD; UPN local part beyond that must
 # be shortened by an explicit column value.
@@ -779,9 +782,15 @@ class ImportService:
                 applied_counts["skipped"] += 1
                 continue
 
-            sp = await self.session.begin_nested()
             cred: ProvisionedCredential | None = None
+            # begin_nested() is opened *inside* the try so that a savepoint that
+            # cannot be started (e.g. a connection that a prior row left in a bad
+            # state) degrades to a per-row failure instead of a request-wide 500
+            # that would roll back — and thereby discard from Magister — every
+            # teacher already provisioned in AD this run.
+            sp: AsyncSessionTransaction | None = None
             try:
+                sp = await self.session.begin_nested()
                 if job.kind == IMPORT_KIND_CLASSES:
                     await self._apply_class(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_CLASS_MEMBERSHIPS:
@@ -796,18 +805,28 @@ class ImportService:
                     )
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
+                await sp.commit()
+                # Count + append only AFTER the row's savepoint commits, so a
+                # failed flush never leaves the row double-counted (created AND
+                # failed) or leaks a credential into the hand-out list.
                 staged.applied_at = now
                 if staged.action == IMPORT_ACTION_CREATE:
                     applied_counts["created"] += 1
                 else:
                     applied_counts["updated"] += 1
-                await sp.commit()
-                # Append only after the row commits, so a rolled-back row never
-                # leaks a credential into the hand-out list.
                 if cred is not None:
                     self.provisioned.append(cred)
             except Exception as exc:  # noqa: BLE001
-                await sp.rollback()
+                if sp is not None:
+                    try:
+                        await sp.rollback()
+                    except Exception as rb_exc:  # noqa: BLE001
+                        # Savepoint already gone (connection dropped mid-row) —
+                        # nothing to release; keep going so other rows and the
+                        # summary still get a chance to complete.
+                        logger.warning(
+                            "savepoint rollback failed for row %s: %s", staged.id, rb_exc
+                        )
                 staged.applied_at = now
                 staged.applied_error = str(exc)[:512]
                 applied_counts["failed"] += 1
@@ -817,17 +836,36 @@ class ImportService:
         job.summary = {**job.summary, "applied": applied_counts}
         await self.session.flush()
 
-        await self.audit.emit(
-            action="import_applied",
-            target_kind="import_job",
-            target_id=str(job.id),
-            actor_upn=self.scope.upn,
-            actor_object_guid=self.scope.ad_object_guid,
-            school_id=job.school_id,
-            ip=ip,
-            request_id=request_id,
-            payload={"kind": job.kind, "applied": applied_counts},
-        )
+        # The actual mutations (teacher_provisioned / student_provisioned, or
+        # the class/membership writes) are already audited inside each committed
+        # per-row savepoint. This ``import_applied`` event is a *summary* — so
+        # isolate it in its own savepoint. An audit-infra failure here (e.g. a
+        # pgcrypto / audit-key problem at encrypt time) must never propagate out
+        # of apply(), because the request session would then roll back the WHOLE
+        # transaction and discard from Magister every account already created in
+        # AD this run — leaving orphaned teachers (the reported bulk-import bug).
+        sp_audit: AsyncSessionTransaction | None = None
+        try:
+            sp_audit = await self.session.begin_nested()
+            await self.audit.emit(
+                action="import_applied",
+                target_kind="import_job",
+                target_id=str(job.id),
+                actor_upn=self.scope.upn,
+                actor_object_guid=self.scope.ad_object_guid,
+                school_id=job.school_id,
+                ip=ip,
+                request_id=request_id,
+                payload={"kind": job.kind, "applied": applied_counts},
+            )
+            await sp_audit.commit()
+        except Exception as exc:  # noqa: BLE001
+            if sp_audit is not None:
+                try:
+                    await sp_audit.rollback()
+                except Exception as rb_exc:  # noqa: BLE001
+                    logger.warning("import_applied audit rollback failed: %s", rb_exc)
+            logger.error("import_applied audit emit failed for job %s: %s", job.id, exc)
         return job
 
     async def _apply_class(self, school_id: int, staged: ImportStagedRow) -> None:
