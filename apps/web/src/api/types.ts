@@ -667,6 +667,7 @@ export interface ImportJobDetailOut extends ImportJobOut {
 
 export interface ProvisionedCredential {
   upn: string;
+  sam_account_name: string;
   display_name: string;
   class_name: string;
   password: string;

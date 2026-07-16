@@ -42,7 +42,17 @@ _STRINGS: dict[str, dict[str, str]] = {
         "teacher_title": "Ihre Zugangsdaten",
         "class_label": "Klasse",
         "teachers_group": "Lehrpersonen",
-        "username": "Benutzername",
+        # Student username = MS365; teacher username = Online/Nextcloud (overlaid
+        # below). "username_pc" is the sAMAccountName for the PC login.
+        "username": "Benutzername MS365",
+        "teacher_username": "Benutzername Online / Nextcloud",
+        "username_pc": "Benutzername PC",
+        # Teacher-only mandatory note below the password (empty for students).
+        "pw_change_note": "",
+        "teacher_pw_change_note": (
+            "Passwort beim ersten Einloggen unbedingt ändern. Das neue Passwort "
+            "niemandem weitergeben und nirgends aufschreiben."
+        ),
         "password": "Passwort",
         "force_change_note": "Beim ersten Anmelden musst du ein neues Passwort setzen.",
         "teacher_force_change_note": ("Beim ersten Anmelden müssen Sie ein neues Passwort setzen."),
@@ -63,7 +73,14 @@ _STRINGS: dict[str, dict[str, str]] = {
         "teacher_title": "Vos identifiants",
         "class_label": "Classe",
         "teachers_group": "Enseignant·es",
-        "username": "Nom d'utilisateur",
+        "username": "Nom d'utilisateur MS365",
+        "teacher_username": "Nom d'utilisateur en ligne / Nextcloud",
+        "username_pc": "Nom d'utilisateur PC",
+        "pw_change_note": "",
+        "teacher_pw_change_note": (
+            "Changez impérativement le mot de passe lors de la première connexion. "
+            "Ne communiquez le nouveau mot de passe à personne et ne l'écrivez nulle part."
+        ),
         "password": "Mot de passe",
         "force_change_note": (
             "Lors de la première connexion, tu devras définir un nouveau mot de passe."
@@ -86,7 +103,14 @@ _STRINGS: dict[str, dict[str, str]] = {
         "teacher_title": "Le sue credenziali",
         "class_label": "Classe",
         "teachers_group": "Docenti",
-        "username": "Nome utente",
+        "username": "Nome utente MS365",
+        "teacher_username": "Nome utente online / Nextcloud",
+        "username_pc": "Nome utente PC",
+        "pw_change_note": "",
+        "teacher_pw_change_note": (
+            "Cambiare assolutamente la password al primo accesso. Non comunicare "
+            "la nuova password a nessuno e non annotarla da nessuna parte."
+        ),
         "password": "Password",
         "force_change_note": "Al primo accesso dovrai impostare una nuova password.",
         "teacher_force_change_note": "Al primo accesso dovrà impostare una nuova password.",
@@ -110,6 +134,7 @@ def _strings_for(language: str) -> dict[str, str]:
 @dataclass(frozen=True)
 class HandoutEntry:
     upn: str
+    sam_account_name: str
     display_name: str
     class_name: str
     password: str
@@ -184,9 +209,11 @@ def render_handouts_zip(
     strings = dict(base)
     if teachers:
         strings["title"] = base["teacher_title"]
+        strings["username"] = base["teacher_username"]
         strings["force_change_note"] = base["teacher_force_change_note"]
         strings["keep_safe"] = base["teacher_keep_safe"]
         strings["confidential"] = base["teacher_confidential"]
+        strings["pw_change_note"] = base["teacher_pw_change_note"]
 
     sorted_entries = sorted(entries, key=lambda x: (x.class_name, x.display_name.lower()))
     handouts_html = env.get_template("student_handouts.html").render(

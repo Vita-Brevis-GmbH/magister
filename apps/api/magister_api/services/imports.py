@@ -236,6 +236,7 @@ class ProvisionedCredential:
     """
 
     upn: str
+    sam_account_name: str
     display_name: str
     class_name: str
     password: str
@@ -1117,6 +1118,7 @@ class ImportService:
         )
         return ProvisionedCredential(
             upn=upn,
+            sam_account_name=sam,
             display_name=display,
             class_name=class_name,
             password=password,
@@ -1206,6 +1208,7 @@ class ImportService:
         )
         return ProvisionedCredential(
             upn=upn,
+            sam_account_name=sam,
             display_name=display,
             class_name="",
             password=password,

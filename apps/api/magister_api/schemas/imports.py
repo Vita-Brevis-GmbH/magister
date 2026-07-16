@@ -48,6 +48,7 @@ class ProvisionedCredentialOut(BaseModel):
     """
 
     upn: str
+    sam_account_name: str = ""
     display_name: str
     class_name: str
     password: str

@@ -277,6 +277,7 @@ async def render_handouts(
     entries = [
         HandoutEntry(
             upn=c.upn,
+            sam_account_name=c.sam_account_name,
             display_name=c.display_name,
             class_name=c.class_name,
             password=c.password,

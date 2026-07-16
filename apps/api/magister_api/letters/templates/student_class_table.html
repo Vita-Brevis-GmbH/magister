@@ -26,6 +26,7 @@
           <tr>
             <th>{{ t.name }}</th>
             <th>{{ t.username }}</th>
+            <th>{{ t.username_pc }}</th>
             <th>{{ t.password }}</th>
             <th>{{ t.change }}</th>
           </tr>
@@ -35,6 +36,7 @@
           <tr>
             <td>{{ e.display_name }}</td>
             <td>{{ e.upn }}</td>
+            <td>{{ e.sam_account_name }}</td>
             <td class="pw">{{ e.password }}</td>
             <td>{% if e.force_change %}{{ t.yes }}{% else %}{{ t.no }}{% endif %}</td>
           </tr>

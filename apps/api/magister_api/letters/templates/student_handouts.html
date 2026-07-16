@@ -17,6 +17,7 @@
       .pw { font-family: "DejaVu Sans Mono", monospace; font-size: 16pt; font-weight: bold;
             letter-spacing: 0.5px; }
       .note { margin-top: 8mm; font-size: 10pt; color: #444; }
+      .note.strong { font-weight: bold; color: #111; }
     </style>
   </head>
   <body>
@@ -27,9 +28,12 @@
       <p class="sub">{{ e.display_name }}{% if e.class_name %} · {{ t.class_label }} {{ e.class_name }}{% endif %}</p>
       <table class="creds">
         <tr><th>{{ t.username }}</th><td>{{ e.upn }}</td></tr>
+        <tr><th>{{ t.username_pc }}</th><td>{{ e.sam_account_name }}</td></tr>
         <tr><th>{{ t.password }}</th><td class="pw">{{ e.password }}</td></tr>
       </table>
-      {% if e.force_change %}
+      {% if t.pw_change_note %}
+      <p class="note strong">{{ t.pw_change_note }}</p>
+      {% elif e.force_change %}
       <p class="note">{{ t.force_change_note }}</p>
       {% endif %}
       <p class="note">{{ t.keep_safe }}</p>
