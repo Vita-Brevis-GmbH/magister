@@ -6,8 +6,11 @@
 # einlogbaren App: erzeugt die Secrets, hasht das Break-Glass-Admin-Passwort,
 # schreibt eine korrekte .env (chmod 600) und startet den Compose-Stack.
 #
+# TLS ist immer selbstsigniert (Caddy internal CA, kein ACME) — funktioniert
+# auch per IP; der Browser zeigt beim ersten Aufruf eine einmalige
+# Zertifikatswarnung. Es wird KEINE ACME-Mail und kein DNS gebraucht.
+#
 # Was NICHT automatisierbar ist (extern, wird am Ende als Anleitung gedruckt):
-#   - DNS-A/AAAA-Record für den FQDN (Prod: Caddy braucht ihn für ACME)
 #   - Entra-App-Registrierung (OIDC) und AD-Bind-User
 #   - Schulen + SMI-Rollen (bis zur M2-UI noch manuelles SQL)
 #
@@ -17,7 +20,7 @@
 #   ./scripts/install-magister.sh --mode dev --config-only   # nur .env schreiben
 #
 # Flags:
-#   --mode prod|dev   prod = HTTPS/FQDN/ACME; dev = HTTP/IP/localhost   [default: prod]
+#   --mode prod|dev   prod = self-signed HTTPS (FQDN oder IP); dev = plain HTTP   [default: prod]
 #   --config-only     nur .env erzeugen, weder pullen noch starten
 #   --no-up           .env (+ ggf. Docker/Repo) vorbereiten, aber nicht starten
 #   --with-oidc       OIDC-Werte (Entra) abfragen und als First-Boot-Seed setzen
@@ -50,7 +53,7 @@ Usage:
        ./scripts/install-magister.sh --mode dev --config-only
 
 Flags:
-  --mode prod|dev   prod = HTTPS/FQDN/ACME; dev = HTTP/IP/localhost   [default: prod]
+  --mode prod|dev   prod = self-signed HTTPS (FQDN oder IP); dev = plain HTTP   [default: prod]
   --config-only     nur .env erzeugen, weder pullen noch starten
   --no-up           vorbereiten + Images ziehen, aber nicht starten
   --with-oidc       OIDC-Werte (Entra) abfragen (First-Boot-Seed)
@@ -218,29 +221,18 @@ ensure_docker
 # Idempotenz: vorhandene .env respektieren.
 [[ -f "$ENV_FILE" ]] && ok "Bestehende .env gefunden — Secrets werden bewahrt."
 
-# 1) Hostname
+# 1) Hostname / IP — setzt Caddys self-signed Cert-Subject + default_sni.
 DEF_HOST="$(read_env_value MAGISTER_PUBLIC_HOSTNAME "$ENV_FILE" 2>/dev/null || true)"
 [[ -z "$DEF_HOST" || "$DEF_HOST" == magister.example.ch ]] && DEF_HOST=""
 if [[ "$MODE" == "dev" && -z "$DEF_HOST" ]]; then DEF_HOST="localhost"; fi
-HOSTNAME_VALUE="$(prompt_default "Öffentlicher Hostname (Prod: FQDN; Dev: IP/localhost)" "$DEF_HOST")"
-[[ -n "$HOSTNAME_VALUE" ]] || die "Hostname ist erforderlich."
+HOSTNAME_VALUE="$(prompt_default "Host ODER IP, über die der Server erreicht wird (z.B. magister.schule.ch oder 172.25.8.27)" "$DEF_HOST")"
+[[ -n "$HOSTNAME_VALUE" ]] || die "Hostname/IP ist erforderlich."
+# TLS ist immer selbstsigniert (kein ACME) — eine IP ist also völlig ok. Der
+# Wert muss exakt der Adresse entsprechen, über die zugegriffen wird, damit
+# Cert-Subject + default_sni übereinstimmen (sonst TLS-Handshake-Fehler bzw.
+# zusätzliche Warnung). Kein DNS und keine ACME-Mail nötig.
 
-# Prod: warnen wenn der Hostname nicht auflöst / eine IP ist (ACME scheitert dann).
-if [[ "$MODE" == "prod" ]]; then
-    if [[ "$HOSTNAME_VALUE" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ || "$HOSTNAME_VALUE" == "localhost" ]]; then
-        warn "Im Prod-Modus brauchst du einen DNS-Namen — Let's Encrypt stellt für IP/localhost kein Zertifikat aus. Für Demo per IP: --mode dev."
-    elif command -v getent >/dev/null 2>&1 && ! getent hosts "$HOSTNAME_VALUE" >/dev/null 2>&1; then
-        warn "$HOSTNAME_VALUE löst aktuell nicht auf — ACME schlägt fehl, bis der DNS-A/AAAA-Record gesetzt ist."
-    fi
-fi
-
-# 2) ACME-Mail (compose verlangt sie via :? auch im Dev-Modus)
-DEF_MAIL="$(read_env_value MAGISTER_ACME_EMAIL "$ENV_FILE" 2>/dev/null || true)"
-[[ -z "$DEF_MAIL" || "$DEF_MAIL" == ops@example.ch ]] && DEF_MAIL=""
-ACME_EMAIL="$(prompt_default "ACME-Kontakt-Mail (Let's Encrypt; im Dev-Modus ungenutzt, aber erforderlich)" "$DEF_MAIL")"
-[[ -n "$ACME_EMAIL" ]] || die "ACME-Mail ist erforderlich (compose-Pflichtfeld)."
-
-# 3) Local-Admin
+# 2) Local-Admin
 ADMIN_USER="$(prompt_default "Local-Admin-Benutzername" "$(read_env_value MAGISTER_LOCAL_ADMIN_USERNAME "$ENV_FILE" 2>/dev/null || echo admin)")"
 
 # Auf Platte ist der Hash $$-escaped; in die Kanonform ($argon2…) zurückholen.
@@ -270,7 +262,7 @@ else
     ok "Admin-Hash erzeugt."
 fi
 
-# 4) Secrets (bewahren falls vorhanden, sonst generieren)
+# 3) Secrets (bewahren falls vorhanden, sonst generieren)
 log "Erzeuge/übernehme Secrets …"
 POSTGRES_PASSWORD="$(secret_preserve_or_gen POSTGRES_PASSWORD)"
 AUDIT_KEY="$(secret_preserve_or_gen MAGISTER_AUDIT_KEY)"
@@ -278,7 +270,7 @@ SESSION_SECRET="$(secret_preserve_or_gen MAGISTER_SESSION_SECRET)"
 CSRF_SECRET="$(secret_preserve_or_gen MAGISTER_CSRF_SECRET)"
 ok "Secrets bereit."
 
-# 5) Optionale First-Boot-Seeds (OIDC / AD)
+# 4) Optionale First-Boot-Seeds (OIDC / AD)
 OIDC_ISSUER=""; OIDC_CLIENT_ID=""; OIDC_CLIENT_SECRET=""; BOOTSTRAP_ADMINS=""
 if [[ $WITH_OIDC -eq 1 ]]; then
     log "OIDC (Entra) — wird nur beim allerersten Boot in die DB geseedet"
@@ -296,7 +288,7 @@ if [[ $WITH_AD -eq 1 ]]; then
     AD_SEARCH_BASE="$(prompt_default "AD-Users-Search-Base (z.B. OU=Users,DC=example,DC=local)" "")"
 fi
 
-# 6) .env schreiben
+# 5) .env schreiben
 log "Schreibe $ENV_FILE"
 umask 077
 # Jeder Wert wird durch esc geschützt ($ -> $$), damit compose ihn literal
@@ -304,7 +296,6 @@ umask 077
 {
     echo "# --- generated $(date -Iseconds) by install-magister.sh (mode=$MODE) ---"
     echo "MAGISTER_PUBLIC_HOSTNAME=$(esc "$HOSTNAME_VALUE")"
-    echo "MAGISTER_ACME_EMAIL=$(esc "$ACME_EMAIL")"
     echo "MAGISTER_LOG_LEVEL=INFO"
     if [[ -n "$IMAGE_TAG" ]]; then
         echo "MAGISTER_API_IMAGE=$(esc "$API_IMAGE")"
@@ -355,7 +346,7 @@ cat <<'BANNER'
 BANNER
 printf '\033[0m\n'
 
-# 7) Validierung
+# 6) Validierung
 log "Validiere Compose-Konfiguration"
 dc config -q || die "docker compose config fehlgeschlagen — .env prüfen."
 ok "Compose-Konfiguration valide."
@@ -368,7 +359,7 @@ if [[ $CONFIG_ONLY -eq 1 ]]; then
     exit 0
 fi
 
-# 8) Pull + Start
+# 7) Pull + Start
 log "Ziehe Images"
 dc pull
 
@@ -381,7 +372,7 @@ fi
 log "Starte Stack"
 dc up -d
 
-# 9) Smoke-Test gegen magister-api (image-unabhängig via python stdlib)
+# 8) Smoke-Test gegen magister-api (image-unabhängig via python stdlib)
 log "Smoke-Test (/healthz)"
 HEALTHY=0
 for _ in $(seq 1 20); do
@@ -394,7 +385,7 @@ for _ in $(seq 1 20); do
 done
 if [[ $HEALTHY -eq 1 ]]; then ok "API antwortet (/healthz)."; else warn "API antwortete im Zeitfenster nicht — '$COMPOSE_HINT logs magister-api' prüfen."; fi
 
-# 10) Next steps
+# 9) Next steps
 if [[ "$MODE" == "dev" ]]; then URL="http://$HOSTNAME_VALUE"; else URL="https://$HOSTNAME_VALUE"; fi
 cat <<EOF
 
@@ -406,6 +397,7 @@ cat <<EOF
 Nächste Schritte:
   1. $URL öffnen, als Local-Admin '$ADMIN_USER' einloggen.
 $( [[ "$MODE" == "dev" ]] && echo "     (Dev: zwingend http://, ggf. alte Cookies für den Host löschen.)" )
+$( [[ "$MODE" == "prod" ]] && echo "     (Prod: selbstsigniertes TLS — einmalige Browser-Zertifikatswarnung akzeptieren.)" )
   2. Im Admin-GUI OIDC (Entra), AD-Sync und Mail-Domains konfigurieren.
   3. Per Entra (SSO) re-login; Bootstrap-Admin-UPNs greifen beim ersten OIDC-Login.
   4. Schulen + SMI-Rollen anlegen (bis zur M2-UI noch via SQL — siehe Runbook).

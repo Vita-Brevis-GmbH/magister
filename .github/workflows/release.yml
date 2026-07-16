@@ -2,6 +2,11 @@ name: release
 
 on:
   push:
+    # CD: every merge to main rebuilds + pushes :latest and :sha-<commit>, so a
+    # `git clone` + installer (`docker compose pull`) always gets current main.
+    # The tag-compute step below sets primary=sha-<short> for branch pushes and
+    # primary=<tag> for v* tag pushes (which additionally publish :vX.Y.Z).
+    branches: ["main"]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
