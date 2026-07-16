@@ -9,7 +9,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
-from magister_api.ad.password import MIN_LENGTH, count_charset_classes
+from magister_api.ad.password import _TEACHER_SPECIAL, count_charset_classes
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.routers.imports import get_ad_client
@@ -75,8 +75,10 @@ async def test_teacher_password_is_short_and_complex(
     creds = r.json()["credentials"]
     assert len(creds) == 1
     pw = creds[0]["password"]
-    # Teacher rule: at most 12 chars (== AD minimum) and still strong (>=3 of 4
-    # charset classes) — NOT the longer kid-friendly word password.
-    assert len(pw) == MIN_LENGTH == 12
-    assert count_charset_classes(pw) >= 3
-    assert "-" not in pw or count_charset_classes(pw) >= 3  # not the word-hyphen format
+    # Teacher rule: exactly 12 chars, all four charset classes, and every
+    # special char drawn from the keyboard-friendly allow-list only.
+    assert len(pw) == 12
+    assert count_charset_classes(pw) == 4
+    specials = [c for c in pw if not c.isalnum()]
+    assert specials, "expected at least one special char"
+    assert all(c in _TEACHER_SPECIAL for c in specials)

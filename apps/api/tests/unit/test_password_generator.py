@@ -6,13 +6,36 @@ import pytest
 
 from magister_api.ad._wordlist_de import WORDS_DE
 from magister_api.ad.password import (
+    _TEACHER_SPECIAL,
     DEFAULT_LENGTH,
     MIN_LENGTH,
     count_charset_classes,
     generate_password,
     generate_readable_password,
+    generate_teacher_password,
     passes_default_complexity,
 )
+
+
+class TestGenerateTeacherPassword:
+    def test_default_length_is_twelve(self) -> None:
+        assert len(generate_teacher_password()) == 12
+
+    def test_all_four_charset_classes(self) -> None:
+        for _ in range(50):
+            assert count_charset_classes(generate_teacher_password()) == 4
+
+    def test_only_allowed_special_chars(self) -> None:
+        for _ in range(50):
+            pw = generate_teacher_password()
+            specials = [c for c in pw if not c.isalnum()]
+            assert specials
+            assert all(c in _TEACHER_SPECIAL for c in specials)
+
+    def test_no_confusable_glyphs(self) -> None:
+        for _ in range(50):
+            pw = generate_teacher_password()
+            assert not (set(pw) & set("0O1lI"))
 
 
 class TestGeneratePassword:

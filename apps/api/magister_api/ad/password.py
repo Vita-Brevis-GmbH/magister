@@ -23,6 +23,10 @@ _LOWER = "abcdefghijkmnpqrstuvwxyz"
 _UPPER = "ABCDEFGHJKLMNPQRSTUVWXYZ"
 _DIGIT = "23456789"
 _SPECIAL = "!#$%&*+-=?@_"
+# Restricted special set for teacher hand-out passwords: only the punctuation
+# a user reliably finds on a Swiss keyboard, avoiding glyphs like # % & = ? @
+# that are awkward to locate. Requested explicitly by ops.
+_TEACHER_SPECIAL = ".,!$-_+*:;"
 
 DEFAULT_LENGTH = 14  # > 12 to give some headroom over AD's typical minimum
 MIN_LENGTH = 12
@@ -52,6 +56,33 @@ def generate_password(length: int = DEFAULT_LENGTH) -> str:
     chars.extend(rng.choice(pool) for _ in range(length - len(chars)))
     rng.shuffle(chars)
     return "".join(chars)
+
+
+def generate_teacher_password(length: int = MIN_LENGTH) -> str:
+    """Teacher hand-out password: strong but keyboard-friendly.
+
+    ``length`` characters (default 12) guaranteeing at least one upper-case,
+    one lower-case, one digit and one special character. The special set is
+    restricted to :data:`_TEACHER_SPECIAL` (``.,!$-_+*:;``) — punctuation a user
+    can actually find — and confusable glyphs (0/O/1/l/I) are excluded.
+    """
+    if length < 4:
+        raise ValueError("length must be >= 4 to hit all four charset classes")
+    rng = secrets.SystemRandom()
+    chars: list[str] = [
+        rng.choice(_LOWER),
+        rng.choice(_UPPER),
+        rng.choice(_DIGIT),
+        rng.choice(_TEACHER_SPECIAL),
+    ]
+    pool = _LOWER + _UPPER + _DIGIT + _TEACHER_SPECIAL
+    chars.extend(rng.choice(pool) for _ in range(length - len(chars)))
+    rng.shuffle(chars)
+    pw = "".join(chars)
+    # Invariant: 4-of-4 classes by construction; verify defensively.
+    if count_charset_classes(pw) < 4:  # pragma: no cover - invariant
+        raise ValueError("generated teacher password failed complexity check")
+    return pw
 
 
 def generate_readable_password(
@@ -104,5 +135,6 @@ __all__ = [
     "count_charset_classes",
     "generate_password",
     "generate_readable_password",
+    "generate_teacher_password",
     "passes_default_complexity",
 ]

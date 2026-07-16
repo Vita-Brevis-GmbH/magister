@@ -25,7 +25,7 @@ from magister_api.ad.ou import (
     select_student_ou,
     zyklus_for_jahrgangsstufe,
 )
-from magister_api.ad.password import MIN_LENGTH, generate_password, generate_readable_password
+from magister_api.ad.password import generate_readable_password, generate_teacher_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
@@ -1156,10 +1156,10 @@ class ImportService:
             groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
         )
 
-        # Teachers get a short (max 12 chars) but stronger random password —
-        # not the kid-friendly word password students receive. 12 = AD's
-        # minimum and, per request, the cap for teacher accounts.
-        password = generate_password(MIN_LENGTH)
+        # Teachers get a 12-char password with all four charset classes, using
+        # only keyboard-friendly special chars (.,!$-_+*:;) — not the kid-
+        # friendly word password students receive.
+        password = generate_teacher_password()
         guid = await self.ad.create_user(
             ou_dn=ou,
             common_name=display,
