@@ -5,6 +5,20 @@ export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        // Headings use `font-serif` → the self-hosted Fraunces display serif,
+        // with a graceful system-serif fallback while the woff2 loads / if it
+        // ever fails. @font-face lives in src/index.css.
+        serif: [
+          "Fraunces",
+          "ui-serif",
+          "Georgia",
+          "Cambria",
+          "Times New Roman",
+          "Times",
+          "serif",
+        ],
+      },
       colors: {
         // shadcn/ui-style CSS-variable palette.
         border: "hsl(var(--border))",
