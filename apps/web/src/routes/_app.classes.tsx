@@ -99,11 +99,13 @@ function ClassesPage(): JSX.Element {
           <TableBody>
             {paged.pageItems.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">
+                <TableCell className="p-0 font-medium">
+                  {/* Link fills the whole cell so the click target is the full
+                      name column, not just the text glyphs. */}
                   <Link
                     to="/classes/$classId"
                     params={{ classId: String(c.id) }}
-                    className="underline-offset-2 hover:underline"
+                    className="block px-4 py-3 text-primary underline-offset-2 hover:underline"
                   >
                     {c.name}
                   </Link>

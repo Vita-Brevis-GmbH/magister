@@ -306,6 +306,75 @@ function SubjectTeachersSection({
   );
 }
 
+// Shared teacher chooser: shows the whole teacher pool up front and narrows as
+// you type, instead of only revealing candidates after ≥2 characters. Keeps the
+// previous result on screen while a new query is in flight so the list never
+// blanks and a click can't land on an empty list.
+export function TeacherPicker({
+  value,
+  onPick,
+  inputId,
+}: {
+  value: AdUserOut | null;
+  onPick: (u: AdUserOut) => void;
+  inputId: string;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const users = useUsers(
+    { kind: "teacher", search: search.trim(), limit: 50 },
+    { keepPrevious: true },
+  );
+  const items = users.data?.items ?? [];
+  const total = users.data?.total ?? items.length;
+
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={inputId}>{t("classes.search_teacher")}</Label>
+      <Input
+        id={inputId}
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder={t("users.search_placeholder")}
+      />
+      <ul
+        role="radiogroup"
+        aria-label={t("classes.search_teacher")}
+        className="max-h-56 overflow-y-auto rounded-md border bg-background text-sm"
+      >
+        {items.length === 0 ? (
+          <li className="px-3 py-2 text-muted-foreground">{t("users.empty")}</li>
+        ) : (
+          items.map((u) => (
+            <li key={u.ad_object_guid}>
+              <button
+                type="button"
+                onClick={() => onPick(u)}
+                className={`block w-full px-3 py-2 text-left hover:bg-accent ${
+                  value?.ad_object_guid === u.ad_object_guid ? "bg-accent" : ""
+                }`}
+              >
+                {[u.given_name, u.surname].filter(Boolean).join(" ") || u.upn}
+                <span className="block truncate text-xs text-muted-foreground">{u.upn}</span>
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+      {total > items.length ? (
+        <p className="text-xs text-muted-foreground">
+          {t("devices.person_more_hint", { shown: items.length, total })}
+        </p>
+      ) : null}
+      {value ? (
+        <p className="text-xs text-muted-foreground">
+          {t("classes.picked")}: <span className="font-mono">{value.upn}</span>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AssignSubjectTeacherModal({
   classId,
   open,
@@ -316,19 +385,14 @@ function AssignSubjectTeacherModal({
   onClose: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<AdUserOut | null>(null);
   const [subject, setSubject] = useState("");
   const [validFrom, setValidFrom] = useState(today());
   const [validTo, setValidTo] = useState("");
 
-  const users = useUsers(
-    search.length >= 2 ? { kind: "teacher", search, limit: 10 } : { kind: "teacher", limit: 0 },
-  );
   const assign = useAssignSubjectTeacher(classId);
 
   function reset(): void {
-    setSearch("");
     setPicked(null);
     setSubject("");
     setValidFrom(today());
@@ -379,47 +443,7 @@ function AssignSubjectTeacherModal({
               {t("errors.generic")}
             </div>
           ) : null}
-          <div className="space-y-1">
-            <Label htmlFor="subject-teacher-search">{t("classes.search_teacher")}</Label>
-            <Input
-              id="subject-teacher-search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPicked(null);
-              }}
-              placeholder={t("users.search_placeholder")}
-            />
-            {search.length >= 2 && users.data ? (
-              <ul className="max-h-40 overflow-y-auto rounded-md border bg-background text-sm">
-                {users.data.items.length === 0 ? (
-                  <li className="px-3 py-2 text-muted-foreground">{t("users.empty")}</li>
-                ) : (
-                  users.data.items.map((u) => (
-                    <li key={u.ad_object_guid}>
-                      <button
-                        type="button"
-                        onClick={() => setPicked(u)}
-                        className={`block w-full px-3 py-2 text-left hover:bg-accent ${
-                          picked?.ad_object_guid === u.ad_object_guid ? "bg-accent" : ""
-                        }`}
-                      >
-                        {u.upn}
-                        {u.given_name || u.surname
-                          ? ` — ${[u.given_name, u.surname].filter(Boolean).join(" ")}`
-                          : ""}
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            ) : null}
-            {picked ? (
-              <p className="text-xs text-muted-foreground">
-                {t("classes.picked")}: <span className="font-mono">{picked.upn}</span>
-              </p>
-            ) : null}
-          </div>
+          <TeacherPicker value={picked} onPick={setPicked} inputId="subject-teacher-search" />
           <div className="space-y-1">
             <Label htmlFor="subject-teacher-subject">{t("classes.subject")}</Label>
             <Input
@@ -505,21 +529,14 @@ function AssignTeacherModal({
   onClose: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<AdUserOut | null>(null);
   const [role, setRole] = useState<ClassTeacherRole>("haupt");
   const [validFrom, setValidFrom] = useState(today());
   const [validTo, setValidTo] = useState("");
 
-  // Only fetch when there's a search term to avoid loading the whole teacher
-  // pool just to open the modal.
-  const users = useUsers(
-    search.length >= 2 ? { kind: "teacher", search, limit: 10 } : { kind: "teacher", limit: 0 },
-  );
   const assign = useAssignClassTeacher(classId);
 
   function reset(): void {
-    setSearch("");
     setPicked(null);
     setRole("haupt");
     setValidFrom(today());
@@ -570,47 +587,7 @@ function AssignTeacherModal({
               {t("errors.generic")}
             </div>
           ) : null}
-          <div className="space-y-1">
-            <Label htmlFor="teacher-search">{t("classes.search_teacher")}</Label>
-            <Input
-              id="teacher-search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPicked(null);
-              }}
-              placeholder={t("users.search_placeholder")}
-            />
-            {search.length >= 2 && users.data ? (
-              <ul className="max-h-40 overflow-y-auto rounded-md border bg-background text-sm">
-                {users.data.items.length === 0 ? (
-                  <li className="px-3 py-2 text-muted-foreground">{t("users.empty")}</li>
-                ) : (
-                  users.data.items.map((u) => (
-                    <li key={u.ad_object_guid}>
-                      <button
-                        type="button"
-                        onClick={() => setPicked(u)}
-                        className={`block w-full px-3 py-2 text-left hover:bg-accent ${
-                          picked?.ad_object_guid === u.ad_object_guid ? "bg-accent" : ""
-                        }`}
-                      >
-                        {u.upn}
-                        {u.given_name || u.surname
-                          ? ` — ${[u.given_name, u.surname].filter(Boolean).join(" ")}`
-                          : ""}
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            ) : null}
-            {picked ? (
-              <p className="text-xs text-muted-foreground">
-                {t("classes.picked")}: <span className="font-mono">{picked.upn}</span>
-              </p>
-            ) : null}
-          </div>
+          <TeacherPicker value={picked} onPick={setPicked} inputId="teacher-search" />
           <div className="space-y-1">
             <Label htmlFor="teacher-role">{t("classes.role")}</Label>
             <select
