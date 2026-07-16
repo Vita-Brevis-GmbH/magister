@@ -1,11 +1,11 @@
-"""Render student credential hand-outs as PDFs (student provisioning, ADR 0006).
+"""Render credential hand-outs as PDFs (student + teacher provisioning, ADR 0006).
 
 Two PDFs, zipped:
-- ``schueler-handouts.pdf`` — one slip per student (username + password).
-- ``klassen-uebersicht.pdf`` — one table per class listing all students.
+- a per-person slip (username + password), and
+- an overview table (grouped by class for students, one group for teachers).
 
 Passwords are received from the caller (the one-time apply response) and never
-persisted. German-only for now, mirroring the parent-letter templates.
+persisted. Rendered in the three Swiss national languages (de/fr/it).
 """
 
 from __future__ import annotations
@@ -21,55 +21,84 @@ from weasyprint import HTML
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "letters" / "templates"
 
-HANDOUT_FILE = "schueler-handouts.pdf"
-CLASS_TABLE_FILE = "klassen-uebersicht.pdf"
+AUDIENCE_STUDENTS = "students"
+AUDIENCE_TEACHERS = "teachers"
+
+# Internal PDF filenames inside the ZIP, per audience.
+_FILES: dict[str, tuple[str, str]] = {
+    AUDIENCE_STUDENTS: ("schueler-handouts.pdf", "klassen-uebersicht.pdf"),
+    AUDIENCE_TEACHERS: ("lehrpersonen-handouts.pdf", "lehrpersonen-uebersicht.pdf"),
+}
+
+# Backwards-compatible aliases (student defaults) for existing imports/tests.
+HANDOUT_FILE = _FILES[AUDIENCE_STUDENTS][0]
+CLASS_TABLE_FILE = _FILES[AUDIENCE_STUDENTS][1]
 
 # Hand-out strings in the three Swiss national languages. Unknown languages
 # (e.g. "en") fall back to German.
 _STRINGS: dict[str, dict[str, str]] = {
     "de": {
         "title": "Deine Zugangsdaten",
+        "teacher_title": "Ihre Zugangsdaten",
         "class_label": "Klasse",
+        "teachers_group": "Lehrpersonen",
         "username": "Benutzername",
         "password": "Passwort",
         "force_change_note": "Beim ersten Anmelden musst du ein neues Passwort setzen.",
+        "teacher_force_change_note": ("Beim ersten Anmelden müssen Sie ein neues Passwort setzen."),
         "keep_safe": "Bewahre diesen Zettel sicher auf und gib ihn niemandem weiter.",
+        "teacher_keep_safe": (
+            "Bewahren Sie diesen Zettel sicher auf und geben Sie ihn niemandem weiter."
+        ),
         "students": "Schüler:innen",
         "name": "Name",
         "change": "Wechsel",
         "yes": "ja",
         "no": "nein",
         "confidential": "Vertraulich — nur für die Lehrperson. Nach der Übergabe vernichten.",
+        "teacher_confidential": "Vertraulich — nach der Übergabe vernichten.",
     },
     "fr": {
         "title": "Tes identifiants",
+        "teacher_title": "Vos identifiants",
         "class_label": "Classe",
+        "teachers_group": "Enseignant·es",
         "username": "Nom d'utilisateur",
         "password": "Mot de passe",
         "force_change_note": (
             "Lors de la première connexion, tu devras définir un nouveau mot de passe."
         ),
+        "teacher_force_change_note": (
+            "Lors de la première connexion, vous devrez définir un nouveau mot de passe."
+        ),
         "keep_safe": "Conserve cette feuille en lieu sûr et ne la donne à personne.",
+        "teacher_keep_safe": ("Conservez cette feuille en lieu sûr et ne la donnez à personne."),
         "students": "élèves",
         "name": "Nom",
         "change": "Changement",
         "yes": "oui",
         "no": "non",
         "confidential": "Confidentiel — réservé à l'enseignant. À détruire après la remise.",
+        "teacher_confidential": "Confidentiel — à détruire après la remise.",
     },
     "it": {
         "title": "Le tue credenziali",
+        "teacher_title": "Le sue credenziali",
         "class_label": "Classe",
+        "teachers_group": "Docenti",
         "username": "Nome utente",
         "password": "Password",
         "force_change_note": "Al primo accesso dovrai impostare una nuova password.",
+        "teacher_force_change_note": "Al primo accesso dovrà impostare una nuova password.",
         "keep_safe": "Conserva questo foglio in un luogo sicuro e non darlo a nessuno.",
+        "teacher_keep_safe": ("Conservi questo foglio in un luogo sicuro e non lo dia a nessuno."),
         "students": "studenti",
         "name": "Nome",
         "change": "Cambio",
         "yes": "sì",
         "no": "no",
         "confidential": "Riservato — solo per il docente. Distruggere dopo la consegna.",
+        "teacher_confidential": "Riservato — distruggere dopo la consegna.",
     },
 }
 
@@ -91,6 +120,7 @@ class HandoutEntry:
 class _ClassGroup:
     class_name: str
     entries: list[HandoutEntry]
+    group_heading: str
 
 
 def _build_env() -> Environment:
@@ -103,11 +133,25 @@ def _build_env() -> Environment:
     )
 
 
-def _group_by_class(entries: list[HandoutEntry]) -> list[_ClassGroup]:
+def _group_by_class(
+    entries: list[HandoutEntry], *, strings: dict[str, str], teachers: bool
+) -> list[_ClassGroup]:
+    if teachers:
+        # Teachers have no class — one flat group titled "Lehrpersonen".
+        ordered = sorted(entries, key=lambda x: x.display_name.lower())
+        heading = f"{strings['teachers_group']} — {len(ordered)}"
+        return [_ClassGroup(class_name="", entries=ordered, group_heading=heading)]
     grouped: OrderedDict[str, list[HandoutEntry]] = OrderedDict()
     for e in sorted(entries, key=lambda x: (x.class_name, x.display_name.lower())):
         grouped.setdefault(e.class_name, []).append(e)
-    return [_ClassGroup(class_name=k, entries=v) for k, v in grouped.items()]
+    return [
+        _ClassGroup(
+            class_name=k,
+            entries=v,
+            group_heading=f"{strings['class_label']} {k} — {len(v)} {strings['students']}",
+        )
+        for k, v in grouped.items()
+    ]
 
 
 def _html_to_pdf(html: str) -> bytes:
@@ -118,22 +162,38 @@ def _html_to_pdf(html: str) -> bytes:
 
 
 def render_handouts_zip(
-    entries: list[HandoutEntry], *, school_name: str, generated_on: str, language: str = "de"
+    entries: list[HandoutEntry],
+    *,
+    school_name: str,
+    generated_on: str,
+    language: str = "de",
+    audience: str = AUDIENCE_STUDENTS,
 ) -> bytes:
     """Render both hand-out PDFs and return them as a single ZIP archive.
 
     ``language`` is one of de/fr/it (Swiss national languages); anything else
-    falls back to German. Pure/synchronous (WeasyPrint) — call via
-    ``run_in_threadpool``.
+    falls back to German. ``audience`` selects student vs teacher wording
+    (title, group heading, confidentiality note) and the internal filenames.
+    Pure/synchronous (WeasyPrint) — call via ``run_in_threadpool``.
     """
+    teachers = audience == AUDIENCE_TEACHERS
     env = _build_env()
-    strings = _strings_for(language)
+    base = _strings_for(language)
+    # Overlay the audience-specific wording onto the base strings so the
+    # templates stay audience-agnostic (they read the same keys).
+    strings = dict(base)
+    if teachers:
+        strings["title"] = base["teacher_title"]
+        strings["force_change_note"] = base["teacher_force_change_note"]
+        strings["keep_safe"] = base["teacher_keep_safe"]
+        strings["confidential"] = base["teacher_confidential"]
+
     sorted_entries = sorted(entries, key=lambda x: (x.class_name, x.display_name.lower()))
     handouts_html = env.get_template("student_handouts.html").render(
         entries=sorted_entries, school_name=school_name, generated_on=generated_on, t=strings
     )
     table_html = env.get_template("student_class_table.html").render(
-        groups=_group_by_class(entries),
+        groups=_group_by_class(entries, strings=strings, teachers=teachers),
         school_name=school_name,
         generated_on=generated_on,
         t=strings,
@@ -141,11 +201,19 @@ def render_handouts_zip(
     handouts_pdf = _html_to_pdf(handouts_html)
     table_pdf = _html_to_pdf(table_html)
 
+    slip_file, table_file = _FILES.get(audience, _FILES[AUDIENCE_STUDENTS])
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(HANDOUT_FILE, handouts_pdf)
-        zf.writestr(CLASS_TABLE_FILE, table_pdf)
+        zf.writestr(slip_file, handouts_pdf)
+        zf.writestr(table_file, table_pdf)
     return buf.getvalue()
 
 
-__all__ = ["CLASS_TABLE_FILE", "HANDOUT_FILE", "HandoutEntry", "render_handouts_zip"]
+__all__ = [
+    "AUDIENCE_STUDENTS",
+    "AUDIENCE_TEACHERS",
+    "CLASS_TABLE_FILE",
+    "HANDOUT_FILE",
+    "HandoutEntry",
+    "render_handouts_zip",
+]

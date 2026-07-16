@@ -16,7 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
 from magister_api.ad.client import AdClient
@@ -25,7 +25,7 @@ from magister_api.ad.ou import (
     select_student_ou,
     zyklus_for_jahrgangsstufe,
 )
-from magister_api.ad.password import generate_readable_password
+from magister_api.ad.password import MIN_LENGTH, generate_password, generate_readable_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
@@ -289,6 +289,11 @@ def _derive_sam(upn: str, explicit: str) -> str:
     return (explicit or "").strip() or upn.split("@", 1)[0]
 
 
+def _norm_name(name: str) -> str:
+    """Normalise a display name for duplicate detection (case + whitespace)."""
+    return " ".join(name.split()).casefold()
+
+
 class ImportService:
     def __init__(
         self,
@@ -311,6 +316,12 @@ class ImportService:
         # sAMAccountName (AD would reject the second only at apply time).
         self._seen_upns: set[str] = set()
         self._seen_sams: set[str] = set()
+        # Intra-file duplicate guard for the display name of provisioning
+        # imports: the AD object's DN is ``CN=<display>,<OU>`` and CN must be
+        # unique within the OU, so two rows with the same name would collide at
+        # apply time (the second ``conn.add`` fails). Caught here so the operator
+        # sees a clear "duplicate name" error instead of a cryptic AD failure.
+        self._seen_names: set[str] = set()
 
     async def _app_settings_row(self) -> AppSettings:
         if self._app_settings is None:
@@ -336,6 +347,7 @@ class ImportService:
             raise InvalidCsvError(f"unknown import kind: {kind}")
         self._seen_upns = set()
         self._seen_sams = set()
+        self._seen_names = set()
         template_header = TEMPLATES[kind][0]
         optional = OPTIONAL_HEADERS.get(kind, [])
         required = [h for h in template_header if h not in optional]
@@ -706,6 +718,18 @@ class ImportService:
             return IMPORT_ACTION_ERROR, [f"duplicate sam_account_name {sam!r} in this file"]
         self._seen_sams.add(sam)
 
+        # Display name = the AD CN. All teachers land in the single teacher OU,
+        # so two rows with the same name collide on the DN at apply time. Flag
+        # the duplicate here (in-file) so the operator fixes it up front.
+        display = (row.get("display_name") or "").strip() or f"{given} {surname}"
+        name_key = _norm_name(display)
+        if name_key in self._seen_names:
+            return IMPORT_ACTION_ERROR, [
+                f"duplicate name {display!r} in this file — CN must be unique in the teacher OU; "
+                "give one an explicit display_name"
+            ]
+        self._seen_names.add(name_key)
+
         settings_row = await self._app_settings_row()
         domain = upn.split("@", 1)[1]
         if settings_row.mail_domains and domain not in settings_row.mail_domains:
@@ -727,6 +751,19 @@ class ImportService:
         ).scalar_one_or_none()
         if existing_sam is not None:
             return IMPORT_ACTION_ERROR, [f"sam_account_name {sam!r} already exists"]
+
+        # An existing teacher with the same CN would also collide in the OU.
+        # scope-bypass: the teacher OU is global (one OU for all schools).
+        existing_name = (
+            await self.session.execute(
+                select(AdUserCache).where(
+                    AdUserCache.kind == "teacher",
+                    func.lower(AdUserCache.display_name) == display.lower(),
+                )
+            )
+        ).first()
+        if existing_name is not None:
+            return IMPORT_ACTION_ERROR, [f"a teacher named {display!r} already exists"]
 
         return IMPORT_ACTION_CREATE, []
 
@@ -1119,7 +1156,10 @@ class ImportService:
             groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
         )
 
-        password = generate_readable_password()
+        # Teachers get a short (max 12 chars) but stronger random password —
+        # not the kid-friendly word password students receive. 12 = AD's
+        # minimum and, per request, the cap for teacher accounts.
+        password = generate_password(MIN_LENGTH)
         guid = await self.ad.create_user(
             ou_dn=ou,
             common_name=display,

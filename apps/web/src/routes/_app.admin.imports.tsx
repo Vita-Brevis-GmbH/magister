@@ -288,7 +288,8 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
   async function handleDownloadHandouts() {
     setHandoutError(false);
     try {
-      await downloadHandouts(credentials, "", handoutLang);
+      const audience = q.data?.kind === "teachers" ? "teachers" : "students";
+      await downloadHandouts(credentials, "", handoutLang, audience);
     } catch {
       setHandoutError(true);
     }

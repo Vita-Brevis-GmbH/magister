@@ -47,7 +47,11 @@ from magister_api.schemas.imports import (
     ImportStagedRowOut,
     ProvisionedCredentialOut,
 )
-from magister_api.services.handouts import HandoutEntry, render_handouts_zip
+from magister_api.services.handouts import (
+    AUDIENCE_TEACHERS,
+    HandoutEntry,
+    render_handouts_zip,
+)
 from magister_api.services.imports import (
     ImportJobBadStateError,
     ImportJobNotFoundError,
@@ -258,14 +262,16 @@ async def render_handouts(
     body: HandoutRequest,
     user: AuthenticatedUser = Depends(require_import_access),
 ) -> Response:
-    """Render the one-time student credentials into a ZIP of two PDFs.
+    """Render the one-time provisioning credentials into a ZIP of two PDFs.
 
     Stateless: credentials are supplied by the caller (the apply response) and
-    never persisted here. The ZIP holds a per-student hand-out PDF and a
-    per-class overview table.
+    never persisted here. ``audience`` (students/teachers) selects the wording
+    and the download filename; both provisioning imports create AD accounts, so
+    either way the caller must be Admin/SMI.
     """
-    # Hand-outs only exist for the students provisioning import → Admin/SMI.
-    _authorize_kind(user, IMPORT_KIND_STUDENTS)
+    teachers = body.audience == AUDIENCE_TEACHERS
+    # Both provisioning imports create AD accounts → Admin/SMI only.
+    _authorize_kind(user, IMPORT_KIND_TEACHERS if teachers else IMPORT_KIND_STUDENTS)
     if not body.credentials:
         raise HTTPException(status_code=400, detail="no_credentials")
     entries = [
@@ -284,11 +290,13 @@ async def render_handouts(
         language=body.language,
         school_name=body.school_name,
         generated_on=date.today().strftime("%d.%m.%Y"),
+        audience=body.audience,
     )
+    filename = "lehrpersonen-zugangsdaten.zip" if teachers else "schueler-zugangsdaten.zip"
     return Response(
         content=zip_bytes,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="schueler-zugangsdaten.zip"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

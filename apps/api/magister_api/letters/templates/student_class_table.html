@@ -20,7 +20,7 @@
     {% for group in groups %}
     <div class="class-block">
       <div class="school">{{ school_name }} · {{ generated_on }}</div>
-      <h2>{{ t.class_label }} {{ group.class_name }} — {{ group.entries | length }} {{ t.students }}</h2>
+      <h2>{{ group.group_heading }}</h2>
       <table>
         <thead>
           <tr>

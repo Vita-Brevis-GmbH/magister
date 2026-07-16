@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -65,6 +65,8 @@ class HandoutRequest(BaseModel):
     credentials: list[ProvisionedCredentialOut]
     school_name: str = ""
     language: str = "de"  # de/fr/it; unknown falls back to de
+    # Wording + filename: "students" (default) or "teachers".
+    audience: Literal["students", "teachers"] = "students"
 
 
 __all__ = [

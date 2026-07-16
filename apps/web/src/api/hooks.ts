@@ -877,6 +877,7 @@ export async function downloadHandouts(
   credentials: ProvisionedCredential[],
   schoolName: string,
   language = "de",
+  audience: "students" | "teachers" = "students",
 ): Promise<void> {
   const csrf = document.cookie.match(/(?:^|; )magister_csrf=([^;]+)/)?.[1];
   const res = await fetch(`${API_BASE}/imports/handouts`, {
@@ -886,14 +887,15 @@ export async function downloadHandouts(
       "Content-Type": "application/json",
       ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
     },
-    body: JSON.stringify({ credentials, school_name: schoolName, language }),
+    body: JSON.stringify({ credentials, school_name: schoolName, language, audience }),
   });
   if (!res.ok) throw new ApiError(res.status, "handout_render_failed", await res.text());
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "schueler-zugangsdaten.zip";
+  a.download =
+    audience === "teachers" ? "lehrpersonen-zugangsdaten.zip" : "schueler-zugangsdaten.zip";
   document.body.appendChild(a);
   a.click();
   a.remove();
