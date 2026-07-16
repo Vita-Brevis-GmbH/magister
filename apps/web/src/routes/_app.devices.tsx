@@ -11,6 +11,7 @@ import {
   useDevices,
   useSchools,
   useUpdateDevice,
+  useUser,
   useUsers,
 } from "@/api/hooks";
 import type { DeviceAssignmentType, DeviceOut, SchoolOut, ClassOut, AdUserOut } from "@/api/types";
@@ -428,6 +429,10 @@ export function AssignDeviceModal({
   // keepPrevious so the list doesn't blank while typing (a click can't land on
   // an empty list); limit generous but capped — a hint nudges to search.
   const personResults = useUsers({ search: search.trim(), limit: 25 }, { keepPrevious: true });
+  // Resolve the *currently assigned* person by GUID directly, so the pinned row
+  // always shows a name even when the device payload's assigned_person_name is
+  // null (e.g. resolved from a stale cache) — never a raw GUID.
+  const assignedUser = useUser(target?.assigned_person_guid ?? "");
 
   if (target && hydratedId !== target.id) {
     setType(
@@ -518,6 +523,15 @@ export function AssignDeviceModal({
                 const items = personResults.data?.items ?? [];
                 const total = personResults.data?.total ?? items.length;
                 const selectedInList = items.some((u) => u.ad_object_guid === personGuid);
+                // Prefer the label captured on selection; else the freshly
+                // resolved user; else the seeded name; only the GUID as a last
+                // resort (which the resolution above is designed to avoid).
+                const pinnedLabel =
+                  personLabel ||
+                  (assignedUser.data && assignedUser.data.ad_object_guid === personGuid
+                    ? `${displayLabel(assignedUser.data)} · ${assignedUser.data.upn}`
+                    : "") ||
+                  personGuid;
                 return (
                   <>
                     {/* Currently-selected person stays pinned + visible even when
@@ -532,7 +546,7 @@ export function AssignDeviceModal({
                           className="h-4 w-4"
                         />
                         <span className="min-w-0 truncate">
-                          {personLabel || personGuid}
+                          {pinnedLabel}
                           <span className="ml-1 text-xs text-muted-foreground">
                             ({t("devices.person_selected")})
                           </span>

@@ -1,4 +1,4 @@
-# Magister DEV/demo override — plain HTTP, reachable by IP, no ACME/TLS.
+# Magister DEV/demo override — plain HTTP, reachable by IP, no TLS.
 #
 # Usage (from deploy/compose/):
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
@@ -7,11 +7,10 @@
 # NOT named docker-compose.override.yml on purpose: that file would be
 # auto-loaded by `docker compose up` and silently turn the PRODUCTION stack
 # into plain HTTP. Always opt in explicitly with `-f docker-compose.dev.yml`.
-# Production (docker-compose.yml alone) keeps Caddy's auto-TLS.
+# Production (docker-compose.yml alone) keeps Caddy's self-signed TLS.
 #
-# MAGISTER_PUBLIC_HOSTNAME / MAGISTER_ACME_EMAIL from .env are ignored by the
-# dev Caddyfile (it listens on :80 for every host), but still need to be set
-# because the base compose file marks ACME_EMAIL as required.
+# MAGISTER_PUBLIC_HOSTNAME from .env is ignored by the dev Caddyfile (it listens
+# on :80 for every host).
 
 services:
   magister-api:

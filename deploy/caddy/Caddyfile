@@ -1,31 +1,42 @@
 # Magister reverse proxy.
 #
-# Auto-TLS via Let's-Encrypt; the public hostname and ACME email are passed
-# as env from docker-compose. The Schweizer Schul-SPA is served by the
-# magister-web container; the FastAPI backend lives behind the /api/* prefix
-# and is mounted at "/" on the backend itself — Caddy strips /api/ on the
-# way through (handle_path), so the backend stays prefix-agnostic.
+# TLS is ALWAYS self-signed via Caddy's built-in "internal" issuer — no ACME,
+# no Let's-Encrypt, works fully offline behind an internal-only hostname. Caddy
+# generates the certificate from its own local CA and stores it in the
+# caddy_data volume; browsers show a one-time "untrusted certificate" warning
+# that you accept manually.
+#
+# The Schweizer Schul-SPA is served by the magister-web container; the FastAPI
+# backend lives behind the /api/* prefix and is mounted at "/" on the backend
+# itself — Caddy strips /api/ on the way through (handle_path), so the backend
+# stays prefix-agnostic.
+#
+# NOTE: HSTS is deliberately OMITTED. With a self-signed cert, an HSTS header
+# would make the browser refuse the manual "accept the risk" bypass, locking you
+# out of the site entirely. Do not add Strict-Transport-Security to this file.
 {
-	email {$MAGISTER_ACME_EMAIL}
-	# Production defaults; uncomment for staging certs while testing:
-	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+	# When a client connects without SNI — e.g. access by IP address, where
+	# browsers and curl omit the SNI extension — fall back to this name so
+	# Caddy still serves the internal certificate instead of aborting the
+	# handshake with a "tlsv1 alert internal error". Set MAGISTER_PUBLIC_HOSTNAME
+	# to the exact host OR IP you reach the server by (e.g. 172.25.8.27), so the
+	# certificate subject, the site match, and this default all line up.
+	default_sni {$MAGISTER_PUBLIC_HOSTNAME}
 }
 
 # HTTPS-only: every plain-HTTP request is permanently redirected to its
 # HTTPS equivalent (Host + path preserved). No application content is ever
 # served over cleartext. This explicit catch-all replaces Caddy's implicit
 # per-host redirect, so it also covers access by IP or an unexpected Host
-# header — anything that hits :80 bounces to :443.
+# header — anything that hits :80 bounces to :443. HSTS stays OFF (see the
+# header note below) — the redirect is enough and does not lock out the
+# one-time self-signed-cert acceptance.
 http:// {
 	redir https://{host}{uri} permanent
 }
 
 (security_headers) {
 	header {
-		# HSTS — explicit so includeSubDomains + preload are guaranteed
-		# regardless of Caddy version defaults. 1-year lifetime per RFC 6797.
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-
 		# MIME-sniff lock-down + clickjacking + referrer minimisation.
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
@@ -62,16 +73,10 @@ http:// {
 }
 
 {$MAGISTER_PUBLIC_HOSTNAME} {
-	# TLS pin: only TLS 1.3. The TLS 1.3 spec constrains cipher negotiation
-	# to three AEAD suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305) —
-	# all are fast and side-channel-resistant, so we let the browser pick
-	# per platform (ChaCha20 wins on mobile, AES-GCM on AES-NI desktops).
-	# Pinning the key-exchange curves to x25519 + secp256r1 keeps the
-	# handshake on the quickest paths and rules out the slow ones.
-	tls {
-		protocols tls1.3
-		curves x25519 secp256r1
-	}
+	# Self-signed certificate from Caddy's internal CA — no ACME, works
+	# offline. The cert is stored in the caddy_data volume and persists
+	# across restarts.
+	tls internal
 
 	encode zstd gzip
 

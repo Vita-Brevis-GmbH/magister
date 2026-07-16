@@ -100,6 +100,13 @@ export function Layout() {
             {canManage ? (
               <>
                 <Link
+                  to="/users"
+                  activeProps={{ className: navActive }}
+                  inactiveProps={{ className: navIdle }}
+                >
+                  {t("nav.usermanagement")}
+                </Link>
+                <Link
                   to="/admin/imports"
                   activeProps={{ className: navActive }}
                   inactiveProps={{ className: navIdle }}
@@ -132,14 +139,6 @@ export function Layout() {
                     role="menu"
                     className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border bg-card p-1 shadow-md"
                   >
-                    <Link
-                      to="/users"
-                      role="menuitem"
-                      activeProps={{ className: menuActive }}
-                      inactiveProps={{ className: menuIdle }}
-                    >
-                      {t("nav.usermanagement")}
-                    </Link>
                     {isAdmin ? (
                       <Link
                         to="/admin/schools"

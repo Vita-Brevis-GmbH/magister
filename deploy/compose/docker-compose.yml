@@ -1,12 +1,12 @@
 # Magister production-ish compose stack.
 #
-# Caddy terminates TLS via ACME, reverse-proxies HTTP to magister-api.
+# Caddy terminates TLS with a self-signed cert (internal CA — no ACME),
+# reverse-proxies HTTP to magister-api.
 # magister-api connects to postgres via the internal network.
 # pg-backup runs pg_dump on a cron schedule into /var/backups/magister.
 #
 # Required env (see deploy/compose/.env.example):
-#   MAGISTER_PUBLIC_HOSTNAME            — public FQDN, e.g. magister.example.ch
-#   MAGISTER_ACME_EMAIL                 — Let's-Encrypt contact mail
+#   MAGISTER_PUBLIC_HOSTNAME            — public FQDN or IP, e.g. magister.example.ch
 #   MAGISTER_API_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-api:latest
 #   MAGISTER_WEB_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-web:latest
 #   POSTGRES_USER / _PASSWORD / _DB     — Postgres bootstrap
@@ -93,7 +93,6 @@ services:
       - "443:443"
     environment:
       MAGISTER_PUBLIC_HOSTNAME: ${MAGISTER_PUBLIC_HOSTNAME}
-      MAGISTER_ACME_EMAIL: ${MAGISTER_ACME_EMAIL:?MAGISTER_ACME_EMAIL is required}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

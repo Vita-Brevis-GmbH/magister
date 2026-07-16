@@ -6,8 +6,9 @@
 # local CA — no ACME, works fully offline. Browsers show a one-time
 # "untrusted certificate" warning that you accept manually.
 #
-# Loaded ONLY via docker-compose.selfsigned.yml; production keeps
-# ../caddy/Caddyfile (public ACME auto-TLS).
+# The main ../caddy/Caddyfile is now also self-signed (tls internal), so this
+# variant is kept only for the docker-compose.selfsigned.yml invocation and is
+# otherwise equivalent to the production config.
 #
 # NOTE: HSTS is deliberately OMITTED here. With a self-signed cert, an HSTS
 # header would make the browser refuse the manual "accept the risk" bypass,
