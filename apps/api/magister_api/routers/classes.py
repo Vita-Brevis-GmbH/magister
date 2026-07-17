@@ -20,9 +20,14 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.repositories.class_memberships import ClassMembershipRepository
+from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
+from magister_api.repositories.devices import DeviceRepository
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.classes import (
+    ClassAdvanceRequest,
     ClassCreate,
+    ClassDeviceOut,
     ClassOut,
     ClassPromotionRequest,
     ClassPromotionResult,
@@ -35,6 +40,7 @@ from magister_api.services.classes import (
     ClassPermissionError,
     ClassService,
 )
+from magister_api.services.devices import DeviceService
 
 router = APIRouter(prefix="/classes", tags=["classes"])
 
@@ -194,6 +200,97 @@ async def promote_class(
         errors=[ClassPromotionErrorSchema(ad_object_guid=g, detail=d) for g, d in result.errors],
         source_archived=result.source_archived,
     )
+
+
+@router.post("/{class_id}/advance", response_model=ClassPromotionResult)
+async def advance_class_students(
+    class_id: int,
+    payload: ClassAdvanceRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> ClassPromotionResult:
+    """Move and/or re-grade the selected students of this class.
+
+    Drives the class-detail multi-select actions: move to another class (any
+    direction) and/or raise the school year — including keeping the same class
+    and only advancing the grade (``target_class_id`` omitted).
+    """
+    svc = ClassService(session, settings, user.to_scope())
+    ip, request_id = _ip_request_id(request)
+    try:
+        result = await svc.advance_students(
+            source_class_id=class_id,
+            student_guids=payload.student_guids,
+            grade_delta=payload.grade_delta,
+            target_class_id=payload.target_class_id,
+            archive_source=payload.archive_source,
+            ip=ip,
+            request_id=request_id,
+        )
+    except ClassNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="class_not_found") from exc
+
+    return ClassPromotionResult(
+        students_moved=result.students_moved,
+        students_failed=result.students_failed,
+        errors=[ClassPromotionErrorSchema(ad_object_guid=g, detail=d) for g, d in result.errors],
+        source_archived=result.source_archived,
+    )
+
+
+@router.get("/{class_id}/devices", response_model=list[ClassDeviceOut])
+async def list_class_devices(
+    class_id: int,
+    user: AuthenticatedUser = Depends(require_class_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> list[ClassDeviceOut]:
+    """Devices tied to this class: assigned to the class itself, to one of its
+    students, or to one of its teachers — each with a friendly "assigned to
+    whom" label. ``require_class_writer`` already authorizes the caller for this
+    class, so the device scope filter is deliberately bypassed here."""
+    scope = user.to_scope()
+    students = await ClassMembershipRepository(session).list_for_class(class_id, only_active=True)
+    teachers = await ClassTeacherRoleRepository(session).list_active_for_class(class_id)
+    student_guids = {m.ad_object_guid for m in students}
+    teacher_guids = {t.ad_object_guid for t in teachers}
+
+    devices = await DeviceRepository(session, scope).list_for_class_context(
+        class_id, student_guids | teacher_guids
+    )
+    if not devices:
+        return []
+
+    person_guids = {d.assigned_person_guid for d in devices if d.assigned_person_guid}
+    names = await DeviceService(session, settings, scope).person_names(person_guids)
+    cls = await ClassService(session, settings, scope).get(class_id)
+
+    out: list[ClassDeviceOut] = []
+    for d in devices:
+        guid = d.assigned_person_guid
+        if guid and guid in teacher_guids:
+            kind: str = "teacher"
+            label = names.get(guid, guid)
+        elif guid and guid in student_guids:
+            kind = "student"
+            label = names.get(guid, guid)
+        else:
+            kind = "class"
+            label = cls.name
+        out.append(
+            ClassDeviceOut(
+                id=d.id,
+                name=d.name,
+                device_type=d.device_type,
+                serial_number=d.serial_number,
+                is_loan=d.is_loan,
+                assignee_kind=kind,  # type: ignore[arg-type]
+                assignee_label=label,
+            )
+        )
+    return out
 
 
 @router.get("/{class_id}/password-list")

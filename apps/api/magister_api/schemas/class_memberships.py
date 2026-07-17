@@ -39,6 +39,9 @@ class ClassMembershipOut(BaseModel):
     given_name: str | None = None
     surname: str | None = None
     upn: str | None = None
+    # Per-student grade ("Schuljahr"/Jahrgangsstufe) from ad_user_cache, so the
+    # class roster can show which year each child is in. -1 = 1. KG … 13.
+    jahrgangsstufe: int | None = None
 
 
 class BulkClassMembershipCreate(BaseModel):

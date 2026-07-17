@@ -24,7 +24,9 @@ import type {
   AuthCapabilities,
   BulkClassMembershipCreate,
   BulkClassMembershipResult,
+  ClassAdvanceRequest,
   ClassCreate,
+  ClassDeviceOut,
   ClassMembershipCreate,
   ClassMembershipOut,
   ClassOut,
@@ -410,6 +412,25 @@ export function usePromoteClass(classId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.classes });
     },
+  });
+}
+
+export function useAdvanceClassStudents(classId: number) {
+  const qc = useQueryClient();
+  return useMutation<ClassPromotionResult, ApiError, ClassAdvanceRequest>({
+    mutationFn: (body) =>
+      apiFetch<ClassPromotionResult>(`/classes/${classId}/advance`, { method: "POST", body }),
+    onSuccess: () => {
+      // Both the source roster and (on a move) the target roster change.
+      qc.invalidateQueries({ queryKey: ["classes"] });
+    },
+  });
+}
+
+export function useClassDevices(classId: number) {
+  return useQuery<ClassDeviceOut[]>({
+    queryKey: ["classes", classId, "devices"],
+    queryFn: () => apiFetch<ClassDeviceOut[]>(`/classes/${classId}/devices`),
   });
 }
 

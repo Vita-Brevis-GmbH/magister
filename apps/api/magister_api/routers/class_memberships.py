@@ -57,6 +57,7 @@ async def list_class_students(
             valid_from=r.valid_from,
             valid_to=r.valid_to,
             created_at=r.created_at,
+            jahrgangsstufe=lbl.jahrgangsstufe if (lbl := labels.get(r.ad_object_guid)) else None,
             **user_label_fields(labels.get(r.ad_object_guid)),
         )
         for r in rows

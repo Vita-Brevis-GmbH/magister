@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -78,6 +79,35 @@ class ClassPromotionRequest(BaseModel):
     grade_overrides: dict[str, int] | None = None
 
 
+class ClassAdvanceRequest(BaseModel):
+    """Move and/or re-grade selected students of a class.
+
+    - ``target_class_id`` set + different → move the students there (any
+      direction). Null or equal to the source → keep the class (only grade
+      changes: raise the school year without moving class).
+    - ``grade_delta`` shifts each student's Jahrgangsstufe (+1 school-year
+      change, -1 down, 0 keep), clamped to the valid range.
+    """
+
+    student_guids: list[str] = Field(min_length=1)
+    target_class_id: int | None = None
+    grade_delta: int = Field(default=0, ge=-14, le=14)
+    archive_source: bool = False
+
+
+class ClassDeviceOut(BaseModel):
+    """A device tied to a class, with a friendly "assigned to whom" label."""
+
+    id: int
+    name: str
+    device_type: str | None
+    serial_number: str | None
+    is_loan: bool
+    # Who the device is assigned to within this class context.
+    assignee_kind: Literal["student", "teacher", "class"]
+    assignee_label: str
+
+
 class ClassPromotionError(BaseModel):
     ad_object_guid: str
     detail: str
@@ -93,7 +123,9 @@ class ClassPromotionResult(BaseModel):
 __all__ = [
     "CLASS_STATUS_ACTIVE",
     "CLASS_STATUS_ARCHIVED",
+    "ClassAdvanceRequest",
     "ClassCreate",
+    "ClassDeviceOut",
     "ClassOut",
     "ClassPromotionError",
     "ClassPromotionRequest",

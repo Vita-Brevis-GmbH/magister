@@ -53,6 +53,21 @@ class DeviceRepository(BaseRepository):
         ).order_by(Device.name, Device.id)
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def list_for_class_context(self, class_id: int, person_guids: set[str]) -> list[Device]:
+        """Devices tied to a class: the class itself or any of its members.
+
+        # scope-bypass: the caller is already authorized at the class level
+        # (require_class_writer), so this deliberately skips the school-scope
+        # filter and surfaces every device bound to the class or to one of the
+        # given person GUIDs (its students/teachers), regardless of the device's
+        # own school_id.
+        """
+        conds = [Device.class_id == class_id]
+        if person_guids:
+            conds.append(Device.assigned_person_guid.in_(person_guids))
+        stmt = select(Device).where(or_(*conds)).order_by(Device.name, Device.id)
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def create(
         self,
         *,

@@ -313,3 +313,128 @@ class ClassService:
             errors=errors,
             source_archived=source_archived,
         )
+
+    async def advance_students(
+        self,
+        *,
+        source_class_id: int,
+        student_guids: list[str],
+        grade_delta: int = 0,
+        target_class_id: int | None = None,
+        archive_source: bool = False,
+        ip: str | None,
+        request_id: str,
+    ) -> PromotionResult:
+        """Move and/or re-grade selected students of a class.
+
+        Powers the class-detail multi-select actions:
+        - ``target_class_id`` set and different from the source → move each
+          student to that class (any direction: higher, lower, same level).
+        - ``target_class_id`` None or equal to the source → keep the class; only
+          the grade changes (raise the school year without changing the class).
+        - ``grade_delta`` shifts each student's own ``jahrgangsstufe`` by that
+          amount (e.g. +1 school-year change, -1 down, 0 keep), clamped to range.
+
+        Per-student savepoints; one audit event. Same scope rules as promote.
+        """
+        source = await self.get(source_class_id)
+        moving = target_class_id is not None and target_class_id != source_class_id
+        if moving:
+            assert target_class_id is not None  # narrowed by `moving`
+            target = await self.get(target_class_id)
+        else:
+            target = source
+        membership_repo = ClassMembershipRepository(self.session)
+        active = await membership_repo.list_for_class(source_class_id, only_active=True)
+        wanted = set(student_guids)
+        active = [m for m in active if m.ad_object_guid in wanted]
+
+        moved: list[str] = []
+        errors: list[tuple[str, str]] = []
+
+        for m in active:
+            sp = await self.session.begin_nested()
+            try:
+                if moving:
+                    effective_from = utcnow()
+                    clamp_at = effective_from - timedelta(seconds=1)
+                    closed = await membership_repo.end_active_for_student(
+                        ad_object_guid=m.ad_object_guid,
+                        end_at=effective_from,
+                        excluding_class_id=target.id,
+                    )
+                    for row in closed:
+                        row.valid_to = clamp_at
+                    if closed:
+                        await self.session.flush()
+                    overlapping = await membership_repo.find_overlapping(
+                        ad_object_guid=m.ad_object_guid,
+                        valid_from=effective_from,
+                        valid_to=None,
+                    )
+                    if overlapping:
+                        await sp.rollback()
+                        errors.append((m.ad_object_guid, "overlapping_membership"))
+                        continue
+                    self.session.add(
+                        ClassMembership(
+                            class_id=target.id,
+                            ad_object_guid=m.ad_object_guid,
+                            valid_from=effective_from,
+                            valid_to=None,
+                            created_by=self.scope.upn,
+                        )
+                    )
+                    await self.session.flush()
+
+                if grade_delta != 0:
+                    # scope-bypass: source class already scope-checked via get();
+                    # only students being advanced out of it are touched.
+                    student = await self.session.get(AdUserCache, m.ad_object_guid)
+                    if student is not None:
+                        base = (
+                            student.jahrgangsstufe
+                            if student.jahrgangsstufe is not None
+                            else source.jahrgangsstufe
+                        )
+                        new_grade = base + grade_delta
+                        student.jahrgangsstufe = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        await self.session.flush()
+
+                await sp.commit()
+                moved.append(m.ad_object_guid)
+            except Exception:  # noqa: BLE001
+                await sp.rollback()
+                errors.append((m.ad_object_guid, "unexpected_error"))
+
+        source_archived = False
+        if archive_source and moving:
+            source = await self.repo.archive(source)
+            source_archived = True
+
+        await self.audit.emit(
+            action="class_students_advanced",
+            target_kind="class",
+            target_id=str(source_class_id),
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=source.school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={
+                "source_class_id": source_class_id,
+                "source_class_name": source.name,
+                "target_class_id": target.id if moving else None,
+                "target_class_name": target.name if moving else None,
+                "grade_delta": grade_delta,
+                "students_moved": len(moved),
+                "students_failed": len(errors),
+                "source_archived": source_archived,
+            },
+        )
+        return PromotionResult(
+            students_moved=len(moved),
+            students_failed=len(errors),
+            errors=errors,
+            source_archived=source_archived,
+        )

@@ -198,6 +198,24 @@ export interface ClassMembershipOut {
   given_name: string | null;
   surname: string | null;
   upn: string | null;
+  jahrgangsstufe: number | null;
+}
+
+export interface ClassDeviceOut {
+  id: number;
+  name: string;
+  device_type: string | null;
+  serial_number: string | null;
+  is_loan: boolean;
+  assignee_kind: "student" | "teacher" | "class";
+  assignee_label: string;
+}
+
+export interface ClassAdvanceRequest {
+  student_guids: string[];
+  target_class_id?: number | null;
+  grade_delta?: number;
+  archive_source?: boolean;
 }
 
 export interface ClassMembershipCreate {

@@ -1,17 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ApiError, apiFetch } from "@/api/client";
+import { ApiError } from "@/api/client";
 import {
   downloadClassPasswordList,
   saveBlob,
   useAddClassMembership,
+  useAdvanceClassStudents,
   useAssignClassTeacher,
   useAssignSubjectTeacher,
   useBulkAddClassMemberships,
   useClass,
+  useClassDevices,
   useClassMemberships,
   useClassTeachers,
   useClasses,
@@ -26,10 +27,10 @@ import type {
   AdUserOut,
   BulkClassMembershipResult,
   ClassMembershipOut,
+  ClassPromotionResult,
   ClassTeacherOut,
   ClassTeacherRole,
 } from "@/api/types";
-import { LetterModal, type LetterTarget } from "@/components/LetterModal";
 import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -133,7 +134,8 @@ function ClassDetailPage(): JSX.Element {
 
           <TeachersSection classId={classId} canManage={!!canManageTeachers} />
           <SubjectTeachersSection classId={classId} canManage={!!canManageTeachers} />
-          <StudentsSection classId={classId} className={klass.data.name} />
+          <StudentsSection classId={classId} />
+          <ClassDevicesSection classId={classId} />
         </>
       ) : null}
     </div>
@@ -645,13 +647,18 @@ function AssignTeacherModal({
 
 // --- Students --------------------------------------------------------------
 
-function StudentsSection({
-  classId,
-  className,
-}: {
-  classId: number;
-  className: string | null;
-}): JSX.Element {
+/** Single-student grade label: -1 = 1. KG, 0 = 2. KG, else the grade number. */
+function gradeLabel(
+  g: number | null,
+  t: (k: string, o?: Record<string, unknown>) => string,
+): string {
+  if (g === null || g === undefined) return "–";
+  if (g === -1) return t("classes.grade_kg1");
+  if (g === 0) return t("classes.grade_kg2");
+  return t("classes.grade_n", { grade: g });
+}
+
+function StudentsSection({ classId }: { classId: number }): JSX.Element {
   const { t } = useTranslation();
   const fmt = useFormatters();
   const me = useCurrentUser();
@@ -659,15 +666,34 @@ function StudentsSection({
   const remove = useRemoveClassMembership(classId);
   const [addOpen, setAddOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [moveOpen, setMoveOpen] = useState(false);
-  const [letterTarget, setLetterTarget] = useState<LetterTarget | null>(null);
+  const [advanceMode, setAdvanceMode] = useState<"move" | "schoolyear" | null>(null);
   const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const canBulkManage =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
-  // The user-detail view is admin/SMI only (Schulleitung gets 404 there), so
-  // only offer the "show details" link to those who can actually open it.
   const canViewUserDetail = me.data?.is_admin || (me.data?.roles ?? []).includes("smi");
+
+  const rows = q.data ?? [];
+  // Only currently-active memberships are selectable / movable.
+  const activeRows = rows.filter((r) => r.valid_to === null);
+  const allSelected =
+    activeRows.length > 0 && activeRows.every((r) => selected.has(r.ad_object_guid));
+
+  function toggle(guid: string): void {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(guid)) next.delete(guid);
+      else next.add(guid);
+      return next;
+    });
+  }
+  function toggleAll(): void {
+    setSelected(allSelected ? new Set() : new Set(activeRows.map((r) => r.ad_object_guid)));
+  }
+  function clearSelection(): void {
+    setSelected(new Set());
+  }
 
   return (
     <Card>
@@ -678,14 +704,9 @@ function StudentsSection({
         </div>
         <div className="flex gap-2">
           {canBulkManage ? (
-            <>
-              <Button type="button" size="sm" variant="outline" onClick={() => setMoveOpen(true)}>
-                {t("classes.move_class_button")}
-              </Button>
-              <Button type="button" size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
-                {t("classes.bulk_add_button")}
-              </Button>
-            </>
+            <Button type="button" size="sm" variant="outline" onClick={() => setBulkOpen(true)}>
+              {t("classes.bulk_add_button")}
+            </Button>
           ) : null}
           <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
             {t("classes.add_student_button")}
@@ -693,6 +714,33 @@ function StudentsSection({
         </div>
       </CardHeader>
       <CardContent>
+        {canBulkManage && activeRows.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border bg-muted/30 px-3 py-2">
+            <span className="text-sm text-muted-foreground">
+              {t("classes.selected_count", { count: selected.size })}
+            </span>
+            <div className="ml-auto flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={selected.size === 0}
+                onClick={() => setAdvanceMode("move")}
+              >
+                {t("classes.move_class_button")}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={selected.size === 0}
+                onClick={() => setAdvanceMode("schoolyear")}
+              >
+                {t("classes.schoolyear_button")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
         {q.isLoading ? (
           <p>{t("common.loading")}</p>
         ) : q.isError ? (
@@ -701,24 +749,50 @@ function StudentsSection({
               ? t("errors.forbidden")
               : t("errors.generic")}
           </p>
-        ) : (q.data ?? []).length === 0 ? (
+        ) : rows.length === 0 ? (
           <p className="text-muted-foreground">{t("classes.students_empty")}</p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
+                {canBulkManage ? (
+                  <TableHead className="w-0">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label={t("classes.select_all")}
+                    />
+                  </TableHead>
+                ) : null}
                 <TableHead>{t("classes.student")}</TableHead>
+                <TableHead>{t("classes.schuljahr")}</TableHead>
                 <TableHead>{t("classes.valid_from")}</TableHead>
                 <TableHead>{t("classes.valid_to")}</TableHead>
                 <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(q.data ?? []).map((row: ClassMembershipOut) => (
+              {rows.map((row: ClassMembershipOut) => (
                 <TableRow key={row.id}>
+                  {canBulkManage ? (
+                    <TableCell>
+                      {row.valid_to === null ? (
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-input"
+                          checked={selected.has(row.ad_object_guid)}
+                          onChange={() => toggle(row.ad_object_guid)}
+                          aria-label={displayLabel({ ...row, upn: row.upn ?? "" })}
+                        />
+                      ) : null}
+                    </TableCell>
+                  ) : null}
                   <TableCell>
                     <PersonCell row={row} />
                   </TableCell>
+                  <TableCell>{gradeLabel(row.jahrgangsstufe, t)}</TableCell>
                   <TableCell>{fmt.formatDate(row.valid_from)}</TableCell>
                   <TableCell>{row.valid_to ? fmt.formatDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">
@@ -744,20 +818,6 @@ function StudentsSection({
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() =>
-                          setLetterTarget({
-                            ad_object_guid: row.ad_object_guid,
-                            display_name: row.display_name,
-                            upn: row.upn,
-                          })
-                        }
-                      >
-                        {t("letters.button")}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
                         onClick={() => remove.mutate(row.id)}
                         disabled={remove.isPending || row.valid_to !== null}
                       >
@@ -773,16 +833,12 @@ function StudentsSection({
       </CardContent>
       <AddStudentModal classId={classId} open={addOpen} onClose={() => setAddOpen(false)} />
       <BulkAddStudentsModal classId={classId} open={bulkOpen} onClose={() => setBulkOpen(false)} />
-      <MoveClassModal
+      <AdvanceStudentsModal
         classId={classId}
-        students={q.data ?? []}
-        open={moveOpen}
-        onClose={() => setMoveOpen(false)}
-      />
-      <LetterModal
-        target={letterTarget}
-        currentClassName={className}
-        onClose={() => setLetterTarget(null)}
+        mode={advanceMode}
+        selectedGuids={[...selected]}
+        onClose={() => setAdvanceMode(null)}
+        onDone={clearSelection}
       />
       <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
     </Card>
@@ -1124,126 +1180,225 @@ function BulkAddStudentsModal({
   );
 }
 
-function MoveClassModal({
+function AdvanceStudentsModal({
   classId,
-  students,
-  open,
+  mode,
+  selectedGuids,
   onClose,
+  onDone,
 }: {
   classId: number;
-  students: ClassMembershipOut[];
-  open: boolean;
+  mode: "move" | "schoolyear" | null;
+  selectedGuids: string[];
   onClose: () => void;
+  onDone: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [targetClassId, setTargetClassId] = useState<number | "">("");
   const classes = useClasses();
-  const qc = useQueryClient();
-  const activeStudents = students.filter((s) => s.valid_to === null);
+  const advance = useAdvanceClassStudents(classId);
+  const [targetClassId, setTargetClassId] = useState<number | "">("");
+  const [gradeDelta, setGradeDelta] = useState(0);
+  const [archiveSource, setArchiveSource] = useState(false);
+  const [result, setResult] = useState<ClassPromotionResult | null>(null);
+  const [hydratedMode, setHydratedMode] = useState<string | null>(null);
 
-  const move = useMutation<BulkClassMembershipResult, Error, number>({
-    mutationFn: (tClassId) =>
-      apiFetch<BulkClassMembershipResult>(`/classes/${tClassId}/students/bulk`, {
-        method: "POST",
-        body: {
-          students: activeStudents.map((s) => ({
-            ad_object_guid: s.ad_object_guid,
-            valid_from: new Date().toISOString(),
-          })),
-        },
-      }),
-    onSuccess: (_res, tClassId) => {
-      qc.invalidateQueries({ queryKey: ["classes", classId, "students"] });
-      qc.invalidateQueries({ queryKey: ["classes", tClassId, "students"] });
-      reset();
-      onClose();
-    },
-  });
-
-  function reset(): void {
+  // Reset per opening; the school-year flow defaults to +1, move defaults keep.
+  if (mode && hydratedMode !== mode) {
     setTargetClassId("");
-    move.reset();
+    setGradeDelta(mode === "schoolyear" ? 1 : 0);
+    setArchiveSource(false);
+    setResult(null);
+    advance.reset();
+    setHydratedMode(mode);
+  }
+
+  function close(): void {
+    setHydratedMode(null);
+    onClose();
   }
 
   const availableClasses = (classes.data ?? []).filter(
     (c) => c.id !== classId && c.status === "active",
   );
+  const targetRequired = mode === "move";
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
-    if (!targetClassId) return;
-    move.mutate(Number(targetClassId));
+    if (targetRequired && !targetClassId) return;
+    advance.mutate(
+      {
+        student_guids: selectedGuids,
+        target_class_id: targetClassId ? Number(targetClassId) : null,
+        grade_delta: gradeDelta,
+        archive_source: archiveSource && !!targetClassId,
+      },
+      {
+        onSuccess: (res) => {
+          setResult(res);
+          if (res.students_failed === 0) {
+            onDone();
+            close();
+          }
+        },
+      },
+    );
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          reset();
-          onClose();
-        }
-      }}
-    >
+    <Dialog open={mode !== null} onOpenChange={(next) => (!next ? close() : undefined)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("classes.move_class_title")}</DialogTitle>
+          <DialogTitle>
+            {mode === "schoolyear" ? t("classes.schoolyear_title") : t("classes.move_class_title")}
+          </DialogTitle>
           <DialogDescription>
-            {t("classes.move_class_description", { count: activeStudents.length })}
+            {t("classes.advance_description", { count: selectedGuids.length })}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {move.isError && (
+          {advance.isError ? (
             <div
               role="alert"
               className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
               {t("errors.generic")}
             </div>
-          )}
-          {activeStudents.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("classes.move_class_empty")}</p>
-          ) : (
-            <div className="space-y-1">
-              <Label htmlFor="target-class">{t("classes.move_class_target")}</Label>
-              <select
-                id="target-class"
-                value={targetClassId}
-                onChange={(e) => setTargetClassId(e.target.value ? Number(e.target.value) : "")}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                required
-              >
-                <option value="">{t("classes.move_class_select_placeholder")}</option>
-                {availableClasses.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                    {c.kuerzel ? ` (${c.kuerzel})` : ""}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">{t("classes.mid_year_hint")}</p>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                reset();
-                onClose();
-              }}
+          ) : null}
+          {result && result.students_failed > 0 ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
             >
+              {t("classes.advance_partial", {
+                moved: result.students_moved,
+                failed: result.students_failed,
+              })}
+            </div>
+          ) : null}
+
+          <div className="space-y-1">
+            <Label htmlFor="advance-target">
+              {targetRequired
+                ? t("classes.move_class_target")
+                : t("classes.advance_target_optional")}
+            </Label>
+            <select
+              id="advance-target"
+              value={targetClassId}
+              onChange={(e) => setTargetClassId(e.target.value ? Number(e.target.value) : "")}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              required={targetRequired}
+            >
+              <option value="">
+                {targetRequired
+                  ? t("classes.move_class_select_placeholder")
+                  : t("classes.advance_keep_class")}
+              </option>
+              {availableClasses.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.kuerzel ? ` (${c.kuerzel})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <Label htmlFor="advance-grade">{t("classes.advance_grade")}</Label>
+            <select
+              id="advance-grade"
+              value={gradeDelta}
+              onChange={(e) => setGradeDelta(Number(e.target.value))}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value={1}>{t("classes.grade_higher")}</option>
+              <option value={0}>{t("classes.grade_keep")}</option>
+              <option value={-1}>{t("classes.grade_lower")}</option>
+            </select>
+          </div>
+
+          {targetClassId ? (
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-input"
+                checked={archiveSource}
+                onChange={(e) => setArchiveSource(e.target.checked)}
+              />
+              <span>{t("classes.advance_archive_source")}</span>
+            </label>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{t("classes.mid_year_hint")}</p>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={close}>
               {t("common.cancel")}
             </Button>
-            {activeStudents.length > 0 && (
-              <Button type="submit" disabled={!targetClassId || move.isPending}>
-                {move.isPending ? t("common.loading") : t("classes.move_class_submit")}
-              </Button>
-            )}
+            <Button
+              type="submit"
+              disabled={advance.isPending || (targetRequired && !targetClassId)}
+            >
+              {advance.isPending ? t("common.loading") : t("classes.advance_submit")}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function ClassDevicesSection({ classId }: { classId: number }): JSX.Element {
+  const { t } = useTranslation();
+  const q = useClassDevices(classId);
+  const devices = q.data ?? [];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("classes.devices_title")}</CardTitle>
+        <CardDescription>{t("classes.devices_description")}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {q.isLoading ? (
+          <p>{t("common.loading")}</p>
+        ) : q.isError ? (
+          <p className="text-destructive">{t("errors.generic")}</p>
+        ) : devices.length === 0 ? (
+          <p className="text-muted-foreground">{t("classes.devices_empty")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("devices.col.name")}</TableHead>
+                <TableHead>{t("devices.col.type")}</TableHead>
+                <TableHead>{t("classes.device_assignee")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {devices.map((d) => (
+                <TableRow key={d.id}>
+                  <TableCell className="font-medium">
+                    {d.name}
+                    {d.is_loan ? (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        ({t("devices.loan_badge")})
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{d.device_type ?? "—"}</TableCell>
+                  <TableCell>
+                    {d.assignee_label}
+                    <span className="ml-1 text-xs text-muted-foreground">
+                      ({t(`classes.assignee_${d.assignee_kind}`)})
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
