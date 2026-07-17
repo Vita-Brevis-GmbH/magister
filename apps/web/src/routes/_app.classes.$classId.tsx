@@ -179,7 +179,7 @@ function TeachersSection({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("classes.teacher_guid")}</TableHead>
+                <TableHead>{t("classes.teacher")}</TableHead>
                 <TableHead>{t("classes.role")}</TableHead>
                 <TableHead>{t("classes.valid_from")}</TableHead>
                 <TableHead>{t("classes.valid_to")}</TableHead>
@@ -260,7 +260,7 @@ function SubjectTeachersSection({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("classes.teacher_guid")}</TableHead>
+                <TableHead>{t("classes.teacher")}</TableHead>
                 <TableHead>{t("classes.subject")}</TableHead>
                 <TableHead>{t("classes.valid_from")}</TableHead>
                 <TableHead>{t("classes.valid_to")}</TableHead>
@@ -1012,11 +1012,16 @@ function BulkAddStudentsModal({
             >
               <p className="font-medium">{t("classes.bulk_add_partial_error")}</p>
               <ul className="mt-1 list-inside list-disc">
-                {result.errors.map((err) => (
-                  <li key={err.ad_object_guid} className="text-xs">
-                    {err.ad_object_guid}: {err.detail}
-                  </li>
-                ))}
+                {result.errors.map((err) => {
+                  // Resolve the GUID back to the picked student's name — the
+                  // operator never sees a raw GUID.
+                  const who = picked.find((p) => p.ad_object_guid === err.ad_object_guid);
+                  return (
+                    <li key={err.ad_object_guid} className="text-xs">
+                      {who ? displayLabel(who) : "—"}: {err.detail}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

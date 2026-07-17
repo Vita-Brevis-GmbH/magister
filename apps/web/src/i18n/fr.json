@@ -95,7 +95,7 @@
     "teachers_title": "Enseignants de classe",
     "teachers_description": "KL / co-KL / remplaçant avec plage de dates.",
     "teachers_empty": "Aucun enseignant assigné.",
-    "teacher_guid": "GUID AD",
+    "teacher": "Enseignant·e",
     "role": "Rôle",
     "role_haupt": "Titulaire (KL)",
     "role_co": "Co-titulaire",

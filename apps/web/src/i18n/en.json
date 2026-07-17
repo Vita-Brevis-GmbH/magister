@@ -92,7 +92,7 @@
     "teachers_title": "Class teachers",
     "teachers_description": "KL / co-KL / substitute with date range.",
     "teachers_empty": "No teachers assigned yet.",
-    "teacher_guid": "AD GUID",
+    "teacher": "Teacher",
     "role": "Role",
     "role_haupt": "Class teacher (KL)",
     "role_co": "Co-class teacher",

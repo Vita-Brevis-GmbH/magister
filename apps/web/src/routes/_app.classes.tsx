@@ -745,9 +745,7 @@ function PromoteClassWizard({
                             onChange={() => toggle(m.ad_object_guid)}
                             className="h-3.5 w-3.5 rounded border-input"
                           />
-                          <span className="truncate">
-                            {m.display_name ?? m.upn ?? m.ad_object_guid}
-                          </span>
+                          <span className="truncate">{m.display_name ?? m.upn ?? "—"}</span>
                         </label>
                         {bumpGrade && selected.has(m.ad_object_guid) ? (
                           <input

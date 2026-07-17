@@ -92,7 +92,7 @@
     "teachers_title": "Klassenlehrpersonen",
     "teachers_description": "KL/Co-KL/Stellvertretung mit Zeitfenster.",
     "teachers_empty": "Noch keine KL zugewiesen.",
-    "teacher_guid": "AD-GUID",
+    "teacher": "Lehrperson",
     "role": "Rolle",
     "role_haupt": "Klassenlehrperson (KL)",
     "role_co": "Co-Klassenlehrperson",

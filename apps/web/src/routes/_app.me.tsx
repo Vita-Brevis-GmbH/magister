@@ -36,7 +36,6 @@ function MePage(): JSX.Element {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           <Row label={t("auth.logged_in_as")} value={u.upn} />
-          <Row label="ad_object_guid" value={u.ad_object_guid} mono />
           <Row
             label={t("auth.roles")}
             value={u.roles.length ? u.roles.join(", ") : t("auth.no_roles")}

@@ -60,7 +60,7 @@ function MyStudentsPage(): JSX.Element {
                     {c.students.map((s) => (
                       <TableRow key={s.ad_object_guid}>
                         <TableCell className="font-medium">
-                          {s.display_name ?? s.upn ?? s.ad_object_guid}
+                          {s.display_name ?? s.upn ?? "—"}
                         </TableCell>
                         <TableCell className="text-muted-foreground">{s.upn ?? "–"}</TableCell>
                       </TableRow>

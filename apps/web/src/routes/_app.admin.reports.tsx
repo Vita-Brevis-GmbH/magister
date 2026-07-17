@@ -128,9 +128,7 @@ function TeacherWorkloadSection(): JSX.Element {
                 <TableRow key={row.ad_object_guid}>
                   <TableCell>
                     <div className="flex flex-col leading-tight">
-                      <span className="font-medium">
-                        {row.display_name ?? row.upn ?? row.ad_object_guid}
-                      </span>
+                      <span className="font-medium">{row.display_name ?? row.upn ?? "—"}</span>
                       {row.upn && <span className="text-xs text-muted-foreground">{row.upn}</span>}
                     </div>
                   </TableCell>

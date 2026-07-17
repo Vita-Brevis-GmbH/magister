@@ -880,7 +880,7 @@ function UserReadView({
                       {c.teachers
                         .map(
                           (tch) =>
-                            `${tch.display_name ?? tch.upn ?? tch.ad_object_guid} (${t(
+                            `${tch.display_name ?? tch.upn ?? "—"} (${t(
                               `classes.role_${tch.role}`,
                             )})`,
                         )
