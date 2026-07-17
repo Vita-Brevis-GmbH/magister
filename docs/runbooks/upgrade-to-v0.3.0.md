@@ -134,6 +134,13 @@ Running upgrade 0027_ad_group_catalog     -> 0028_device_is_loan
 > Schalter unter Einstellungen) verschlüsselt mit `MAGISTER_AUDIT_KEY` (bzw.
 > `MAGISTER_SECRETS_KEY`) — server-seitig, nicht in der DB. Ohne gesetzten
 > Schlüssel bleibt das Feature ungenutzt; keine neue Env-Var nötig.
+>
+> **Tresor beim Import füllen:** Die Provisioning-Importe (`students`/`teachers`)
+> haben neu eine optionale Spalte `store_password`. Ist sie leer, folgt jede
+> Zeile dem globalen Schalter — d. h. **Schalter an ⇒ die beim Anlegen erzeugten
+> Passwörter landen automatisch im Tresor** (und in der Klassen-Passwortliste),
+> ohne dass die CSV angepasst werden muss. `true`/`false` pro Zeile übersteuert.
+> Der Tresor wird nur befüllt, wenn Schalter UND (Spalte oder Default) an sind.
 
 > **AD-Validierung:** „Benutzer kann Passwort nicht ändern" wird im AD über den
 > Security-Descriptor (DACL) gesetzt und konnte nicht gegen echtes AD getestet
