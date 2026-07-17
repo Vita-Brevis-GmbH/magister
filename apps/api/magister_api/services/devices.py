@@ -8,13 +8,19 @@ and refuses cross-scope binds for non-admin writers.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import select
+from sqlalchemy import update as sqla_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.base import utcnow
 from magister_api.models.device import Device
+from magister_api.models.device_assignment import DeviceAssignment
+from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.devices import DeviceRepository
@@ -30,6 +36,22 @@ class DevicePermissionError(PermissionError):
 
 class DeviceAssignmentError(ValueError):
     """Raised when the assignment target is missing or invalid."""
+
+
+def _assignee_key(device: Device) -> tuple[str, object, bool] | None:
+    """Identity of a device's current holder (type, id, is_loan), or None if free.
+
+    Person takes precedence over class over school (a person-assigned device
+    also carries the derived school_id). The loaner flag is part of the key so a
+    fixed↔loaner flip is recorded as a new history period.
+    """
+    if device.assigned_person_guid:
+        return ("person", device.assigned_person_guid, device.is_loan)
+    if device.class_id is not None:
+        return ("class", device.class_id, False)
+    if device.school_id is not None:
+        return ("school", device.school_id, False)
+    return None
 
 
 class DeviceService:
@@ -169,6 +191,7 @@ class DeviceService:
         if resolved_school is not None and not self.scope.can_access_school(resolved_school):
             raise DevicePermissionError("school_out_of_scope")
 
+        old_key = _assignee_key(row)
         row = await self.repo.set_assignment(
             row,
             school_id=resolved_school,
@@ -176,6 +199,7 @@ class DeviceService:
             assigned_person_guid=resolved_person,
             is_loan=is_loan,
         )
+        await self._record_history_transition(row, old_key)
         await self._emit(
             "device_assigned",
             row,
@@ -189,6 +213,68 @@ class DeviceService:
             },
         )
         return row
+
+    async def _record_history_transition(
+        self, device: Device, old_key: tuple[str, object, bool] | None
+    ) -> None:
+        """Close the open history row and open a new one when the holder changed.
+
+        No-op when the assignment (holder + loaner flag) is unchanged.
+        """
+        new_key = _assignee_key(device)
+        if old_key == new_key:
+            return
+        now = utcnow()
+        if old_key is not None:
+            await self._close_open_history(device.id, now)
+        if new_key is not None:
+            label = await self._assignee_label(device)
+            self.session.add(
+                DeviceAssignment(
+                    device_id=device.id,
+                    assignment_type=str(new_key[0]),
+                    assigned_person_guid=device.assigned_person_guid,
+                    class_id=device.class_id if new_key[0] == "class" else None,
+                    school_id=device.school_id if new_key[0] == "school" else None,
+                    label=label,
+                    is_loan=device.is_loan,
+                    valid_from=now,
+                    valid_to=None,
+                )
+            )
+            await self.session.flush()
+
+    async def _close_open_history(self, device_id: int, end_at: datetime) -> None:
+        await self.session.execute(
+            sqla_update(DeviceAssignment)
+            .where(DeviceAssignment.device_id == device_id, DeviceAssignment.valid_to.is_(None))
+            .values(valid_to=end_at)
+        )
+
+    async def _assignee_label(self, device: Device) -> str:
+        """Snapshot the current holder's display label for the history row."""
+        if device.assigned_person_guid:
+            names = await self.person_names({device.assigned_person_guid})
+            return names.get(device.assigned_person_guid, device.assigned_person_guid)
+        if device.class_id is not None:
+            cls = await self.session.get(SchoolClass, device.class_id)
+            return cls.name if cls else str(device.class_id)
+        if device.school_id is not None:
+            school = await self.session.get(School, device.school_id)
+            return school.name if school else str(device.school_id)
+        return ""
+
+    async def history(self, device_id: int) -> list[DeviceAssignment]:
+        """Full assignment history for a device, newest first."""
+        await self.get(device_id)  # scope check / 404
+        rows = (
+            await self.session.execute(
+                select(DeviceAssignment)
+                .where(DeviceAssignment.device_id == device_id)
+                .order_by(DeviceAssignment.valid_from.desc(), DeviceAssignment.id.desc())
+            )
+        ).scalars()
+        return list(rows.all())
 
     async def _resolve_target(
         self,
@@ -250,6 +336,59 @@ class DeviceService:
         )
 
 
+async def release_person_devices(
+    session: AsyncSession,
+    settings: Settings,
+    ad_object_guid: str,
+    *,
+    actor_upn: str,
+    actor_object_guid: str | None,
+    ip: str | None,
+    request_id: str,
+) -> int:
+    """Free every device assigned to a person and close its open history row.
+
+    Called when a user is deleted so their devices return to the free pool
+    instead of staying stuck on a now-gone objectGUID. Returns the count freed.
+
+    # scope-bypass: the caller (admin user-delete) is already authorized; this
+    # releases the person's devices regardless of school so none are orphaned.
+    """
+    devices = list(
+        (await session.execute(select(Device).where(Device.assigned_person_guid == ad_object_guid)))
+        .scalars()
+        .all()
+    )
+    if not devices:
+        return 0
+    audit = AuditService(session, settings)
+    now = utcnow()
+    for d in devices:
+        await session.execute(
+            sqla_update(DeviceAssignment)
+            .where(DeviceAssignment.device_id == d.id, DeviceAssignment.valid_to.is_(None))
+            .values(valid_to=now)
+        )
+        prev_school = d.school_id
+        d.school_id = None
+        d.class_id = None
+        d.assigned_person_guid = None
+        d.is_loan = False
+        await audit.emit(
+            action="device_released",
+            target_kind="device",
+            target_id=str(d.id),
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            school_id=prev_school,
+            ip=ip,
+            request_id=request_id,
+            payload={"reason": "user_deleted", "person_guid": ad_object_guid},
+        )
+    await session.flush()
+    return len(devices)
+
+
 async def import_devices_from_ad(
     session: AsyncSession,
     computers: list[tuple[str, str]],
@@ -273,4 +412,5 @@ __all__ = [
     "DevicePermissionError",
     "DeviceService",
     "import_devices_from_ad",
+    "release_person_devices",
 ]

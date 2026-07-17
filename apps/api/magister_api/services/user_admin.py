@@ -28,6 +28,7 @@ from magister_api.models.school import School
 from magister_api.models.subject_teacher_role import SubjectTeacherRole
 from magister_api.models.user_preferences import UserPreference
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
+from magister_api.services.devices import release_person_devices
 
 # Categories offered to the admin. Determine both the target OU and the default
 # AD groups. Students are split by Zyklus (1/2/3); the OU still only has two
@@ -221,6 +222,19 @@ class UserAdminService:
         if dn is not None:
             await self.ad.delete_user_object(user_dn=dn)
             ad_removed = True
+
+        # Free any devices still assigned to this user — they return to the free
+        # pool instead of staying stuck on a deleted objectGUID. The device's
+        # open history period is closed (with the person snapshot preserved).
+        await release_person_devices(
+            self.session,
+            self.settings,
+            ad_object_guid,
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            ip=ip,
+            request_id=request_id,
+        )
 
         for stmt in (
             delete(SubjectTeacherRole).where(SubjectTeacherRole.ad_object_guid == ad_object_guid),

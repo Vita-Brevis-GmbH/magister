@@ -557,6 +557,15 @@ export interface DeviceAssign {
   is_loan?: boolean;
 }
 
+export interface DeviceAssignmentOut {
+  id: number;
+  assignment_type: "person" | "class" | "school";
+  label: string;
+  is_loan: boolean;
+  valid_from: string;
+  valid_to: string | null;
+}
+
 export interface AuditEventOut {
   id: number;
   ts: string;

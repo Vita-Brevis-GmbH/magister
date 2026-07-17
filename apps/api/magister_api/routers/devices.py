@@ -20,6 +20,7 @@ from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.devices import (
     DeviceAssign,
+    DeviceAssignmentOut,
     DeviceCreate,
     DeviceOut,
     DeviceUpdate,
@@ -150,6 +151,22 @@ async def assign_device(
     except DeviceAssignmentError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return await _one_out(svc, row)
+
+
+@router.get("/{device_id}/history", response_model=list[DeviceAssignmentOut])
+async def device_history(
+    device_id: int,
+    user: AuthenticatedUser = Depends(require_smi),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> list[DeviceAssignmentOut]:
+    """Assignment history of a device: who held it (incl. loaners) and from/to."""
+    svc = DeviceService(session, settings, user.to_scope())
+    try:
+        rows = await svc.history(device_id)
+    except DeviceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="device_not_found") from exc
+    return [DeviceAssignmentOut.model_validate(r) for r in rows]
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)

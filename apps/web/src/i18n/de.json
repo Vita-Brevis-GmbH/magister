@@ -838,7 +838,21 @@
     "person_more_hint": "{{shown}} von {{total}} angezeigt — Suche eingrenzen, um weitere zu finden.",
     "is_loan": "Leihgerät",
     "is_loan_hint": "Als Leihgerät markieren (z. B. während das Hauptgerät in Reparatur ist).",
-    "loan_badge": "Leihgerät"
+    "loan_badge": "Leihgerät",
+    "history_button": "Verlauf",
+    "history_title": "Zuweisungs-Verlauf",
+    "history_empty": "Noch keine Zuweisungen erfasst.",
+    "history_ongoing": "läuft",
+    "history_col": {
+      "holder": "Inhaber",
+      "type": "Art",
+      "period": "Von – Bis"
+    },
+    "history_type": {
+      "person": "Person",
+      "class": "Klasse",
+      "school": "Schule"
+    }
   },
   "schools": {
     "title": "Schulen",

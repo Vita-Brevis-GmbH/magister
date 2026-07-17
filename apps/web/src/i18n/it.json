@@ -841,7 +841,21 @@
     "person_more_hint": "Visualizzati {{shown}} di {{total}} — restringere la ricerca per trovarne altri.",
     "is_loan": "Dispositivo in prestito",
     "is_loan_hint": "Contrassegna come dispositivo in prestito (ad es. mentre il dispositivo principale è in riparazione).",
-    "loan_badge": "in prestito"
+    "loan_badge": "in prestito",
+    "history_button": "Cronologia",
+    "history_title": "Cronologia delle assegnazioni",
+    "history_empty": "Nessuna assegnazione registrata finora.",
+    "history_ongoing": "in corso",
+    "history_col": {
+      "holder": "Titolare",
+      "type": "Tipo",
+      "period": "Da – A"
+    },
+    "history_type": {
+      "person": "Persona",
+      "class": "Classe",
+      "school": "Scuola"
+    }
   },
   "schools": {
     "title": "Scuole",

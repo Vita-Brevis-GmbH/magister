@@ -838,7 +838,21 @@
     "person_more_hint": "Showing {{shown}} of {{total}} — narrow the search to find more.",
     "is_loan": "Loaner device",
     "is_loan_hint": "Mark as a loaner (e.g. while the main device is being repaired).",
-    "loan_badge": "loaner"
+    "loan_badge": "loaner",
+    "history_button": "History",
+    "history_title": "Assignment history",
+    "history_empty": "No assignments recorded yet.",
+    "history_ongoing": "ongoing",
+    "history_col": {
+      "holder": "Holder",
+      "type": "Type",
+      "period": "From – To"
+    },
+    "history_type": {
+      "person": "Person",
+      "class": "Class",
+      "school": "School"
+    }
   },
   "schools": {
     "title": "Schools",

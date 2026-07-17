@@ -841,7 +841,21 @@
     "person_more_hint": "{{shown}} sur {{total}} affichés — affinez la recherche pour en voir plus.",
     "is_loan": "Appareil de prêt",
     "is_loan_hint": "Marquer comme appareil de prêt (p. ex. pendant que l'appareil principal est en réparation).",
-    "loan_badge": "prêt"
+    "loan_badge": "prêt",
+    "history_button": "Historique",
+    "history_title": "Historique des attributions",
+    "history_empty": "Aucune attribution enregistrée pour l'instant.",
+    "history_ongoing": "en cours",
+    "history_col": {
+      "holder": "Détenteur",
+      "type": "Type",
+      "period": "Du – Au"
+    },
+    "history_type": {
+      "person": "Personne",
+      "class": "Classe",
+      "school": "École"
+    }
   },
   "schools": {
     "title": "Écoles",

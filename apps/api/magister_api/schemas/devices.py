@@ -66,9 +66,25 @@ class DeviceOut(BaseModel):
     updated_at: datetime
 
 
+class DeviceAssignmentOut(BaseModel):
+    """One assignment period from a device's history."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    assignment_type: str
+    # Snapshot of who held the device (person name / class / school), taken at
+    # assignment time so it stays readable after the holder is deleted.
+    label: str
+    is_loan: bool
+    valid_from: datetime
+    valid_to: datetime | None
+
+
 __all__ = [
     "AssignmentType",
     "DeviceAssign",
+    "DeviceAssignmentOut",
     "DeviceCreate",
     "DeviceOut",
     "DeviceUpdate",

@@ -8,13 +8,22 @@ import {
   useClasses,
   useCreateDevice,
   useDeleteDevice,
+  useDeviceHistory,
   useDevices,
   useSchools,
   useUpdateDevice,
   useUser,
   useUsers,
 } from "@/api/hooks";
-import type { DeviceAssignmentType, DeviceOut, SchoolOut, ClassOut, AdUserOut } from "@/api/types";
+import type {
+  DeviceAssignmentOut,
+  DeviceAssignmentType,
+  DeviceOut,
+  SchoolOut,
+  ClassOut,
+  AdUserOut,
+} from "@/api/types";
+import { useFormatters } from "@/lib/useFormatters";
 import { Pagination } from "@/components/Pagination";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +75,7 @@ function DevicesPage(): JSX.Element {
   const [editTarget, setEditTarget] = useState<DeviceOut | null>(null);
   const [assignTarget, setAssignTarget] = useState<DeviceOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeviceOut | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<DeviceOut | null>(null);
   const paged = usePagedList(q.data ?? []);
 
   const schoolName = (id: number): string =>
@@ -143,6 +153,14 @@ function DevicesPage(): JSX.Element {
                   <Button
                     type="button"
                     size="sm"
+                    variant="ghost"
+                    onClick={() => setHistoryTarget(d)}
+                  >
+                    {t("devices.history_button")}
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
                     variant="destructive"
                     onClick={() => setDeleteTarget(d)}
                   >
@@ -166,6 +184,7 @@ function DevicesPage(): JSX.Element {
         onClose={() => setAssignTarget(null)}
       />
       <DeleteDeviceDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
+      <DeviceHistoryModal target={historyTarget} onClose={() => setHistoryTarget(null)} />
     </div>
   );
 }
@@ -710,6 +729,80 @@ function DeleteDeviceDialog({
             disabled={del.isPending}
           >
             {del.isPending ? t("common.loading") : t("devices.delete_confirm_button")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeviceHistoryModal({
+  target,
+  onClose,
+}: {
+  target: DeviceOut | null;
+  onClose: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const fmt = useFormatters();
+  const history = useDeviceHistory(target?.id ?? null);
+
+  const assignmentTypeLabel = (type: DeviceAssignmentOut["assignment_type"]): string => {
+    if (type === "person") return t("devices.history_type.person");
+    if (type === "class") return t("devices.history_type.class");
+    return t("devices.history_type.school");
+  };
+
+  return (
+    <Dialog open={target !== null} onOpenChange={(next) => (!next ? onClose() : undefined)}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{t("devices.history_title")}</DialogTitle>
+          <DialogDescription>{target?.name ?? ""}</DialogDescription>
+        </DialogHeader>
+        {history.isLoading ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : history.isError ? (
+          <p className="text-sm text-destructive">{t("errors.generic")}</p>
+        ) : (history.data ?? []).length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("devices.history_empty")}</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t("devices.history_col.holder")}</TableHead>
+                <TableHead>{t("devices.history_col.type")}</TableHead>
+                <TableHead>{t("devices.history_col.period")}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(history.data ?? []).map((h) => (
+                <TableRow key={h.id}>
+                  <TableCell className="font-medium">
+                    {h.label || "—"}
+                    {h.is_loan ? (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                        {t("devices.loan_badge")}
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>{assignmentTypeLabel(h.assignment_type)}</TableCell>
+                  <TableCell>
+                    {fmt.formatDateTime(h.valid_from)} –{" "}
+                    {h.valid_to ? (
+                      fmt.formatDateTime(h.valid_to)
+                    ) : (
+                      <span className="text-muted-foreground">{t("devices.history_ongoing")}</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            {t("common.close")}
           </Button>
         </DialogFooter>
       </DialogContent>

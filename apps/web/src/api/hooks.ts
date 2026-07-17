@@ -36,6 +36,7 @@ import type {
   DeviceCreate,
   DeviceUpdate,
   DeviceAssign,
+  DeviceAssignmentOut,
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
@@ -424,6 +425,14 @@ export function useAdvanceClassStudents(classId: number) {
       // Both the source roster and (on a move) the target roster change.
       qc.invalidateQueries({ queryKey: ["classes"] });
     },
+  });
+}
+
+export function useDeviceHistory(deviceId: number | null) {
+  return useQuery<DeviceAssignmentOut[]>({
+    queryKey: ["devices", deviceId, "history"],
+    queryFn: () => apiFetch<DeviceAssignmentOut[]>(`/devices/${deviceId}/history`),
+    enabled: deviceId !== null,
   });
 }
 
