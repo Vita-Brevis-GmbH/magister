@@ -135,12 +135,13 @@ Running upgrade 0027_ad_group_catalog     -> 0028_device_is_loan
 > `MAGISTER_SECRETS_KEY`) — server-seitig, nicht in der DB. Ohne gesetzten
 > Schlüssel bleibt das Feature ungenutzt; keine neue Env-Var nötig.
 >
-> **Tresor beim Import füllen:** Die Provisioning-Importe (`students`/`teachers`)
-> haben neu eine optionale Spalte `store_password`. Ist sie leer, folgt jede
-> Zeile dem globalen Schalter — d. h. **Schalter an ⇒ die beim Anlegen erzeugten
-> Passwörter landen automatisch im Tresor** (und in der Klassen-Passwortliste),
-> ohne dass die CSV angepasst werden muss. `true`/`false` pro Zeile übersteuert.
-> Der Tresor wird nur befüllt, wenn Schalter UND (Spalte oder Default) an sind.
+> **Tresor beim Import füllen:** Bei den Provisioning-Importen
+> (`students`/`teachers`) wird das erzeugte Passwort **nur für Konten gespeichert,
+> die ihr Passwort nicht ändern können** (`cannot_change_password = true`) — deren
+> Passwort bleibt gültig, eine gespeicherte Kopie also korrekt. Konten, die ihr
+> Passwort ändern dürfen, werden **nie** im Tresor abgelegt (die Kopie würde
+> veralten). Zusätzlich gilt weiterhin der globale Schalter unter Einstellungen:
+> ist er aus, wird gar nichts gespeichert. Keine zusätzliche CSV-Spalte nötig.
 
 > **AD-Validierung:** „Benutzer kann Passwort nicht ändern" wird im AD über den
 > Security-Descriptor (DACL) gesetzt und konnte nicht gegen echtes AD getestet

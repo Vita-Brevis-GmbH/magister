@@ -1,4 +1,9 @@
-"""Provisioning imports fill the password vault when the store switch is on."""
+"""Provisioning stores a password in the vault ONLY for cannot-change accounts.
+
+A cannot-change-password account keeps its password, so a stored copy stays
+correct; an account that can change it would leave a stale copy, so it is never
+vaulted. Storage is additionally gated by the global password-store switch.
+"""
 
 from __future__ import annotations
 
@@ -20,9 +25,11 @@ from magister_api.services.password_vault import PasswordVaultService
 
 pytestmark = pytest.mark.postgres
 
-STUDENT_HEADER = (
+# given_name,surname,display_name,upn,sam,class,valid_from,force_change,
+# jahrgangsstufe,cannot_change_password,password_never_expires
+HEADER = (
     "given_name,surname,display_name,upn,sam_account_name,class,valid_from,"
-    "force_change,jahrgangsstufe,cannot_change_password,password_never_expires,store_password"
+    "force_change,jahrgangsstufe,cannot_change_password,password_never_expires"
 )
 
 
@@ -37,6 +44,13 @@ async def _student_ou(db_session: AsyncSession) -> None:
     assert row is not None
     row.ad_ou_students_zyklus3 = "OU=Sek,DC=schule,DC=local"
     row.ad_ou_students_other = "OU=Prim,DC=schule,DC=local"
+    await db_session.commit()
+
+
+async def _set_switch(db_session: AsyncSession, on: bool) -> None:
+    row = await db_session.get(AppSettings, 1)
+    assert row is not None
+    row.password_store_enabled = on
     await db_session.commit()
 
 
@@ -68,15 +82,14 @@ async def _apply(as_client: AsyncClient, app: FastAPI, mock_ad: AdClient, csv: s
     return r.json()
 
 
-async def _guid_for(db_session: AsyncSession, upn: str) -> str:
-    guid = (
-        await db_session.execute(select(AdUserCache.ad_object_guid).where(AdUserCache.upn == upn))
+async def _row_for(db_session: AsyncSession, upn: str) -> AdUserCache:
+    return (
+        await db_session.execute(select(AdUserCache).where(AdUserCache.upn == upn))
     ).scalar_one()
-    return str(guid)
 
 
 @pytest.mark.asyncio
-async def test_switch_on_default_fills_vault(
+async def test_cannot_change_account_is_vaulted(
     as_smi_a: AsyncClient,
     app: FastAPI,
     db_session: AsyncSession,
@@ -85,32 +98,23 @@ async def test_switch_on_default_fills_vault(
     mock_ad: AdClient,
     _student_ou: None,
 ) -> None:
-    # Global switch ON; store_password column left blank → follows the switch.
-    row = await db_session.get(AppSettings, 1)
-    assert row is not None
-    row.password_store_enabled = True
-    await db_session.commit()
+    await _set_switch(db_session, True)
     await _make_class(db_session, school_a)
 
-    csv = f"{STUDENT_HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,true,3,,,\n"
+    # cannot_change_password = true  → gets vaulted.
+    csv = f"{HEADER}\nAnna,Muster,,anna.muster@schule.ch,,3a,2026-08-12,false,3,true,true\n"
     body = await _apply(as_smi_a, app, mock_ad, csv)
     handout_pw = body["credentials"][0]["password"]
 
     db_session.expire_all()
-    guid = await _guid_for(db_session, "anna.muster@schule.ch")
+    row = await _row_for(db_session, "anna.muster@schule.ch")
+    assert row.store_password is True
     vault = PasswordVaultService(db_session, app_settings)
-    assert await vault.get(guid) == handout_pw
-
-    stored = (
-        await db_session.execute(
-            select(AdUserCache.store_password).where(AdUserCache.ad_object_guid == guid)
-        )
-    ).scalar_one()
-    assert stored is True
+    assert await vault.get(row.ad_object_guid) == handout_pw
 
 
 @pytest.mark.asyncio
-async def test_switch_off_does_not_store_even_if_column_true(
+async def test_changeable_account_is_not_vaulted(
     as_smi_a: AsyncClient,
     app: FastAPI,
     db_session: AsyncSession,
@@ -119,17 +123,39 @@ async def test_switch_off_does_not_store_even_if_column_true(
     mock_ad: AdClient,
     _student_ou: None,
 ) -> None:
-    row = await db_session.get(AppSettings, 1)
-    assert row is not None
-    row.password_store_enabled = False
-    await db_session.commit()
+    await _set_switch(db_session, True)
     await _make_class(db_session, school_a)
 
-    csv = f"{STUDENT_HEADER}\nBea,Beispiel,,bea.beispiel@schule.ch,,3a,2026-08-12,true,3,,,true\n"
+    # cannot_change_password blank (=false) → NOT vaulted, even with switch on.
+    csv = f"{HEADER}\nBea,Beispiel,,bea.beispiel@schule.ch,,3a,2026-08-12,true,3,,\n"
     await _apply(as_smi_a, app, mock_ad, csv)
 
     db_session.expire_all()
-    guid = await _guid_for(db_session, "bea.beispiel@schule.ch")
+    row = await _row_for(db_session, "bea.beispiel@schule.ch")
+    assert row.store_password is False
     vault = PasswordVaultService(db_session, app_settings)
-    # Per-user flag captured (True) but nothing encrypted while the switch is off.
-    assert await vault.get(guid) is None
+    assert await vault.get(row.ad_object_guid) is None
+
+
+@pytest.mark.asyncio
+async def test_switch_off_stores_nothing(
+    as_smi_a: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    app_settings: Settings,
+    school_a: int,
+    mock_ad: AdClient,
+    _student_ou: None,
+) -> None:
+    await _set_switch(db_session, False)
+    await _make_class(db_session, school_a)
+
+    # cannot_change_password = true but global switch off → nothing stored.
+    csv = f"{HEADER}\nCleo,Muster,,cleo.muster@schule.ch,,3a,2026-08-12,false,3,true,true\n"
+    await _apply(as_smi_a, app, mock_ad, csv)
+
+    db_session.expire_all()
+    row = await _row_for(db_session, "cleo.muster@schule.ch")
+    assert row.store_password is False
+    vault = PasswordVaultService(db_session, app_settings)
+    assert await vault.get(row.ad_object_guid) is None

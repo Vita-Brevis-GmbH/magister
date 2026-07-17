@@ -32,7 +32,7 @@ OU_TEACHERS = "OU=Lehrpersonen,OU=Volksschule,DC=schule,DC=local"
 
 TEACHERS_HEADER = (
     "given_name,surname,display_name,upn,sam_account_name,force_change,"
-    "cannot_change_password,password_never_expires,store_password"
+    "cannot_change_password,password_never_expires"
 )
 
 
@@ -59,7 +59,7 @@ async def _seed_class(db_session: AsyncSession, school_id: int, name: str, jhg: 
 STUDENTS_HEADER = (
     "given_name,surname,display_name,upn,sam_account_name,"
     "class,valid_from,force_change,jahrgangsstufe,"
-    "cannot_change_password,password_never_expires,store_password"
+    "cannot_change_password,password_never_expires"
 )
 
 

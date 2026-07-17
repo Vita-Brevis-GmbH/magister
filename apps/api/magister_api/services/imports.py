@@ -115,7 +115,6 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "jahrgangsstufe",
             "cannot_change_password",
             "password_never_expires",
-            "store_password",
         ],
         [
             [
@@ -128,7 +127,6 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
                 "2026-08-12",
                 "true",
                 "3",
-                "",
                 "",
                 "",
             ],  # noqa: E501
@@ -144,22 +142,8 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
                 "3",
                 "true",
                 "true",
-                "true",
             ],
-            [
-                "Clara",
-                "Frey",
-                "",
-                "clara.frey@schule.ch",
-                "",
-                "3b",
-                "2026-08-12",
-                "",
-                "",
-                "",
-                "",
-                "",
-            ],
+            ["Clara", "Frey", "", "clara.frey@schule.ch", "", "3b", "2026-08-12", "", "", "", ""],
         ],
     ),
     IMPORT_KIND_TEACHERS: (
@@ -175,10 +159,9 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "force_change",
             "cannot_change_password",
             "password_never_expires",
-            "store_password",
         ],
         [
-            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", "", ""],
+            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", ""],
             [
                 "Max",
                 "Kollege",
@@ -188,9 +171,8 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
                 "false",
                 "",
                 "true",
-                "",
             ],  # noqa: E501
-            ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", "", "", "", ""],
+            ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", "", "", ""],
         ],
     ),
 }
@@ -204,13 +186,8 @@ OPTIONAL_HEADERS: dict[str, list[str]] = {
         "jahrgangsstufe",
         "cannot_change_password",
         "password_never_expires",
-        "store_password",
     ],
-    IMPORT_KIND_TEACHERS: [
-        "cannot_change_password",
-        "password_never_expires",
-        "store_password",
-    ],
+    IMPORT_KIND_TEACHERS: ["cannot_change_password", "password_never_expires"],
 }
 
 
@@ -356,26 +333,22 @@ class ImportService:
         return self._app_settings
 
     def _vault_columns(
-        self, row: dict[str, str], password: str, settings_row: AppSettings
+        self, cannot_change_password: bool, password: str, settings_row: AppSettings
     ) -> tuple[bool, object | None]:
         """Return ``(store_password, password_enc)`` for a provisioned account.
 
-        The per-row ``store_password`` column decides opt-in; when the column is
-        blank it follows the global ``password_store_enabled`` switch — so an
-        operator who turned the switch on gets the vault filled without editing
-        every CSV row. The password is only encrypted (pgcrypto, same key as the
-        audit/secret columns) when BOTH the per-user flag and the global switch
-        are on and a secrets key is configured; otherwise the blob stays NULL.
+        Only accounts that **cannot change their password** are vaulted: their
+        password stays valid, so a stored copy stays correct. For accounts that
+        can change it, a stored copy would silently go stale, so it is never
+        saved. Storage is additionally gated by the global
+        ``password_store_enabled`` switch; when off, nothing is stored. The
+        password is encrypted with pgcrypto (same key as the audit/secret
+        columns) only when it is actually being stored.
         """
-        raw = (row.get("store_password") or "").strip()
-        store_pw = (
-            _parse_bool_flag(raw, column="store_password")
-            if raw
-            else bool(settings_row.password_store_enabled)
-        )
+        store_pw = bool(settings_row.password_store_enabled) and cannot_change_password
         key = self.settings.app_secrets_key()
-        if store_pw and settings_row.password_store_enabled and key:
-            return store_pw, func.pgp_sym_encrypt(password, key)
+        if store_pw and key:
+            return True, func.pgp_sym_encrypt(password, key)
         return store_pw, None
 
     # ----- Stage --------------------------------------------------------
@@ -651,7 +624,7 @@ class ImportService:
             _parse_force_change(row.get("force_change", ""))
         except ValueError as exc:
             errors.append(str(exc))
-        for flag_col in ("cannot_change_password", "password_never_expires", "store_password"):
+        for flag_col in ("cannot_change_password", "password_never_expires"):
             try:
                 _parse_bool_flag(row.get(flag_col, ""), column=flag_col)
             except ValueError as exc:
@@ -743,7 +716,7 @@ class ImportService:
             _parse_force_change(row.get("force_change", ""))
         except ValueError as exc:
             errors.append(str(exc))
-        for flag_col in ("cannot_change_password", "password_never_expires", "store_password"):
+        for flag_col in ("cannot_change_password", "password_never_expires"):
             try:
                 _parse_bool_flag(row.get(flag_col, ""), column=flag_col)
             except ValueError as exc:
@@ -1123,7 +1096,7 @@ class ImportService:
             group_dns=group_dns,
         )
 
-        store_pw, password_enc = self._vault_columns(row, password, settings_row)
+        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
         self.session.add(
             AdUserCache(
                 ad_object_guid=guid,
@@ -1227,7 +1200,7 @@ class ImportService:
             group_dns=group_dns,
         )
 
-        store_pw, password_enc = self._vault_columns(row, password, settings_row)
+        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
         self.session.add(
             AdUserCache(
                 ad_object_guid=guid,
