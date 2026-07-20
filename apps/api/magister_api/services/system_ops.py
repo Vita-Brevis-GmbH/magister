@@ -98,9 +98,9 @@ class SystemOpsService:
         return payload
 
     def status(self) -> dict[str, Any]:
-        """Read the current ops status (pending count + last watcher result)."""
+        """Read the current ops status (pending count + last watcher result + log)."""
         ops = self._ops_dir
-        out: dict[str, Any] = {"configured": bool(ops), "pending": 0, "last": None}
+        out: dict[str, Any] = {"configured": bool(ops), "pending": 0, "last": None, "log": None}
         if not ops:
             return out
         req_dir = os.path.join(ops, "requests")
@@ -113,6 +113,14 @@ class SystemOpsService:
                     out["last"] = json.load(fh)
             except (OSError, ValueError):
                 out["last"] = None
+        # Live log of the most recent command (capped so the response stays small).
+        log_path = os.path.join(ops, "last.log")
+        if os.path.isfile(log_path):
+            try:
+                with open(log_path, encoding="utf-8", errors="replace") as fh:
+                    out["log"] = fh.read()[-20000:]
+            except OSError:
+                out["log"] = None
         return out
 
 

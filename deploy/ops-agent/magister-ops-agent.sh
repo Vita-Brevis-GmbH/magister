@@ -26,6 +26,7 @@ COMPOSE_ENV="${COMPOSE_ENV:-$REPO_DIR/deploy/compose/.env}"
 
 REQ_DIR="$OPS_DIR/requests"
 STATUS="$OPS_DIR/status.json"
+LOGFILE="$OPS_DIR/last.log"
 
 compose() {
   if [ -f "$COMPOSE_ENV" ]; then
@@ -54,19 +55,25 @@ write_status() {
   mv -f "$tmp" "$STATUS"
 }
 
+# Run an action, streaming its combined output live to $LOGFILE (so the WebUI
+# can show progress while it runs). Returns the action's real exit code, not
+# tee's, via pipefail.
 run_action() {
   local action="$1"
+  set -o pipefail
   case "$action" in
     restart)
-      compose restart 2>&1
+      compose restart 2>&1 | tee -a "$LOGFILE"
       ;;
     update)
-      git -C "$REPO_DIR" pull --ff-only 2>&1 && \
-        compose build 2>&1 && \
-        compose up -d 2>&1
+      {
+        git -C "$REPO_DIR" pull --ff-only 2>&1 && \
+          compose build 2>&1 && \
+          compose up -d 2>&1
+      } | tee -a "$LOGFILE"
       ;;
     *)
-      echo "unknown action: $action"
+      echo "unknown action: $action" | tee -a "$LOGFILE"
       return 2
       ;;
   esac
@@ -87,11 +94,13 @@ for req in $(ls -1tr "$REQ_DIR"/*.json 2>/dev/null); do
       ;;
   esac
 
+  # Fresh log for this run; the WebUI polls it live via the status endpoint.
+  : >"$LOGFILE"
   write_status "$action" "running" "" "$started" ""
-  output="$(run_action "$action" 2>&1)"
+  run_action "$action"
   code=$?
-  # Keep only the tail so status.json stays small.
-  tail_out="$(printf '%s' "$output" | tail -c 2000)"
+  # status.json keeps only the tail; last.log has the full output.
+  tail_out="$(tail -c 2000 "$LOGFILE" 2>/dev/null)"
   if [ "$code" -eq 0 ]; then
     write_status "$action" "success" "$tail_out" "$started" "$(now)"
   else

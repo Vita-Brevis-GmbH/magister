@@ -36,6 +36,7 @@ async def system_status(
         configured=bool(raw["configured"]),
         pending=int(raw["pending"]),
         last=SystemCommandResult.model_validate(last) if isinstance(last, dict) else None,
+        log=raw.get("log"),
     )
 
 

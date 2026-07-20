@@ -122,15 +122,18 @@ function ClassesPage(): JSX.Element {
           <TableBody>
             {paged.pageItems.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="p-0 font-medium">
-                  {/* Link fills the whole cell so the click target is the full
-                      name column, not just the text glyphs. */}
+                <TableCell>
                   <Link
                     to="/classes/$classId"
                     params={{ classId: String(c.id) }}
-                    className="block px-4 py-3 text-primary underline-offset-2 hover:underline"
+                    className="group flex flex-col leading-tight"
                   >
-                    {c.name}
+                    <span className="font-medium text-foreground group-hover:underline">
+                      {c.name}
+                    </span>
+                    {c.kuerzel ? (
+                      <span className="text-xs text-muted-foreground">{c.kuerzel}</span>
+                    ) : null}
                   </Link>
                 </TableCell>
                 <TableCell>{c.kuerzel ?? "–"}</TableCell>

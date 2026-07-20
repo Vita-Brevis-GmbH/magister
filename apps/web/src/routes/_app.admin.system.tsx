@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useAppSettings, useRequestRestart, useRequestUpdate, useSystemStatus } from "@/api/hooks";
+import { DangerZoneCard } from "@/components/DangerZoneCard";
 import { WebTlsCard } from "@/components/WebTlsCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,8 @@ function SystemPage(): JSX.Element {
       {settings.data ? <WebTlsCard certSet={settings.data.web_tls_cert_set} /> : null}
 
       <SystemOpsCard />
+
+      <DangerZoneCard />
     </div>
   );
 }
@@ -40,6 +43,7 @@ function SystemOpsCard(): JSX.Element {
   const configured = status.data?.configured ?? false;
   const last = status.data?.last ?? null;
   const pending = status.data?.pending ?? 0;
+  const log = status.data?.log ?? null;
   const busy = pending > 0 || last?.state === "running" || restart.isPending || update.isPending;
 
   const stateLabel = (state: string | null | undefined): string => {
@@ -146,18 +150,20 @@ function SystemOpsCard(): JSX.Element {
                   <dd className="font-medium">{fmt.formatDateTime(last.finished_at)}</dd>
                 </div>
               ) : null}
-              {last.message ? (
-                <div className="mt-1">
-                  <pre className="max-h-48 overflow-auto rounded-md border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
-                    {last.message}
-                  </pre>
-                </div>
-              ) : null}
             </>
           ) : (
             <p className="text-muted-foreground">{t("system.ops.no_history")}</p>
           )}
         </dl>
+
+        {log ? (
+          <div className="space-y-1">
+            <p className="text-sm font-medium">{t("system.ops.log")}</p>
+            <pre className="max-h-72 overflow-auto rounded-md border bg-muted/30 p-2 text-xs whitespace-pre-wrap">
+              {log}
+            </pre>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

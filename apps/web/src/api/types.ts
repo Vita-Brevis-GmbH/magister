@@ -458,6 +458,7 @@ export interface DemoPurgeResponse {
 
 export interface AuditResetResponse {
   deleted: number;
+  imports_deleted: number;
 }
 
 export interface SystemCommandResult {
@@ -472,6 +473,7 @@ export interface SystemStatusOut {
   configured: boolean;
   pending: number;
   last: SystemCommandResult | null;
+  log: string | null;
 }
 export interface SystemCommandResponse {
   id: string;

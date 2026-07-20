@@ -162,13 +162,18 @@ function DevicesPage(): JSX.Element {
           <TableBody>
             {paged.pageItems.map((d) => (
               <TableRow key={d.id}>
-                <TableCell className="p-0 font-medium">
+                <TableCell>
                   <Link
                     to="/devices/$deviceId"
                     params={{ deviceId: String(d.id) }}
-                    className="block px-4 py-3 text-primary underline-offset-2 hover:underline"
+                    className="group flex flex-col leading-tight"
                   >
-                    {d.name}
+                    <span className="font-medium text-foreground group-hover:underline">
+                      {d.name}
+                    </span>
+                    {d.serial_number ? (
+                      <span className="text-xs text-muted-foreground">{d.serial_number}</span>
+                    ) : null}
                   </Link>
                 </TableCell>
                 <TableCell>{d.device_type ?? "—"}</TableCell>

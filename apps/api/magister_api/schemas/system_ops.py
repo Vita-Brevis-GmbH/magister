@@ -20,6 +20,8 @@ class SystemStatusOut(BaseModel):
     configured: bool
     pending: int = 0
     last: SystemCommandResult | None = None
+    # Live combined output of the most recent command (tail), or None.
+    log: str | None = None
 
 
 class SystemCommandResponse(BaseModel):

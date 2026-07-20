@@ -96,6 +96,7 @@ class AuditService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        extra: dict[str, Any] | None = None,
     ) -> int:
         """Delete the whole activity history, then record the reset itself.
 
@@ -103,7 +104,8 @@ class AuditService:
         activity overview. The reset is itself audited (Niemals-Regel: keine
         schreibende Operation ohne Audit-Event), so the fresh log carries a
         single ``audit_reset`` entry documenting who cleared it and how many
-        rows were removed. Returns the number of events deleted.
+        rows were removed. ``extra`` merges extra context (e.g. how many import
+        jobs were purged alongside) into that entry. Returns the events deleted.
         """
         count = int(
             (await self.session.execute(select(func.count()).select_from(AuditEvent))).scalar_one()
@@ -118,7 +120,7 @@ class AuditService:
             school_id=None,
             ip=ip,
             request_id=request_id,
-            payload={"deleted": count},
+            payload={"deleted": count, **(extra or {})},
         )
         return count
 

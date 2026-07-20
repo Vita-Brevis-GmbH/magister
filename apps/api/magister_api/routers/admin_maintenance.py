@@ -13,6 +13,7 @@ from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.user_admin import AuditResetResponse, DemoPurgeResponse
 from magister_api.services.demo_data import DemoDataService
+from magister_api.services.imports import purge_import_history
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -49,17 +50,20 @@ async def reset_activity_log(
 ) -> AuditResetResponse:
     """Clear the whole activity overview before hand-over. Admin-only.
 
-    The reset itself is recorded, so the fresh log keeps a single entry
-    documenting who cleared it and how many events were removed.
+    Also clears the import history (jobs + staged rows) so the imports overview
+    starts empty too. The reset itself is recorded, so the fresh log keeps a
+    single entry documenting who cleared it and how much was removed.
     """
     ip, request_id = _ip_request_id(request)
+    imports_deleted = await purge_import_history(session)
     deleted = await AuditService(session, settings).purge(
         actor_upn=user.upn,
         actor_object_guid=user.ad_object_guid,
         ip=ip,
         request_id=request_id,
+        extra={"imports_deleted": imports_deleted},
     )
-    return AuditResetResponse(deleted=deleted)
+    return AuditResetResponse(deleted=deleted, imports_deleted=imports_deleted)
 
 
 __all__ = ["router"]

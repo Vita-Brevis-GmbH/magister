@@ -12,7 +12,8 @@ API ──schreibt──▶ /ops/requests/<id>.json        (unprivilegiert)
 ops-agent (Host, systemd) ──liest──▶ Request
    restart │ docker compose restart
    update  │ git pull --ff-only && docker compose build && up -d
-ops-agent ──schreibt──▶ /ops/status.json ──gelesen von der API──▶ WebUI
+ops-agent ──streamt Output──▶ /ops/last.log (live)
+ops-agent ──schreibt──▶ /ops/status.json ──gelesen von der API──▶ WebUI (inkl. Log)
 ```
 
 Ein kompromittiertes WebUI kann damit höchstens einen Neustart/Update anstossen

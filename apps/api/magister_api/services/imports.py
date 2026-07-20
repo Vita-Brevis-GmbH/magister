@@ -16,6 +16,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from sqlalchemy import delete as sqla_delete
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
@@ -1297,3 +1298,18 @@ class ImportService:
         if school_ids is not None:
             stmt = stmt.where(ImportJob.school_id.in_(school_ids))
         return list((await self.session.execute(stmt)).scalars().all())
+
+
+async def purge_import_history(session: AsyncSession) -> int:
+    """Delete the whole import history (all jobs + their staged rows).
+
+    Called from the admin activity-reset so the import overview is cleared
+    alongside the audit log before hand-over. Global by design (admin-only,
+    cross-school). Staged rows cascade via the FK. Returns the job count.
+
+    # scope-bypass: admin-triggered global reset; not tied to one school.
+    """
+    count = int((await session.execute(select(func.count()).select_from(ImportJob))).scalar_one())
+    await session.execute(sqla_delete(ImportStagedRow))
+    await session.execute(sqla_delete(ImportJob))
+    return count

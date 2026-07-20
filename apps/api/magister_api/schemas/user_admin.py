@@ -47,6 +47,7 @@ class DemoPurgeResponse(BaseModel):
 
 class AuditResetResponse(BaseModel):
     deleted: int = 0
+    imports_deleted: int = 0
 
 
 __all__ = [
