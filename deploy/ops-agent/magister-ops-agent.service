@@ -1,0 +1,17 @@
+# Magister ops-agent — executes WebUI-triggered restart/update requests.
+# Install to /etc/systemd/system/ together with the .timer. See
+# docs/runbooks/system-updates.md.
+[Unit]
+Description=Magister ops-agent (process WebUI restart/update requests)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# The user must be allowed to drive Docker (in the docker group or root).
+User=root
+Environment=OPS_DIR=/opt/magister/ops
+Environment=REPO_DIR=/opt/magister/magister
+Environment=COMPOSE_FILE=/opt/magister/magister/deploy/compose/docker-compose.yml
+Environment=COMPOSE_ENV=/opt/magister/magister/deploy/compose/.env
+ExecStart=/opt/magister/magister/deploy/ops-agent/magister-ops-agent.sh

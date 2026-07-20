@@ -76,8 +76,16 @@ services:
       # Shared with Caddy: the API materializes tls.pem/tls.key + a Caddy `tls`
       # snippet here from the imported webserver cert (or a self-signed fallback).
       MAGISTER_WEB_CERT_DIR: /certs
+      # Shared with the host ops-agent: the API only WRITES restart/update
+      # request files here; the privileged host watcher executes them. Unset
+      # this mount to disable the WebUI System restart/update controls.
+      MAGISTER_OPS_DIR: /ops
     volumes:
       - web_certs:/certs
+      # Host bind mount (NOT a named volume) so the host ops-agent can read the
+      # request files and write status.json back. Must be writable by the API
+      # container user — see docs/runbooks/system-updates.md.
+      - ${MAGISTER_OPS_HOST_DIR:-./ops}:/ops
     networks: [internal]
     # No public ports — only Caddy reaches it on the internal network.
 

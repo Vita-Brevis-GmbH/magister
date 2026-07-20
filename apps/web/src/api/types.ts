@@ -460,6 +460,25 @@ export interface AuditResetResponse {
   deleted: number;
 }
 
+export interface SystemCommandResult {
+  action: string | null;
+  state: string | null;
+  message: string | null;
+  git_sha: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+}
+export interface SystemStatusOut {
+  configured: boolean;
+  pending: number;
+  last: SystemCommandResult | null;
+}
+export interface SystemCommandResponse {
+  id: string;
+  action: string;
+  requested_at: string;
+}
+
 export type PrefLanguage = "de" | "fr" | "it" | "en";
 export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
 export type PrefTimeFormat = "24h" | "12h";

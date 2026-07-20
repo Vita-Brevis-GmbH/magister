@@ -24,7 +24,8 @@
     "usermanagement": "Gestione utenti",
     "system_settings": "Impostazioni di sistema",
     "refresh": "Aggiorna",
-    "user_settings": "Configurazione utenti"
+    "user_settings": "Configurazione utenti",
+    "system": "Sistema"
   },
   "auth": {
     "login_title": "Accedi",
@@ -722,6 +723,31 @@
     "last_n_days": "{{count}} giorni",
     "col_action": "Azione",
     "col_count": "Numero"
+  },
+  "system": {
+    "title": "Sistema",
+    "description": "Certificato del server web, riavvio e aggiornamento dell'applicazione.",
+    "ops": {
+      "title": "Riavvio e aggiornamento",
+      "desc": "Riavvia i container o aggiornali (git pull + ricompilazione). Eseguito da un servizio host protetto.",
+      "not_configured": "Non configurato — l'ops-agent dell'host non è installato. Vedi il runbook «system-updates».",
+      "update_button": "Scarica aggiornamento",
+      "update_confirm": "Scaricare l'aggiornamento ora (git pull + ricompilazione + riavvio)?",
+      "update_yes": "Esegui aggiornamento",
+      "restart_button": "Riavvia",
+      "restart_confirm": "Riavviare davvero tutti i container?",
+      "restart_yes": "Riavvia ora",
+      "busy": "Un comando è in esecuzione …",
+      "pending": "Richieste in sospeso",
+      "last_action": "Ultima azione",
+      "version": "Versione (Git)",
+      "finished_at": "Completato",
+      "no_history": "Nessuna azione ancora eseguita.",
+      "state_success": "riuscito",
+      "state_error": "errore",
+      "state_running": "in corso",
+      "state_queued": "in coda"
+    }
   },
   "letters": {
     "button": "Lettera",

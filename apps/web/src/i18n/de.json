@@ -21,7 +21,8 @@
     "usermanagement": "Benutzerverwaltung",
     "system_settings": "Systemeinstellungen",
     "refresh": "Aktualisieren",
-    "user_settings": "Userkonfiguration"
+    "user_settings": "Userkonfiguration",
+    "system": "System"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -719,6 +720,31 @@
     "last_n_days": "{{count}} Tage",
     "col_action": "Aktion",
     "col_count": "Anzahl"
+  },
+  "system": {
+    "title": "System",
+    "description": "Webserver-Zertifikat, Neustart und Update der Applikation.",
+    "ops": {
+      "title": "Neustart & Update",
+      "desc": "Container neu starten oder aktualisieren (git pull + neu bauen). Wird von einem abgesicherten Host-Dienst ausgeführt.",
+      "not_configured": "Nicht konfiguriert — der Host-Ops-Agent ist nicht eingerichtet. Siehe Runbook «system-updates».",
+      "update_button": "Update holen",
+      "update_confirm": "Update jetzt holen (git pull + neu bauen + neu starten)?",
+      "update_yes": "Update ausführen",
+      "restart_button": "Neustart",
+      "restart_confirm": "Alle Container wirklich neu starten?",
+      "restart_yes": "Jetzt neu starten",
+      "busy": "Ein Befehl läuft …",
+      "pending": "Offene Anfragen",
+      "last_action": "Letzte Aktion",
+      "version": "Version (Git)",
+      "finished_at": "Abgeschlossen",
+      "no_history": "Noch keine Aktion ausgeführt.",
+      "state_success": "erfolgreich",
+      "state_error": "Fehler",
+      "state_running": "läuft",
+      "state_queued": "eingereiht"
+    }
   },
   "letters": {
     "button": "Brief",

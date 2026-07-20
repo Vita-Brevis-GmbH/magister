@@ -21,7 +21,8 @@
     "usermanagement": "User management",
     "system_settings": "System settings",
     "refresh": "Refresh",
-    "user_settings": "User configuration"
+    "user_settings": "User configuration",
+    "system": "System"
   },
   "auth": {
     "login_title": "Sign in",
@@ -719,6 +720,31 @@
     "last_n_days": "{{count}} days",
     "col_action": "Action",
     "col_count": "Count"
+  },
+  "system": {
+    "title": "System",
+    "description": "Webserver certificate, application restart and update.",
+    "ops": {
+      "title": "Restart & update",
+      "desc": "Restart the containers or update them (git pull + rebuild). Executed by a hardened host service.",
+      "not_configured": "Not configured — the host ops-agent is not set up. See the «system-updates» runbook.",
+      "update_button": "Fetch update",
+      "update_confirm": "Fetch the update now (git pull + rebuild + restart)?",
+      "update_yes": "Run update",
+      "restart_button": "Restart",
+      "restart_confirm": "Really restart all containers?",
+      "restart_yes": "Restart now",
+      "busy": "A command is running …",
+      "pending": "Pending requests",
+      "last_action": "Last action",
+      "version": "Version (Git)",
+      "finished_at": "Finished",
+      "no_history": "No action run yet.",
+      "state_success": "success",
+      "state_error": "error",
+      "state_running": "running",
+      "state_queued": "queued"
+    }
   },
   "letters": {
     "button": "Letter",

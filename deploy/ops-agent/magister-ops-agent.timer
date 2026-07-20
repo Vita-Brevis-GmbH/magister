@@ -1,0 +1,11 @@
+# Runs the ops-agent every 30s to pick up pending WebUI requests.
+[Unit]
+Description=Run the Magister ops-agent periodically
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

@@ -24,7 +24,8 @@
     "usermanagement": "Gestion des utilisateurs",
     "system_settings": "Paramètres système",
     "refresh": "Actualiser",
-    "user_settings": "Configuration utilisateur"
+    "user_settings": "Configuration utilisateur",
+    "system": "Système"
   },
   "auth": {
     "login_title": "Connexion",
@@ -722,6 +723,31 @@
     "last_n_days": "{{count}} jours",
     "col_action": "Action",
     "col_count": "Nombre"
+  },
+  "system": {
+    "title": "Système",
+    "description": "Certificat du serveur web, redémarrage et mise à jour de l'application.",
+    "ops": {
+      "title": "Redémarrage & mise à jour",
+      "desc": "Redémarrer les conteneurs ou les mettre à jour (git pull + reconstruction). Exécuté par un service hôte sécurisé.",
+      "not_configured": "Non configuré — l'agent ops de l'hôte n'est pas installé. Voir le runbook « system-updates ».",
+      "update_button": "Récupérer la mise à jour",
+      "update_confirm": "Récupérer la mise à jour maintenant (git pull + reconstruction + redémarrage) ?",
+      "update_yes": "Lancer la mise à jour",
+      "restart_button": "Redémarrer",
+      "restart_confirm": "Redémarrer vraiment tous les conteneurs ?",
+      "restart_yes": "Redémarrer maintenant",
+      "busy": "Une commande est en cours …",
+      "pending": "Demandes en attente",
+      "last_action": "Dernière action",
+      "version": "Version (Git)",
+      "finished_at": "Terminé",
+      "no_history": "Aucune action exécutée pour l'instant.",
+      "state_success": "réussi",
+      "state_error": "erreur",
+      "state_running": "en cours",
+      "state_queued": "en file"
+    }
   },
   "letters": {
     "button": "Lettre",

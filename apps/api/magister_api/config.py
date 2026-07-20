@@ -138,6 +138,16 @@ class Settings(BaseSettings):
             "tests). In Compose this is the shared web_certs volume (e.g. /certs)."
         ),
     )
+    ops_dir: str | None = Field(
+        default=None,
+        description=(
+            "Directory shared with the host ops-agent for WebUI-triggered "
+            "container restart / git-update. The API only WRITES request files "
+            "into <ops_dir>/requests and READS <ops_dir>/status.json — it never "
+            "runs Docker itself. A privileged host watcher executes the requests. "
+            "Unset = the System restart/update controls are disabled (dev/tests)."
+        ),
+    )
     ad_tls_ca_pem: str | None = Field(
         default=None,
         description=(

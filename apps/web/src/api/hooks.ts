@@ -19,6 +19,8 @@ import type {
   UserGroupsUpdate,
   AuditResetResponse,
   DemoPurgeResponse,
+  SystemCommandResponse,
+  SystemStatusOut,
   AppSettingsOut,
   AppSettingsUpdate,
   AuditEventListResponse,
@@ -775,6 +777,36 @@ export function usePurgeDemoData() {
       qc.invalidateQueries({ queryKey: queryKeys.schools });
     },
   });
+}
+
+export function useSystemStatus() {
+  return useQuery<SystemStatusOut>({
+    queryKey: ["system", "status"],
+    queryFn: () => apiFetch<SystemStatusOut>("/admin/system/status"),
+    // While a command is queued/running, poll so the UI reflects progress.
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      return d && (d.pending > 0 || d.last?.state === "running") ? 3000 : false;
+    },
+  });
+}
+
+function useSystemCommand(path: string) {
+  const qc = useQueryClient();
+  return useMutation<SystemCommandResponse, ApiError, void>({
+    mutationFn: () => apiFetch<SystemCommandResponse>(path, { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["system", "status"] });
+    },
+  });
+}
+
+export function useRequestRestart() {
+  return useSystemCommand("/admin/system/restart");
+}
+
+export function useRequestUpdate() {
+  return useSystemCommand("/admin/system/update");
 }
 
 export function useResetActivityLog() {

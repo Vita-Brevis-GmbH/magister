@@ -193,6 +193,16 @@ export function Layout() {
                         {t("nav.system_settings")}
                       </Link>
                     ) : null}
+                    {isAdmin ? (
+                      <Link
+                        to="/admin/system"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.system")}
+                      </Link>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
