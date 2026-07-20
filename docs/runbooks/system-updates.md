@@ -20,46 +20,122 @@ Ein kompromittiertes WebUI kann damit höchstens einen Neustart/Update anstossen
 — niemals beliebige Host-Befehle ausführen (der Agent kennt nur die zwei fixen
 Aktionen).
 
+> **Kein Container:** In dieser (sichersten) Variante ist der ops-agent ein
+> **systemd-Dienst auf dem Host**, kein Docker-Container. So bekommt die Web-App
+> nie Docker-Zugriff. Eine optionale Container-Variante ist unten beschrieben.
+
 ## Einrichtung (einmalig, auf dem Host)
 
-Annahme: Repo liegt unter `/opt/magister/magister`, Compose-Stack darin.
+Annahmen (Pfade an die eigene Umgebung anpassen):
 
-1. **Ops-Verzeichnis anlegen** (gemeinsam zwischen API-Container und Host):
+- Repo/Checkout: `/opt/magister/magister`
+- Compose-Stack: `/opt/magister/magister/deploy/compose/docker-compose.yml`
+- `.env` daneben: `/opt/magister/magister/deploy/compose/.env`
+- Der API-Container läuft als User `magister` (**uid 1000**) — wichtig für die
+  Verzeichnisrechte in Schritt 2.
 
-   ```bash
-   sudo mkdir -p /opt/magister/ops/requests
-   # Muss vom API-Container-User beschreibbar sein. Einfachste Variante:
-   sudo chmod -R 0777 /opt/magister/ops
-   ```
+### Schritt 1 — Code auf dem Server holen
 
-2. **Compose auf das Verzeichnis zeigen lassen** — in `deploy/compose/.env`:
+Für „Update" (git pull + build) muss auf dem Server ein **Git-Checkout** liegen,
+aus dem gebaut wird:
 
-   ```
-   MAGISTER_OPS_HOST_DIR=/opt/magister/ops
-   ```
+```bash
+sudo mkdir -p /opt/magister
+sudo git clone https://github.com/Vita-Brevis-GmbH/magister.git /opt/magister/magister
+cd /opt/magister/magister
+```
 
-   (Ohne diese Variable wird `./ops` neben dem Compose-File verwendet.)
+Betreibst du den Stack schon aus einem anderen Verzeichnis, verwende dessen Pfad
+überall unten statt `/opt/magister/magister`.
 
-3. **ops-agent + Timer installieren:**
+### Schritt 2 — geteiltes ops-Verzeichnis anlegen
 
-   ```bash
-   sudo cp deploy/ops-agent/magister-ops-agent.service /etc/systemd/system/
-   sudo cp deploy/ops-agent/magister-ops-agent.timer   /etc/systemd/system/
-   # Pfade in der .service ggf. anpassen (OPS_DIR/REPO_DIR/COMPOSE_FILE).
-   sudo systemctl daemon-reload
-   sudo systemctl enable --now magister-ops-agent.timer
-   ```
+Der API-Container legt hier Anfragen ab; er schreibt als **uid 1000**, also muss
+das Verzeichnis dieser uid gehören:
 
-   Der Timer läuft alle 30 s und arbeitet offene Anfragen ab.
+```bash
+sudo mkdir -p /opt/magister/ops/requests
+sudo chown -R 1000:1000 /opt/magister/ops
+```
 
-4. **Prüfen:**
+(Alternativ, falls uid 1000 auf dem Host anderweitig belegt ist:
+`sudo chmod -R 0777 /opt/magister/ops` — funktional gleichwertig, aber weniger
+restriktiv.)
 
-   ```bash
-   systemctl status magister-ops-agent.timer
-   # Nach einem WebUI-Klick:
-   cat /opt/magister/ops/status.json
-   journalctl -u magister-ops-agent.service --no-pager | tail
-   ```
+### Schritt 3 — Compose auf das Verzeichnis zeigen lassen
+
+In `deploy/compose/.env` ergänzen:
+
+```bash
+echo 'MAGISTER_OPS_HOST_DIR=/opt/magister/ops' \
+  | sudo tee -a /opt/magister/magister/deploy/compose/.env
+```
+
+Der Compose-Eintrag ist bereits vorhanden: er mountet `${MAGISTER_OPS_HOST_DIR}`
+in den API-Container als `/ops` und setzt `MAGISTER_OPS_DIR=/ops`. (Ohne die
+Variable wird `./ops` neben dem Compose-File verwendet.) API-Container einmal neu
+erzeugen, damit der Mount greift, und prüfen:
+
+```bash
+cd /opt/magister/magister/deploy/compose
+docker compose up -d magister-api
+docker compose exec magister-api ls -la /ops
+```
+
+### Schritt 4 — ops-agent + Timer installieren
+
+Die drei Dateien liegen im Repo unter `deploy/ops-agent/`:
+
+```bash
+cd /opt/magister/magister
+sudo chmod +x deploy/ops-agent/magister-ops-agent.sh
+sudo cp deploy/ops-agent/magister-ops-agent.service /etc/systemd/system/
+sudo cp deploy/ops-agent/magister-ops-agent.timer   /etc/systemd/system/
+```
+
+**Pfade in der Unit prüfen.** In `/etc/systemd/system/magister-ops-agent.service`
+müssen die `Environment=`-Zeilen zu deinen Pfaden passen:
+
+```ini
+Environment=OPS_DIR=/opt/magister/ops
+Environment=REPO_DIR=/opt/magister/magister
+Environment=COMPOSE_FILE=/opt/magister/magister/deploy/compose/docker-compose.yml
+Environment=COMPOSE_ENV=/opt/magister/magister/deploy/compose/.env
+```
+
+Dann laden und Timer starten:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now magister-ops-agent.timer
+```
+
+Der Timer läuft alle 30 s und arbeitet offene Anfragen ab.
+
+### Schritt 5 — testen
+
+In der WebUI **Einstellungen → System** auf „Neustart" oder „Update holen"
+klicken, dann auf dem Host beobachten:
+
+```bash
+systemctl status magister-ops-agent.timer
+cat  /opt/magister/ops/status.json          # letzter Zustand (running/success/error)
+tail -f /opt/magister/ops/last.log          # Live-Log der Ausführung
+journalctl -u magister-ops-agent.service -f    # Agent-Läufe
+```
+
+### Komponenten-Übersicht
+
+| Datei | Ort | Zweck |
+|---|---|---|
+| `deploy/ops-agent/magister-ops-agent.sh` | Host (Repo) | führt `restart`/`update` aus, schreibt `status.json` + `last.log` |
+| `magister-ops-agent.service` | `/etc/systemd/system/` | ruft das Skript einmal auf (oneshot) |
+| `magister-ops-agent.timer` | `/etc/systemd/system/` | löst den Dienst alle 30 s aus |
+| `/opt/magister/ops/requests/*.json` | geteiltes Volume | Anfragen der Web-App (uid 1000) |
+| `/opt/magister/ops/status.json` + `last.log` | geteiltes Volume | Ergebnis/Log (vom Host geschrieben) |
+
+Fehler „System nicht konfiguriert" in der WebUI = der `/ops`-Mount fehlt
+(Schritt 3); die Buttons bleiben dann deaktiviert.
 
 ## Verhalten
 
@@ -82,3 +158,50 @@ Annahme: Repo liegt unter `/opt/magister/magister`, Compose-Stack darin.
   auch den API-Container; die laufende Anfrage kann dadurch abgeschnitten werden
   — das ist erwartet. Der Status wird vom Host-Agenten geschrieben, nicht vom
   (neu startenden) Container, bleibt also erhalten.
+
+## Optional: als Container statt Host-Dienst
+
+Wer den Agenten lieber im Compose-Stack „mitliefern" möchte, kann ihn als
+Container betreiben. **Trade-off:** bequemer, aber der Docker-Socket liegt dann
+in einem Container statt nur auf dem Host — etwas grössere Angriffsfläche als die
+reine Host-Variante oben. Der Container bleibt minimal (nur Docker-CLI + Git +
+das Skript) und hängt an keinem Port.
+
+Service in `deploy/compose/docker-compose.yml` ergänzen:
+
+```yaml
+  ops-agent:
+    image: docker:27-cli
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        apk add --no-cache git bash >/dev/null
+        while true; do
+          bash /repo/deploy/ops-agent/magister-ops-agent.sh
+          sleep 30
+        done
+    environment:
+      OPS_DIR: /ops
+      REPO_DIR: /repo
+      COMPOSE_FILE: /repo/deploy/compose/docker-compose.yml
+      COMPOSE_ENV: /repo/deploy/compose/.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # ← die privilegierte Stelle
+      - /opt/magister/magister:/repo                # Git-Checkout (für update)
+      - ${MAGISTER_OPS_HOST_DIR:-./ops}:/ops        # dieselbe geteilte ops-Dir
+    networks: [internal]
+```
+
+Danach:
+
+```bash
+cd /opt/magister/magister/deploy/compose
+docker compose up -d ops-agent
+docker compose logs -f ops-agent
+```
+
+Wenn du diese Variante nutzt, **den systemd-Dienst NICHT zusätzlich** aktivieren
+(sonst laufen zwei Agenten auf derselben ops-Dir). Beide Wege verwenden dasselbe
+`magister-ops-agent.sh` und dieselbe `/ops`-Dir — es ist also nur ein
+Entweder/Oder bei der Ausführung.
