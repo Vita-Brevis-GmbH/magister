@@ -34,8 +34,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { gradeRangeLabel } from "@/lib/grade";
+import { gradeLabel, gradeRangeLabel } from "@/lib/grade";
 import { usePagedList } from "@/lib/usePagedList";
+import { useSortable } from "@/lib/useSortable";
+import { SortableHead } from "@/components/SortableHead";
 
 export const Route = createFileRoute("/_app/classes")({
   component: ClassesPage,
@@ -57,7 +59,18 @@ function ClassesPage(): JSX.Element {
   const [editTarget, setEditTarget] = useState<ClassOut | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<ClassOut | null>(null);
   const [promoteSource, setPromoteSource] = useState<ClassOut | null>(null);
-  const paged = usePagedList(q.data ?? []);
+  const { sorted, sort, toggle } = useSortable(
+    q.data ?? [],
+    {
+      name: (c) => c.name,
+      kuerzel: (c) => c.kuerzel,
+      jahrgangsstufe: (c) => c.jahrgangsstufe,
+      school: (c) => schoolName(c.school_id),
+      status: (c) => c.status,
+    },
+    "name",
+  );
+  const paged = usePagedList(sorted);
 
   if (childMatches.length > 0) return <Outlet />;
 
@@ -86,11 +99,21 @@ function ClassesPage(): JSX.Element {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("classes.name")}</TableHead>
-              <TableHead>{t("classes.kuerzel")}</TableHead>
-              <TableHead>{t("classes.jahrgangsstufe")}</TableHead>
-              <TableHead>{t("classes.school")}</TableHead>
-              <TableHead>{t("classes.status")}</TableHead>
+              <SortableHead sortKey="name" sort={sort} onSort={toggle}>
+                {t("classes.name")}
+              </SortableHead>
+              <SortableHead sortKey="kuerzel" sort={sort} onSort={toggle}>
+                {t("classes.kuerzel")}
+              </SortableHead>
+              <SortableHead sortKey="jahrgangsstufe" sort={sort} onSort={toggle}>
+                {t("classes.jahrgangsstufe")}
+              </SortableHead>
+              <SortableHead sortKey="school" sort={sort} onSort={toggle}>
+                {t("classes.school")}
+              </SortableHead>
+              <SortableHead sortKey="status" sort={sort} onSort={toggle}>
+                {t("classes.status")}
+              </SortableHead>
               {canWrite ? (
                 <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
               ) : null}
@@ -746,6 +769,11 @@ function PromoteClassWizard({
                             className="h-3.5 w-3.5 rounded border-input"
                           />
                           <span className="truncate">{m.display_name ?? m.upn ?? "—"}</span>
+                          {m.jahrgangsstufe != null ? (
+                            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                              {t("classes.schuljahr")} {gradeLabel(m.jahrgangsstufe)}
+                            </span>
+                          ) : null}
                         </label>
                         {bumpGrade && selected.has(m.ad_object_guid) ? (
                           <input

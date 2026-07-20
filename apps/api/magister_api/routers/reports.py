@@ -21,6 +21,7 @@ from magister_api.repositories.reports import ReportsRepository
 from magister_api.schemas.reports import (
     ActivityReport,
     StudentsByClassReport,
+    StudentsBySchoolYearReport,
     TeacherWorkloadReport,
 )
 
@@ -37,6 +38,19 @@ async def students_by_class(
         rows=rows,
         total_students=sum(r.student_count for r in rows),
         total_classes=len(rows),
+    )
+
+
+@router.get("/students-by-school-year", response_model=StudentsBySchoolYearReport)
+async def students_by_school_year(
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    session: AsyncSession = Depends(get_session),
+) -> StudentsBySchoolYearReport:
+    """How many students are in each grade year (Schuljahr), school-scoped."""
+    rows = await ReportsRepository(session, user.to_scope()).students_by_school_year()
+    return StudentsBySchoolYearReport(
+        rows=rows,
+        total_students=sum(r.student_count for r in rows),
     )
 
 

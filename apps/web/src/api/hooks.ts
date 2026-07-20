@@ -17,6 +17,7 @@ import type {
   AdUserSettingsUpdate,
   UserGroupsResult,
   UserGroupsUpdate,
+  AuditResetResponse,
   DemoPurgeResponse,
   AppSettingsOut,
   AppSettingsUpdate,
@@ -53,6 +54,7 @@ import type {
   LetterRequest,
   LetterTemplate,
   StudentsByClassReport,
+  StudentsBySchoolYearReport,
   SubjectAccessReport,
   TeacherWorkloadReport,
   LocalAdminOut,
@@ -763,6 +765,17 @@ export function usePurgeDemoData() {
   });
 }
 
+export function useResetActivityLog() {
+  const qc = useQueryClient();
+  return useMutation<AuditResetResponse, ApiError, void>({
+    mutationFn: () => apiFetch<AuditResetResponse>("/admin/audit/reset", { method: "POST" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["audit"] });
+      qc.invalidateQueries({ queryKey: ["reports", "activity"] });
+    },
+  });
+}
+
 export function useTriggerAdSync() {
   const qc = useQueryClient();
   return useMutation<AdSyncResultOut, ApiError, void>({
@@ -1053,6 +1066,13 @@ export function useStudentsByClass() {
   return useQuery<StudentsByClassReport>({
     queryKey: ["reports", "students-by-class"],
     queryFn: () => apiFetch<StudentsByClassReport>("/reports/students-by-class"),
+  });
+}
+
+export function useStudentsBySchoolYear() {
+  return useQuery<StudentsBySchoolYearReport>({
+    queryKey: ["reports", "students-by-school-year"],
+    queryFn: () => apiFetch<StudentsBySchoolYearReport>("/reports/students-by-school-year"),
   });
 }
 

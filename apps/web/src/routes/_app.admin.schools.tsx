@@ -25,6 +25,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { mapPointUrl, mapSearchUrl, osmEmbedUrl } from "@/lib/mapLink";
+import { useSortable } from "@/lib/useSortable";
+import { SortableHead } from "@/components/SortableHead";
 
 export const Route = createFileRoute("/_app/admin/schools")({
   component: SchoolsPage,
@@ -51,6 +53,16 @@ function SchoolsPage(): JSX.Element {
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SchoolOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SchoolOut | null>(null);
+  const { sorted, sort, toggle } = useSortable(
+    q.data ?? [],
+    {
+      name: (s) => s.name,
+      kuerzel: (s) => s.kuerzel,
+      city: (s) => [s.postal_code, s.city].filter(Boolean).join(" "),
+      phone: (s) => s.phone,
+    },
+    "name",
+  );
 
   return (
     <div className="space-y-4">
@@ -74,15 +86,23 @@ function SchoolsPage(): JSX.Element {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("schools.col.name")}</TableHead>
-              <TableHead>{t("schools.col.kuerzel")}</TableHead>
-              <TableHead>{t("schools.col.city")}</TableHead>
-              <TableHead>{t("schools.col.phone")}</TableHead>
+              <SortableHead sortKey="name" sort={sort} onSort={toggle}>
+                {t("schools.col.name")}
+              </SortableHead>
+              <SortableHead sortKey="kuerzel" sort={sort} onSort={toggle}>
+                {t("schools.col.kuerzel")}
+              </SortableHead>
+              <SortableHead sortKey="city" sort={sort} onSort={toggle}>
+                {t("schools.col.city")}
+              </SortableHead>
+              <SortableHead sortKey="phone" sort={sort} onSort={toggle}>
+                {t("schools.col.phone")}
+              </SortableHead>
               <TableHead className="text-right">{t("schools.col.actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(q.data ?? []).map((s) => {
+            {sorted.map((s) => {
               const mapUrl = schoolMapUrl(s);
               return (
                 <TableRow key={s.id}>

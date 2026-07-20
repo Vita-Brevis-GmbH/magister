@@ -165,6 +165,58 @@ async def test_empty_class_counted_with_zero(
 
 
 # ---------------------------------------------------------------------------
+# /reports/students-by-school-year
+# ---------------------------------------------------------------------------
+
+
+async def _seed_students(
+    db: AsyncSession,
+    *,
+    school_id: int,
+    jahrgang: int | None,
+    count: int,
+    guid_offset: int,
+) -> None:
+    for i in range(count):
+        guid = f"00000000-0000-0000-0000-{guid_offset + i:012d}"
+        db.add(
+            AdUserCache(
+                ad_object_guid=guid,
+                school_id=school_id,
+                upn=f"y{guid_offset + i}@example.ch",
+                kind="student",
+                enabled=True,
+                jahrgangsstufe=jahrgang,
+                ms_ds_consistency_guid=guid,
+            )
+        )
+    await db.commit()
+
+
+@pytest.mark.asyncio
+async def test_students_by_school_year_aggregates_scoped(
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+    school_b: int,
+) -> None:
+    await _seed_students(db_session, school_id=school_a, jahrgang=3, count=5, guid_offset=1000)
+    await _seed_students(db_session, school_id=school_a, jahrgang=4, count=2, guid_offset=1100)
+    await _seed_students(db_session, school_id=school_a, jahrgang=None, count=1, guid_offset=1200)
+    # Other school is excluded for a Schulleitung scoped to A.
+    await _seed_students(db_session, school_id=school_b, jahrgang=3, count=9, guid_offset=1300)
+
+    r = await as_schulleitung_a.get("/reports/students-by-school-year")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total_students"] == 8
+    by_year = {row["jahrgangsstufe"]: row["student_count"] for row in body["rows"]}
+    assert by_year == {3: 5, 4: 2, None: 1}
+    # Known years come first, the "unrecorded" (null) bucket sorts last.
+    assert body["rows"][-1]["jahrgangsstufe"] is None
+
+
+# ---------------------------------------------------------------------------
 # /reports/teacher-workload
 # ---------------------------------------------------------------------------
 
@@ -231,6 +283,8 @@ async def test_teacher_workload_role_breakdown(
     assert row["co_count"] == 1
     assert row["stellvertretung_count"] == 0
     assert row["total"] == 2
+    # "Lehrer-Klassen": the report lists which classes the teacher holds.
+    assert row["classes"] == ["3a", "3b"]
 
 
 @pytest.mark.asyncio

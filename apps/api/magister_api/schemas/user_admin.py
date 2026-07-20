@@ -45,9 +45,14 @@ class DemoPurgeResponse(BaseModel):
     users: int = 0
 
 
+class AuditResetResponse(BaseModel):
+    deleted: int = 0
+
+
 __all__ = [
     "AdUserCreateRequest",
     "AdUserCreateResponse",
     "AdUserDeleteResponse",
+    "AuditResetResponse",
     "DemoPurgeResponse",
 ]

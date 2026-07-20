@@ -2,7 +2,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useActivityReport, useStudentsByClass, useTeacherWorkload } from "@/api/hooks";
+import {
+  useActivityReport,
+  useStudentsByClass,
+  useStudentsBySchoolYear,
+  useTeacherWorkload,
+} from "@/api/hooks";
 import { SkeletonRow } from "@/components/Skeleton";
 import {
   Table,
@@ -12,7 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { gradeRangeLabel } from "@/lib/grade";
+import { gradeLabel, gradeRangeLabel } from "@/lib/grade";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/reports")({
@@ -41,9 +46,55 @@ function ReportsPage(): JSX.Element {
       </header>
 
       <StudentsByClassSection />
+      <StudentsBySchoolYearSection />
       <TeacherWorkloadSection />
       <ActivitySection />
     </div>
+  );
+}
+
+function StudentsBySchoolYearSection(): JSX.Element {
+  const { t } = useTranslation();
+  const q = useStudentsBySchoolYear();
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">{t("reports.school_year_title")}</h2>
+        {q.data && (
+          <p className="text-sm text-muted-foreground">
+            {t("reports.school_year_total", { students: q.data.total_students })}
+          </p>
+        )}
+      </div>
+      <div className="overflow-hidden rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("reports.col_school_year")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_students")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={2} />)
+            ) : q.isError ? (
+              <ErrorRow columns={2} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.jahrgangsstufe ?? "unknown"}>
+                  <TableCell className="font-medium">
+                    {row.jahrgangsstufe === null
+                      ? t("reports.school_year_unknown")
+                      : gradeLabel(row.jahrgangsstufe)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.student_count}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }
 
@@ -116,13 +167,14 @@ function TeacherWorkloadSection(): JSX.Element {
               <TableHead className="text-right">{t("classes.role_co")}</TableHead>
               <TableHead className="text-right">{t("classes.role_stellvertretung")}</TableHead>
               <TableHead className="text-right">{t("reports.col_total")}</TableHead>
+              <TableHead>{t("reports.col_classes")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {q.isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={5} />)
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={6} />)
             ) : q.isError ? (
-              <ErrorRow columns={5} />
+              <ErrorRow columns={6} />
             ) : (
               (q.data?.rows ?? []).map((row) => (
                 <TableRow key={row.ad_object_guid}>
@@ -138,6 +190,9 @@ function TeacherWorkloadSection(): JSX.Element {
                     {row.stellvertretung_count}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{row.total}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {row.classes.length > 0 ? row.classes.join(", ") : "—"}
+                  </TableCell>
                 </TableRow>
               ))
             )}

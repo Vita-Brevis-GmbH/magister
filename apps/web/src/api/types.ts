@@ -455,6 +455,10 @@ export interface DemoPurgeResponse {
   users: number;
 }
 
+export interface AuditResetResponse {
+  deleted: number;
+}
+
 export type PrefLanguage = "de" | "fr" | "it" | "en";
 export type PrefDateFormat = "DD.MM.YYYY" | "YYYY-MM-DD" | "MM/DD/YYYY";
 export type PrefTimeFormat = "24h" | "12h";
@@ -623,6 +627,15 @@ export interface StudentsByClassReport {
   total_classes: number;
 }
 
+export interface StudentsBySchoolYearRow {
+  jahrgangsstufe: number | null;
+  student_count: number;
+}
+export interface StudentsBySchoolYearReport {
+  rows: StudentsBySchoolYearRow[];
+  total_students: number;
+}
+
 export interface TeacherWorkloadRow {
   ad_object_guid: string;
   upn: string | null;
@@ -631,6 +644,7 @@ export interface TeacherWorkloadRow {
   co_count: number;
   stellvertretung_count: number;
   total: number;
+  classes: string[];
 }
 export interface TeacherWorkloadReport {
   rows: TeacherWorkloadRow[];

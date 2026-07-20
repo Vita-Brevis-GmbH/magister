@@ -18,7 +18,12 @@ from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
 from magister_api.models.school_class import CLASS_STATUS_ACTIVE, SchoolClass
 from magister_api.repositories.base import BaseRepository, ScopeContext
-from magister_api.schemas.reports import ActivityRow, StudentsByClassRow, TeacherWorkloadRow
+from magister_api.schemas.reports import (
+    ActivityRow,
+    StudentsByClassRow,
+    StudentsBySchoolYearRow,
+    TeacherWorkloadRow,
+)
 
 
 class ReportsRepository(BaseRepository):
@@ -73,6 +78,26 @@ class ReportsRepository(BaseRepository):
             for r in rows
         ]
 
+    async def students_by_school_year(self) -> list[StudentsBySchoolYearRow]:
+        """Count enabled students per grade year (Schuljahr/Jahrgangsstufe), scoped.
+
+        Counts the student cache directly (not memberships) so the totals reflect
+        every student on record, including those not yet placed in a class.
+        """
+        stmt = (
+            select(
+                AdUserCache.jahrgangsstufe,
+                func.count(AdUserCache.ad_object_guid).label("student_count"),
+            )
+            .where(AdUserCache.kind == "student")
+            .where(AdUserCache.enabled.is_(True))
+            .group_by(AdUserCache.jahrgangsstufe)
+            .order_by(AdUserCache.jahrgangsstufe.asc().nulls_last())
+        )
+        stmt = self.apply_scope(stmt, AdUserCache.school_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [StudentsBySchoolYearRow(jahrgangsstufe=r[0], student_count=r[1]) for r in rows]
+
     async def teacher_workload(self) -> list[TeacherWorkloadRow]:
         """Count active class-teacher roles per teacher, broken down by role."""
         now = utcnow()
@@ -83,6 +108,7 @@ class ReportsRepository(BaseRepository):
         haupt = func.sum(case((ClassTeacherRole.role == "haupt", 1), else_=0)).cast(Integer)
         co = func.sum(case((ClassTeacherRole.role == "co", 1), else_=0)).cast(Integer)
         stv = func.sum(case((ClassTeacherRole.role == "stellvertretung", 1), else_=0)).cast(Integer)
+        class_label = func.coalesce(SchoolClass.kuerzel, SchoolClass.name)
         stmt = (
             select(
                 ClassTeacherRole.ad_object_guid,
@@ -92,6 +118,7 @@ class ReportsRepository(BaseRepository):
                 co.label("co_count"),
                 stv.label("stv_count"),
                 func.count(ClassTeacherRole.id).label("total"),
+                func.array_agg(class_label).label("class_labels"),
             )
             .select_from(ClassTeacherRole)
             .join(SchoolClass, SchoolClass.id == ClassTeacherRole.class_id)
@@ -112,6 +139,7 @@ class ReportsRepository(BaseRepository):
                 co_count=r[4] or 0,
                 stellvertretung_count=r[5] or 0,
                 total=r[6],
+                classes=sorted({c for c in (r[7] or []) if c}),
             )
             for r in rows
         ]

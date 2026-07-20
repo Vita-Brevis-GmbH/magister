@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, insert, select
+from sqlalchemy import ColumnElement, delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.allowlist import validate_audit_payload
@@ -88,6 +88,39 @@ class AuditService:
         result = await self.session.execute(stmt)
         new_id = result.scalar_one()
         return int(new_id)
+
+    async def purge(
+        self,
+        *,
+        actor_upn: str | None,
+        actor_object_guid: str | None,
+        ip: str | None,
+        request_id: str,
+    ) -> int:
+        """Delete the whole activity history, then record the reset itself.
+
+        Used before hand-over/delivery so the customer starts with a clean
+        activity overview. The reset is itself audited (Niemals-Regel: keine
+        schreibende Operation ohne Audit-Event), so the fresh log carries a
+        single ``audit_reset`` entry documenting who cleared it and how many
+        rows were removed. Returns the number of events deleted.
+        """
+        count = int(
+            (await self.session.execute(select(func.count()).select_from(AuditEvent))).scalar_one()
+        )
+        await self.session.execute(delete(AuditEvent))
+        await self.emit(
+            action="audit_reset",
+            target_kind="audit",
+            target_id="all",
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            school_id=None,
+            ip=ip,
+            request_id=request_id,
+            payload={"deleted": count},
+        )
+        return count
 
     async def read(self, event_id: int) -> AuditEventRecord | None:
         """Decrypt and return a single audit event by id."""

@@ -45,6 +45,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { usePagedList } from "@/lib/usePagedList";
+import { useSortable } from "@/lib/useSortable";
+import { SortableHead } from "@/components/SortableHead";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/devices")({
@@ -76,7 +78,6 @@ function DevicesPage(): JSX.Element {
   const [assignTarget, setAssignTarget] = useState<DeviceOut | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeviceOut | null>(null);
   const [historyTarget, setHistoryTarget] = useState<DeviceOut | null>(null);
-  const paged = usePagedList(q.data ?? []);
 
   const schoolName = (id: number): string =>
     schools.data?.find((s) => s.id === id)?.name ?? String(id);
@@ -97,6 +98,22 @@ function DevicesPage(): JSX.Element {
     }
     return t("devices.free");
   }
+
+  const sourceText = (d: DeviceOut): string =>
+    d.source === "ad" ? t("devices.source.ad") : t("devices.source.manual");
+
+  const { sorted, sort, toggle } = useSortable(
+    q.data ?? [],
+    {
+      name: (d) => d.name,
+      type: (d) => d.device_type,
+      serial: (d) => d.serial_number,
+      assignment: (d) => assignmentText(d),
+      source: (d) => sourceText(d),
+    },
+    "name",
+  );
+  const paged = usePagedList(sorted);
 
   return (
     <div className="space-y-4">
@@ -120,11 +137,21 @@ function DevicesPage(): JSX.Element {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("devices.col.name")}</TableHead>
-              <TableHead>{t("devices.col.type")}</TableHead>
-              <TableHead>{t("devices.col.serial")}</TableHead>
-              <TableHead>{t("devices.col.assignment")}</TableHead>
-              <TableHead>{t("devices.col.source")}</TableHead>
+              <SortableHead sortKey="name" sort={sort} onSort={toggle}>
+                {t("devices.col.name")}
+              </SortableHead>
+              <SortableHead sortKey="type" sort={sort} onSort={toggle}>
+                {t("devices.col.type")}
+              </SortableHead>
+              <SortableHead sortKey="serial" sort={sort} onSort={toggle}>
+                {t("devices.col.serial")}
+              </SortableHead>
+              <SortableHead sortKey="assignment" sort={sort} onSort={toggle}>
+                {t("devices.col.assignment")}
+              </SortableHead>
+              <SortableHead sortKey="source" sort={sort} onSort={toggle}>
+                {t("devices.col.source")}
+              </SortableHead>
               <TableHead className="text-right">{t("devices.col.actions")}</TableHead>
             </TableRow>
           </TableHeader>
@@ -135,9 +162,7 @@ function DevicesPage(): JSX.Element {
                 <TableCell>{d.device_type ?? "—"}</TableCell>
                 <TableCell>{d.serial_number ?? "—"}</TableCell>
                 <TableCell>{assignmentText(d)}</TableCell>
-                <TableCell>
-                  {d.source === "ad" ? t("devices.source.ad") : t("devices.source.manual")}
-                </TableCell>
+                <TableCell>{sourceText(d)}</TableCell>
                 <TableCell className="space-x-2 text-right">
                   <Button
                     type="button"
