@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
@@ -16,6 +17,7 @@ from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.class_memberships import ClassMembershipRepository
 from magister_api.repositories.classes import ClassRepository
+from magister_api.services.group_reassign import GradeChange, reassign_cycle_groups
 
 # Grade bounds: -1 = 1. Kindergarten, 0 = 2. Kindergarten, 1..13 = Klassen.
 _GRADE_MIN = -1
@@ -43,10 +45,17 @@ class ClassGradeRangeError(ValueError):
 
 
 class ClassService:
-    def __init__(self, session: AsyncSession, settings: Settings, scope: ScopeContext) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        settings: Settings,
+        scope: ScopeContext,
+        ad_client: AdClient | None = None,
+    ) -> None:
         self.session = session
         self.settings = settings
         self.scope = scope
+        self.ad_client = ad_client
         self.repo = ClassRepository(session, scope)
         self.audit = AuditService(session, settings)
 
@@ -215,6 +224,7 @@ class ClassService:
 
         moved: list[int] = []
         errors: list[tuple[str, str]] = []
+        grade_changes: list[GradeChange] = []
         now_iso = None
 
         for m in active:
@@ -264,6 +274,7 @@ class ClassService:
                 if bump_grade or m.ad_object_guid in overrides:
                     student = await self.session.get(AdUserCache, m.ad_object_guid)
                     if student is not None:
+                        old_grade = student.jahrgangsstufe
                         if m.ad_object_guid in overrides:
                             new_grade = overrides[m.ad_object_guid]
                         else:
@@ -273,14 +284,36 @@ class ClassService:
                                 else source.jahrgangsstufe
                             )
                             new_grade = base + 1
-                        student.jahrgangsstufe = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        clamped = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        student.jahrgangsstufe = clamped
                         await self.session.flush()
+                        if clamped != old_grade:
+                            grade_changes.append(
+                                GradeChange(
+                                    ad_object_guid=m.ad_object_guid,
+                                    old_grade=old_grade,
+                                    new_grade=clamped,
+                                )
+                            )
 
                 await sp.commit()
                 moved.append(new_row.id)
             except Exception:
                 await sp.rollback()
                 errors.append((m.ad_object_guid, "unexpected_error"))
+
+        # Re-assign Zyklus AD groups for students whose grade crossed a Zyklus
+        # boundary (best-effort; AD hiccups never block the promotion).
+        await reassign_cycle_groups(
+            self.session,
+            self.settings,
+            self.ad_client,
+            grade_changes,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            ip=ip,
+            request_id=request_id,
+        )
 
         source_archived = False
         if archive_source:
@@ -351,6 +384,7 @@ class ClassService:
 
         moved: list[str] = []
         errors: list[tuple[str, str]] = []
+        grade_changes: list[GradeChange] = []
 
         for m in active:
             sp = await self.session.begin_nested()
@@ -392,20 +426,41 @@ class ClassService:
                     # only students being advanced out of it are touched.
                     student = await self.session.get(AdUserCache, m.ad_object_guid)
                     if student is not None:
+                        old_grade = student.jahrgangsstufe
                         base = (
                             student.jahrgangsstufe
                             if student.jahrgangsstufe is not None
                             else source.jahrgangsstufe
                         )
                         new_grade = base + grade_delta
-                        student.jahrgangsstufe = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        clamped = max(_GRADE_MIN, min(_GRADE_MAX, new_grade))
+                        student.jahrgangsstufe = clamped
                         await self.session.flush()
+                        if clamped != old_grade:
+                            grade_changes.append(
+                                GradeChange(
+                                    ad_object_guid=m.ad_object_guid,
+                                    old_grade=old_grade,
+                                    new_grade=clamped,
+                                )
+                            )
 
                 await sp.commit()
                 moved.append(m.ad_object_guid)
             except Exception:  # noqa: BLE001
                 await sp.rollback()
                 errors.append((m.ad_object_guid, "unexpected_error"))
+
+        await reassign_cycle_groups(
+            self.session,
+            self.settings,
+            self.ad_client,
+            grade_changes,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            ip=ip,
+            request_id=request_id,
+        )
 
         source_archived = False
         if archive_source and moving:

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.class_perm import require_class_writer
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
@@ -24,6 +25,7 @@ from magister_api.repositories.class_memberships import ClassMembershipRepositor
 from magister_api.repositories.class_teachers import ClassTeacherRoleRepository
 from magister_api.repositories.devices import DeviceRepository
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.classes import (
     ClassAdvanceRequest,
     ClassCreate,
@@ -168,17 +170,19 @@ async def promote_class(
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
 ) -> ClassPromotionResult:
     """Move all active students from this class to ``target_class_id``.
 
     Optionally archives the source class afterwards. Each student is attempted
     atomically; overlap failures are reported in ``errors`` while the rest are
-    committed.
+    committed. Students whose grade crosses a Zyklus get their AD groups
+    re-assigned to the new Zyklus template.
     """
     if payload.target_class_id == class_id:
         raise HTTPException(status_code=422, detail="source_and_target_must_differ")
 
-    svc = ClassService(session, settings, user.to_scope())
+    svc = ClassService(session, settings, user.to_scope(), ad_client=ad)
     ip, request_id = _ip_request_id(request)
     try:
         result = await svc.promote(
@@ -210,14 +214,16 @@ async def advance_class_students(
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
 ) -> ClassPromotionResult:
     """Move and/or re-grade the selected students of this class.
 
     Drives the class-detail multi-select actions: move to another class (any
     direction) and/or raise the school year — including keeping the same class
-    and only advancing the grade (``target_class_id`` omitted).
+    and only advancing the grade (``target_class_id`` omitted). Students whose
+    grade crosses a Zyklus get their AD groups re-assigned accordingly.
     """
-    svc = ClassService(session, settings, user.to_scope())
+    svc = ClassService(session, settings, user.to_scope(), ad_client=ad)
     ip, request_id = _ip_request_id(request)
     try:
         result = await svc.advance_students(

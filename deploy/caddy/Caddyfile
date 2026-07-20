@@ -73,10 +73,13 @@ http:// {
 }
 
 {$MAGISTER_PUBLIC_HOSTNAME} {
-	# Self-signed certificate from Caddy's internal CA — no ACME, works
-	# offline. The cert is stored in the caddy_data volume and persists
-	# across restarts.
-	tls internal
+	# TLS is driven by a snippet the API materializes into the shared
+	# /certs volume: `tls /certs/tls.pem /certs/tls.key` when an admin has
+	# imported a real certificate (Einstellungen → System), otherwise
+	# `tls internal` (Caddy's self-signed internal CA — no ACME, offline).
+	# The API always writes this file on startup, and the caddy container
+	# waits for it before booting, so the import never fails.
+	import /certs/tls.caddy
 
 	encode zstd gzip
 

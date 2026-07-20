@@ -134,6 +134,14 @@ class AppSettings(Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
+    # --- Web-server (Caddy) TLS certificate ---
+    # An imported certificate for the public HTTPS endpoint. When both are set,
+    # Caddy serves this cert+key instead of its self-signed internal CA. The
+    # full chain is public data (plain Text); the private key is pgcrypto-
+    # encrypted like the other secrets. Both NULL = self-signed fallback.
+    web_tls_cert_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
+    web_tls_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

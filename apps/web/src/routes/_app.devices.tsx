@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -69,6 +69,7 @@ function deviceErrorKey(err: unknown, t: TFn): string {
 
 function DevicesPage(): JSX.Element {
   const { t } = useTranslation();
+  const childMatches = useChildMatches();
   const q = useDevices();
   const schools = useSchools();
   const classes = useClasses();
@@ -115,6 +116,9 @@ function DevicesPage(): JSX.Element {
   );
   const paged = usePagedList(sorted);
 
+  // A child route (/devices/$deviceId) takes over the whole panel.
+  if (childMatches.length > 0) return <Outlet />;
+
   return (
     <div className="space-y-4">
       <header className="flex items-center justify-between">
@@ -158,7 +162,15 @@ function DevicesPage(): JSX.Element {
           <TableBody>
             {paged.pageItems.map((d) => (
               <TableRow key={d.id}>
-                <TableCell className="font-medium">{d.name}</TableCell>
+                <TableCell className="p-0 font-medium">
+                  <Link
+                    to="/devices/$deviceId"
+                    params={{ deviceId: String(d.id) }}
+                    className="block px-4 py-3 text-primary underline-offset-2 hover:underline"
+                  >
+                    {d.name}
+                  </Link>
+                </TableCell>
                 <TableCell>{d.device_type ?? "—"}</TableCell>
                 <TableCell>{d.serial_number ?? "—"}</TableCell>
                 <TableCell>{assignmentText(d)}</TableCell>
@@ -367,7 +379,7 @@ export function CreateDeviceModal({
   );
 }
 
-function EditDeviceModal({
+export function EditDeviceModal({
   target,
   onClose,
 }: {
@@ -706,12 +718,14 @@ export function AssignDeviceModal({
   );
 }
 
-function DeleteDeviceDialog({
+export function DeleteDeviceDialog({
   target,
   onClose,
+  onDeleted,
 }: {
   target: DeviceOut | null;
   onClose: () => void;
+  onDeleted?: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const del = useDeleteDevice();
@@ -722,6 +736,7 @@ function DeleteDeviceDialog({
       onSuccess: () => {
         del.reset();
         onClose();
+        onDeleted?.();
       },
     });
   }

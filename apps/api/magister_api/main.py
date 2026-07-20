@@ -60,7 +60,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     sm = get_sessionmaker()
     async with sm() as seed_session:
         await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
-        await AppSettingsService(seed_session, settings).seed_from_env_if_empty(settings)
+        app_settings_svc = AppSettingsService(seed_session, settings)
+        await app_settings_svc.seed_from_env_if_empty(settings)
+        # Materialize the webserver cert (custom or self-signed fallback) so the
+        # reverse proxy has a snippet to import before it (re)starts. No-op when
+        # MAGISTER_WEB_CERT_DIR is unset (dev/tests).
+        with contextlib.suppress(Exception):
+            await app_settings_svc.materialize_web_tls()
 
     # Periodic AD sync (interval from app_settings, GUI-editable at runtime).
     stop_event = asyncio.Event()

@@ -98,6 +98,7 @@ export const queryKeys = {
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   devices: ["devices"] as const,
+  device: (deviceId: number) => ["device", deviceId] as const,
 };
 
 // --- Current user ----------------------------------------------------------
@@ -219,6 +220,14 @@ export function useDevices() {
   });
 }
 
+export function useDevice(deviceId: number | null) {
+  return useQuery<DeviceOut>({
+    queryKey: deviceId === null ? ["device", "none"] : queryKeys.device(deviceId),
+    queryFn: () => apiFetch<DeviceOut>(`/devices/${deviceId}`),
+    enabled: deviceId !== null,
+  });
+}
+
 export function useCreateDevice() {
   const qc = useQueryClient();
   return useMutation<DeviceOut, ApiError, DeviceCreate>({
@@ -235,6 +244,7 @@ export function useUpdateDevice(deviceId: number) {
     mutationFn: (body) => apiFetch<DeviceOut>(`/devices/${deviceId}`, { method: "PATCH", body }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.devices });
+      qc.invalidateQueries({ queryKey: queryKeys.device(deviceId) });
     },
   });
 }
@@ -246,6 +256,8 @@ export function useAssignDevice(deviceId: number) {
       apiFetch<DeviceOut>(`/devices/${deviceId}/assign`, { method: "POST", body }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.devices });
+      qc.invalidateQueries({ queryKey: queryKeys.device(deviceId) });
+      qc.invalidateQueries({ queryKey: ["devices", deviceId, "history"] });
     },
   });
 }

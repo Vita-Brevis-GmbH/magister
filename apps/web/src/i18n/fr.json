@@ -472,7 +472,25 @@
       "reset_activity_confirm": "Supprimer vraiment tout le journal d'activité ?",
       "reset_activity_yes": "Réinitialiser définitivement",
       "reset_activity_ok": "Réinitialisé : {{deleted}} entrées supprimées.",
-      "userconfig_moved_hint": "La configuration utilisateur (OU cibles, groupes AD, stockage des mots de passe) se trouve désormais sous Paramètres → Configuration utilisateur."
+      "userconfig_moved_hint": "La configuration utilisateur (OU cibles, groupes AD, stockage des mots de passe) se trouve désormais sous Paramètres → Configuration utilisateur.",
+      "web_tls": {
+        "title": "Certificat TLS (serveur web)",
+        "desc": "Importer un certificat valide pour l'adresse HTTPS publique. Sans certificat, le serveur web utilise un certificat auto-signé.",
+        "status": "État",
+        "status_custom": "Certificat personnalisé actif",
+        "status_selfsigned": "Auto-signé (repli)",
+        "mode_pem": "PEM (certificat + clé)",
+        "mode_pfx": "PFX / PKCS#12",
+        "cert_label": "Certificat (chaîne PEM, feuille en premier)",
+        "key_label": "Clé privée (PEM)",
+        "pfx_label": "Fichier PFX (.pfx/.p12)",
+        "pfx_password": "Mot de passe PFX (facultatif)",
+        "reload_hint": "Après l'import, le serveur web doit être rechargé (docker compose restart caddy) pour que le certificat prenne effet.",
+        "import_button": "Importer le certificat",
+        "remove_button": "Supprimer le certificat",
+        "saved": "Enregistré.",
+        "error": "Certificat invalide ({{code}})."
+      }
     },
     "local_admin": {
       "title": "Compte administrateur local",
@@ -866,6 +884,14 @@
       "person": "Personne",
       "class": "Classe",
       "school": "École"
+    },
+    "detail": {
+      "not_found": "Appareil introuvable.",
+      "details_title": "Détails de l'appareil",
+      "assignment_title": "Attribution",
+      "ad_guid": "objectGUID AD",
+      "created_at": "Créé",
+      "updated_at": "Mis à jour"
     }
   },
   "schools": {

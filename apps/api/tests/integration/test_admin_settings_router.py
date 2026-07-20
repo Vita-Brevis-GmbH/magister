@@ -114,3 +114,75 @@ class TestCapabilitiesReflectsDb:
         after = await client.get("/auth/capabilities")
         body = after.json()
         assert body["oidc_enabled"] is True
+
+
+class TestWebTlsImport:
+    """Importing a webserver certificate via PUT /admin/app-settings."""
+
+    @staticmethod
+    def _make_cert() -> tuple[str, str, str]:
+        import datetime as dt
+
+        from cryptography import x509
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.x509.oid import NameOID
+
+        def one() -> tuple[str, str]:
+            key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+            name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "magister.test")])
+            cert = (
+                x509.CertificateBuilder()
+                .subject_name(name)
+                .issuer_name(name)
+                .public_key(key.public_key())
+                .serial_number(x509.random_serial_number())
+                .not_valid_before(dt.datetime(2020, 1, 1))
+                .not_valid_after(dt.datetime(2035, 1, 1))
+                .sign(key, hashes.SHA256())
+            )
+            return (
+                cert.public_bytes(serialization.Encoding.PEM).decode(),
+                key.private_bytes(
+                    serialization.Encoding.PEM,
+                    serialization.PrivateFormat.PKCS8,
+                    serialization.NoEncryption(),
+                ).decode(),
+            )
+
+        cert_pem, key_pem = one()
+        _, other_key = one()
+        return cert_pem, key_pem, other_key
+
+    async def test_import_pem_sets_flag_and_hides_key(self, as_admin: AsyncClient) -> None:
+        cert_pem, key_pem, _ = self._make_cert()
+        resp = await as_admin.put(
+            "/admin/app-settings",
+            json={"web_tls_cert_pem": cert_pem, "web_tls_key_pem": key_pem},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["web_tls_cert_set"] is True
+        # The private key never comes back.
+        assert "PRIVATE KEY" not in resp.text
+
+    async def test_mismatched_key_is_422(self, as_admin: AsyncClient) -> None:
+        cert_pem, _, other_key = self._make_cert()
+        resp = await as_admin.put(
+            "/admin/app-settings",
+            json={"web_tls_cert_pem": cert_pem, "web_tls_key_pem": other_key},
+        )
+        assert resp.status_code == 422
+
+    async def test_clear_reverts_to_selfsigned(self, as_admin: AsyncClient) -> None:
+        cert_pem, key_pem, _ = self._make_cert()
+        await as_admin.put(
+            "/admin/app-settings",
+            json={"web_tls_cert_pem": cert_pem, "web_tls_key_pem": key_pem},
+        )
+        resp = await as_admin.put(
+            "/admin/app-settings",
+            json={"web_tls_cert_pem": "", "web_tls_key_pem": ""},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["web_tls_cert_set"] is False

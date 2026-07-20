@@ -469,7 +469,25 @@
       "reset_activity_confirm": "Gesamtes Aktivitätsprotokoll wirklich löschen?",
       "reset_activity_yes": "Endgültig zurücksetzen",
       "reset_activity_ok": "Zurückgesetzt: {{deleted}} Einträge gelöscht.",
-      "userconfig_moved_hint": "Userkonfiguration (Ziel-OUs, AD-Gruppen, Passwortspeicherung) findest du nun unter Einstellungen → Userkonfiguration."
+      "userconfig_moved_hint": "Userkonfiguration (Ziel-OUs, AD-Gruppen, Passwortspeicherung) findest du nun unter Einstellungen → Userkonfiguration.",
+      "web_tls": {
+        "title": "TLS-Zertifikat (Webserver)",
+        "desc": "Gültiges Zertifikat für die öffentliche HTTPS-Adresse importieren. Ohne Import verwendet der Webserver ein selbstsigniertes Zertifikat.",
+        "status": "Status",
+        "status_custom": "Eigenes Zertifikat aktiv",
+        "status_selfsigned": "Selbstsigniert (Fallback)",
+        "mode_pem": "PEM (Zertifikat + Schlüssel)",
+        "mode_pfx": "PFX / PKCS#12",
+        "cert_label": "Zertifikat (PEM-Kette, Leaf zuerst)",
+        "key_label": "Privater Schlüssel (PEM)",
+        "pfx_label": "PFX-Datei (.pfx/.p12)",
+        "pfx_password": "PFX-Passwort (optional)",
+        "reload_hint": "Nach dem Import muss der Webserver neu geladen werden (docker compose restart caddy), damit das Zertifikat aktiv wird.",
+        "import_button": "Zertifikat importieren",
+        "remove_button": "Zertifikat entfernen",
+        "saved": "Gespeichert.",
+        "error": "Zertifikat ungültig ({{code}})."
+      }
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",
@@ -863,6 +881,14 @@
       "person": "Person",
       "class": "Klasse",
       "school": "Schule"
+    },
+    "detail": {
+      "not_found": "Gerät nicht gefunden.",
+      "details_title": "Geräte-Details",
+      "assignment_title": "Zuweisung",
+      "ad_guid": "AD-objectGUID",
+      "created_at": "Erstellt",
+      "updated_at": "Aktualisiert"
     }
   },
   "schools": {

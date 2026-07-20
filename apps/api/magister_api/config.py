@@ -129,6 +129,15 @@ class Settings(BaseSettings):
             "root CA for defence-in-depth against a compromised system CA."
         ),
     )
+    web_cert_dir: str | None = Field(
+        default=None,
+        description=(
+            "Directory shared with the Caddy reverse proxy where the effective "
+            "webserver certificate is materialized (tls.pem/tls.key + a Caddy "
+            "tls snippet). Unset = certificate materialization is skipped (dev/"
+            "tests). In Compose this is the shared web_certs volume (e.g. /certs)."
+        ),
+    )
     ad_tls_ca_pem: str | None = Field(
         default=None,
         description=(

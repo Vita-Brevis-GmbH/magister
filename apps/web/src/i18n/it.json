@@ -472,7 +472,25 @@
       "reset_activity_confirm": "Eliminare davvero l'intero registro delle attività?",
       "reset_activity_yes": "Reimposta definitivamente",
       "reset_activity_ok": "Reimpostato: {{deleted}} voci eliminate.",
-      "userconfig_moved_hint": "La configurazione utenti (OU di destinazione, gruppi AD, memorizzazione password) si trova ora in Impostazioni → Configurazione utenti."
+      "userconfig_moved_hint": "La configurazione utenti (OU di destinazione, gruppi AD, memorizzazione password) si trova ora in Impostazioni → Configurazione utenti.",
+      "web_tls": {
+        "title": "Certificato TLS (server web)",
+        "desc": "Importa un certificato valido per l'indirizzo HTTPS pubblico. Senza, il server web usa un certificato autofirmato.",
+        "status": "Stato",
+        "status_custom": "Certificato personalizzato attivo",
+        "status_selfsigned": "Autofirmato (fallback)",
+        "mode_pem": "PEM (certificato + chiave)",
+        "mode_pfx": "PFX / PKCS#12",
+        "cert_label": "Certificato (catena PEM, foglia per prima)",
+        "key_label": "Chiave privata (PEM)",
+        "pfx_label": "File PFX (.pfx/.p12)",
+        "pfx_password": "Password PFX (facoltativa)",
+        "reload_hint": "Dopo l'importazione, il server web deve essere ricaricato (docker compose restart caddy) affinché il certificato diventi attivo.",
+        "import_button": "Importa certificato",
+        "remove_button": "Rimuovi certificato",
+        "saved": "Salvato.",
+        "error": "Certificato non valido ({{code}})."
+      }
     },
     "local_admin": {
       "title": "Account amministratore locale",
@@ -866,6 +884,14 @@
       "person": "Persona",
       "class": "Classe",
       "school": "Scuola"
+    },
+    "detail": {
+      "not_found": "Dispositivo non trovato.",
+      "details_title": "Dettagli del dispositivo",
+      "assignment_title": "Assegnazione",
+      "ad_guid": "objectGUID AD",
+      "created_at": "Creato",
+      "updated_at": "Aggiornato"
     }
   },
   "schools": {

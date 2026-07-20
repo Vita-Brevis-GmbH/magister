@@ -62,6 +62,10 @@ class AppSettingsOut(BaseModel):
     ad_groups_student_zyklus2: list[str]
     ad_groups_student_zyklus3: list[str]
 
+    # Whether a custom webserver TLS cert is imported (else self-signed). The
+    # cert/key bodies are never returned — only this presence flag.
+    web_tls_cert_set: bool = False
+
     # Audit fingerprint
     updated_at: datetime
     updated_by_upn: str | None
@@ -139,6 +143,27 @@ class AppSettingsUpdate(BaseModel):
     ad_groups_student_zyklus1: list[str] | None = Field(default=None)
     ad_groups_student_zyklus2: list[str] | None = Field(default=None)
     ad_groups_student_zyklus3: list[str] | None = Field(default=None)
+
+    # --- Webserver TLS certificate import ---
+    # Provide a PEM cert chain + private key together, OR a base64 PFX (+ its
+    # password). Send both PEM fields as empty strings to clear (revert to the
+    # self-signed fallback). Null/omit on all → leave the stored cert unchanged.
+    web_tls_cert_pem: str | None = Field(
+        default=None,
+        description="PEM certificate chain (leaf first). Pair with web_tls_key_pem.",
+    )
+    web_tls_key_pem: str | None = Field(
+        default=None,
+        description="PEM private key matching the leaf certificate. Never returned.",
+    )
+    web_tls_pfx_base64: str | None = Field(
+        default=None,
+        description="Base64-encoded PKCS#12/PFX blob (alternative to the PEM pair).",
+    )
+    web_tls_pfx_password: str | None = Field(
+        default=None,
+        description="Password for the PFX blob, if any.",
+    )
 
     @field_validator("ad_bind_mode")
     @classmethod

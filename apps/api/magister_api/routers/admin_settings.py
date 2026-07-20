@@ -8,7 +8,7 @@ the stored value alone).
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.auth.current_user import AuthenticatedUser
@@ -18,6 +18,7 @@ from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.web_tls import WebTlsError
 
 router = APIRouter(prefix="/admin/app-settings", tags=["admin"])
 
@@ -40,13 +41,20 @@ async def update_app_settings(
     session: AsyncSession = Depends(get_session),
 ) -> AppSettingsOut:
     ip, request_id = _ip_request_id(request)
-    return await AppSettingsService(session, settings).update(
-        payload,
-        actor_upn=user.upn,
-        actor_object_guid=user.ad_object_guid,
-        ip=ip,
-        request_id=request_id,
-    )
+    svc = AppSettingsService(session, settings)
+    try:
+        result = await svc.update(
+            payload,
+            actor_upn=user.upn,
+            actor_object_guid=user.ad_object_guid,
+            ip=ip,
+            request_id=request_id,
+        )
+    except WebTlsError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Reflect any webserver-cert change onto the disk the reverse proxy reads.
+    await svc.materialize_web_tls()
+    return result
 
 
 __all__ = ["router"]

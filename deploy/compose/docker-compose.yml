@@ -73,6 +73,11 @@ services:
       MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
       MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
       MAGISTER_AD_SYNC_INTERVAL_MINUTES: ${MAGISTER_AD_SYNC_INTERVAL_MINUTES:-15}
+      # Shared with Caddy: the API materializes tls.pem/tls.key + a Caddy `tls`
+      # snippet here from the imported webserver cert (or a self-signed fallback).
+      MAGISTER_WEB_CERT_DIR: /certs
+    volumes:
+      - web_certs:/certs
     networks: [internal]
     # No public ports — only Caddy reaches it on the internal network.
 
@@ -95,8 +100,23 @@ services:
       MAGISTER_PUBLIC_HOSTNAME: ${MAGISTER_PUBLIC_HOSTNAME}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - web_certs:/certs:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Wait for the API to materialize the tls snippet (import /certs/tls.caddy)
+    # before starting, so Caddy never boots with a missing import (which would
+    # otherwise fall through to ACME). --watch reloads on Caddyfile changes; a
+    # runtime cert import applies after `docker compose restart caddy`.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        echo "caddy: waiting for /certs/tls.caddy ..."
+        i=0
+        while [ ! -f /certs/tls.caddy ]; do
+          i=$$((i+1)); [ $$i -gt 120 ] && echo "caddy: timeout waiting for cert snippet" && break
+          sleep 1
+        done
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
     networks: [internal]
 
   pg-backup:
@@ -125,4 +145,7 @@ volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  # Shared cert dir: magister-api writes tls.pem/tls.key + tls.caddy here, Caddy
+  # reads them (import /certs/tls.caddy). Empty = self-signed fallback snippet.
+  web_certs:
   backups:

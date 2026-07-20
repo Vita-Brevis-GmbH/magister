@@ -14,6 +14,7 @@ is built without a process restart.
 
 from __future__ import annotations
 
+import base64
 import logging
 from dataclasses import dataclass
 from datetime import datetime
@@ -27,6 +28,40 @@ from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from magister_api.schemas.user_settings import AdUserSettingsOut, AdUserSettingsUpdate
+from magister_api.services import web_tls
+
+
+def _resolve_web_tls_import(
+    payload: AppSettingsUpdate,
+) -> tuple[bool, str | None, str | None]:
+    """Interpret the webserver-cert fields of an update payload.
+
+    Returns ``(touched, cert_pem, key_pem)``:
+    - ``touched`` False → leave the stored cert unchanged.
+    - ``touched`` True, cert/key None → clear (fall back to self-signed).
+    - ``touched`` True, cert/key set → import this normalised PEM pair.
+
+    Raises :class:`web_tls.WebTlsError` on invalid/mismatched material.
+    """
+    if payload.web_tls_pfx_base64:
+        try:
+            der = base64.b64decode(payload.web_tls_pfx_base64, validate=True)
+        except Exception as exc:  # noqa: BLE001
+            raise web_tls.WebTlsError("invalid_pfx") from exc
+        cert_pem, key_pem = web_tls.from_pfx(der, payload.web_tls_pfx_password or None)
+        return True, cert_pem, key_pem
+
+    cert = payload.web_tls_cert_pem
+    key = payload.web_tls_key_pem
+    if cert is None and key is None:
+        return False, None, None
+    if (cert or "").strip() == "" and (key or "").strip() == "":
+        return True, None, None  # explicit clear
+    if not (cert or "").strip() or not (key or "").strip():
+        raise web_tls.WebTlsError("cert_and_key_required")
+    norm_cert, norm_key = web_tls.normalize_pem(cert or "", key or "")
+    return True, norm_cert, norm_key
+
 
 logger = logging.getLogger(__name__)
 
@@ -173,6 +208,7 @@ class AppSettingsService:
             AppSettings.ad_groups_student_zyklus1,
             AppSettings.ad_groups_student_zyklus2,
             AppSettings.ad_groups_student_zyklus3,
+            (AppSettings.web_tls_cert_pem.is_not(None)).label("web_tls_cert_set"),
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -208,6 +244,7 @@ class AppSettingsService:
             ad_groups_student_zyklus1=list(row.ad_groups_student_zyklus1 or []),
             ad_groups_student_zyklus2=list(row.ad_groups_student_zyklus2 or []),
             ad_groups_student_zyklus3=list(row.ad_groups_student_zyklus3 or []),
+            web_tls_cert_set=bool(row.web_tls_cert_set),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -365,6 +402,21 @@ class AppSettingsService:
             values["ad_tls_ca_pem"] = pem
             diff["ad_tls_ca_pem_set"] = pem is not None
 
+        # Web-server TLS certificate import (PEM pair or PFX). The chain is
+        # public Text; the private key is a secret (encrypted). Only the
+        # "cert present" flag reaches the audit diff — never the key/chain body.
+        # WebTlsError propagates to the router as a 422.
+        web_touched, web_cert, web_key = _resolve_web_tls_import(payload)
+        if web_touched:
+            if web_cert and web_key:
+                values["web_tls_cert_pem"] = web_cert
+                values["web_tls_key_enc"] = func.pgp_sym_encrypt(web_key, self._key)
+                diff["web_tls_cert_set"] = True
+            else:
+                values["web_tls_cert_pem"] = None
+                values["web_tls_key_enc"] = None
+                diff["web_tls_cert_set"] = False
+
         # Always bump version + updated_*.
         values["version"] = AppSettings.version + 1
         values["updated_at"] = func.now()
@@ -387,6 +439,30 @@ class AppSettingsService:
         )
 
         return await self.get_redacted_for_api()
+
+    async def materialize_web_tls(self) -> str | None:
+        """Write the effective webserver cert to ``settings.web_cert_dir``.
+
+        Reads the stored chain + decrypted key and hands them to
+        :func:`web_tls.materialize`, which writes ``tls.pem``/``tls.key`` and a
+        Caddy ``tls`` snippet (or a self-signed fallback snippet when no cert is
+        configured). Returns ``"custom"``/``"selfsigned"``, or ``None`` when no
+        cert directory is configured (dev/tests). Call on startup and after each
+        settings change.
+
+        # scope-bypass: app_settings is a global singleton (no school scope).
+        """
+        cert_dir = self._settings.web_cert_dir
+        if not cert_dir:
+            return None
+        stmt = select(
+            AppSettings.web_tls_cert_pem,
+            func.pgp_sym_decrypt(AppSettings.web_tls_key_enc, self._key).label("web_tls_key"),
+        ).where(AppSettings.id == 1)
+        row = (await self.session.execute(stmt)).one_or_none()
+        cert = row.web_tls_cert_pem if row else None
+        key = row.web_tls_key if row else None
+        return web_tls.materialize(cert_dir, cert, key)
 
     # ---------- bootstrap ----------
 

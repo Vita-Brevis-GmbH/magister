@@ -62,6 +62,7 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     ad_groups_student_zyklus1: [],
     ad_groups_student_zyklus2: [],
     ad_groups_student_zyklus3: [],
+    web_tls_cert_set: false,
     updated_at: "2026-05-08T12:00:00+00:00",
     updated_by_upn: "ops@example.ch",
     ...overrides,

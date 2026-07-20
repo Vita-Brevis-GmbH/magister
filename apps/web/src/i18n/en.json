@@ -469,7 +469,25 @@
       "reset_activity_confirm": "Really delete the entire activity log?",
       "reset_activity_yes": "Reset permanently",
       "reset_activity_ok": "Reset: {{deleted}} entries deleted.",
-      "userconfig_moved_hint": "User configuration (target OUs, AD groups, password storage) has moved to Settings → User configuration."
+      "userconfig_moved_hint": "User configuration (target OUs, AD groups, password storage) has moved to Settings → User configuration.",
+      "web_tls": {
+        "title": "TLS certificate (webserver)",
+        "desc": "Import a valid certificate for the public HTTPS address. Without one, the webserver uses a self-signed certificate.",
+        "status": "Status",
+        "status_custom": "Custom certificate active",
+        "status_selfsigned": "Self-signed (fallback)",
+        "mode_pem": "PEM (certificate + key)",
+        "mode_pfx": "PFX / PKCS#12",
+        "cert_label": "Certificate (PEM chain, leaf first)",
+        "key_label": "Private key (PEM)",
+        "pfx_label": "PFX file (.pfx/.p12)",
+        "pfx_password": "PFX password (optional)",
+        "reload_hint": "After importing, the webserver must be reloaded (docker compose restart caddy) for the certificate to take effect.",
+        "import_button": "Import certificate",
+        "remove_button": "Remove certificate",
+        "saved": "Saved.",
+        "error": "Invalid certificate ({{code}})."
+      }
     },
     "local_admin": {
       "title": "Local admin account",
@@ -863,6 +881,14 @@
       "person": "Person",
       "class": "Class",
       "school": "School"
+    },
+    "detail": {
+      "not_found": "Device not found.",
+      "details_title": "Device details",
+      "assignment_title": "Assignment",
+      "ad_guid": "AD objectGUID",
+      "created_at": "Created",
+      "updated_at": "Updated"
     }
   },
   "schools": {
