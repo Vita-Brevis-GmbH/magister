@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import { SchoolModal } from "./_app.admin.schools";
+import { SchoolForm } from "./_app.admin.schools";
 
 beforeAll(async () => {
   await i18n.changeLanguage("de");
@@ -47,7 +47,7 @@ describe("SchoolModal (create)", () => {
       jsonResponse({ id: 1, name: "PS Musterdorf", kuerzel: "PSM", scope_short: "PSM" }),
     );
 
-    renderWithQuery(<SchoolModal open={true} target={null} onClose={() => {}} />);
+    renderWithQuery(<SchoolForm target={null} onDone={() => {}} />);
     const user = userEvent.setup();
 
     await user.type(screen.getByLabelText(/^name$/i), "PS Musterdorf");
