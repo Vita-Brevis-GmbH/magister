@@ -38,6 +38,9 @@ interface FormState {
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
+  zyklus1_max_grade: string;
+  zyklus2_max_grade: string;
+  ad_groups_search_base: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -60,6 +63,9 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
+    zyklus1_max_grade: String(data.zyklus1_max_grade),
+    zyklus2_max_grade: String(data.zyklus2_max_grade),
+    ad_groups_search_base: data.ad_groups_search_base ?? "",
   };
 }
 
@@ -128,6 +134,13 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const interval = Number(form.ad_sync_interval_minutes);
   if (Number.isFinite(interval) && interval !== current.ad_sync_interval_minutes) {
     payload.ad_sync_interval_minutes = interval;
+  }
+  const z1 = Number(form.zyklus1_max_grade);
+  if (Number.isFinite(z1) && z1 !== current.zyklus1_max_grade) payload.zyklus1_max_grade = z1;
+  const z2 = Number(form.zyklus2_max_grade);
+  if (Number.isFinite(z2) && z2 !== current.zyklus2_max_grade) payload.zyklus2_max_grade = z2;
+  if (form.ad_groups_search_base !== (current.ad_groups_search_base ?? "")) {
+    payload.ad_groups_search_base = form.ad_groups_search_base;
   }
   return payload;
 }
@@ -433,12 +446,6 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
           </div>
 
           <div className="space-y-2 border-t pt-4">
-            <p className="text-xs text-muted-foreground">
-              {t("admin.settings.userconfig_moved_hint")}
-            </p>
-          </div>
-
-          <div className="space-y-2 border-t pt-4">
             <div className="flex items-center gap-3">
               <Button
                 type="button"
@@ -501,6 +508,38 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
             </div>
             <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("admin.settings.provisioning_section")}</CardTitle>
+          <CardDescription>{t("admin.settings.provisioning_section_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
+              <Input id="z1max" type="number" min={1} max={13} {...field("zyklus1_max_grade")} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
+              <Input id="z2max" type="number" min={1} max={13} {...field("zyklus2_max_grade")} />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+          <div className="space-y-1">
+            <Label htmlFor="groups-base">{t("admin.settings.field.ad_groups_search_base")}</Label>
+            <Input
+              id="groups-base"
+              placeholder="OU=Groups,DC=schule,DC=local"
+              {...field("ad_groups_search_base")}
+            />
+            <p className="text-xs text-muted-foreground">{t("admin.settings.groups_base_hint")}</p>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {t("admin.settings.provisioning_perschool_hint")}
+          </p>
         </CardContent>
       </Card>
 

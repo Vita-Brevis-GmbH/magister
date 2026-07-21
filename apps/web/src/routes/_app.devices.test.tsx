@@ -98,7 +98,22 @@ describe("AssignDeviceModal", () => {
     renderWithQuery(
       <AssignDeviceModal
         target={DEVICE}
-        schools={[{ id: 3, name: "Schule A", kuerzel: "A", scope_short: "A" }]}
+        schools={[
+          {
+            id: 3,
+            name: "Schule A",
+            kuerzel: "A",
+            scope_short: "A",
+            ad_ou_students_zyklus3: null,
+            ad_ou_students_other: null,
+            ad_ou_teachers: null,
+            ad_ou_devices: null,
+            ad_groups_teacher: [],
+            ad_groups_student_zyklus1: [],
+            ad_groups_student_zyklus2: [],
+            ad_groups_student_zyklus3: [],
+          },
+        ]}
         classes={[]}
         onClose={() => {}}
       />,

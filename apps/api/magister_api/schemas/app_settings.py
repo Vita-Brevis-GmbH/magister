@@ -56,6 +56,9 @@ class AppSettingsOut(BaseModel):
     # Password vault master switch.
     password_store_enabled: bool
 
+    # Optional subtree walked for the group catalog (global).
+    ad_groups_search_base: str | None
+
     # Default AD groups per provisioning category (lists of group DNs).
     ad_groups_teacher: list[str]
     ad_groups_student_zyklus1: list[str]

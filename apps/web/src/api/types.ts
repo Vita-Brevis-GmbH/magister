@@ -97,6 +97,18 @@ export interface ClassUpdate {
   details?: string | null;
 }
 
+/** Per-school AD provisioning config (target OUs + Zyklus group templates). */
+export interface SchoolAdConfig {
+  ad_ou_students_zyklus3?: string | null;
+  ad_ou_students_other?: string | null;
+  ad_ou_teachers?: string | null;
+  ad_ou_devices?: string | null;
+  ad_groups_teacher?: string[] | null;
+  ad_groups_student_zyklus1?: string[] | null;
+  ad_groups_student_zyklus2?: string[] | null;
+  ad_groups_student_zyklus3?: string[] | null;
+}
+
 export interface SchoolOut {
   id: number;
   name: string;
@@ -109,6 +121,15 @@ export interface SchoolOut {
   description?: string | null;
   latitude?: number | null;
   longitude?: number | null;
+  // Per-school AD provisioning config (OUs are string|null, groups always arrays).
+  ad_ou_students_zyklus3: string | null;
+  ad_ou_students_other: string | null;
+  ad_ou_teachers: string | null;
+  ad_ou_devices: string | null;
+  ad_groups_teacher: string[];
+  ad_groups_student_zyklus1: string[];
+  ad_groups_student_zyklus2: string[];
+  ad_groups_student_zyklus3: string[];
 }
 
 export interface SchoolCreate {
@@ -124,7 +145,7 @@ export interface SchoolCreate {
   longitude?: number | null;
 }
 
-export type SchoolUpdate = Partial<SchoolCreate>;
+export type SchoolUpdate = Partial<SchoolCreate> & SchoolAdConfig;
 
 export type ClassTeacherRole = "haupt" | "co" | "stellvertretung";
 
@@ -353,6 +374,7 @@ export interface AppSettingsOut {
   zyklus1_max_grade: number;
   zyklus2_max_grade: number;
   password_store_enabled: boolean;
+  ad_groups_search_base: string | null;
   ad_groups_teacher: string[];
   ad_groups_student_zyklus1: string[];
   ad_groups_student_zyklus2: string[];
@@ -407,35 +429,6 @@ export interface UserGroupsResult {
   removed: string[];
   failed: string[];
   groups: string[];
-}
-
-export interface AdUserSettingsOut {
-  version: number;
-  ad_ou_students_zyklus3: string | null;
-  ad_ou_students_other: string | null;
-  ad_ou_teachers: string | null;
-  zyklus1_max_grade: number;
-  zyklus2_max_grade: number;
-  password_store_enabled: boolean;
-  ad_groups_search_base: string | null;
-  ad_groups_teacher: string[];
-  ad_groups_student_zyklus1: string[];
-  ad_groups_student_zyklus2: string[];
-  ad_groups_student_zyklus3: string[];
-}
-
-export interface AdUserSettingsUpdate {
-  ad_ou_students_zyklus3?: string | null;
-  ad_ou_students_other?: string | null;
-  ad_ou_teachers?: string | null;
-  zyklus1_max_grade?: number | null;
-  zyklus2_max_grade?: number | null;
-  password_store_enabled?: boolean | null;
-  ad_groups_search_base?: string | null;
-  ad_groups_teacher?: string[] | null;
-  ad_groups_student_zyklus1?: string[] | null;
-  ad_groups_student_zyklus2?: string[] | null;
-  ad_groups_student_zyklus3?: string[] | null;
 }
 
 export interface AdUserCreateResponse {
@@ -766,6 +759,7 @@ export interface AppSettingsUpdate {
   zyklus1_max_grade?: number | null;
   zyklus2_max_grade?: number | null;
   password_store_enabled?: boolean | null;
+  ad_groups_search_base?: string | null;
   ad_groups_teacher?: string[] | null;
   ad_groups_student_zyklus1?: string[] | null;
   ad_groups_student_zyklus2?: string[] | null;

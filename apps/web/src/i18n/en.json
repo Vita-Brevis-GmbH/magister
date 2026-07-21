@@ -438,6 +438,7 @@
         "ad_groups_student_zyklus3": "Default groups students cycle 3",
         "zyklus1_max_grade": "Zyklus 1 up to grade",
         "zyklus2_max_grade": "Zyklus 2 up to grade",
+        "ad_groups_search_base": "Group search base (optional)",
         "ad_login_enabled": "Enable AD login",
         "ad_login_group": "Authorizing group",
         "ad_login_group_hint": "AD group (DN or CN) whose members may sign in via AD. Direct membership only."
@@ -448,6 +449,10 @@
       "ad_tls_skip_verify_warning": "Warning: the connection is encrypted but not authenticated — vulnerable to man-in-the-middle attacks.",
       "provisioning_title": "Provisioning (new accounts)",
       "provisioning_hint": "Target OUs for AD accounts created via the student import. The student OU follows the class Zyklus. Leaving one empty disables provisioning for that bucket.",
+      "provisioning_section": "Provisioning (global)",
+      "provisioning_section_desc": "Zyklus boundaries (Lehrplan 21) and the group catalog search base — shared across all schools.",
+      "provisioning_perschool_hint": "Target OUs and AD group templates are set per school building — under Settings → Schools → AD configuration.",
+      "groups_base_hint": "OU/subtree to search for AD groups. Empty = user search base.",
       "zyklus_hint": "Zyklus boundaries by grade: Zyklus 1 up to and including the first number, Zyklus 2 up to the second, Zyklus 3 above (default 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
       "password_store_title": "Password storage",
       "password_store_enabled": "Store passwords encrypted in Magister",
@@ -929,6 +934,7 @@
     "save": "Save",
     "edit_button": "Edit",
     "delete_button": "Delete",
+    "ad_config_link": "AD configuration",
     "map_open": "Map",
     "map_preview": "Map preview",
     "coords_hint": "Coordinates (lat/lon) optional — only needed for the embedded map preview. Without them, ‘Map’ opens the address in OpenStreetMap.",
@@ -955,6 +961,26 @@
       "city": "City",
       "phone": "Phone",
       "actions": "Actions"
+    },
+    "ad_config": {
+      "title": "AD configuration",
+      "subtitle": "Target OUs and AD group templates for this school building — so the correct GPOs and groups apply per school.",
+      "ou_section": "Target OUs",
+      "ou_section_desc": "Which OUs new accounts and devices of this school are created in. Leave blank to disable creation for that bucket.",
+      "ou_hint": "The student OU follows the class's Zyklus (Zyklus 3 separate, otherwise ‘other students’).",
+      "groups_section": "AD group templates",
+      "groups_section_desc": "Groups automatically assigned to new accounts of this school. Selected from the synced AD groups.",
+      "group_pick_hint": "Tick the desired groups.",
+      "field": {
+        "ad_ou_students_zyklus3": "OU students Zyklus 3",
+        "ad_ou_students_other": "OU students (other)",
+        "ad_ou_teachers": "OU teachers",
+        "ad_ou_devices": "OU devices",
+        "ad_groups_teacher": "Groups for teachers",
+        "ad_groups_student_zyklus1": "Groups for students Zyklus 1",
+        "ad_groups_student_zyklus2": "Groups for students Zyklus 2",
+        "ad_groups_student_zyklus3": "Groups for students Zyklus 3"
+      }
     }
   },
   "user_groups": {

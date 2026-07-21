@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -121,6 +121,13 @@ function SchoolsPage(): JSX.Element {
                         {t("schools.map_open")}
                       </a>
                     ) : null}
+                    <Link
+                      to="/admin/schools/$schoolId"
+                      params={{ schoolId: String(s.id) }}
+                      className="text-sm text-primary hover:underline"
+                    >
+                      {t("schools.ad_config_link")}
+                    </Link>
                     <Button
                       type="button"
                       size="sm"

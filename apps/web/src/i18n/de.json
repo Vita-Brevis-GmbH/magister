@@ -438,6 +438,7 @@
         "ad_groups_student_zyklus3": "Standard-Gruppen Schüler:innen Zyklus 3",
         "zyklus1_max_grade": "Zyklus 1 bis Jahrgangsstufe",
         "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe",
+        "ad_groups_search_base": "Such-Basis für Gruppen (optional)",
         "ad_login_enabled": "AD-Login aktivieren",
         "ad_login_group": "Berechtigungs-Gruppe",
         "ad_login_group_hint": "AD-Gruppe (DN oder CN), deren Mitglieder sich per AD anmelden dürfen. Nur direkte Mitgliedschaft."
@@ -448,6 +449,10 @@
       "ad_tls_skip_verify_warning": "Achtung: Die Verbindung ist zwar verschlüsselt, aber nicht authentifiziert — anfällig für Man-in-the-Middle-Angriffe.",
       "provisioning_title": "Provisioning (neue Accounts)",
       "provisioning_hint": "Ziel-OUs für über den Schüler-Import neu angelegte AD-Accounts. Die Schüler-OU richtet sich nach dem Zyklus der Klasse. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
+      "provisioning_section": "Provisioning (global)",
+      "provisioning_section_desc": "Zyklus-Grenzen (Lehrplan 21) und Such-Basis für den Gruppen-Katalog — für alle Schulen gemeinsam.",
+      "provisioning_perschool_hint": "Ziel-OUs und AD-Gruppen-Vorlagen werden pro Schulhaus gesetzt — unter Einstellungen → Schulen → AD-Konfiguration.",
+      "groups_base_hint": "OU/Teilbaum, in dem nach AD-Gruppen gesucht wird. Leer = Benutzer-Such-Basis.",
       "zyklus_hint": "Grenzen der Zyklen nach Jahrgangsstufe: Zyklus 1 bis und mit der ersten Zahl, Zyklus 2 bis und mit der zweiten, Zyklus 3 darüber (Standard 2 / 6 → Z1: 1–2, Z2: 3–6, Z3: 7+).",
       "password_store_title": "Passwort-Speicherung",
       "password_store_enabled": "Passwörter verschlüsselt in Magister speichern",
@@ -929,6 +934,7 @@
     "save": "Speichern",
     "edit_button": "Bearbeiten",
     "delete_button": "Löschen",
+    "ad_config_link": "AD-Konfiguration",
     "map_open": "Auf Karte",
     "map_preview": "Kartenvorschau",
     "coords_hint": "Koordinaten (Breite/Länge) optional — nur nötig für die eingebettete Kartenvorschau. Ohne Koordinaten öffnet „Auf Karte“ die Adresse in OpenStreetMap.",
@@ -955,6 +961,26 @@
       "city": "Ort",
       "phone": "Telefon",
       "actions": "Aktionen"
+    },
+    "ad_config": {
+      "title": "AD-Konfiguration",
+      "subtitle": "Ziel-OUs und AD-Gruppen-Vorlagen für dieses Schulhaus — so greifen die richtigen GPOs und Gruppen pro Schule.",
+      "ou_section": "Ziel-OUs",
+      "ou_section_desc": "In welche OUs neue Konten und Geräte dieser Schule angelegt werden. Leer lassen deaktiviert das Anlegen für den jeweiligen Bereich.",
+      "ou_hint": "Die Schüler-OU richtet sich nach dem Zyklus der Klasse (Zyklus 3 separat, sonst „übrige Schüler:innen“).",
+      "groups_section": "AD-Gruppen-Vorlagen",
+      "groups_section_desc": "Gruppen, die neuen Konten dieser Schule automatisch zugewiesen werden. Auswahl aus den gesyncten AD-Gruppen.",
+      "group_pick_hint": "Gewünschte Gruppen anhaken.",
+      "field": {
+        "ad_ou_students_zyklus3": "OU Schüler:innen Zyklus 3",
+        "ad_ou_students_other": "OU Schüler:innen (übrige)",
+        "ad_ou_teachers": "OU Lehrpersonen",
+        "ad_ou_devices": "OU Geräte",
+        "ad_groups_teacher": "Gruppen für Lehrpersonen",
+        "ad_groups_student_zyklus1": "Gruppen für Schüler:innen Zyklus 1",
+        "ad_groups_student_zyklus2": "Gruppen für Schüler:innen Zyklus 2",
+        "ad_groups_student_zyklus3": "Gruppen für Schüler:innen Zyklus 3"
+      }
     }
   },
   "user_groups": {

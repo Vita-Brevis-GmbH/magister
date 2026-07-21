@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 
 /** Checkbox picker over the synced AD group catalog. Any selected DN that is
  *  not (yet) in the catalog is still shown as a checked row so an existing
- *  selection is never silently dropped. Shared by the Userkonfiguration
- *  templates and the per-user group editor. */
+ *  selection is never silently dropped. Shared by the per-school AD-config
+ *  group templates and the per-user group editor. */
 export function GroupPicker({
   label,
   hint,

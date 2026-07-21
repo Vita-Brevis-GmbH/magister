@@ -58,6 +58,7 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     zyklus1_max_grade: 2,
     zyklus2_max_grade: 6,
     password_store_enabled: false,
+    ad_groups_search_base: null,
     ad_groups_teacher: [],
     ad_groups_student_zyklus1: [],
     ad_groups_student_zyklus2: [],

@@ -2,7 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useAppSettings, useRequestRestart, useRequestUpdate, useSystemStatus } from "@/api/hooks";
+import {
+  useAppSettings,
+  useRequestRestart,
+  useRequestUpdate,
+  useSystemStatus,
+  useUpdateAppSettings,
+} from "@/api/hooks";
+import type { AppSettingsOut } from "@/api/types";
 import { DangerZoneCard } from "@/components/DangerZoneCard";
 import { WebTlsCard } from "@/components/WebTlsCard";
 import { Button } from "@/components/ui/button";
@@ -25,10 +32,70 @@ function SystemPage(): JSX.Element {
 
       {settings.data ? <WebTlsCard certSet={settings.data.web_tls_cert_set} /> : null}
 
+      {settings.data ? <PasswordStoreCard data={settings.data} /> : null}
+
       <SystemOpsCard />
 
       <DangerZoneCard />
     </div>
+  );
+}
+
+function PasswordStoreCard({ data }: { data: AppSettingsOut }): JSX.Element {
+  const { t } = useTranslation();
+  const update = useUpdateAppSettings();
+  const [enabled, setEnabled] = useState(data.password_store_enabled);
+  const [success, setSuccess] = useState(false);
+
+  const dirty = enabled !== data.password_store_enabled;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("admin.settings.password_store_title")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {success ? (
+          <div
+            role="status"
+            className="rounded-md border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-700 dark:text-green-300"
+          >
+            {t("admin.settings.success")}
+          </div>
+        ) : null}
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-input"
+            checked={enabled}
+            onChange={(e) => {
+              setEnabled(e.target.checked);
+              setSuccess(false);
+            }}
+          />
+          <span>
+            {t("admin.settings.password_store_enabled")}
+            <span className="block text-xs text-muted-foreground">
+              {t("admin.settings.password_store_hint")}
+            </span>
+          </span>
+        </label>
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            disabled={!dirty || update.isPending}
+            onClick={() =>
+              update.mutate(
+                { password_store_enabled: enabled },
+                { onSuccess: () => setSuccess(true) },
+              )
+            }
+          >
+            {update.isPending ? t("common.loading") : t("admin.settings.save")}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

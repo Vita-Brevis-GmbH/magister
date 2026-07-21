@@ -13,8 +13,6 @@ import type {
   AdUserListResponse,
   AdUserOut,
   AdGroupOut,
-  AdUserSettingsOut,
-  AdUserSettingsUpdate,
   UserGroupsResult,
   UserGroupsUpdate,
   AuditResetResponse,
@@ -82,6 +80,7 @@ export const queryKeys = {
   me: ["me"] as const,
   classes: ["classes"] as const,
   schools: ["schools"] as const,
+  schoolDetail: (schoolId: number) => ["schools", schoolId] as const,
   classDetail: (classId: number) => ["classes", classId] as const,
   classTeachers: (classId: number) => ["classes", classId, "teachers"] as const,
   subjectTeachers: (classId: number) => ["classes", classId, "subject-teachers"] as const,
@@ -94,7 +93,6 @@ export const queryKeys = {
   authCapabilities: ["auth-capabilities"] as const,
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
-  userSettings: ["user-settings"] as const,
   adGroups: ["ad-groups"] as const,
   myPreferences: ["me", "preferences"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
@@ -145,6 +143,14 @@ export function useSchools() {
   });
 }
 
+export function useSchool(schoolId: number) {
+  return useQuery<SchoolOut>({
+    queryKey: queryKeys.schoolDetail(schoolId),
+    queryFn: () => apiFetch<SchoolOut>(`/schools/${schoolId}`),
+    enabled: schoolId > 0,
+  });
+}
+
 export function useCreateSchool() {
   const qc = useQueryClient();
   return useMutation<SchoolOut, ApiError, SchoolCreate>({
@@ -161,6 +167,7 @@ export function useUpdateSchool(schoolId: number) {
     mutationFn: (body) => apiFetch<SchoolOut>(`/schools/${schoolId}`, { method: "PATCH", body }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.schools });
+      qc.invalidateQueries({ queryKey: queryKeys.schoolDetail(schoolId) });
     },
   });
 }
@@ -652,25 +659,6 @@ export function useUpdateAppSettings() {
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
     mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
-  });
-}
-
-export function useUserSettings() {
-  return useQuery<AdUserSettingsOut>({
-    queryKey: queryKeys.userSettings,
-    queryFn: () => apiFetch<AdUserSettingsOut>("/admin/user-settings"),
-  });
-}
-
-export function useUpdateUserSettings() {
-  const qc = useQueryClient();
-  return useMutation<AdUserSettingsOut, ApiError, AdUserSettingsUpdate>({
-    mutationFn: (body) =>
-      apiFetch<AdUserSettingsOut>("/admin/user-settings", { method: "PUT", body }),
-    onSuccess: (data) => {
-      qc.setQueryData(queryKeys.userSettings, data);
-      qc.invalidateQueries({ queryKey: queryKeys.appSettings });
-    },
   });
 }
 

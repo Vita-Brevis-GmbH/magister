@@ -175,14 +175,6 @@ export function Layout() {
                     >
                       {t("nav.substitutions")}
                     </Link>
-                    <Link
-                      to="/admin/user-settings"
-                      role="menuitem"
-                      activeProps={{ className: menuActive }}
-                      inactiveProps={{ className: menuIdle }}
-                    >
-                      {t("nav.user_settings")}
-                    </Link>
                     {isAdmin ? (
                       <Link
                         to="/admin/settings"
