@@ -28,7 +28,7 @@ class SchoolBase(BaseModel):
     longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
-class SchoolCreate(SchoolBase):
+class SchoolCreate(SchoolBase, SchoolAdConfig):
     name: str = Field(min_length=1, max_length=200)
     kuerzel: str = Field(min_length=1, max_length=50)
     scope_short: str = Field(min_length=1, max_length=50)

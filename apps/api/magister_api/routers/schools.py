@@ -62,7 +62,11 @@ async def create_school(
     svc = SchoolService(session, settings, user.to_scope())
     ip, request_id = _ip_request_id(request)
     try:
-        row = await svc.create(fields=payload.model_dump(), ip=ip, request_id=request_id)
+        # exclude_none so the optional AD-config group lists (default None) fall
+        # back to the model's server_default `[]` instead of hitting NOT NULL.
+        row = await svc.create(
+            fields=payload.model_dump(exclude_none=True), ip=ip, request_id=request_id
+        )
     except SchoolKuerzelConflictError as exc:
         raise HTTPException(status_code=409, detail="kuerzel_conflict") from exc
     return SchoolOut.model_validate(row)

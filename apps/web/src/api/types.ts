@@ -132,7 +132,7 @@ export interface SchoolOut {
   ad_groups_student_zyklus3: string[];
 }
 
-export interface SchoolCreate {
+export interface SchoolCreate extends SchoolAdConfig {
   name: string;
   kuerzel: string;
   scope_short: string;

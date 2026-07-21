@@ -1,10 +1,17 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useCreateSchool, useDeleteSchool, useSchools, useUpdateSchool } from "@/api/hooks";
+import {
+  useAdGroups,
+  useCreateSchool,
+  useDeleteSchool,
+  useSchools,
+  useUpdateSchool,
+} from "@/api/hooks";
 import type { SchoolOut } from "@/api/types";
+import { GroupPicker } from "@/components/GroupPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -121,13 +128,6 @@ function SchoolsPage(): JSX.Element {
                         {t("schools.map_open")}
                       </a>
                     ) : null}
-                    <Link
-                      to="/admin/schools/$schoolId"
-                      params={{ schoolId: String(s.id) }}
-                      className="text-sm text-primary hover:underline"
-                    >
-                      {t("schools.ad_config_link")}
-                    </Link>
                     <Button
                       type="button"
                       size="sm"
@@ -163,6 +163,19 @@ function SchoolsPage(): JSX.Element {
   );
 }
 
+type GroupKey =
+  | "ad_groups_teacher"
+  | "ad_groups_student_zyklus1"
+  | "ad_groups_student_zyklus2"
+  | "ad_groups_student_zyklus3";
+
+const GROUP_KEYS: GroupKey[] = [
+  "ad_groups_teacher",
+  "ad_groups_student_zyklus1",
+  "ad_groups_student_zyklus2",
+  "ad_groups_student_zyklus3",
+];
+
 interface FormState {
   name: string;
   kuerzel: string;
@@ -174,6 +187,14 @@ interface FormState {
   description: string;
   latitude: string;
   longitude: string;
+  ad_ou_students_zyklus3: string;
+  ad_ou_students_other: string;
+  ad_ou_teachers: string;
+  ad_ou_devices: string;
+  ad_groups_teacher: string[];
+  ad_groups_student_zyklus1: string[];
+  ad_groups_student_zyklus2: string[];
+  ad_groups_student_zyklus3: string[];
 }
 
 function emptyForm(): FormState {
@@ -188,6 +209,14 @@ function emptyForm(): FormState {
     description: "",
     latitude: "",
     longitude: "",
+    ad_ou_students_zyklus3: "",
+    ad_ou_students_other: "",
+    ad_ou_teachers: "",
+    ad_ou_devices: "",
+    ad_groups_teacher: [],
+    ad_groups_student_zyklus1: [],
+    ad_groups_student_zyklus2: [],
+    ad_groups_student_zyklus3: [],
   };
 }
 
@@ -203,6 +232,14 @@ function fromSchool(s: SchoolOut): FormState {
     description: s.description ?? "",
     latitude: s.latitude != null ? String(s.latitude) : "",
     longitude: s.longitude != null ? String(s.longitude) : "",
+    ad_ou_students_zyklus3: s.ad_ou_students_zyklus3 ?? "",
+    ad_ou_students_other: s.ad_ou_students_other ?? "",
+    ad_ou_teachers: s.ad_ou_teachers ?? "",
+    ad_ou_devices: s.ad_ou_devices ?? "",
+    ad_groups_teacher: [...s.ad_groups_teacher],
+    ad_groups_student_zyklus1: [...s.ad_groups_student_zyklus1],
+    ad_groups_student_zyklus2: [...s.ad_groups_student_zyklus2],
+    ad_groups_student_zyklus3: [...s.ad_groups_student_zyklus3],
   };
 }
 
@@ -218,8 +255,10 @@ export function SchoolModal({
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState>(emptyForm());
   const [hydratedId, setHydratedId] = useState<number | null>(null);
+  const [page, setPage] = useState<"base" | "ad">("base");
   const create = useCreateSchool();
   const update = useUpdateSchool(target?.id ?? 0);
+  const groups = useAdGroups();
   const mut = target ? update : create;
 
   // Hydrate when a new target (or the create form) opens.
@@ -227,11 +266,16 @@ export function SchoolModal({
   if (open && hydratedId !== wantId) {
     setForm(target ? fromSchool(target) : emptyForm());
     setHydratedId(wantId);
+    setPage("base");
     create.reset();
     update.reset();
   }
 
   function set<K extends keyof FormState>(key: K, value: string): void {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function setGroups(key: GroupKey, value: string[]): void {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -260,6 +304,14 @@ export function SchoolModal({
       description: form.description || null,
       latitude: numOrNull(form.latitude),
       longitude: numOrNull(form.longitude),
+      ad_ou_students_zyklus3: form.ad_ou_students_zyklus3.trim() || null,
+      ad_ou_students_other: form.ad_ou_students_other.trim() || null,
+      ad_ou_teachers: form.ad_ou_teachers.trim() || null,
+      ad_ou_devices: form.ad_ou_devices.trim() || null,
+      ad_groups_teacher: form.ad_groups_teacher,
+      ad_groups_student_zyklus1: form.ad_groups_student_zyklus1,
+      ad_groups_student_zyklus2: form.ad_groups_student_zyklus2,
+      ad_groups_student_zyklus3: form.ad_groups_student_zyklus3,
     };
     if (target) {
       update.mutate(body, { onSuccess: close });
@@ -271,6 +323,20 @@ export function SchoolModal({
   const lat = numOrNull(form.latitude);
   const lon = numOrNull(form.longitude);
 
+  const tabClass = (active: boolean): string =>
+    `border-b-2 px-3 py-2 text-sm font-medium ${
+      active
+        ? "border-primary text-foreground"
+        : "border-transparent text-muted-foreground hover:text-foreground"
+    }`;
+
+  const GROUP_LABELS: Record<GroupKey, string> = {
+    ad_groups_teacher: "schools.ad_config.field.ad_groups_teacher",
+    ad_groups_student_zyklus1: "schools.ad_config.field.ad_groups_student_zyklus1",
+    ad_groups_student_zyklus2: "schools.ad_config.field.ad_groups_student_zyklus2",
+    ad_groups_student_zyklus3: "schools.ad_config.field.ad_groups_student_zyklus3",
+  };
+
   return (
     <Dialog open={open} onOpenChange={(next) => (!next ? close() : undefined)}>
       <DialogContent className="max-h-[85vh] overflow-y-auto">
@@ -278,6 +344,28 @@ export function SchoolModal({
           <DialogTitle>{target ? t("schools.edit_title") : t("schools.create_title")}</DialogTitle>
           <DialogDescription>{t("schools.form_hint")}</DialogDescription>
         </DialogHeader>
+
+        <div className="flex gap-1 border-b" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={page === "base"}
+            className={tabClass(page === "base")}
+            onClick={() => setPage("base")}
+          >
+            {t("schools.tab_base")}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={page === "ad"}
+            className={tabClass(page === "ad")}
+            onClick={() => setPage("ad")}
+          >
+            {t("schools.tab_ad")}
+          </button>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           {mut.isError ? (
             <div
@@ -288,125 +376,193 @@ export function SchoolModal({
             </div>
           ) : null}
 
-          <div className="space-y-1">
-            <Label htmlFor="school-name">{t("schools.field.name")}</Label>
-            <Input
-              id="school-name"
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              required
-              maxLength={200}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className={page === "base" ? "space-y-4" : "hidden"}>
             <div className="space-y-1">
-              <Label htmlFor="school-kuerzel">{t("schools.field.kuerzel")}</Label>
+              <Label htmlFor="school-name">{t("schools.field.name")}</Label>
               <Input
-                id="school-kuerzel"
-                value={form.kuerzel}
-                onChange={(e) => set("kuerzel", e.target.value)}
+                id="school-name"
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
                 required
+                maxLength={200}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="school-kuerzel">{t("schools.field.kuerzel")}</Label>
+                <Input
+                  id="school-kuerzel"
+                  value={form.kuerzel}
+                  onChange={(e) => set("kuerzel", e.target.value)}
+                  required
+                  maxLength={50}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="school-scope">{t("schools.field.scope_short")}</Label>
+                <Input
+                  id="school-scope"
+                  value={form.scope_short}
+                  onChange={(e) => set("scope_short", e.target.value)}
+                  required
+                  maxLength={50}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="school-street">{t("schools.field.street")}</Label>
+              <Input
+                id="school-street"
+                value={form.street}
+                onChange={(e) => set("street", e.target.value)}
+                maxLength={200}
+              />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="school-plz">{t("schools.field.postal_code")}</Label>
+                <Input
+                  id="school-plz"
+                  value={form.postal_code}
+                  onChange={(e) => set("postal_code", e.target.value)}
+                  maxLength={20}
+                />
+              </div>
+              <div className="col-span-2 space-y-1">
+                <Label htmlFor="school-city">{t("schools.field.city")}</Label>
+                <Input
+                  id="school-city"
+                  value={form.city}
+                  onChange={(e) => set("city", e.target.value)}
+                  maxLength={120}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="school-phone">{t("schools.field.phone")}</Label>
+              <Input
+                id="school-phone"
+                value={form.phone}
+                onChange={(e) => set("phone", e.target.value)}
                 maxLength={50}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="school-scope">{t("schools.field.scope_short")}</Label>
-              <Input
-                id="school-scope"
-                value={form.scope_short}
-                onChange={(e) => set("scope_short", e.target.value)}
-                required
-                maxLength={50}
+              <Label htmlFor="school-desc">{t("schools.field.description")}</Label>
+              <textarea
+                id="school-desc"
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+                maxLength={4000}
+                rows={2}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="school-lat">{t("schools.field.latitude")}</Label>
+                <Input
+                  id="school-lat"
+                  value={form.latitude}
+                  onChange={(e) => set("latitude", e.target.value)}
+                  inputMode="decimal"
+                  placeholder="46.9480"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="school-lon">{t("schools.field.longitude")}</Label>
+                <Input
+                  id="school-lon"
+                  value={form.longitude}
+                  onChange={(e) => set("longitude", e.target.value)}
+                  inputMode="decimal"
+                  placeholder="7.4474"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("schools.coords_hint")}</p>
+
+            {lat != null && lon != null ? (
+              <div className="space-y-1">
+                <span className="text-sm font-medium">{t("schools.map_preview")}</span>
+                <iframe
+                  title={t("schools.map_preview")}
+                  src={osmEmbedUrl(lat, lon)}
+                  className="h-56 w-full rounded-md border"
+                  loading="lazy"
+                />
+              </div>
+            ) : null}
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="school-street">{t("schools.field.street")}</Label>
-            <Input
-              id="school-street"
-              value={form.street}
-              onChange={(e) => set("street", e.target.value)}
-              maxLength={200}
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="school-plz">{t("schools.field.postal_code")}</Label>
-              <Input
-                id="school-plz"
-                value={form.postal_code}
-                onChange={(e) => set("postal_code", e.target.value)}
-                maxLength={20}
-              />
+          <div className={page === "ad" ? "space-y-4" : "hidden"}>
+            <p className="text-sm text-muted-foreground">{t("schools.ad_config.subtitle")}</p>
+            <div className="space-y-3">
+              <p className="text-sm font-medium">{t("schools.ad_config.ou_section")}</p>
+              <div className="space-y-1">
+                <Label htmlFor="ou-z3">
+                  {t("schools.ad_config.field.ad_ou_students_zyklus3")}
+                </Label>
+                <Input
+                  id="ou-z3"
+                  value={form.ad_ou_students_zyklus3}
+                  onChange={(e) => set("ad_ou_students_zyklus3", e.target.value)}
+                  placeholder="OU=SekI,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ou-other">
+                  {t("schools.ad_config.field.ad_ou_students_other")}
+                </Label>
+                <Input
+                  id="ou-other"
+                  value={form.ad_ou_students_other}
+                  onChange={(e) => set("ad_ou_students_other", e.target.value)}
+                  placeholder="OU=Schueler,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ou-teachers">{t("schools.ad_config.field.ad_ou_teachers")}</Label>
+                <Input
+                  id="ou-teachers"
+                  value={form.ad_ou_teachers}
+                  onChange={(e) => set("ad_ou_teachers", e.target.value)}
+                  placeholder="OU=Lehrer,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ou-devices">{t("schools.ad_config.field.ad_ou_devices")}</Label>
+                <Input
+                  id="ou-devices"
+                  value={form.ad_ou_devices}
+                  onChange={(e) => set("ad_ou_devices", e.target.value)}
+                  placeholder="OU=Geraete,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">{t("schools.ad_config.ou_hint")}</p>
             </div>
-            <div className="col-span-2 space-y-1">
-              <Label htmlFor="school-city">{t("schools.field.city")}</Label>
-              <Input
-                id="school-city"
-                value={form.city}
-                onChange={(e) => set("city", e.target.value)}
-                maxLength={120}
-              />
-            </div>
-          </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="school-phone">{t("schools.field.phone")}</Label>
-            <Input
-              id="school-phone"
-              value={form.phone}
-              onChange={(e) => set("phone", e.target.value)}
-              maxLength={50}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="school-desc">{t("schools.field.description")}</Label>
-            <textarea
-              id="school-desc"
-              value={form.description}
-              onChange={(e) => set("description", e.target.value)}
-              maxLength={4000}
-              rows={2}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="school-lat">{t("schools.field.latitude")}</Label>
-              <Input
-                id="school-lat"
-                value={form.latitude}
-                onChange={(e) => set("latitude", e.target.value)}
-                inputMode="decimal"
-                placeholder="46.9480"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="school-lon">{t("schools.field.longitude")}</Label>
-              <Input
-                id="school-lon"
-                value={form.longitude}
-                onChange={(e) => set("longitude", e.target.value)}
-                inputMode="decimal"
-                placeholder="7.4474"
-              />
+            <div className="space-y-3 border-t pt-4">
+              <p className="text-sm font-medium">{t("schools.ad_config.groups_section")}</p>
+              {GROUP_KEYS.map((key) => (
+                <GroupPicker
+                  key={key}
+                  label={t(GROUP_LABELS[key])}
+                  hint={t("schools.ad_config.group_pick_hint")}
+                  catalog={Array.isArray(groups.data) ? groups.data : []}
+                  selected={form[key]}
+                  onChange={(next) => setGroups(key, next)}
+                />
+              ))}
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">{t("schools.coords_hint")}</p>
-
-          {lat != null && lon != null ? (
-            <div className="space-y-1">
-              <span className="text-sm font-medium">{t("schools.map_preview")}</span>
-              <iframe
-                title={t("schools.map_preview")}
-                src={osmEmbedUrl(lat, lon)}
-                className="h-56 w-full rounded-md border"
-                loading="lazy"
-              />
-            </div>
-          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>
