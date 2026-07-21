@@ -66,9 +66,7 @@ async def test_reset_clears_all_and_records_itself(
     # The import history is now empty too.
     sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
     async with sm() as s:
-        remaining = (
-            await s.execute(select(func.count()).select_from(ImportJob))
-        ).scalar_one()
+        remaining = (await s.execute(select(func.count()).select_from(ImportJob))).scalar_one()
     assert remaining == 0
 
 

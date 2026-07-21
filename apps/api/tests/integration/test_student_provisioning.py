@@ -19,10 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.config import Settings
-from magister_api.models.app_settings import AppSettings
 from magister_api.models.audit import AuditEvent
 from magister_api.models.auth import AdUserCache
 from magister_api.models.class_membership import ClassMembership
+from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.routers.admin_sync import get_ad_client
 
@@ -42,12 +42,13 @@ def mock_ad(app_settings: Settings) -> AdClient:
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def _configure_ous(db_session: AsyncSession) -> None:
-    row = await db_session.get(AppSettings, 1)
-    assert row is not None
-    row.ad_ou_students_zyklus3 = OU_Z3
-    row.ad_ou_students_other = OU_OTHER
-    row.ad_ou_teachers = OU_TEACHERS
+async def _configure_ous(db_session: AsyncSession, school_a: int) -> None:
+    # OUs are now per-school; configure every school in the fixture DB. Depends
+    # on school_a so it runs after the school(s) exist.
+    for school in (await db_session.execute(select(School))).scalars().all():
+        school.ad_ou_students_zyklus3 = OU_Z3
+        school.ad_ou_students_other = OU_OTHER
+        school.ad_ou_teachers = OU_TEACHERS
     await db_session.commit()
 
 
@@ -345,10 +346,9 @@ async def test_handouts_empty_400(as_smi_a: AsyncClient) -> None:
 async def test_stage_error_when_ou_not_configured(
     as_smi_a: AsyncClient, db_session: AsyncSession, school_a: int
 ) -> None:
-    # Clear the "other" OU so a Zyklus-1/2 class cannot be provisioned.
-    row = await db_session.get(AppSettings, 1)
-    assert row is not None
-    row.ad_ou_students_other = None
+    # Clear the "other" OU on the school so a Zyklus-1/2 class cannot be provisioned.
+    for school in (await db_session.execute(select(School))).scalars().all():
+        school.ad_ou_students_other = None
     await db_session.commit()
     await _seed_class(db_session, school_a, "3a", 3)
 

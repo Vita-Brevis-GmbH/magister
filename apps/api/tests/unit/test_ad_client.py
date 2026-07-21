@@ -134,7 +134,7 @@ class TestClassifyKindByOu:
         from magister_api.ad.client import classify_kind_by_ou
 
         return classify_kind_by_ou(
-            dn, fallback, teacher_ou=self.TEACHER_OU, student_ous=[self.STUDENT_OU, None]
+            dn, fallback, teacher_ous=[self.TEACHER_OU, None], student_ous=[self.STUDENT_OU, None]
         )
 
     def test_dn_under_teacher_ou(self) -> None:

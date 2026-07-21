@@ -19,8 +19,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.ad.client import AdClient
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
-from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.school import School
 from magister_api.routers.imports import get_ad_client
 
 pytestmark = pytest.mark.postgres
@@ -37,10 +37,10 @@ def mock_ad(app_settings: Settings) -> AdClient:
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def _teacher_ou(db_session: AsyncSession) -> None:
-    row = await db_session.get(AppSettings, 1)
-    assert row is not None
-    row.ad_ou_teachers = "OU=Lehrpersonen,DC=schule,DC=local"
+async def _teacher_ou(db_session: AsyncSession, school_a: int) -> None:
+    # Teacher OU is now per-school; configure every school in the fixture DB.
+    for school in (await db_session.execute(select(School))).scalars().all():
+        school.ad_ou_teachers = "OU=Lehrpersonen,DC=schule,DC=local"
     await db_session.commit()
 
 

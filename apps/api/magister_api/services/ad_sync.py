@@ -65,37 +65,31 @@ class AdSyncService:
         self.audit = AuditService(session, settings)
 
     async def _reclassify_by_ou(self, records: list[AdUserRecord]) -> list[AdUserRecord]:
-        """Override each record's ``kind`` from the configured target OUs.
+        """Override each record's ``kind`` from the per-school target OUs.
 
-        The provisioning OUs (Admin → Einstellungen) are the authority for
-        teacher-vs-student: a DN under the teacher OU is a teacher, under a
-        student OU a student. Falls back to the AD-group guess already on the
-        record when the DN matches no configured OU.
+        The per-school provisioning OUs are the authority for teacher-vs-student:
+        a DN under any school's teacher OU is a teacher, under any student OU a
+        student. Falls back to the AD-group guess already on the record when the
+        DN matches no configured OU. Uses the UNION of all schools' OUs so a user
+        under any Schulhaus classifies correctly.
 
-        # scope-bypass: app_settings is a global singleton (no school scope).
+        # scope-bypass: sync runs as a service user that owns all schools.
         """
-        row = (
-            await self.session.execute(
-                select(
-                    AppSettings.ad_ou_teachers,
-                    AppSettings.ad_ou_students_zyklus3,
-                    AppSettings.ad_ou_students_other,
-                ).where(AppSettings.id == 1)
-            )
-        ).one_or_none()
-        if row is None or not (
-            row.ad_ou_teachers or row.ad_ou_students_zyklus3 or row.ad_ou_students_other
-        ):
-            # No target OUs configured — keep the group-based classification.
+        schools = await self._load_schools()
+        teacher_ous = [s.ad_ou_teachers for s in schools if s.ad_ou_teachers]
+        student_ous = [
+            ou for s in schools for ou in (s.ad_ou_students_zyklus3, s.ad_ou_students_other) if ou
+        ]
+        if not teacher_ous and not student_ous:
+            # No target OUs configured on any school — keep group-based guess.
             return records
-        student_ous = (row.ad_ou_students_zyklus3, row.ad_ou_students_other)
         return [
             replace(
                 r,
                 kind=classify_kind_by_ou(
                     r.distinguished_name,
                     r.kind,
-                    teacher_ou=row.ad_ou_teachers,
+                    teacher_ous=teacher_ous,
                     student_ous=student_ous,
                 ),
             )

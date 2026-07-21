@@ -32,6 +32,7 @@ _ERROR_STATUS = {
     "user_not_disabled": status.HTTP_409_CONFLICT,
     "ou_not_configured": status.HTTP_409_CONFLICT,
     "invalid_ou_choice": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    "school_not_found": status.HTTP_404_NOT_FOUND,
 }
 
 
@@ -54,6 +55,7 @@ async def create_ad_user(
             user_principal_name=payload.user_principal_name,
             mail=payload.mail,
             ou_key=payload.ou_key,
+            school_id=payload.school_id,
             display_name=payload.display_name,
             force_change=payload.force_change,
             cannot_change_password=payload.cannot_change_password,

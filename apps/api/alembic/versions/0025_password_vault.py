@@ -28,9 +28,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.add_column(
         "ad_user_cache",
-        sa.Column(
-            "store_password", sa.Boolean(), nullable=False, server_default=sa.false()
-        ),
+        sa.Column("store_password", sa.Boolean(), nullable=False, server_default=sa.false()),
     )
     op.add_column(
         "ad_user_cache",

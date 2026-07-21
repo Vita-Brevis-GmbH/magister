@@ -211,17 +211,18 @@ def classify_kind_by_ou(
     dn: str,
     fallback_kind: str,
     *,
-    teacher_ou: str | None,
+    teacher_ous: Iterable[str | None],
     student_ous: Iterable[str | None],
 ) -> str:
     """Classify a user as teacher/student by which target OU their DN sits under.
 
-    The configured provisioning OUs (Admin → Einstellungen) are authoritative:
-    a DN under the teacher OU is a teacher, a DN under any student OU is a
-    student. When the DN matches no configured OU we keep ``fallback_kind``
-    (the group-based guess), so partially-configured deployments still work.
+    The configured provisioning OUs (per school) are authoritative: a DN under
+    any teacher OU is a teacher, a DN under any student OU is a student. When the
+    DN matches no configured OU we keep ``fallback_kind`` (the group-based guess),
+    so partially-configured deployments still work. Both OU sets are the union
+    across all schools, so a user under any school's OU classifies correctly.
     """
-    if _dn_under_ou(dn, teacher_ou):
+    if any(_dn_under_ou(dn, ou) for ou in teacher_ous):
         return "teacher"
     if any(_dn_under_ou(dn, ou) for ou in student_ous):
         return "student"

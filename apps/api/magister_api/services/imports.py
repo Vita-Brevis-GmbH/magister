@@ -53,6 +53,7 @@ from magister_api.models.import_job import (
     ImportJob,
     ImportStagedRow,
 )
+from magister_api.models.school import School
 from magister_api.models.school_class import (
     CLASS_STATUS_ACTIVE,
     SchoolClass,
@@ -324,6 +325,8 @@ class ImportService:
         # apply time (the second ``conn.add`` fails). Caught here so the operator
         # sees a clear "duplicate name" error instead of a cryptic AD failure.
         self._seen_names: set[str] = set()
+        # Per-school AD config cache (OUs + group templates), keyed by school_id.
+        self._schools: dict[int, School] = {}
 
     async def _app_settings_row(self) -> AppSettings:
         if self._app_settings is None:
@@ -332,6 +335,17 @@ class ImportService:
                 raise ValueError("app_settings not initialised")
             self._app_settings = row
         return self._app_settings
+
+    async def _school_row(self, school_id: int) -> School:
+        """The target school (cached) whose per-school AD config drives OU+groups."""
+        cached = self._schools.get(school_id)
+        if cached is None:
+            row = await self.session.get(School, school_id)
+            if row is None:
+                raise ValueError(f"school {school_id} not found")
+            self._schools[school_id] = row
+            cached = row
+        return cached
 
     def _vault_columns(
         self, cannot_change_password: bool, password: str, settings_row: AppSettings
@@ -448,7 +462,7 @@ class ImportService:
             if kind == IMPORT_KIND_STUDENTS:
                 return await self._classify_student(school_id, row)
             if kind == IMPORT_KIND_TEACHERS:
-                return await self._classify_teacher_provision(row)
+                return await self._classify_teacher_provision(school_id, row)
         except Exception as exc:  # noqa: BLE001 — defensive fallback
             return IMPORT_ACTION_ERROR, [str(exc)]
         return IMPORT_ACTION_ERROR, ["unsupported kind"]
@@ -658,10 +672,11 @@ class ImportService:
         if cls is None:
             return IMPORT_ACTION_ERROR, [f"class {class_name!r} not found in school"]
 
+        school = await self._school_row(school_id)
         ou = select_student_ou(
             jahrgangsstufe=cls.jahrgangsstufe,
-            ou_zyklus3=settings_row.ad_ou_students_zyklus3,
-            ou_other=settings_row.ad_ou_students_other,
+            ou_zyklus3=school.ad_ou_students_zyklus3,
+            ou_other=school.ad_ou_students_other,
             zyklus1_max=settings_row.zyklus1_max_grade,
             zyklus2_max=settings_row.zyklus2_max_grade,
         )
@@ -672,7 +687,7 @@ class ImportService:
                 zyklus2_max=settings_row.zyklus2_max_grade,
             )
             return IMPORT_ACTION_ERROR, [
-                f"target OU for Zyklus {zyklus} not configured in settings"
+                f"target OU for Zyklus {zyklus} not configured for this school"
             ]
 
         # scope-bypass: UPN is an AD-global identifier — a new account must be
@@ -696,11 +711,13 @@ class ImportService:
 
         return IMPORT_ACTION_CREATE, []
 
-    async def _classify_teacher_provision(self, row: dict[str, str]) -> tuple[str, list[str]]:
+    async def _classify_teacher_provision(
+        self, school_id: int, row: dict[str, str]
+    ) -> tuple[str, list[str]]:
         """Validate a teacher-provisioning row (create a NEW AD teacher account).
 
         Like students but without a class or grade; the account lands in the
-        configured teacher OU (``ad_ou_teachers``).
+        school's configured teacher OU (``ad_ou_teachers``).
         """
         errors: list[str] = []
         given = row.get("given_name", "").strip()
@@ -755,8 +772,9 @@ class ImportService:
         domain = upn.split("@", 1)[1]
         if settings_row.mail_domains and domain not in settings_row.mail_domains:
             return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
-        if not settings_row.ad_ou_teachers:
-            return IMPORT_ACTION_ERROR, ["teacher OU not configured in settings"]
+        school = await self._school_row(school_id)
+        if not school.ad_ou_teachers:
+            return IMPORT_ACTION_ERROR, ["teacher OU not configured for this school"]
 
         # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
         # checked across all schools, not just the import's school.
@@ -1056,10 +1074,11 @@ class ImportService:
         # Per-student grade: explicit value, else the class's lower/primary grade.
         jahrgangsstufe = int(grade_raw) if grade_raw else cls.jahrgangsstufe
         settings_row = await self._app_settings_row()
+        school = await self._school_row(school_id)
         ou = select_student_ou(
             jahrgangsstufe=cls.jahrgangsstufe,
-            ou_zyklus3=settings_row.ad_ou_students_zyklus3,
-            ou_other=settings_row.ad_ou_students_other,
+            ou_zyklus3=school.ad_ou_students_zyklus3,
+            ou_other=school.ad_ou_students_other,
             zyklus1_max=settings_row.zyklus1_max_grade,
             zyklus2_max=settings_row.zyklus2_max_grade,
         )
@@ -1074,10 +1093,10 @@ class ImportService:
         group_dns = select_provision_groups(
             kind="student",
             zyklus=zyklus,
-            groups_teacher=settings_row.ad_groups_teacher,
-            groups_student_zyklus1=settings_row.ad_groups_student_zyklus1,
-            groups_student_zyklus2=settings_row.ad_groups_student_zyklus2,
-            groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
+            groups_teacher=school.ad_groups_teacher,
+            groups_student_zyklus1=school.ad_groups_student_zyklus1,
+            groups_student_zyklus2=school.ad_groups_student_zyklus2,
+            groups_student_zyklus3=school.ad_groups_student_zyklus3,
         )
 
         password = generate_readable_password()
@@ -1168,17 +1187,18 @@ class ImportService:
         )
 
         settings_row = await self._app_settings_row()
-        ou = settings_row.ad_ou_teachers
+        school = await self._school_row(school_id)
+        ou = school.ad_ou_teachers
         if not ou:
             raise ValueError("teacher_ou_not_configured")
 
         group_dns = select_provision_groups(
             kind="teacher",
             zyklus=None,
-            groups_teacher=settings_row.ad_groups_teacher,
-            groups_student_zyklus1=settings_row.ad_groups_student_zyklus1,
-            groups_student_zyklus2=settings_row.ad_groups_student_zyklus2,
-            groups_student_zyklus3=settings_row.ad_groups_student_zyklus3,
+            groups_teacher=school.ad_groups_teacher,
+            groups_student_zyklus1=school.ad_groups_student_zyklus1,
+            groups_student_zyklus2=school.ad_groups_student_zyklus2,
+            groups_student_zyklus3=school.ad_groups_student_zyklus3,
         )
 
         # Teachers get a 12-char password with all four charset classes, using

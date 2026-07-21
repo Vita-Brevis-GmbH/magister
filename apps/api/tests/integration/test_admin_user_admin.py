@@ -8,11 +8,10 @@ from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from magister_api.ad.client import AdClient
 from magister_api.config import Settings
-from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
 from magister_api.models.school_class import CLASS_STATUS_ACTIVE, SchoolClass
@@ -38,16 +37,22 @@ async def mock_ad(app_settings: Settings) -> AsyncIterator[AdClient]:
     await client.aclose()
 
 
-async def _set_teacher_ou(session: AsyncSession, ou: str) -> None:
-    await session.execute(update(AppSettings).where(AppSettings.id == 1).values(ad_ou_teachers=ou))
+async def _set_teacher_ou(session: AsyncSession, school_id: int, ou: str) -> None:
+    school = await session.get(School, school_id)
+    assert school is not None
+    school.ad_ou_teachers = ou
     await session.commit()
 
 
 @pytest.mark.asyncio
 async def test_create_user_success(
-    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession
+    as_admin: AsyncClient,
+    app: FastAPI,
+    mock_ad: AdClient,
+    db_session: AsyncSession,
+    school_a: int,
 ) -> None:
-    await _set_teacher_ou(db_session, "OU=Lehrer,DC=schule,DC=local")
+    await _set_teacher_ou(db_session, school_a, "OU=Lehrer,DC=schule,DC=local")
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
         "/admin/ad-users",
@@ -57,6 +62,7 @@ async def test_create_user_success(
             "sam_account_name": "hmuster",
             "user_principal_name": "hans.muster@schule.ch",
             "ou_key": "teacher",
+            "school_id": school_a,
         },
     )
     assert r.status_code == 201, r.text
@@ -75,8 +81,9 @@ async def test_create_user_success(
 
 @pytest.mark.asyncio
 async def test_create_user_ou_not_configured(
-    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient
+    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, school_a: int
 ) -> None:
+    # school_a has no teacher OU configured → provisioning must fail.
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
         "/admin/ad-users",
@@ -86,6 +93,7 @@ async def test_create_user_ou_not_configured(
             "sam_account_name": "keinou",
             "user_principal_name": "kein.ou@schule.ch",
             "ou_key": "teacher",
+            "school_id": school_a,
         },
     )
     assert r.status_code == 409, r.text

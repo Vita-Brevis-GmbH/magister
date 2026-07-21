@@ -19,6 +19,7 @@ from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
 from magister_api.db import dispose_engine, get_sessionmaker, init_engine
 from magister_api.logging_config import configure_logging
+from magister_api.routers.admin_ad_groups import router as admin_ad_groups_router
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
 from magister_api.routers.admin_roles import router as admin_roles_router
@@ -43,7 +44,6 @@ from magister_api.routers.student_password_reset import router as student_pw_res
 from magister_api.routers.subject_teachers import router as subject_teachers_router
 from magister_api.routers.substitutions import router as substitutions_router
 from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
-from magister_api.routers.user_settings import router as user_settings_router
 from magister_api.routers.users import router as users_router
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
@@ -120,7 +120,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(admin_sync_router)
     app.include_router(admin_local_admin_router)
     app.include_router(admin_settings_router)
-    app.include_router(user_settings_router)
+    app.include_router(admin_ad_groups_router)
     app.include_router(admin_roles_router)
     app.include_router(admin_users_router)
     app.include_router(admin_maintenance_router)

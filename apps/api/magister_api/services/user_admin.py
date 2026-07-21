@@ -20,7 +20,6 @@ from magister_api.ad.ou import select_provision_groups
 from magister_api.ad.password import generate_password
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
-from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache, RoleAssignment, Session
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
@@ -58,18 +57,16 @@ class UserAdminService:
         self.ad = ad
         self.audit = AuditService(session, settings)
 
-    async def _provision_target(self, ou_key: str) -> tuple[str, list[str]]:
-        """Resolve ``(ou_dn, default_group_dns)`` for a provisioning category."""
-        row = (
-            await self.session.execute(select(AppSettings).where(AppSettings.id == 1))
-        ).scalar_one_or_none()
-        if row is None:
-            raise UserAdminError("ou_not_configured")
+    async def _provision_target(self, ou_key: str, school: School) -> tuple[str, list[str]]:
+        """Resolve ``(ou_dn, default_group_dns)`` for a provisioning category.
+
+        OUs + group templates come from the target school (per-school config).
+        """
         ou = {
-            "teacher": row.ad_ou_teachers,
-            "student_zyklus1": row.ad_ou_students_other,
-            "student_zyklus2": row.ad_ou_students_other,
-            "student_zyklus3": row.ad_ou_students_zyklus3,
+            "teacher": school.ad_ou_teachers,
+            "student_zyklus1": school.ad_ou_students_other,
+            "student_zyklus2": school.ad_ou_students_other,
+            "student_zyklus3": school.ad_ou_students_zyklus3,
         }.get(ou_key)
         if not ou:
             raise UserAdminError("ou_not_configured")
@@ -78,10 +75,10 @@ class UserAdminService:
         groups = select_provision_groups(
             kind=kind,
             zyklus=zyklus,
-            groups_teacher=row.ad_groups_teacher,
-            groups_student_zyklus1=row.ad_groups_student_zyklus1,
-            groups_student_zyklus2=row.ad_groups_student_zyklus2,
-            groups_student_zyklus3=row.ad_groups_student_zyklus3,
+            groups_teacher=school.ad_groups_teacher,
+            groups_student_zyklus1=school.ad_groups_student_zyklus1,
+            groups_student_zyklus2=school.ad_groups_student_zyklus2,
+            groups_student_zyklus3=school.ad_groups_student_zyklus3,
         )
         return ou, groups
 
@@ -106,6 +103,7 @@ class UserAdminService:
         user_principal_name: str,
         mail: str | None,
         ou_key: str,
+        school_id: int,
         display_name: str | None = None,
         force_change: bool = True,
         cannot_change_password: bool = False,
@@ -118,7 +116,10 @@ class UserAdminService:
     ) -> CreatedUser:
         if ou_key not in OU_CHOICES:
             raise UserAdminError("invalid_ou_choice")
-        ou_dn, group_dns = await self._provision_target(ou_key)
+        school = await self.session.get(School, school_id)
+        if school is None:
+            raise UserAdminError("school_not_found")
+        ou_dn, group_dns = await self._provision_target(ou_key, school)
         kind = "teacher" if ou_key == "teacher" else "student"
         display = (
             (display_name or "").strip() or f"{given_name} {surname}".strip() or sam_account_name
@@ -170,6 +171,9 @@ class UserAdminService:
         cache = await self.session.get(AdUserCache, guid)
         if cache is not None:
             cache.cannot_change_password = cannot_change_password
+            # We know the target school explicitly — set it directly rather than
+            # relying on the OU/scope_short resolver.
+            cache.school_id = school_id
             if kind == "student" and jahrgangsstufe is not None:
                 cache.jahrgangsstufe = jahrgangsstufe
             await self.session.flush()

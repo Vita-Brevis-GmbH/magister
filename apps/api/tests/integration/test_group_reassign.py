@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.school import School
 from magister_api.services.group_reassign import GradeChange, reassign_cycle_groups
 
 if TYPE_CHECKING:
@@ -54,9 +55,12 @@ async def _seed(
             s.add(app)
         app.zyklus1_max_grade = 2
         app.zyklus2_max_grade = 6
-        app.ad_groups_student_zyklus1 = [Z1, SHARED]
-        app.ad_groups_student_zyklus2 = [Z2, SHARED]
-        app.ad_groups_student_zyklus3 = [Z3, SHARED]
+        # Zyklus boundaries stay global; group templates are per-school.
+        school = await s.get(School, school_id)
+        assert school is not None
+        school.ad_groups_student_zyklus1 = [Z1, SHARED]
+        school.ad_groups_student_zyklus2 = [Z2, SHARED]
+        school.ad_groups_student_zyklus3 = [Z3, SHARED]
         s.add(
             AdUserCache(
                 ad_object_guid=GUID,

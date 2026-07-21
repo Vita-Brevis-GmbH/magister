@@ -14,6 +14,8 @@ class AdUserCreateRequest(BaseModel):
     user_principal_name: Upn
     mail: str | None = Field(default=None, max_length=320)
     ou_key: str = Field(description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3")
+    # Target school — its per-school AD config drives the OU + default groups.
+    school_id: int = Field(ge=1)
     # Optional display name; derived from given+surname when blank.
     display_name: str | None = Field(default=None, max_length=128)
     # AD account flags (parity with the bulk import). Defaults are the safe /

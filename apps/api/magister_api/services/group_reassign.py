@@ -23,6 +23,7 @@ from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.school import School
 
 
 @dataclass(frozen=True)
@@ -56,17 +57,19 @@ async def reassign_cycle_groups(
     if app is None:
         return 0
 
+    # Zyklus boundaries stay global (Lehrplan 21); only the group templates that
+    # are applied are per-school.
     z1_max = app.zyklus1_max_grade
     z2_max = app.zyklus2_max_grade
 
-    def groups_for(zyklus: int) -> list[str]:
+    def groups_for(school: School, zyklus: int) -> list[str]:
         return select_provision_groups(
             kind="student",
             zyklus=zyklus,
-            groups_teacher=app.ad_groups_teacher or [],
-            groups_student_zyklus1=app.ad_groups_student_zyklus1 or [],
-            groups_student_zyklus2=app.ad_groups_student_zyklus2 or [],
-            groups_student_zyklus3=app.ad_groups_student_zyklus3 or [],
+            groups_teacher=school.ad_groups_teacher or [],
+            groups_student_zyklus1=school.ad_groups_student_zyklus1 or [],
+            groups_student_zyklus2=school.ad_groups_student_zyklus2 or [],
+            groups_student_zyklus3=school.ad_groups_student_zyklus3 or [],
         )
 
     audit = AuditService(session, settings)
@@ -81,16 +84,20 @@ async def reassign_cycle_groups(
         if old_zyklus == new_zyklus:
             continue  # Same Zyklus → template groups unchanged.
 
-        old_groups = [] if old_zyklus is None else groups_for(old_zyklus)
-        new_groups = groups_for(new_zyklus)
+        student = await session.get(AdUserCache, ch.ad_object_guid)
+        if student is None or student.school_id is None:
+            continue
+        school = await session.get(School, student.school_id)
+        if school is None:
+            continue
+
+        old_groups = [] if old_zyklus is None else groups_for(school, old_zyklus)
+        new_groups = groups_for(school, new_zyklus)
         to_add = [g for g in new_groups if g not in old_groups]
         to_remove = [g for g in old_groups if g not in new_groups]
         if not to_add and not to_remove:
             continue
 
-        student = await session.get(AdUserCache, ch.ad_object_guid)
-        if student is None:
-            continue
         dn = await ad_client.find_user_dn(ch.ad_object_guid)
         if dn is None:
             continue  # Not in AD (yet) — nothing to write.
