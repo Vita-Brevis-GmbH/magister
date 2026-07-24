@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -49,6 +50,8 @@ from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -65,9 +68,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await app_settings_svc.seed_from_env_if_empty(settings)
         # Materialize the webserver cert (custom or self-signed fallback) so the
         # reverse proxy has a snippet to import before it (re)starts. No-op when
-        # MAGISTER_WEB_CERT_DIR is unset (dev/tests).
-        with contextlib.suppress(Exception):
+        # MAGISTER_WEB_CERT_DIR is unset (dev/tests). Non-fatal, but LOUD: if this
+        # silently fails (e.g. a root-owned /certs volume the non-root API can't
+        # write), Caddy never gets its `import /certs/tls.caddy` snippet and won't
+        # start — so the failure must be visible in the API logs, not swallowed.
+        try:
             await app_settings_svc.materialize_web_tls()
+        except Exception:
+            logger.exception(
+                "Failed to materialize webserver TLS snippet into %s; "
+                "the reverse proxy may not start until this is resolved "
+                "(check that the cert dir is writable by the API user).",
+                settings.web_cert_dir,
+            )
 
     # Periodic AD sync (interval from app_settings, GUI-editable at runtime).
     stop_event = asyncio.Event()
