@@ -43,6 +43,13 @@ ENV PYTHONUNBUFFERED=1 \
 RUN groupadd --system --gid 1000 magister \
  && useradd  --system --uid 1000 --gid magister --create-home --home-dir /app magister
 
+# Pre-create the shared webserver-cert dir owned by the runtime user. A named
+# volume (compose `web_certs`) inherits the ownership of its mountpoint in the
+# image on first init; without this the fresh volume is root-owned and the
+# non-root API (uid 1000) cannot write /certs/tls.caddy — which silently leaves
+# Caddy without its `import /certs/tls.caddy` snippet and unable to start.
+RUN mkdir -p /certs && chown magister:magister /certs
+
 # Runtime libs:
 # - WeasyPrint (parent-letter + credential PDFs) needs Pango/Cairo/GDK-PixBuf.
 # - Kerberos runtime + SASL GSSAPI module + kinit: only exercised when
