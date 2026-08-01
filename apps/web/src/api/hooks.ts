@@ -71,6 +71,7 @@ import type {
   SubstitutionOut,
   UserAttributesUpdate,
   UserDashboardOut,
+  UserDeletionImpact,
   UserPreferencesOut,
   UserPreferencesUpdate,
   UserStatusUpdate,
@@ -473,6 +474,7 @@ export interface UseUsersParams {
   enabled?: boolean;
   search?: string;
   class_id?: number;
+  missing?: boolean;
   offset?: number;
   limit?: number;
 }
@@ -515,6 +517,24 @@ export function useUpdateUser(guid: string) {
     mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+export function useUserDeletionPreview(guid: string, enabled: boolean) {
+  return useQuery<UserDeletionImpact>({
+    queryKey: [...queryKeys.user(guid), "deletion-preview"],
+    queryFn: () => apiFetch<UserDeletionImpact>(`/users/${guid}/deletion-preview`),
+    enabled: enabled && !!guid,
+  });
+}
+
+export function useDeleteUser(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<UserDeletionImpact, ApiError, void>({
+    mutationFn: () => apiFetch<UserDeletionImpact>(`/users/${guid}`, { method: "DELETE" }),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["users"] });
     },
   });

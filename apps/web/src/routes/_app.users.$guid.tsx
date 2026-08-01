@@ -12,12 +12,14 @@ import {
   useAdGroups,
   useCurrentUser,
   useDeleteAdUser,
+  useDeleteUser,
   useDevices,
   useMailDomains,
   useUpdateUser,
   useUpdateUserGroups,
   useUser,
   useUserDashboard,
+  useUserDeletionPreview,
 } from "@/api/hooks";
 import type { AdUserOut, DeviceOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
@@ -364,7 +366,9 @@ function UserDetailPage(): JSX.Element {
             <CardTitle className="font-serif text-2xl">{displayLabel(user)}</CardTitle>
             <CardDescription className="font-mono text-xs">{user.upn}</CardDescription>
           </div>
-          {user.enabled ? (
+          {user.ad_missing_since ? (
+            <StatusPill tone="danger">{t("users.delete.badge")}</StatusPill>
+          ) : user.enabled ? (
             <StatusPill tone="ok">{t("users.status_active")}</StatusPill>
           ) : (
             <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>
@@ -428,6 +432,10 @@ function UserDetailPage(): JSX.Element {
             ? t("users.detail.delete_err_ad")
             : t("errors.generic")}
         </div>
+      ) : null}
+
+      {!editing && (user.kind === "student" || user.kind === "teacher") ? (
+        <DeleteUserSection user={user} />
       ) : null}
 
       {savedFlash && !editing ? (
@@ -1119,6 +1127,105 @@ function UserDetailSkeleton(): JSX.Element {
           </CardContent>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function DeleteUserSection({ user }: { user: AdUserOut }): JSX.Element {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const flagged = !!user.ad_missing_since;
+  return (
+    <div
+      className={
+        flagged
+          ? "rounded-md border border-rose-300 bg-rose-50 px-4 py-3"
+          : "rounded-md border px-4 py-3"
+      }
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm">
+          <p className="font-medium">
+            {flagged ? t("users.delete.flagged_title") : t("users.delete.title")}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {flagged ? t("users.delete.flagged_hint") : t("users.delete.hint")}
+          </p>
+        </div>
+        <Button type="button" variant="destructive" onClick={() => setOpen(true)}>
+          {t("users.delete.button")}
+        </Button>
+      </div>
+      {open ? <DeleteUserModal user={user} onClose={() => setOpen(false)} /> : null}
+    </div>
+  );
+}
+
+function DeleteUserModal({ user, onClose }: { user: AdUserOut; onClose: () => void }): JSX.Element {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const preview = useUserDeletionPreview(user.ad_object_guid, true);
+  const del = useDeleteUser(user.ad_object_guid);
+  const rows: { key: keyof NonNullable<typeof preview.data>; label: string }[] = [
+    { key: "class_memberships", label: t("users.delete.impact_memberships") },
+    { key: "class_teacher_roles", label: t("users.delete.impact_kl_roles") },
+    { key: "subject_teacher_roles", label: t("users.delete.impact_subject_roles") },
+    { key: "role_assignments", label: t("users.delete.impact_role_assignments") },
+    { key: "user_preferences", label: t("users.delete.impact_preferences") },
+    { key: "sessions", label: t("users.delete.impact_sessions") },
+  ];
+
+  function deleteErrorMessage(err: ApiError): string {
+    if (err.status === 409 && err.code === "user_still_in_ad")
+      return t("users.delete.error_still_in_ad");
+    if (err.status === 409) return t("users.delete.error_not_deletable");
+    if (err.status === 503) return t("errors.ad_unavailable");
+    return t("errors.generic");
+  }
+
+  function handleDelete(): void {
+    del.mutate(undefined, { onSuccess: () => navigate({ to: "/users" }) });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-md space-y-4 rounded-lg bg-card p-5 shadow-lg">
+        <h2 className="text-lg font-semibold">{t("users.delete.confirm_title")}</h2>
+        <p className="text-sm text-muted-foreground">
+          {t("users.delete.confirm_desc", { name: displayLabel(user) })}
+        </p>
+        <div className="rounded-md border bg-muted/30 p-3 text-sm">
+          <p className="mb-1 font-medium">{t("users.delete.impact_title")}</p>
+          {preview.isLoading ? (
+            <p className="text-muted-foreground">{t("common.loading")}</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {rows.map((r) => (
+                <li key={r.key} className="flex justify-between">
+                  <span className="text-muted-foreground">{r.label}</span>
+                  <span className="tabular-nums">{preview.data?.[r.key] ?? 0}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        {del.isError ? (
+          <p className="text-sm text-destructive">{deleteErrorMessage(del.error)}</p>
+        ) : null}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={del.isPending}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={del.isPending}
+          >
+            {del.isPending ? t("common.loading") : t("users.delete.confirm_button")}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
