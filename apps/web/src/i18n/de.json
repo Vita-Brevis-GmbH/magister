@@ -214,6 +214,27 @@
       "local_part_placeholder": "vorname.nachname",
       "domain_empty": "— keine Domain —",
       "domains_missing": "Noch keine Mail-Domains konfiguriert. Administration → Systemeinstellungen."
+    },
+    "filter_missing": "Nur zu löschende",
+    "delete": {
+      "badge": "Nicht mehr im AD",
+      "title": "Benutzer löschen",
+      "hint": "Endgültig aus Magister entfernen. Nur möglich, wenn der User nicht mehr im AD ist.",
+      "flagged_title": "Nicht mehr im AD — sollte gelöscht werden",
+      "flagged_hint": "Ein Voll-Sync hat festgestellt, dass dieser User nicht mehr im AD existiert.",
+      "button": "Löschen",
+      "confirm_title": "Benutzer endgültig löschen?",
+      "confirm_desc": "«{{name}}» wird samt aller Magister-Daten hart gelöscht. Das Audit-Log bleibt erhalten.",
+      "confirm_button": "Endgültig löschen",
+      "impact_title": "Wird gelöscht:",
+      "impact_memberships": "Klassen-Mitgliedschaften",
+      "impact_kl_roles": "Klassenlehrer-Rollen",
+      "impact_subject_roles": "Fachlehrer-Rollen",
+      "impact_role_assignments": "Rollen-Zuweisungen",
+      "impact_preferences": "Einstellungen",
+      "impact_sessions": "Aktive Sitzungen",
+      "error_still_in_ad": "Der User existiert noch im AD und kann nicht gelöscht werden.",
+      "error_not_deletable": "Dieser Benutzer kann nicht gelöscht werden (nur Schüler/Lehrer)."
     }
   },
   "password_reset": {

@@ -217,6 +217,27 @@
       "local_part_placeholder": "prenom.nom",
       "domain_empty": "— pas de domaine —",
       "domains_missing": "Aucun domaine e-mail configuré."
+    },
+    "filter_missing": "À supprimer",
+    "delete": {
+      "badge": "Absent d'AD",
+      "title": "Supprimer l'utilisateur",
+      "hint": "Retirer définitivement de Magister. Possible uniquement si l'utilisateur n'est plus dans AD.",
+      "flagged_title": "Absent d'AD — à supprimer",
+      "flagged_hint": "Une synchronisation complète a constaté que cet utilisateur n'existe plus dans AD.",
+      "button": "Supprimer",
+      "confirm_title": "Supprimer définitivement l'utilisateur ?",
+      "confirm_desc": "«{{name}}» sera supprimé avec toutes ses données Magister. Le journal d'audit est conservé.",
+      "confirm_button": "Supprimer définitivement",
+      "impact_title": "Sera supprimé :",
+      "impact_memberships": "Appartenances de classe",
+      "impact_kl_roles": "Rôles de titulaire",
+      "impact_subject_roles": "Rôles d'enseignant de matière",
+      "impact_role_assignments": "Attributions de rôles",
+      "impact_preferences": "Préférences",
+      "impact_sessions": "Sessions actives",
+      "error_still_in_ad": "L'utilisateur existe encore dans AD et ne peut pas être supprimé.",
+      "error_not_deletable": "Cet utilisateur ne peut pas être supprimé (élèves/enseignants uniquement)."
     }
   },
   "password_reset": {

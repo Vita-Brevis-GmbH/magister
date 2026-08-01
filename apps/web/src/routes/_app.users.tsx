@@ -35,6 +35,7 @@ function UsersPage(): JSX.Element {
   const fmt = useFormatters();
   const [kind, setKind] = useState<KindFilter>("all");
   const [search, setSearch] = useState("");
+  const [missingOnly, setMissingOnly] = useState(false);
   const [resetTarget, setResetTarget] = useState<AdUserOut | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const me = useCurrentUser();
@@ -50,6 +51,7 @@ function UsersPage(): JSX.Element {
     limit: 50,
     ...(kind !== "all" && { kind }),
     ...(search && { search }),
+    ...(missingOnly && { missing: true }),
   };
   const q = useUsers(params);
 
@@ -98,6 +100,19 @@ function UsersPage(): JSX.Element {
           onChange={(e) => setSearch(e.target.value)}
           className="h-9 min-w-[16rem] flex-1 rounded-md border border-input bg-background px-3 text-sm"
         />
+        <button
+          type="button"
+          aria-pressed={missingOnly}
+          onClick={() => setMissingOnly((v) => !v)}
+          className={cn(
+            "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
+            missingOnly
+              ? "border-rose-300 bg-rose-50 text-rose-700"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {t("users.filter_missing")}
+        </button>
       </div>
 
       {q.isError ? (
@@ -146,7 +161,9 @@ function UsersPage(): JSX.Element {
                         <KindPill kind={u.kind} />
                       </TableCell>
                       <TableCell>
-                        {u.enabled ? (
+                        {u.ad_missing_since ? (
+                          <StatusPill tone="danger">{t("users.delete.badge")}</StatusPill>
+                        ) : u.enabled ? (
                           <StatusPill tone="ok">{t("users.status_active")}</StatusPill>
                         ) : (
                           <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>

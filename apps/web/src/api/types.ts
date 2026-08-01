@@ -181,12 +181,22 @@ export interface AdUserOut {
   kind: "teacher" | "student" | "admin";
   enabled: boolean;
   last_sync_at: string | null;
+  ad_missing_since: string | null;
   street_address: string | null;
   locality: string | null;
   postal_code: string | null;
   country: string | null;
   device_name: string | null;
   temp_device_name: string | null;
+}
+
+export interface UserDeletionImpact {
+  class_memberships: number;
+  class_teacher_roles: number;
+  subject_teacher_roles: number;
+  role_assignments: number;
+  user_preferences: number;
+  sessions: number;
 }
 
 /** PATCH /users/{guid} — omit a field to leave it alone. Empty string/null

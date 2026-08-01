@@ -214,6 +214,27 @@
       "local_part_placeholder": "first.last",
       "domain_empty": "— no domain —",
       "domains_missing": "No mail domains configured. Administration → System settings."
+    },
+    "filter_missing": "Only to delete",
+    "delete": {
+      "badge": "Gone from AD",
+      "title": "Delete user",
+      "hint": "Permanently remove from Magister. Only possible when the user is gone from AD.",
+      "flagged_title": "Gone from AD — should be deleted",
+      "flagged_hint": "A full sync found this user no longer exists in AD.",
+      "button": "Delete",
+      "confirm_title": "Permanently delete user?",
+      "confirm_desc": "«{{name}}» will be hard-deleted with all Magister data. The audit log is kept.",
+      "confirm_button": "Delete permanently",
+      "impact_title": "Will be removed:",
+      "impact_memberships": "Class memberships",
+      "impact_kl_roles": "Class-teacher roles",
+      "impact_subject_roles": "Subject-teacher roles",
+      "impact_role_assignments": "Role assignments",
+      "impact_preferences": "Preferences",
+      "impact_sessions": "Active sessions",
+      "error_still_in_ad": "The user still exists in AD and cannot be deleted.",
+      "error_not_deletable": "This user cannot be deleted (students/teachers only)."
     }
   },
   "password_reset": {
