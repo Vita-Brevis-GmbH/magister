@@ -180,6 +180,38 @@ curl https://magister.<schultraeger>.ch/users?limit=10
 # { "items": [...], "total": ..., "last_sync_at": "..." }
 ```
 
+### Im AD gelöschte User (AD = Source of Truth)
+
+Ein **Full-Sync** (kein Cursor) kennt die vollständige AD-Menge und erkennt
+daher, welche Student:innen/Lehrpersonen im AD **verschwunden** sind. Solche
+User werden nicht sofort gelöscht, sondern mit `ad_missing_since` **markiert**
+und in der User-Liste bzw. auf dem User-Detail rot gekennzeichnet
+(Filter **„Nur zu löschende"**). Admins werden **nie** markiert oder gelöscht.
+
+Das eigentliche Löschen ist **manuell** und **hart**: Admin oder SMI öffnet den
+User, sieht in der Bestätigung die betroffenen Objekte (Klassen-Mitgliedschaften,
+KL-/Fach-Rollen, Rollen-Zuweisungen, Preferences, Sessions) und löscht dann. Der
+User-Datensatz und seine Verknüpfungen werden entfernt; das **Audit bleibt
+stehen** (Action `ad_user_deleted`, ohne personenbezogene Zusatzdaten). Ein User,
+der noch im AD existiert, wird beim Löschen mit `409 user_still_in_ad`
+abgelehnt; User, die im Magister fehlerhaft sind, weil sie im AD nicht mehr
+auffindbar sind, lassen sich so dennoch bereinigen.
+
+**Guardrail gegen Massen-Fehlmarkierung** (z. B. falsche Such-Basis, AD-Ausfall
+mit leerem Ergebnis): Ein Full-Sync markiert höchstens
+`max(MAGISTER_AD_SYNC_MISSING_FLOOR, ⌊total · MAGISTER_AD_SYNC_MISSING_MAX_RATIO⌋)`
+User pro Lauf. Wird die Schwelle überschritten, markiert der Lauf **nichts** und
+schreibt ein Audit-Event `ad_sync_missing_skipped_threshold`.
+
+```dotenv
+MAGISTER_AD_SYNC_MISSING_MAX_RATIO=0.2   # max. Anteil markierbar pro Lauf (Default 0.2)
+MAGISTER_AD_SYNC_MISSING_FLOOR=10        # absoluter Sockel, unabhängig vom Anteil (Default 10)
+```
+
+Nur der **Full-Sync** markiert; ein inkrementeller Sync (`whenChanged`-Cursor,
+siehe ADR 0004) sieht Löschungen prinzipiell nicht und lässt Markierungen
+unberührt.
+
 ## 7b. Schüler-Passwort-Reset E2E
 
 **Voraussetzungen:** Sync (§7a) ist gelaufen, Schüler ist im `ad_user_cache`,
