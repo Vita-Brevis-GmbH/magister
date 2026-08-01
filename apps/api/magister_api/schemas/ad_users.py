@@ -21,6 +21,7 @@ class AdUserOut(BaseModel):
     kind: str
     enabled: bool
     last_sync_at: datetime | None
+    ad_missing_since: datetime | None = None
     street_address: str | None = None
     locality: str | None = None
     postal_code: str | None = None
@@ -57,3 +58,14 @@ class AdSyncResultOut(BaseModel):
 class AdConnectionTestOut(BaseModel):
     ok: bool
     detail: str
+
+
+class UserDeletionImpactOut(BaseModel):
+    """Rows that a delete would remove (preview) or removed (result)."""
+
+    class_memberships: int = 0
+    class_teacher_roles: int = 0
+    subject_teacher_roles: int = 0
+    role_assignments: int = 0
+    user_preferences: int = 0
+    sessions: int = 0

@@ -41,6 +41,12 @@ class AdUserCache(Base):
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Set by a full sync when a student/teacher's objectGUID is no longer present
+    # in AD (AD = source of truth). Drives the "should be deleted" flag in the UI;
+    # cleared automatically if the user reappears. Admins are never flagged.
+    ad_missing_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     ms_ds_consistency_guid: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True
     )

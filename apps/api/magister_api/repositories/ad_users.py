@@ -9,10 +9,11 @@ which is allowed to bypass with the documented marker.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +23,16 @@ from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
 from magister_api.repositories.base import BaseRepository, ScopeContext
+
+
+@dataclass(frozen=True)
+class MissingMarkResult:
+    """Outcome of the full-sync missing-user reconcile."""
+
+    marked: int
+    total: int
+    skipped: bool
+    would_mark: int = 0
 
 
 class AdUserListingRepository(BaseRepository):
@@ -37,6 +48,7 @@ class AdUserListingRepository(BaseRepository):
         enabled: bool | None = None,
         search: str | None = None,
         class_id: int | None = None,
+        missing: bool | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AdUserCache], int]:
@@ -51,6 +63,14 @@ class AdUserListingRepository(BaseRepository):
         if enabled is not None:
             stmt = stmt.where(AdUserCache.enabled == enabled)
             count_stmt = count_stmt.where(AdUserCache.enabled == enabled)
+        if missing is not None:
+            pred = (
+                AdUserCache.ad_missing_since.is_not(None)
+                if missing
+                else AdUserCache.ad_missing_since.is_(None)
+            )
+            stmt = stmt.where(pred)
+            count_stmt = count_stmt.where(pred)
         if search:
             pattern = f"%{search.lower()}%"
             search_pred = or_(
@@ -178,9 +198,52 @@ class AdUserCacheSyncRepository:
                         AdUserCache
                     ).excluded.password_never_expires,
                     "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
+                    # Present in AD again → clear any "missing" marker.
+                    "ad_missing_since": None,
                 },
             )
         )
         await self.session.execute(stmt)
         await self.session.flush()
         return len(rows)
+
+    async def mark_missing_students_teachers(
+        self,
+        seen_guids: set[str],
+        *,
+        now: datetime,
+        max_ratio: float,
+        floor: int,
+    ) -> MissingMarkResult:
+        """Flag student/teacher cache rows whose GUID is absent from ``seen_guids``.
+
+        Only newly-absent rows (``ad_missing_since IS NULL``) are counted/flagged.
+        Admins are never flagged. Guardrail: if the number to flag exceeds both
+        ``floor`` and ``max_ratio`` of the student/teacher cache, nothing is
+        flagged and ``skipped=True`` is returned (protects against a too-narrow
+        search base flagging everyone).
+        """
+        base = AdUserCache.kind.in_(("student", "teacher"))
+        total = (
+            await self.session.execute(select(func.count()).select_from(AdUserCache).where(base))
+        ).scalar_one()
+        absent = base & AdUserCache.ad_object_guid.notin_(seen_guids)
+        candidates = (
+            await self.session.execute(
+                select(func.count())
+                .select_from(AdUserCache)
+                .where(absent, AdUserCache.ad_missing_since.is_(None))
+            )
+        ).scalar_one()
+        if candidates == 0:
+            return MissingMarkResult(marked=0, total=total, skipped=False)
+        limit = max(floor, int(total * max_ratio))
+        if candidates > limit:
+            return MissingMarkResult(marked=0, total=total, skipped=True, would_mark=candidates)
+        await self.session.execute(
+            update(AdUserCache)
+            .where(absent, AdUserCache.ad_missing_since.is_(None))
+            .values(ad_missing_since=now)
+        )
+        await self.session.flush()
+        return MissingMarkResult(marked=candidates, total=total, skipped=False)

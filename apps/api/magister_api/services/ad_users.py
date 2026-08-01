@@ -36,12 +36,14 @@ class AdUsersService:
         class_id: int | None,
         offset: int,
         limit: int,
+        missing: bool | None = None,
     ) -> AdUserListing:
         rows, total = await self.repo.list_filtered(
             kind=kind,
             enabled=enabled,
             search=search,
             class_id=class_id,
+            missing=missing,
             offset=offset,
             limit=limit,
         )

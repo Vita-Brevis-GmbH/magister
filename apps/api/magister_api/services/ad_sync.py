@@ -228,6 +228,32 @@ class AdSyncService:
 
         synced = await self.repo.upsert_from_ad(records, school_id_resolver=resolver)
 
+        # Reconcile deletions: on a full sync, flag student/teacher rows whose
+        # objectGUID is no longer in AD (AD = source of truth). Non-destructive —
+        # the UI surfaces them for manual deletion. Guardrail: never flag on an
+        # empty AD result, and cap the fraction flagged per run.
+        missing = None
+        if effective_mode == "full" and records:
+            seen_guids = {r.ad_object_guid for r in records}
+            missing = await self.repo.mark_missing_students_teachers(
+                seen_guids,
+                now=datetime.now(UTC),
+                max_ratio=self.settings.ad_sync_missing_max_ratio,
+                floor=self.settings.ad_sync_missing_floor,
+            )
+            if missing.skipped:
+                await self.audit.emit(
+                    action="ad_sync_missing_skipped_threshold",
+                    target_kind="ad_sync",
+                    target_id="all",
+                    actor_upn=actor_upn,
+                    actor_object_guid=actor_object_guid,
+                    school_id=None,
+                    ip=ip,
+                    request_id=request_id,
+                    payload={"would_mark": missing.would_mark, "total": missing.total},
+                )
+
         cursor_after = max(
             (r.when_changed for r in records if r.when_changed is not None),
             default=cursor_before,
@@ -251,6 +277,7 @@ class AdSyncService:
             payload={
                 "mode": effective_mode,
                 "synced_count": synced,
+                "marked_missing": missing.marked if missing else 0,
                 "device_count": device_count,
                 "devices_imported": devices_imported,
                 "groups_imported": groups_imported,
