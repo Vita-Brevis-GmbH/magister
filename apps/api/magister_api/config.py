@@ -98,6 +98,11 @@ class Settings(BaseSettings):
         ),
     )
     ad_sync_interval_minutes: int = Field(default=15)
+    # Safety guardrail for the full-sync "missing user" marker: never flag more
+    # than this fraction of the cache (and never more than an absolute floor)
+    # in one run — a too-narrow search base would otherwise flag everyone.
+    ad_sync_missing_max_ratio: float = Field(default=0.2, ge=0.0, le=1.0)
+    ad_sync_missing_floor: int = Field(default=10, ge=0)
     ad_use_mock: bool = Field(
         default=False,
         description="When true the AD client uses ldap3's MOCK_SYNC strategy (tests).",

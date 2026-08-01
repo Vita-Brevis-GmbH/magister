@@ -17,10 +17,20 @@ from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
-from magister_api.schemas.ad_users import AdUserListResponse, AdUserOut
+from magister_api.schemas.ad_users import (
+    AdUserListResponse,
+    AdUserOut,
+    UserDeletionImpactOut,
+)
 from magister_api.schemas.user_attrs import UserAttributesUpdate
 from magister_api.schemas.user_dashboard import UserDashboardOut
 from magister_api.schemas.user_lifecycle import UserStatusUpdate
+from magister_api.services.ad_user_deletion import (
+    AdUnavailableForDeletionError,
+    AdUserDeletionService,
+    UserNotDeletableKindError,
+    UserStillInAdError,
+)
 from magister_api.services.ad_users import AdUsersService
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.user_attrs import (
@@ -65,6 +75,10 @@ async def list_users(
         int | None,
         Query(description="Filter to teachers with active KL role for this class."),
     ] = None,
+    missing: Annotated[
+        bool | None,
+        Query(description="Filter by 'deleted in AD' marker (ad_missing_since set)."),
+    ] = None,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AdUserListResponse:
@@ -74,6 +88,7 @@ async def list_users(
         enabled=enabled,
         search=search,
         class_id=class_id,
+        missing=missing,
         offset=offset,
         limit=limit,
     )
@@ -135,6 +150,48 @@ async def user_dashboard(
     actor, target = user_and_target
     classes = await UserDashboardService(session, actor.to_scope()).for_user(target.ad_object_guid)
     return UserDashboardOut(classes=classes)
+
+
+@router.get("/{ad_object_guid}/deletion-preview", response_model=UserDeletionImpactOut)
+async def user_deletion_preview(
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> UserDeletionImpactOut:
+    """Show what a hard delete would remove (no writes). Admin/SMI of the school."""
+    actor, target = user_and_target
+    svc = AdUserDeletionService(session, settings, actor.to_scope(), ad)
+    counts = await svc.preview(target)
+    return UserDeletionImpactOut(**vars(counts))
+
+
+@router.delete("/{ad_object_guid}", response_model=UserDeletionImpactOut)
+async def delete_user(
+    request: Request,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> UserDeletionImpactOut:
+    """Hard-delete a student/teacher who is gone from AD (audit kept).
+
+    Refuses admins (409) and users still present in AD (409). If AD cannot be
+    reached to confirm absence, returns 503 — unless the row was already flagged
+    missing by a full sync.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    svc = AdUserDeletionService(session, settings, actor.to_scope(), ad)
+    try:
+        counts = await svc.delete(target=target, ip=ip, request_id=request_id)
+    except UserNotDeletableKindError as exc:
+        raise HTTPException(status_code=409, detail="cannot_delete_non_student_teacher") from exc
+    except UserStillInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_still_in_ad") from exc
+    except AdUnavailableForDeletionError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+    return UserDeletionImpactOut(**vars(counts))
 
 
 @router.patch("/{ad_object_guid}", response_model=AdUserOut)
