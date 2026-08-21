@@ -115,7 +115,8 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
     async with engine.begin() as conn:
         await conn.exec_driver_sql(
             "TRUNCATE import_staged_rows, import_jobs, class_memberships, "
-            "class_teacher_roles, subject_teacher_roles, classes, departments, "
+            "class_teacher_roles, subject_teacher_roles, classes, "
+            "department_memberships, manager_roles, departments, "
             "audit_events, sessions, role_assignments, ad_user_cache, schools, "
             "local_admins, app_settings, user_preferences RESTART IDENTITY CASCADE"
         )

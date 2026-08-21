@@ -9,9 +9,10 @@ slices layered on the same pattern.
 from __future__ import annotations
 
 from magister_api.modules.manifest import ModuleManifest
+from magister_api.routers.department_people import router as department_people_router
 from magister_api.routers.departments import router as departments_router
 
 COMPANY_MODULE = ModuleManifest(
     id="company",
-    routers=(departments_router,),
+    routers=(departments_router, department_people_router),
 )
