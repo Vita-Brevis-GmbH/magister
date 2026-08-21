@@ -29,7 +29,7 @@ export interface UpdateRequest {
 }
 
 function authHeaders(): Record<string, string> {
-  return { Authorization: `Bearer ${localStorage.getItem("cockpit_token") ?? ""}` };
+  return { Authorization: `Bearer ${sessionStorage.getItem("cockpit_token") ?? ""}` };
 }
 
 async function jsonOrThrow<T>(r: Response): Promise<T> {

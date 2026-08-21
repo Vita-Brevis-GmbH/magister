@@ -120,7 +120,7 @@ Kein User-Create, keine Group-Membership-Writes (M1 hält Klassen ausschliesslic
 - **TLS 1.3 only** im Caddy (`servers { protocols tls1.3 }`); ältere Versionen werden im Handshake hart abgelehnt
 - **Cipher-Suites:** in TLS 1.3 spec-konstrainiert auf 3 AEAD-Suites (AES-128-GCM, AES-256-GCM, ChaCha20-Poly1305) — alle schnell und side-channel-resistent
 - **Auto-TLS via ACME** (Let's Encrypt), automatische Renewals durch Caddy
-- **HSTS:** `max-age=31536000; includeSubDomains; preload`
+- **HSTS:** bei importiertem, öffentlich vertrautem Zertifikat `max-age=31536000; includeSubDomains` (1 Jahr). Im ausgelieferten Offline-Default mit Caddys self-signed *internal*-Cert ist HSTS **bewusst deaktiviert** — der Header würde den einmaligen „Zertifikat-Ausnahme akzeptieren"-Bypass sperren und den Zugang blockieren (siehe Kommentar in `deploy/caddy/Caddyfile`). Damit ist die Audit-Empfehlung L-01 (6 Monate → 1 Jahr) gegenstandslos: der Wert ist 1 Jahr, sobald HSTS überhaupt gesetzt wird.
 
 ### 5.2 HTTP-Security-Header (Caddyfile, alle Responses)
 

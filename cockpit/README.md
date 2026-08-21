@@ -10,7 +10,7 @@
 Das Cockpit ist das interne Werkzeug des Vita-Brevis-Ops-Teams. Es:
 
 - Listet alle verwalteten Magister-Instanzen (1 Schulträger = 1 Instanz)
-- Pollt periodisch `/api/health` und `/api/version` jeder Instanz
+- Pollt periodisch `/api/healthz` (Status + Version) jeder Instanz
 - Zeigt aktuell deployte Version vs. neueste verfügbare Version (`stable`/`latest` Channel)
 - Triggered Updates über einen Webhook auf die Zielinstanz (M4 Schritt 2)
 
