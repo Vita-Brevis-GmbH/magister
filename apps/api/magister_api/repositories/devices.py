@@ -19,6 +19,8 @@ class DeviceRepository(BaseRepository):
     def __init__(self, session: AsyncSession, scope: ScopeContext) -> None:
         super().__init__(session, scope)
 
+    # stmt is a SQLAlchemy Select whose full generic type is unwieldy to spell;
+    # kept untyped deliberately (the ignore silences pyright's no-untyped-def).
     def _visible(self, stmt):  # type: ignore[no-untyped-def]
         """Restrict a Device select to what the caller may see.
 

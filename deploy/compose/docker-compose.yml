@@ -86,6 +86,19 @@ services:
       # request files and write status.json back. Must be writable by the API
       # container user — see docs/runbooks/system-updates.md.
       - ${MAGISTER_OPS_HOST_DIR:-./ops}:/ops
+    # Liveness for `docker compose ps` + downstream `depends_on`. Uses the
+    # stdlib (the image ships Python, not necessarily curl); /healthz is
+    # unauthenticated and returns the running version (hardening I-03).
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks: [internal]
     # No public ports — only Caddy reaches it on the internal network.
 

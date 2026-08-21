@@ -224,6 +224,8 @@ async def me(
         kind=cache.kind if cache else None,
         school_scope=list(user.school_scope),
         roles=list(user.roles),
+        # expires_at is Optional on the session model but always set for an
+        # authenticated user by the time this response is built.
         expires_at=user.expires_at,  # type: ignore[arg-type]
     )
 

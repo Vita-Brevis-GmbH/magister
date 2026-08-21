@@ -292,6 +292,7 @@ async def list_class_devices(
                 device_type=d.device_type,
                 serial_number=d.serial_number,
                 is_loan=d.is_loan,
+                # kind is a str narrowed at runtime to the assignee-kind Literal.
                 assignee_kind=kind,  # type: ignore[arg-type]
                 assignee_label=label,
             )
