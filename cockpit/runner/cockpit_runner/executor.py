@@ -34,6 +34,9 @@ def _ssh(host: str, command: str) -> tuple[int, str, str]:
 
 
 def _run(host: str, command: str, *, step: str) -> None:
+    # ``step`` becomes the ``<step>_failed`` last_error token in cockpit, so it
+    # must be a stable, whitelist-safe identifier (lowercase, no spaces) — see
+    # the M-02 whitelist in hardening-audit-2026-06.md.
     rc, _out, _err = _ssh(host, command)
     if rc != 0:
         # Only the step name and rc are persisted via UpdateFailed → cockpit
@@ -57,12 +60,12 @@ def execute_update(req: ClaimedRequest) -> None:
     _run(
         host,
         f"cd /opt/magister && IMAGE_TAG={shlex.quote(req.target_version)} docker compose pull",
-        step="docker pull",
+        step="docker_pull",
     )
     _run(
         host,
         f"cd /opt/magister && IMAGE_TAG={shlex.quote(req.target_version)} docker compose up -d",
-        step="docker up",
+        step="docker_up",
     )
 
     if settings.dry_run:
