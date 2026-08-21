@@ -25,7 +25,8 @@
     "system_settings": "Impostazioni di sistema",
     "refresh": "Aggiorna",
     "user_settings": "Configurazione utenti",
-    "system": "Sistema"
+    "system": "Sistema",
+    "modules": "Moduli e funzioni"
   },
   "auth": {
     "login_title": "Accedi",
@@ -1017,5 +1018,59 @@
     "section_desc": "Selezionare o deselezionare i gruppi — l'appartenenza viene aggiornata in AD.",
     "save": "Salva gruppi",
     "saved": "Gruppi salvati."
+  },
+  "terms": {
+    "school": {
+      "unit": "Scuola",
+      "unit_plural": "Scuole",
+      "group": "Classe",
+      "group_plural": "Classi",
+      "lead": "Docente di classe",
+      "lead_plural": "Docenti di classe",
+      "member": "Studente",
+      "member_plural": "Studenti"
+    },
+    "company": {
+      "unit": "Sede",
+      "unit_plural": "Sedi",
+      "group": "Team",
+      "group_plural": "Team",
+      "lead": "Quadro",
+      "lead_plural": "Quadri",
+      "member": "Collaboratore",
+      "member_plural": "Collaboratori"
+    },
+    "neutral": {
+      "unit": "Organizzazione",
+      "unit_plural": "Organizzazioni",
+      "group": "Gruppo",
+      "group_plural": "Gruppi",
+      "lead": "Responsabile",
+      "lead_plural": "Responsabili",
+      "member": "Persona",
+      "member_plural": "Persone"
+    }
+  },
+  "modules": {
+    "title": "Moduli e funzioni",
+    "intro": "Attiva o disattiva i singoli moduli funzionali per istanza. Il profilo imposta una base sensata — puoi discostartene in qualsiasi momento.",
+    "profile_label": "Profilo",
+    "profile_hint": "Imposta il vocabolario e il set iniziale consigliato. Non blocca alcuna funzione.",
+    "profile_school": "Scuola",
+    "profile_company": "Azienda",
+    "profile_neutral": "Neutro",
+    "vocab_unit": "Unità organizzativa",
+    "vocab_group": "Gruppo",
+    "vocab_lead": "Responsabile",
+    "vocab_member": "Membro",
+    "modules_label": "Moduli",
+    "requires": "richiede {{deps}}",
+    "always_on": "sempre attivo",
+    "loading": "Caricamento …",
+    "on": "Attivo",
+    "off": "Disattivato",
+    "save_error": "Salvataggio non riuscito.",
+    "mod_platform": "Base (piattaforma)",
+    "mod_school": "Scuola — classi, docenti di classe, importazioni"
   }
 }

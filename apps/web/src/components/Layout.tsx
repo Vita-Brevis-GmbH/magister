@@ -9,6 +9,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import i18n from "@/i18n";
 import { displayLabel } from "@/lib/userDisplay";
+import { useTerms } from "@/lib/useTerms";
 
 export function Layout() {
   const { t } = useTranslation();
@@ -16,6 +17,7 @@ export function Layout() {
   const logout = useLogout();
   const prefs = useMyPreferences();
   const enabledModules = useEnabledModules();
+  const terms = useTerms();
   const qc = useQueryClient();
   // >0 while any query is refetching — drives the spinner on the refresh button.
   const fetching = useIsFetching();
@@ -155,7 +157,7 @@ export function Layout() {
                         activeProps={{ className: menuActive }}
                         inactiveProps={{ className: menuIdle }}
                       >
-                        {t("nav.schools")}
+                        {terms.unit_plural}
                       </Link>
                     ) : null}
                     <Link
@@ -194,6 +196,16 @@ export function Layout() {
                         inactiveProps={{ className: menuIdle }}
                       >
                         {t("nav.system_settings")}
+                      </Link>
+                    ) : null}
+                    {isAdmin ? (
+                      <Link
+                        to="/admin/modules"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.modules")}
                       </Link>
                     ) : null}
                     {isAdmin ? (

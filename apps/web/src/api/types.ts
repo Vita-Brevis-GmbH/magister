@@ -208,14 +208,34 @@ export interface MyStudentsOut {
   classes: MyClassStudents[];
 }
 
-/** M6 Phase 0: feature modules enabled for this instance (GET /me/modules). */
+/** M6: feature modules enabled for this instance (GET /me/modules). */
 export interface ModuleOut {
   id: string;
   depends_on: string[];
 }
 
 export interface ModulesOut {
+  profile: string;
   modules: ModuleOut[];
+}
+
+/** M6 Phase 1: admin view + update of the module configuration. */
+export interface AdminModuleOut {
+  id: string;
+  toggleable: boolean;
+  enabled: boolean;
+  depends_on: string[];
+}
+
+export interface AdminModulesOut {
+  instance_profile: string;
+  known_profiles: string[];
+  modules: AdminModuleOut[];
+}
+
+export interface ModuleSettingsUpdate {
+  instance_profile?: string;
+  module_overrides?: Record<string, boolean>;
 }
 
 export interface ClassMembershipOut {

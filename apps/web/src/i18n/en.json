@@ -22,7 +22,8 @@
     "system_settings": "System settings",
     "refresh": "Refresh",
     "user_settings": "User configuration",
-    "system": "System"
+    "system": "System",
+    "modules": "Modules & Features"
   },
   "auth": {
     "login_title": "Sign in",
@@ -1014,5 +1015,59 @@
     "section_desc": "Check or uncheck groups — membership is updated in AD.",
     "save": "Save groups",
     "saved": "Groups saved."
+  },
+  "terms": {
+    "school": {
+      "unit": "School",
+      "unit_plural": "Schools",
+      "group": "Class",
+      "group_plural": "Classes",
+      "lead": "Class teacher",
+      "lead_plural": "Class teachers",
+      "member": "Student",
+      "member_plural": "Students"
+    },
+    "company": {
+      "unit": "Site",
+      "unit_plural": "Sites",
+      "group": "Team",
+      "group_plural": "Teams",
+      "lead": "Management",
+      "lead_plural": "Management",
+      "member": "Employee",
+      "member_plural": "Employees"
+    },
+    "neutral": {
+      "unit": "Organisation",
+      "unit_plural": "Organisations",
+      "group": "Group",
+      "group_plural": "Groups",
+      "lead": "Lead",
+      "lead_plural": "Leads",
+      "member": "Person",
+      "member_plural": "People"
+    }
+  },
+  "modules": {
+    "title": "Modules & Features",
+    "intro": "Turn individual feature modules on or off per instance. The profile sets a sensible baseline — you can deviate at any time.",
+    "profile_label": "Profile",
+    "profile_hint": "Sets the vocabulary and the recommended starter set. Never locks a feature.",
+    "profile_school": "School",
+    "profile_company": "Company",
+    "profile_neutral": "Neutral",
+    "vocab_unit": "Organisational unit",
+    "vocab_group": "Group",
+    "vocab_lead": "Lead",
+    "vocab_member": "Member",
+    "modules_label": "Modules",
+    "requires": "requires {{deps}}",
+    "always_on": "always on",
+    "loading": "Loading …",
+    "on": "On",
+    "off": "Off",
+    "save_error": "Saving failed.",
+    "mod_platform": "Base (platform)",
+    "mod_school": "School — classes, class teachers, imports"
   }
 }

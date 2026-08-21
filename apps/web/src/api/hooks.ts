@@ -43,6 +43,8 @@ import type {
   ClassUpdate,
   MyStudentsOut,
   ModulesOut,
+  ModuleSettingsUpdate,
+  AdminModulesOut,
   SubjectTeacherCreate,
   SubjectTeacherOut,
   CurrentUserOut,
@@ -98,6 +100,7 @@ export const queryKeys = {
   adGroups: ["ad-groups"] as const,
   myPreferences: ["me", "preferences"] as const,
   myModules: ["me", "modules"] as const,
+  adminModules: ["admin-modules"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   devices: ["devices"] as const,
@@ -126,6 +129,37 @@ export function useEnabledModules() {
     queryFn: () => apiFetch<ModulesOut>("/me/modules"),
     staleTime: 5 * 60_000,
     select: (data) => new Set(data.modules.map((m) => m.id)),
+  });
+}
+
+/** M6 Phase 1: the active instance profile (school/company/neutral). */
+export function useInstanceProfile() {
+  return useQuery<ModulesOut, ApiError, string>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => data.profile,
+  });
+}
+
+/** M6 Phase 1: admin read of the module configuration (profile + toggles). */
+export function useAdminModules() {
+  return useQuery<AdminModulesOut>({
+    queryKey: queryKeys.adminModules,
+    queryFn: () => apiFetch<AdminModulesOut>("/admin/modules"),
+  });
+}
+
+/** M6 Phase 1: admin write of the module configuration. */
+export function useUpdateModules() {
+  const qc = useQueryClient();
+  return useMutation<AdminModulesOut, ApiError, ModuleSettingsUpdate>({
+    mutationFn: (body) => apiFetch<AdminModulesOut>("/admin/modules", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.adminModules, data);
+      // The enabled set changed — refresh the nav-gating query.
+      void qc.invalidateQueries({ queryKey: queryKeys.myModules });
+    },
   });
 }
 

@@ -93,12 +93,12 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
 
 **Akzeptanz (phasenweise, je Phase einzeln lieferbar & rückwärtskompatibel):**
 
-- ⏳ **Phase 0 — Modul-Naht (kein Verhaltenswechsel):** `ModuleManifest` +
+- ✅ **Phase 0 — Modul-Naht (kein Verhaltenswechsel):** `ModuleManifest` +
   Registry; `create_app()` mountet aktivierte Module statt 27× hartem
   `include_router`; bestehende Router in `platform` + `school` einsortiert;
   Frontend-Nav aus `GET /me/modules` statt hartkodiert in `Layout.tsx`. Prod
   läuft unverändert als reines Refactoring, CI grün.
-- ⏳ **Phase 1 — Schalter & Profil:** `instance_profile`
+- ✅ **Phase 1 — Schalter & Profil:** `instance_profile`
   (`school`/`company`/`neutral`) + `module_settings` in `app_settings`
   (versioniert, live über `effective_settings`); Admin-Seite „Module &
   Funktionen" mit Zwei-Ebenen-Schaltung (Profil-Preset + Einzel-Schieber je

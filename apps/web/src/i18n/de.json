@@ -22,7 +22,8 @@
     "system_settings": "Systemeinstellungen",
     "refresh": "Aktualisieren",
     "user_settings": "Userkonfiguration",
-    "system": "System"
+    "system": "System",
+    "modules": "Module & Funktionen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -1014,5 +1015,59 @@
     "section_desc": "Gruppen anhaken oder abwählen — die Mitgliedschaft wird im AD gesetzt.",
     "save": "Gruppen speichern",
     "saved": "Gruppen gespeichert."
+  },
+  "terms": {
+    "school": {
+      "unit": "Schule",
+      "unit_plural": "Schulen",
+      "group": "Klasse",
+      "group_plural": "Klassen",
+      "lead": "Klassenlehrer:in",
+      "lead_plural": "Klassenlehrpersonen",
+      "member": "Schüler:in",
+      "member_plural": "Schüler:innen"
+    },
+    "company": {
+      "unit": "Standort",
+      "unit_plural": "Standorte",
+      "group": "Team",
+      "group_plural": "Teams",
+      "lead": "Kader",
+      "lead_plural": "Kader",
+      "member": "Mitarbeiter:in",
+      "member_plural": "Mitarbeitende"
+    },
+    "neutral": {
+      "unit": "Organisation",
+      "unit_plural": "Organisationen",
+      "group": "Gruppe",
+      "group_plural": "Gruppen",
+      "lead": "Verantwortliche:r",
+      "lead_plural": "Verantwortliche",
+      "member": "Person",
+      "member_plural": "Personen"
+    }
+  },
+  "modules": {
+    "title": "Module & Funktionen",
+    "intro": "Schalte einzelne Funktionsmodule pro Instanz an oder aus. Das Profil setzt eine sinnvolle Grundeinstellung — abweichen ist jederzeit möglich.",
+    "profile_label": "Profil",
+    "profile_hint": "Setzt Vokabular und das empfohlene Start-Set. Sperrt keine Funktion.",
+    "profile_school": "Schule",
+    "profile_company": "Firma",
+    "profile_neutral": "Neutral",
+    "vocab_unit": "Organisationseinheit",
+    "vocab_group": "Gruppe",
+    "vocab_lead": "Leitung",
+    "vocab_member": "Mitglied",
+    "modules_label": "Module",
+    "requires": "benötigt {{deps}}",
+    "always_on": "immer aktiv",
+    "loading": "Wird geladen …",
+    "on": "An",
+    "off": "Aus",
+    "save_error": "Speichern fehlgeschlagen.",
+    "mod_platform": "Basis (Plattform)",
+    "mod_school": "Schule — Klassen, Klassenlehrer, Importe"
   }
 }
