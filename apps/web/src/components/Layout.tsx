@@ -4,7 +4,7 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useCurrentUser, useLogout, useMyPreferences } from "@/api/hooks";
+import { useCurrentUser, useEnabledModules, useLogout, useMyPreferences } from "@/api/hooks";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import i18n from "@/i18n";
@@ -15,6 +15,7 @@ export function Layout() {
   const me = useCurrentUser();
   const logout = useLogout();
   const prefs = useMyPreferences();
+  const enabledModules = useEnabledModules();
   const qc = useQueryClient();
   // >0 while any query is refetching — drives the spinner on the refresh button.
   const fetching = useIsFetching();
@@ -60,6 +61,10 @@ export function Layout() {
   const isTeacher = me.data?.kind === "teacher";
   // Anyone with a management capability can open the Einstellungen menu.
   const canManage = isAdmin || isSchulleitung || isSmi;
+  // M6 Phase 0: gate the school-module nav entries by the enabled modules.
+  // Default visible while loading; in Phase 0 the school module is always on,
+  // so the navigation is unchanged.
+  const hasSchool = enabledModules.data?.has("school") ?? true;
 
   return (
     <div className="min-h-screen bg-background">
@@ -72,14 +77,16 @@ export function Layout() {
           </Link>
 
           <nav className="flex items-center gap-1 text-sm font-medium">
-            <Link
-              to="/classes"
-              activeProps={{ className: navActive }}
-              inactiveProps={{ className: navIdle }}
-            >
-              {t("nav.classes")}
-            </Link>
-            {isTeacher ? (
+            {hasSchool ? (
+              <Link
+                to="/classes"
+                activeProps={{ className: navActive }}
+                inactiveProps={{ className: navIdle }}
+              >
+                {t("nav.classes")}
+              </Link>
+            ) : null}
+            {isTeacher && hasSchool ? (
               <Link
                 to="/my-students"
                 activeProps={{ className: navActive }}
@@ -106,13 +113,15 @@ export function Layout() {
                 >
                   {t("nav.usermanagement")}
                 </Link>
-                <Link
-                  to="/admin/imports"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.imports")}
-                </Link>
+                {hasSchool ? (
+                  <Link
+                    to="/admin/imports"
+                    activeProps={{ className: navActive }}
+                    inactiveProps={{ className: navIdle }}
+                  >
+                    {t("nav.imports")}
+                  </Link>
+                ) : null}
                 <Link
                   to="/admin/reports"
                   activeProps={{ className: navActive }}
@@ -167,14 +176,16 @@ export function Layout() {
                         {t("nav.roles")}
                       </Link>
                     ) : null}
-                    <Link
-                      to="/admin/substitutions"
-                      role="menuitem"
-                      activeProps={{ className: menuActive }}
-                      inactiveProps={{ className: menuIdle }}
-                    >
-                      {t("nav.substitutions")}
-                    </Link>
+                    {hasSchool ? (
+                      <Link
+                        to="/admin/substitutions"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.substitutions")}
+                      </Link>
+                    ) : null}
                     {isAdmin ? (
                       <Link
                         to="/admin/settings"

@@ -42,6 +42,7 @@ import type {
   ClassTeacherOut,
   ClassUpdate,
   MyStudentsOut,
+  ModulesOut,
   SubjectTeacherCreate,
   SubjectTeacherOut,
   CurrentUserOut,
@@ -96,6 +97,7 @@ export const queryKeys = {
   appSettings: ["app-settings"] as const,
   adGroups: ["ad-groups"] as const,
   myPreferences: ["me", "preferences"] as const,
+  myModules: ["me", "modules"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   devices: ["devices"] as const,
@@ -110,6 +112,20 @@ export function useCurrentUser(opts: { retryOn401?: boolean } = {}) {
     queryFn: () => apiFetch<CurrentUserOut>("/auth/me"),
     retry: opts.retryOn401 ? 2 : false,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * M6 Phase 0: the feature modules enabled for this instance. Selected into a
+ * Set of module ids so the nav can gate entries with `.has("school")` etc.
+ * In Phase 0 every module is enabled, so nothing is hidden.
+ */
+export function useEnabledModules() {
+  return useQuery<ModulesOut, ApiError, Set<string>>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => new Set(data.modules.map((m) => m.id)),
   });
 }
 

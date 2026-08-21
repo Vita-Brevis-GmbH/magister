@@ -208,6 +208,16 @@ export interface MyStudentsOut {
   classes: MyClassStudents[];
 }
 
+/** M6 Phase 0: feature modules enabled for this instance (GET /me/modules). */
+export interface ModuleOut {
+  id: string;
+  depends_on: string[];
+}
+
+export interface ModulesOut {
+  modules: ModuleOut[];
+}
+
 export interface ClassMembershipOut {
   id: number;
   class_id: number;
