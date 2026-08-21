@@ -82,6 +82,45 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ I-01 bis I-05 (Informational) abgearbeitet — ldap3-Renovate-Pin, `# type: ignore`-Begründungen, API-Healthcheck, CI-`permissions`, Session-URLs bereits sauber
 - ⏳ Externer Pentest beauftragen (nach M5-Abschluss, Q4 2026)
 
+## M6 — Modulare Funktionen & Company-Readiness (geplant)
+
+**Ziel:** Magister über die Schule hinaus einsetzbar machen (Firmen /
+Mischbetrieb) — **eine** Codebasis, **ein** Deployment-Stack. Fachliche
+Funktionen werden zu einzeln schaltbaren Modulen über einer domänenneutralen
+Basis; ein weiches Profil (Schule/Firma) setzt nur Vokabular und ein
+empfohlenes Start-Set und sperrt nichts. Referenz:
+[ADR-0008](docs/adr/0008-modulare-funktionen.md).
+
+**Akzeptanz (phasenweise, je Phase einzeln lieferbar & rückwärtskompatibel):**
+
+- ⏳ **Phase 0 — Modul-Naht (kein Verhaltenswechsel):** `ModuleManifest` +
+  Registry; `create_app()` mountet aktivierte Module statt 27× hartem
+  `include_router`; bestehende Router in `platform` + `school` einsortiert;
+  Frontend-Nav aus `GET /me/modules` statt hartkodiert in `Layout.tsx`. Prod
+  läuft unverändert als reines Refactoring, CI grün.
+- ⏳ **Phase 1 — Schalter & Profil:** `instance_profile`
+  (`school`/`company`/`neutral`) + `module_settings` in `app_settings`
+  (versioniert, live über `effective_settings`); Admin-Seite „Module &
+  Funktionen" mit Zwei-Ebenen-Schaltung (Profil-Preset + Einzel-Schieber je
+  Modul), abhängigkeitsbewusst, „soft off" für Module mit Daten; Term-Packs
+  (i18n-Overlay je Profil).
+- ⏳ **Phase 2 — Company-MVP:** `departments` + `manager_roles` +
+  `memberships` + On-/Offboarding als eigene Modul-Tabellen (parallel zu
+  `classes`, nicht generischer Diskriminator — ADR-0008 D6); Firmen-Term-Pack;
+  nutzt PW-Reset/Lifecycle/Devices/Imports/Audit/Reports der Plattform.
+- ⏳ **Phase 3 — Härten & optional splitten:** RBAC von Rollennamen auf
+  Capabilities (`require_*` als dünne Wrapper erhalten); Modul-Vertrags-CI
+  (Audit-Actions, Scope-Filter, RBAC-Dependency, i18n je Modul geprüft); ein
+  Modul bei Bedarf via `git subtree split` in einen eigenen Container promoten
+  (Muster wie `cockpit/`, ADR-0003).
+
+**Bewusst nicht in M6:**
+
+- Rename `school_id` → `org_unit_id` (Kosmetik; Vokabular wechselt über
+  Term-Packs, die Spalte/CI-Invariante bleibt).
+- Ein Container pro Modul als Default (Schieber = Runtime-Komposition, nicht
+  Deployment — ADR-0008 D5).
+
 ## Erweiterungen 2026-06 (post-Rollout, abgeschlossen)
 
 **Ziel:** Verbesserungen und kleine Erweiterungen aus dem laufenden Betrieb, parallel zum Produktiv-Rollout. Referenz: [`docs/features/extensions-2026-06.md`](docs/features/extensions-2026-06.md).
