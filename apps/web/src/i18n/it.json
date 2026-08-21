@@ -1071,6 +1071,7 @@
     "off": "Disattivato",
     "save_error": "Salvataggio non riuscito.",
     "mod_platform": "Base (piattaforma)",
-    "mod_school": "Scuola — classi, docenti di classe, importazioni"
+    "mod_school": "Scuola — classi, docenti di classe, importazioni",
+    "mod_company": "Azienda — reparti/team"
   }
 }

@@ -43,6 +43,7 @@ class ModuleMeta:
 MODULE_CATALOG: tuple[ModuleMeta, ...] = (
     ModuleMeta(id="platform", toggleable=False),
     ModuleMeta(id="school", default_in_profiles=("school",), depends_on=("platform",)),
+    ModuleMeta(id="company", default_in_profiles=("company",), depends_on=("platform",)),
 )
 
 

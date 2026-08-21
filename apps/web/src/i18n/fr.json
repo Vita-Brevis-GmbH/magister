@@ -1071,6 +1071,7 @@
     "off": "Désactivé",
     "save_error": "Échec de l'enregistrement.",
     "mod_platform": "Base (plateforme)",
-    "mod_school": "École — classes, enseignant·e·s titulaires, imports"
+    "mod_school": "École — classes, enseignant·e·s titulaires, imports",
+    "mod_company": "Entreprise — départements/équipes"
   }
 }

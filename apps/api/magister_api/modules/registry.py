@@ -6,13 +6,14 @@ routers, instead of hard-listing 25 ``include_router`` calls.
 
 from __future__ import annotations
 
+from magister_api.modules.company import COMPANY_MODULE
 from magister_api.modules.manifest import ModuleManifest
 from magister_api.modules.platform import PLATFORM_MODULE
 from magister_api.modules.school import SCHOOL_MODULE
 
 # Registration order. Modules use distinct route prefixes, so the order is
 # cosmetic (OpenAPI listing) and does not affect routing behaviour.
-ALL_MODULES: tuple[ModuleManifest, ...] = (PLATFORM_MODULE, SCHOOL_MODULE)
+ALL_MODULES: tuple[ModuleManifest, ...] = (PLATFORM_MODULE, SCHOOL_MODULE, COMPANY_MODULE)
 
 
 def enabled_modules() -> tuple[ModuleManifest, ...]:
