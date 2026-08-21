@@ -28,12 +28,12 @@ def test_every_enabled_module_router_is_mounted() -> None:
                     assert key in mounted, f"{module.id}: {route.path} {route.methods} not mounted"
 
 
-def test_router_count_matches_historical_25() -> None:
-    # 25 routers were hard-listed in create_app() before the registry seam.
-    # A drop or accidental duplication during the platform/school split would
-    # change this count.
+def test_router_count() -> None:
+    # 25 routers were hard-listed in create_app() before the registry seam;
+    # M6 Phase 1 adds admin_modules (platform) → 26. A drop or accidental
+    # duplication during the platform/school split would change this count.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 25
+    assert total == 26
 
 
 def test_module_ids_unique_and_expected() -> None:
@@ -43,8 +43,11 @@ def test_module_ids_unique_and_expected() -> None:
 
 
 def test_school_depends_on_platform() -> None:
-    school = next(m for m in ALL_MODULES if m.id == "school")
-    assert "platform" in school.depends_on
+    from magister_api.modules.catalog import get_meta
+
+    meta = get_meta("school")
+    assert meta is not None
+    assert "platform" in meta.depends_on
 
 
 def test_healthz_still_present() -> None:

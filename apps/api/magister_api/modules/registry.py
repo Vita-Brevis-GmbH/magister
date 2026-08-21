@@ -16,11 +16,13 @@ ALL_MODULES: tuple[ModuleManifest, ...] = (PLATFORM_MODULE, SCHOOL_MODULE)
 
 
 def enabled_modules() -> tuple[ModuleManifest, ...]:
-    """Modules whose routers ``create_app`` should mount.
+    """Modules whose routers ``create_app`` mounts.
 
-    Phase 0: every registered module is enabled, so the mounted route set is
-    identical to the previous hard-coded list. Phase 1 filters this by the
-    per-module enable flags in ``app_settings`` (via ``effective_settings``)
-    and the selected instance profile — see ADR-0008.
+    Routers are mounted once at startup and cannot be unmounted at runtime, so
+    this returns every module: mounting is static. Which modules are
+    *effectively enabled* for a running instance (driven by the instance
+    profile + per-module overrides in ``app_settings``) is answered at request
+    time by :func:`magister_api.modules.catalog.effective_enabled_ids`, which
+    gates the nav (``GET /me/modules``) and the admin surface. See ADR-0008.
     """
     return ALL_MODULES

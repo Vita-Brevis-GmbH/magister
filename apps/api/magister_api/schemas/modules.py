@@ -11,4 +11,23 @@ class ModuleOut(BaseModel):
 
 
 class ModulesOut(BaseModel):
+    profile: str
     modules: list[ModuleOut]
+
+
+class AdminModuleOut(BaseModel):
+    id: str
+    toggleable: bool
+    enabled: bool
+    depends_on: list[str]
+
+
+class AdminModulesOut(BaseModel):
+    instance_profile: str
+    known_profiles: list[str]
+    modules: list[AdminModuleOut]
+
+
+class ModuleSettingsUpdate(BaseModel):
+    instance_profile: str | None = None
+    module_overrides: dict[str, bool] | None = None

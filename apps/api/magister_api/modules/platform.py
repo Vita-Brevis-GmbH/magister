@@ -17,6 +17,7 @@ from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.admin_ad_groups import router as admin_ad_groups_router
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
+from magister_api.routers.admin_modules import router as admin_modules_router
 from magister_api.routers.admin_roles import router as admin_roles_router
 from magister_api.routers.admin_settings import router as admin_settings_router
 from magister_api.routers.admin_sync import router as admin_sync_router
@@ -54,5 +55,6 @@ PLATFORM_MODULE = ModuleManifest(
         admin_users_router,
         admin_maintenance_router,
         admin_system_router,
+        admin_modules_router,
     ),
 )

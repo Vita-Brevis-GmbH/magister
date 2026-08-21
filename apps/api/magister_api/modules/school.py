@@ -19,7 +19,6 @@ from magister_api.routers.substitutions import router as substitutions_router
 
 SCHOOL_MODULE = ModuleManifest(
     id="school",
-    depends_on=("platform",),
     routers=(
         classes_router,
         class_teachers_router,

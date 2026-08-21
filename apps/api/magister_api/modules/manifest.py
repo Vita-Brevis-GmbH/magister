@@ -19,13 +19,12 @@ from fastapi import APIRouter
 class ModuleManifest:
     """One feature area and the routers it owns.
 
-    ``id`` is the stable module identifier (also the app_settings key in
-    Phase 1). ``depends_on`` names modules that must be enabled for this one to
-    make sense (e.g. ``school`` depends on ``platform``); the dependency graph
-    is only advisory in Phase 0 and becomes enforced by the admin toggle UI in
-    Phase 1.
+    ``id`` is the stable module identifier — the same id used in
+    :mod:`magister_api.modules.catalog`, which carries the *policy* metadata
+    (toggle flag, profile defaults, dependencies). The manifest carries only
+    the HTTP wiring (its routers), so it can import the routers without the
+    catalog having to — that keeps the catalog import-cycle-free.
     """
 
     id: str
     routers: tuple[APIRouter, ...]
-    depends_on: tuple[str, ...] = ()
