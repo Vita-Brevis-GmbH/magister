@@ -55,21 +55,21 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - FR/IT/EN-Übersetzungen durch native Reviewer (Stub-Status entfernen)
 - Runbook `upgrade-to-m3.md` (siehe `docs/runbooks/`)
 
-## M4 — Scale & Operations Maturity (in Arbeit)
+## M4 — Scale & Operations Maturity (abgeschlossen; externer Pentest terminiert)
 
 **Ziel:** Vita Brevis kann viele Schulträger gleichzeitig betreiben, Schulträger können sich mehr selbst helfen.
 
 **Akzeptanz:**
 - ✅ **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
 - ✅ **M4.2 Update-Tracking** — Release-Manifest-Poller, `update_requests`-Tabelle, "Update einplanen"-UI
-- 🚧 **M4.3 Update-Runner** — atomic claim/complete/fail-Endpoints, Python-Runner mit SSH + pg_dump-Snapshot + Smoke-Test, systemd-Service, Runbook `cockpit-update-runner.md`
+- ✅ **M4.3 Update-Runner** — atomic claim/complete/fail-Endpoints, Python-Runner mit SSH + pg_dump-Snapshot + Smoke-Test, systemd-Service, Runbook `cockpit-update-runner.md`; `last_error`-Härtung (sanitisierter unexpected-Pfad + whitelist-taugliche Step-Tokens) + Runner-Tests
 - ✅ **Performance: AD-Diff-Sync** — inkrementeller Sync via `whenChanged`-Cursor (ADR-0004)
 - ✅ **Performance: Read-Cache** — in-process TTL-Cache mit version-stamped Invalidation, angewendet auf `ClassRepository.list_active`
 - ✅ **Härtungs-Audit (Self-Assessment)** — `docs/security/hardening-audit-2026-06.md` mit 4 Medium-Findings als Pre-Pentest-Hardening-Liste
 - ✅ **Erweiterte Runbooks** — `disaster-recovery.md`, `key-rotation.md`
 - ⏳ Externer Pentest (Q4 2026 nach M5-Hardening)
 
-## M5 — Pre-Pentest Hardening (in Arbeit)
+## M5 — Pre-Pentest Hardening (Hardening abgeschlossen; Pentest terminiert)
 
 **Ziel:** Alle Medium-Findings aus dem Hardening-Audit beheben, bevor externer Pentest gebucht wird.
 
@@ -78,8 +78,9 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ M-02: `last_error`-Whitelist in Cockpit-Poller + Runner
 - ✅ M-03: `audit_events.key_id`-Spalte (Migration 0011) für Multi-Key-Rotation
 - ✅ M-04: CSV-Upload bounded auf 10 MiB (413 statt OOM)
-- ⏳ L-01 bis L-07 (Low-Findings) als Backlog
-- ⏳ Externer Pentest beauftragen
+- ✅ L-01 bis L-07 (Low-Findings) abgearbeitet — Code: L-03 (`sessionStorage`), L-04 (Postgres internal-only), L-06 (Cockpit-API-Security-Header); Doku/gegenstandslos: L-01 (HSTS bei Self-Signed bewusst aus), L-02 (`/api/healthz`-Angleich); L-07 bereits erledigt (Pagination vorhanden). Offen: L-05 (Ops-Infra)
+- ✅ I-01 bis I-05 (Informational) abgearbeitet — ldap3-Renovate-Pin, `# type: ignore`-Begründungen, API-Healthcheck, CI-`permissions`, Session-URLs bereits sauber
+- ⏳ Externer Pentest beauftragen (nach M5-Abschluss, Q4 2026)
 
 ## Erweiterungen 2026-06 (post-Rollout, abgeschlossen)
 

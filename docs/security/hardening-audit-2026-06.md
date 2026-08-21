@@ -8,7 +8,7 @@
 
 ## Zusammenfassung
 
-Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Signed-Bind, `pgcrypto`-encrypted Audit-Payloads, RBAC an jedem Endpoint, Schul-Scope-Filter zentral im Repository-Layer. Es gibt **keinen Critical-Befund**. Alle 4 Medium-Befunde wurden im M5-Pre-Pentest-Hardening-Block behoben.
+Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Signed-Bind, `pgcrypto`-encrypted Audit-Payloads, RBAC an jedem Endpoint, Schul-Scope-Filter zentral im Repository-Layer. Es gibt **keinen Critical-Befund**. Alle 4 Medium-Befunde wurden im M5-Pre-Pentest-Hardening-Block behoben. Die 7 Low- und 5 Informational-Befunde sind im M5-Abschluss (2026-08) abgearbeitet — offen bleiben einzig **L-05** (Ops-Infra, read-only Backup-Bucket) und der **externe Pentest**.
 
 | Severity | Anzahl |
 |---|---|
@@ -59,23 +59,27 @@ Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Si
 **File:** `apps/api/magister_api/routers/imports.py`
 **Status:** Behoben in M5 — `Content-Length`-Pre-Check + bounded `file.read(max_bytes + 1)` mit 10 MiB-Limit. Response: 413 Payload Too Large.
 
-### L-01 bis L-07 · Low-Findings (Excerpt)
+### L-01 bis L-07 · Low-Findings
 
-- L-01: HSTS-Max-Age in Caddy auf 6 Monate gesetzt — Empfehlung 1 Jahr nach Production-Stabilität
-- L-02: `/api/version`-Endpoint existiert nicht (Cockpit fragt `/api/healthz` ab, was Version mitliefert) — Inkonsistenz mit Runbook
-- L-03: Frontend `localStorage.cockpit_token` — sollte auf `sessionStorage` umgestellt werden (kein Persist über Tab-Close)
-- L-04: Docker-Compose-Network exposed `postgres:5432` zum Host — sollte rein internal sein
-- L-05: Backup-Dateien werden nicht in einem read-only-Bucket abgelegt
-- L-06: Keine `Content-Security-Policy` strict für Frontend gesetzt
-- L-07: Audit-Listing-UI hat keine Pagination — bei >10k Events DoS-Vektor
+Disposition im M5-Abschluss (2026-08):
+
+- L-01 ✅ **gegenstandslos** — HSTS ist im ausgelieferten Offline-Default (self-signed *internal*-Cert) bewusst deaktiviert; der Header würde den einmaligen „Zertifikat-Ausnahme akzeptieren"-Bypass sperren (Kommentar in `deploy/caddy/Caddyfile`). Bei importiertem, öffentlich vertrautem Zertifikat wäre der Wert 1 Jahr. `ARCHITECTURE.md` §5.1 entsprechend präzisiert.
+- L-02 ✅ **behoben** — die Docs (ADR-0003, `cockpit/README.md`) nannten `/api/health` + `/api/version`; der reale, vom Health-Poller genutzte Magister-Endpoint ist `/api/healthz` (liefert Status + Version). Docs angeglichen.
+- L-03 ✅ **behoben** — Cockpit-Token von `localStorage` auf `sessionStorage` umgestellt (`cockpit/web/src/App.tsx`, `api.ts`).
+- L-04 ✅ **behoben** — Postgres-Host-Port (`5433:5432`) aus `cockpit/deploy/docker-compose.yml` entfernt; die DB ist nur noch über das Compose-Netz erreichbar. (Der Magister-Compose war bereits internal-only.)
+- L-05 ⏳ **Ops** — read-only Backup-Bucket ist eine Deployment-/Infra-Massnahme des Betreibers, kein App-Code. Bleibt bei Vita-Brevis-Ops.
+- L-06 ✅ **behoben (API)** — die Cockpit-API setzt jetzt Baseline-Security-Header inkl. CSP (`default-src 'none'; frame-ancestors 'none'`) per Middleware. Die Dokument-CSP der Cockpit-SPA folgt mit dem Prod-Reverse-Proxy (spiegelt `deploy/caddy/Caddyfile`), sobald das Cockpit produktiv ausgeliefert wird — heute läuft die SPA Vite-only hinter VPN.
+- L-07 ✅ **bereits erledigt** — das Audit-Listing paginiert bereits: Backend `GET /audit/events` cappt `limit ≤ 200` und liefert `total`, die UI (`_app.admin.audit.tsx`) hat prev/next mit Seiten-Offset. Kein unbounded Fetch.
 
 ### I-01 bis I-05 · Informational
 
-- I-01: ldap3-Version pinning fehlt — Renovate aktivieren
-- I-02: pyright strict mode an, aber ein paar `# type: ignore` ohne Reason-Comment
-- I-03: docker-compose-Healthcheck für API fehlt
-- I-04: GitHub Actions ohne `permissions: contents: read` Default
-- I-05: Docs verweisen auf `claude.ai/code/session_*` URLs — vor public Release entfernen
+Disposition im M5-Abschluss (2026-08):
+
+- I-01 ✅ **behoben** — Renovate-Regel für `ldap3` ergänzt (eigener, gelabelter PR, `rangeStrategy: pin`), analog zum Linter-Pin. ldap3 treibt den AD-Write-Pfad (unicodePwd/Bind-Encoding) und wird nicht mehr stillschweigend mitgezogen.
+- I-02 ✅ **behoben** — alle sieben `# type: ignore` in `apps/api` mit Begründungs-Kommentar versehen.
+- I-03 ✅ **behoben** — Healthcheck für `magister-api` im Compose ergänzt (stdlib-Probe gegen `/healthz`).
+- I-04 ✅ **behoben** — `permissions: contents: read` als Default-Token in `backend-ci.yml` + `frontend-ci.yml` (release.yml hatte es bereits).
+- I-05 ✅ **bereits sauber** — kein `claude.ai/code/session_*`-Verweis mehr in Docs oder Code (repo-weit verifiziert).
 
 ---
 
@@ -95,6 +99,6 @@ Magister ist aus Architektursicht solide: defense-in-depth durch LDAPS-Sealed/Si
 ## Nächste Schritte
 
 - [ ] Issues M-01..M-04 in GitHub als Milestone "pre-pentest-hardening" anlegen
-- [ ] L-01..L-07 als Tickets im Backlog
-- [ ] I-01..I-05 in Cross-Cutting-Aufgaben verteilen
+- [x] L-01..L-07 im M5-Abschluss abgearbeitet (L-05 bleibt Ops; Disposition oben)
+- [x] I-01..I-05 im M5-Abschluss abgearbeitet (Disposition oben)
 - [ ] Quartalsweise Self-Re-Audit, Diff-Doku als `hardening-audit-<YYYY-QN>.md`
