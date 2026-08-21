@@ -18,6 +18,8 @@ from magister_api.schemas.user_preferences import UserPreferencesOut, UserPrefer
 
 
 def _defaults() -> UserPreferencesOut:
+    # DEFAULT_* are plain str constants that are valid members of the Out
+    # model's Literal fields; pyright can't prove that narrowing.
     return UserPreferencesOut(
         language=DEFAULT_LANGUAGE,  # type: ignore[arg-type]
         region=DEFAULT_REGION,

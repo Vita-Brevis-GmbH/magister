@@ -22,9 +22,12 @@ def _process_once(client: CockpitClient) -> bool:
         logger.error("update failed: %s", e)
         client.fail(req.id, str(e))
         return True
-    except Exception as e:
+    except Exception:
+        # Full traceback (which may carry paths/URLs/env values) stays in the
+        # runner's journald log only. Cockpit last_error gets a fixed,
+        # whitelist-safe token — never str(e) — per hardening-audit M-02.
         logger.exception("unexpected error")
-        client.fail(req.id, f"unexpected: {e}")
+        client.fail(req.id, "unexpected_error")
         return True
     client.complete(req.id)
     logger.info("update %s completed", req.id)

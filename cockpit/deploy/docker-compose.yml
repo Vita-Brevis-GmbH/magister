@@ -5,7 +5,9 @@ services:
       POSTGRES_USER: cockpit
       POSTGRES_PASSWORD: cockpit
       POSTGRES_DB: cockpit
-    ports: ["5433:5432"]
+    # No host port: Postgres is reachable only by the api service on the
+    # compose network (hardening-audit L-04). For local psql access add a
+    # temporary `ports: ["5433:5432"]` in an override file, never here.
     volumes:
       - cockpit-pg:/var/lib/postgresql/data
   api:

@@ -20,7 +20,7 @@ function hasUpdate(i: Instance): boolean {
 }
 
 export function App() {
-  const [tokenInput, setTokenInput] = useState(localStorage.getItem("cockpit_token") ?? "");
+  const [tokenInput, setTokenInput] = useState(sessionStorage.getItem("cockpit_token") ?? "");
   const qc = useQueryClient();
   const instancesQ = useQuery({
     queryKey: ["instances"],
@@ -64,7 +64,7 @@ export function App() {
           />
           <button
             onClick={() => {
-              localStorage.setItem("cockpit_token", tokenInput);
+              sessionStorage.setItem("cockpit_token", tokenInput);
               qc.invalidateQueries();
             }}
             className="rounded bg-slate-900 px-3 py-1 text-sm text-white"

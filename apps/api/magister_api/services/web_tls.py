@@ -31,6 +31,8 @@ class WebTlsError(ValueError):
 
 
 def _public_bytes(key: object) -> bytes:
+    # public_key() exists on every concrete private-key type; the param is
+    # typed `object` to avoid importing the full cryptography key union.
     return key.public_key().public_bytes(  # type: ignore[attr-defined]
         encoding=serialization.Encoding.DER,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,

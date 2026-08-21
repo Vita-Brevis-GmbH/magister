@@ -9,6 +9,10 @@ on:
       - "deploy/**"
       - ".github/workflows/backend-ci.yml"
 
+# Least-privilege default GITHUB_TOKEN: CI only reads the repo (hardening I-04).
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

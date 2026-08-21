@@ -39,6 +39,14 @@
       "matchPackageNames": ["ruff", "pyright"],
       "rangeStrategy": "pin",
       "groupName": "python linters"
+    },
+    {
+      "description": "ldap3 drives the AD write path (unicodePwd + bind encoding); pin it and surface any change as its own reviewed PR — never auto-ranged or grouped.",
+      "matchManagers": ["pep621"],
+      "matchPackageNames": ["ldap3"],
+      "rangeStrategy": "pin",
+      "groupName": "ldap3 (AD write path)",
+      "labels": ["dependencies", "security", "review-required"]
     }
   ]
 }

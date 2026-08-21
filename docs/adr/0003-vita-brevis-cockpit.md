@@ -14,7 +14,7 @@ Wir bauen ein separates Tool **Vita Brevis Cockpit**:
 1. **Eigenes Code-Subtree** unter `cockpit/` im Magister-Repo, später extrahiert nach `github.com/vita-brevis-gmbh/vita-brevis-cockpit` via `git subtree split` sobald GitHub-Org-Permissions für API-basierte Repo-Erstellung verfügbar sind.
 2. **Eigener Stack** (FastAPI + React + Postgres), aber identische Konventionen wie Magister — Onboarding-Reibung minimal.
 3. **Bootstrap-Token-Auth** (nicht OIDC) — Cockpit läuft hinter VPN/Tailscale, max. 5 Ops-User. Pragmatischer als Full-OIDC-Setup.
-4. **Read-mostly auf Magister-Daten** — Cockpit ruft nur `/api/health` und `/api/version` der Magister-Instanzen ab. **Kein** direkter DB-Zugriff zu Magister-Postgres-Instanzen.
+4. **Read-mostly auf Magister-Daten** — Cockpit ruft nur `/api/healthz` (liefert Status + Version) der Magister-Instanzen ab. **Kein** direkter DB-Zugriff zu Magister-Postgres-Instanzen.
 
 ## Konsequenzen
 
