@@ -27,7 +27,8 @@
     "user_settings": "Configuration utilisateur",
     "system": "Système",
     "modules": "Modules et fonctions",
-    "departments": "Départements"
+    "departments": "Départements",
+    "document_templates": "Modèles"
   },
   "auth": {
     "login_title": "Connexion",
@@ -1138,5 +1139,26 @@
     "error_upn_conflict": "Ce nom de connexion est déjà pris.",
     "error_domain": "Le domaine n'est pas dans la liste d'autorisation.",
     "error_invalid": "Les valeurs saisies sont invalides."
+  },
+  "doc_templates": {
+    "title": "Modèles (lettres & documents)",
+    "intro": "Personnalisez l'objet et le HTML des lettres aux parents. Sans modèle actif, le modèle intégré est utilisé.",
+    "key": "Modèle",
+    "language": "Langue",
+    "subject": "Objet",
+    "body": "Contenu HTML",
+    "is_active": "Actif (remplace le modèle intégré)",
+    "save": "Enregistrer",
+    "saving": "Enregistrement…",
+    "saved": "Enregistré.",
+    "preview": "Actualiser l'aperçu",
+    "preview_title": "Aperçu",
+    "preview_hint": "Cliquez sur « Actualiser l'aperçu » pour afficher le contenu avec des données d'exemple.",
+    "placeholders": "Espaces réservés disponibles",
+    "reset_to_builtin": "Réinitialiser au modèle intégré",
+    "error_invalid": "Le modèle est invalide (erreur Jinja ou espace réservé inconnu).",
+    "key_enrollment": "Admission",
+    "key_class_change": "Changement de classe",
+    "key_password_handout": "Remise du mot de passe"
   }
 }

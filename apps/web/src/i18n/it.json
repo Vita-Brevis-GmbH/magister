@@ -27,7 +27,8 @@
     "user_settings": "Configurazione utenti",
     "system": "Sistema",
     "modules": "Moduli e funzioni",
-    "departments": "Reparti"
+    "departments": "Reparti",
+    "document_templates": "Modelli"
   },
   "auth": {
     "login_title": "Accedi",
@@ -1138,5 +1139,26 @@
     "error_upn_conflict": "Questo nome di accesso è già in uso.",
     "error_domain": "Il dominio non è nella lista consentita.",
     "error_invalid": "I valori inseriti non sono validi."
+  },
+  "doc_templates": {
+    "title": "Modelli (lettere e documenti)",
+    "intro": "Personalizza l'oggetto e l'HTML delle lettere ai genitori. Senza un modello attivo si usa quello integrato.",
+    "key": "Modello",
+    "language": "Lingua",
+    "subject": "Oggetto",
+    "body": "Contenuto HTML",
+    "is_active": "Attivo (sostituisce il modello integrato)",
+    "save": "Salva",
+    "saving": "Salvataggio…",
+    "saved": "Salvato.",
+    "preview": "Aggiorna anteprima",
+    "preview_title": "Anteprima",
+    "preview_hint": "Fai clic su \"Aggiorna anteprima\" per visualizzare il contenuto con dati di esempio.",
+    "placeholders": "Segnaposto disponibili",
+    "reset_to_builtin": "Ripristina modello integrato",
+    "error_invalid": "Il modello non è valido (errore Jinja o segnaposto sconosciuto).",
+    "key_enrollment": "Iscrizione",
+    "key_class_change": "Cambio classe",
+    "key_password_handout": "Consegna password"
   }
 }

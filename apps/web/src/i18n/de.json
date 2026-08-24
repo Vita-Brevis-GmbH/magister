@@ -24,7 +24,8 @@
     "user_settings": "Userkonfiguration",
     "system": "System",
     "modules": "Module & Funktionen",
-    "departments": "Abteilungen"
+    "departments": "Abteilungen",
+    "document_templates": "Vorlagen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -1135,5 +1136,26 @@
     "error_upn_conflict": "Dieser Anmeldename ist bereits vergeben.",
     "error_domain": "Die Domain ist nicht in der Allowlist.",
     "error_invalid": "Die eingegebenen Werte sind ungültig."
+  },
+  "doc_templates": {
+    "title": "Vorlagen (Briefe & Dokumente)",
+    "intro": "Betreff und HTML der Eltern-Briefe anpassen. Ohne aktive Vorlage gilt die eingebaute Standard-Vorlage.",
+    "key": "Vorlage",
+    "language": "Sprache",
+    "subject": "Betreff",
+    "body": "HTML-Inhalt",
+    "is_active": "Aktiv (überschreibt die Standard-Vorlage)",
+    "save": "Speichern",
+    "saving": "Speichere…",
+    "saved": "Gespeichert.",
+    "preview": "Vorschau aktualisieren",
+    "preview_title": "Vorschau",
+    "preview_hint": "„Vorschau aktualisieren\" klicken, um den Inhalt mit Beispieldaten zu rendern.",
+    "placeholders": "Verfügbare Platzhalter",
+    "reset_to_builtin": "Auf Standard zurücksetzen",
+    "error_invalid": "Die Vorlage ist ungültig (Jinja-Fehler oder unbekannter Platzhalter).",
+    "key_enrollment": "Eintritt (Anmeldung)",
+    "key_class_change": "Klassenwechsel",
+    "key_password_handout": "Passwort-Übergabe"
   }
 }

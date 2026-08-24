@@ -221,6 +221,16 @@ export function Layout() {
                     ) : null}
                     {isAdmin ? (
                       <Link
+                        to="/admin/document-templates"
+                        role="menuitem"
+                        activeProps={{ className: menuActive }}
+                        inactiveProps={{ className: menuIdle }}
+                      >
+                        {t("nav.document_templates")}
+                      </Link>
+                    ) : null}
+                    {isAdmin ? (
+                      <Link
                         to="/admin/system"
                         role="menuitem"
                         activeProps={{ className: menuActive }}

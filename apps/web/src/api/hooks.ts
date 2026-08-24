@@ -73,6 +73,11 @@ import type {
   MailDomainsOut,
   SchoolOut,
   SchoolCreate,
+  DocumentTemplateListOut,
+  DocumentTemplateOut,
+  DocumentTemplatePreviewOut,
+  DocumentTemplatePreviewRequest,
+  DocumentTemplateSave,
   RenameApplyRequest,
   RenamePreviewOut,
   RenamePreviewRequest,
@@ -109,6 +114,7 @@ export const queryKeys = {
   myPreferences: ["me", "preferences"] as const,
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
+  documentTemplates: ["admin-document-templates"] as const,
   departments: ["departments"] as const,
   department: (id: number) => ["departments", id] as const,
   departmentMembers: (id: number) => ["departments", id, "members"] as const,
@@ -172,6 +178,46 @@ export function useUpdateModules() {
       // The enabled set changed — refresh the nav-gating query.
       void qc.invalidateQueries({ queryKey: queryKeys.myModules });
     },
+  });
+}
+
+// --- Document templates (M6 Feature B) ---
+
+export function useDocumentTemplates() {
+  return useQuery<DocumentTemplateListOut>({
+    queryKey: queryKeys.documentTemplates,
+    queryFn: () => apiFetch<DocumentTemplateListOut>("/admin/document-templates"),
+  });
+}
+
+export function useSaveDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplateOut, ApiError, DocumentTemplateSave>({
+    mutationFn: (body) =>
+      apiFetch<DocumentTemplateOut>("/admin/document-templates", { method: "PUT", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+export function useDeleteDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/admin/document-templates/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+export function usePreviewDocumentTemplate() {
+  return useMutation<DocumentTemplatePreviewOut, ApiError, DocumentTemplatePreviewRequest>({
+    mutationFn: (body) =>
+      apiFetch<DocumentTemplatePreviewOut>("/admin/document-templates/preview", {
+        method: "POST",
+        body,
+      }),
   });
 }
 

@@ -456,6 +456,50 @@ export interface MailDomainsOut {
   domains: string[];
 }
 
+// --- Document templates (M6 Feature B) ---
+
+export interface DocumentTemplateOut {
+  id: number;
+  key: string;
+  language: string;
+  school_id: number | null;
+  subject: string | null;
+  body_html: string;
+  is_active: boolean;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface DocumentTemplateMetaOut {
+  keys: string[];
+  placeholders: string[];
+  languages: string[];
+}
+
+export interface DocumentTemplateListOut {
+  templates: DocumentTemplateOut[];
+  meta: DocumentTemplateMetaOut;
+}
+
+export interface DocumentTemplateSave {
+  key: string;
+  language: string;
+  school_id?: number | null;
+  subject?: string | null;
+  body_html: string;
+  is_active?: boolean;
+}
+
+export interface DocumentTemplatePreviewRequest {
+  body_html: string;
+  subject?: string | null;
+}
+
+export interface DocumentTemplatePreviewOut {
+  subject: string | null;
+  html: string;
+}
+
 export interface AdUserListResponse {
   items: AdUserOut[];
   total: number;

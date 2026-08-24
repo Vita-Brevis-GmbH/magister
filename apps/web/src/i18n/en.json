@@ -24,7 +24,8 @@
     "user_settings": "User configuration",
     "system": "System",
     "modules": "Modules & Features",
-    "departments": "Departments"
+    "departments": "Departments",
+    "document_templates": "Templates"
   },
   "auth": {
     "login_title": "Sign in",
@@ -1135,5 +1136,26 @@
     "error_upn_conflict": "This sign-in name is already taken.",
     "error_domain": "The domain is not on the allowlist.",
     "error_invalid": "The entered values are invalid."
+  },
+  "doc_templates": {
+    "title": "Templates (letters & documents)",
+    "intro": "Customise the subject and HTML of parent letters. Without an active template the built-in default is used.",
+    "key": "Template",
+    "language": "Language",
+    "subject": "Subject",
+    "body": "HTML content",
+    "is_active": "Active (overrides the built-in template)",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved.",
+    "preview": "Refresh preview",
+    "preview_title": "Preview",
+    "preview_hint": "Click \"Refresh preview\" to render the content with sample data.",
+    "placeholders": "Available placeholders",
+    "reset_to_builtin": "Reset to built-in",
+    "error_invalid": "The template is invalid (Jinja error or unknown placeholder).",
+    "key_enrollment": "Enrolment",
+    "key_class_change": "Class change",
+    "key_password_handout": "Password handout"
   }
 }

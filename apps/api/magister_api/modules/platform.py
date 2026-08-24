@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.admin_ad_groups import router as admin_ad_groups_router
+from magister_api.routers.admin_document_templates import router as admin_document_templates_router
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
 from magister_api.routers.admin_modules import router as admin_modules_router
@@ -56,5 +57,6 @@ PLATFORM_MODULE = ModuleManifest(
         admin_maintenance_router,
         admin_system_router,
         admin_modules_router,
+        admin_document_templates_router,
     ),
 )
