@@ -5,9 +5,21 @@ Skipped unless MAGISTER_TEST_DATABASE_URL is set (see integration conftest).
 
 from __future__ import annotations
 
+import pytest_asyncio
 from httpx import AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 _GUID = "33333333-3333-3333-3333-333333333333"
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _enable_company(db_session: AsyncSession) -> None:
+    """The company module is off by default; enable it for these tests."""
+    await db_session.execute(
+        text("UPDATE app_settings SET module_overrides = '{\"company\": true}'::jsonb WHERE id = 1")
+    )
+    await db_session.commit()
 
 
 async def _dept(client: AsyncClient, name: str = "Onboard-Dept") -> int:

@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request
@@ -20,6 +20,8 @@ from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
 from magister_api.db import dispose_engine, get_sessionmaker, init_engine
 from magister_api.logging_config import configure_logging
+from magister_api.modules import catalog
+from magister_api.modules.enforcement import make_module_guard
 from magister_api.modules.registry import enabled_modules
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
@@ -98,12 +100,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CsrfMiddleware)
     app.add_middleware(AuditContextMiddleware)
 
-    # Feature modules own their routers (M6 Phase 0 — magister_api/modules).
-    # Mount every enabled module's routers; today all modules are enabled, so
-    # the mounted route set is identical to the previous hard-coded list.
+    # Feature modules own their routers (M6 — magister_api/modules). Toggleable
+    # modules get a mount-time guard dependency so a disabled module's routes
+    # 404 at request time (Phase 3), not just disappear from the nav; the
+    # non-toggleable platform base is always reachable.
     for module in enabled_modules():
+        meta = catalog.get_meta(module.id)
+        guard = (
+            [Depends(make_module_guard(module.id))] if meta is not None and meta.toggleable else []
+        )
         for router in module.routers:
-            app.include_router(router)
+            app.include_router(router, dependencies=guard)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
