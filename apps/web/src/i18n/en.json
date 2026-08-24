@@ -23,7 +23,8 @@
     "refresh": "Refresh",
     "user_settings": "User configuration",
     "system": "System",
-    "modules": "Modules & Features"
+    "modules": "Modules & Features",
+    "departments": "Departments"
   },
   "auth": {
     "login_title": "Sign in",
@@ -1070,5 +1071,28 @@
     "mod_platform": "Base (platform)",
     "mod_school": "School — classes, class teachers, imports",
     "mod_company": "Company — departments/teams"
+  },
+  "departments": {
+    "title": "Departments",
+    "intro": "Manage this instance's departments/teams.",
+    "name": "Name",
+    "name_placeholder": "e.g. Front office",
+    "kuerzel": "Short code",
+    "create": "Create",
+    "loading": "Loading …",
+    "empty": "No departments yet.",
+    "archive": "Archive",
+    "members": "Members",
+    "member_guid": "Employee (objectGUID)",
+    "add_member": "Add",
+    "remove": "Remove",
+    "no_members": "No active members.",
+    "managers": "Managers",
+    "manager_guid": "Manager (objectGUID)",
+    "role": "Role",
+    "role_lead": "Lead",
+    "role_deputy": "Deputy",
+    "assign_manager": "Assign",
+    "no_managers": "No active managers."
   }
 }

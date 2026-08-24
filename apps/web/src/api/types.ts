@@ -238,6 +238,49 @@ export interface ModuleSettingsUpdate {
   module_overrides?: Record<string, boolean>;
 }
 
+/** M6 Phase 2: company-edition departments + memberships + manager roles. */
+export interface DepartmentOut {
+  id: number;
+  school_id: number;
+  name: string;
+  kuerzel: string | null;
+  details: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentCreate {
+  name: string;
+  kuerzel?: string | null;
+  details?: string | null;
+  school_id?: number;
+}
+
+export interface DepartmentMembershipOut {
+  id: number;
+  department_id: number;
+  ad_object_guid: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ManagerRoleOut {
+  id: number;
+  department_id: number;
+  ad_object_guid: string;
+  role: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ManagerRoleCreate {
+  ad_object_guid: string;
+  role?: "lead" | "deputy";
+}
+
 export interface ClassMembershipOut {
   id: number;
   class_id: number;

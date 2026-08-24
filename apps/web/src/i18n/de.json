@@ -23,7 +23,8 @@
     "refresh": "Aktualisieren",
     "user_settings": "Userkonfiguration",
     "system": "System",
-    "modules": "Module & Funktionen"
+    "modules": "Module & Funktionen",
+    "departments": "Abteilungen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -1070,5 +1071,28 @@
     "mod_platform": "Basis (Plattform)",
     "mod_school": "Schule — Klassen, Klassenlehrer, Importe",
     "mod_company": "Firma — Abteilungen/Teams"
+  },
+  "departments": {
+    "title": "Abteilungen",
+    "intro": "Abteilungen/Teams dieser Instanz verwalten.",
+    "name": "Name",
+    "name_placeholder": "z.B. Schulsekretariat",
+    "kuerzel": "Kürzel",
+    "create": "Anlegen",
+    "loading": "Wird geladen …",
+    "empty": "Noch keine Abteilungen.",
+    "archive": "Archivieren",
+    "members": "Mitglieder",
+    "member_guid": "Mitarbeiter (objectGUID)",
+    "add_member": "Hinzufügen",
+    "remove": "Entfernen",
+    "no_members": "Keine aktiven Mitglieder.",
+    "managers": "Kader",
+    "manager_guid": "Kader (objectGUID)",
+    "role": "Rolle",
+    "role_lead": "Leitung",
+    "role_deputy": "Stellvertretung",
+    "assign_manager": "Zuweisen",
+    "no_managers": "Kein aktives Kader."
   }
 }

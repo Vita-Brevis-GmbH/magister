@@ -67,6 +67,8 @@ export function Layout() {
   // Default visible while loading; in Phase 0 the school module is always on,
   // so the navigation is unchanged.
   const hasSchool = enabledModules.data?.has("school") ?? true;
+  // The company module is off by default; only surface its nav once enabled.
+  const hasCompany = enabledModules.data?.has("company") ?? false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -86,6 +88,15 @@ export function Layout() {
                 inactiveProps={{ className: navIdle }}
               >
                 {t("nav.classes")}
+              </Link>
+            ) : null}
+            {canManage && hasCompany ? (
+              <Link
+                to="/departments"
+                activeProps={{ className: navActive }}
+                inactiveProps={{ className: navIdle }}
+              >
+                {t("nav.departments")}
               </Link>
             ) : null}
             {isTeacher && hasSchool ? (

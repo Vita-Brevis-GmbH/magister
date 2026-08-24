@@ -26,7 +26,8 @@
     "refresh": "Actualiser",
     "user_settings": "Configuration utilisateur",
     "system": "Système",
-    "modules": "Modules et fonctions"
+    "modules": "Modules et fonctions",
+    "departments": "Départements"
   },
   "auth": {
     "login_title": "Connexion",
@@ -1073,5 +1074,28 @@
     "mod_platform": "Base (plateforme)",
     "mod_school": "École — classes, enseignant·e·s titulaires, imports",
     "mod_company": "Entreprise — départements/équipes"
+  },
+  "departments": {
+    "title": "Départements",
+    "intro": "Gérer les départements/équipes de cette instance.",
+    "name": "Nom",
+    "name_placeholder": "p. ex. Secrétariat",
+    "kuerzel": "Abréviation",
+    "create": "Créer",
+    "loading": "Chargement …",
+    "empty": "Aucun département.",
+    "archive": "Archiver",
+    "members": "Membres",
+    "member_guid": "Collaborateur (objectGUID)",
+    "add_member": "Ajouter",
+    "remove": "Retirer",
+    "no_members": "Aucun membre actif.",
+    "managers": "Cadres",
+    "manager_guid": "Cadre (objectGUID)",
+    "role": "Rôle",
+    "role_lead": "Responsable",
+    "role_deputy": "Adjoint",
+    "assign_manager": "Assigner",
+    "no_managers": "Aucun cadre actif."
   }
 }

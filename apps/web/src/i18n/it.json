@@ -26,7 +26,8 @@
     "refresh": "Aggiorna",
     "user_settings": "Configurazione utenti",
     "system": "Sistema",
-    "modules": "Moduli e funzioni"
+    "modules": "Moduli e funzioni",
+    "departments": "Reparti"
   },
   "auth": {
     "login_title": "Accedi",
@@ -1073,5 +1074,28 @@
     "mod_platform": "Base (piattaforma)",
     "mod_school": "Scuola — classi, docenti di classe, importazioni",
     "mod_company": "Azienda — reparti/team"
+  },
+  "departments": {
+    "title": "Reparti",
+    "intro": "Gestisci i reparti/team di questa istanza.",
+    "name": "Nome",
+    "name_placeholder": "es. Segreteria",
+    "kuerzel": "Sigla",
+    "create": "Crea",
+    "loading": "Caricamento …",
+    "empty": "Nessun reparto.",
+    "archive": "Archivia",
+    "members": "Membri",
+    "member_guid": "Collaboratore (objectGUID)",
+    "add_member": "Aggiungi",
+    "remove": "Rimuovi",
+    "no_members": "Nessun membro attivo.",
+    "managers": "Quadri",
+    "manager_guid": "Quadro (objectGUID)",
+    "role": "Ruolo",
+    "role_lead": "Responsabile",
+    "role_deputy": "Vice",
+    "assign_manager": "Assegna",
+    "no_managers": "Nessun quadro attivo."
   }
 }

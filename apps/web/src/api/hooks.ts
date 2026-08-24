@@ -45,6 +45,11 @@ import type {
   ModulesOut,
   ModuleSettingsUpdate,
   AdminModulesOut,
+  DepartmentOut,
+  DepartmentCreate,
+  DepartmentMembershipOut,
+  ManagerRoleOut,
+  ManagerRoleCreate,
   SubjectTeacherCreate,
   SubjectTeacherOut,
   CurrentUserOut,
@@ -101,6 +106,10 @@ export const queryKeys = {
   myPreferences: ["me", "preferences"] as const,
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
+  departments: ["departments"] as const,
+  department: (id: number) => ["departments", id] as const,
+  departmentMembers: (id: number) => ["departments", id, "members"] as const,
+  departmentManagers: (id: number) => ["departments", id, "managers"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   devices: ["devices"] as const,
@@ -160,6 +169,88 @@ export function useUpdateModules() {
       // The enabled set changed — refresh the nav-gating query.
       void qc.invalidateQueries({ queryKey: queryKeys.myModules });
     },
+  });
+}
+
+// --- Departments (company edition, M6 Phase 2) ---
+
+export function useDepartments() {
+  return useQuery<DepartmentOut[]>({
+    queryKey: queryKeys.departments,
+    queryFn: () => apiFetch<DepartmentOut[]>("/departments"),
+  });
+}
+
+export function useDepartment(id: number) {
+  return useQuery<DepartmentOut>({
+    queryKey: queryKeys.department(id),
+    queryFn: () => apiFetch<DepartmentOut>(`/departments/${id}`),
+  });
+}
+
+export function useCreateDepartment() {
+  const qc = useQueryClient();
+  return useMutation<DepartmentOut, ApiError, DepartmentCreate>({
+    mutationFn: (body) => apiFetch<DepartmentOut>("/departments", { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departments }),
+  });
+}
+
+export function useArchiveDepartment() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/departments/${id}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departments }),
+  });
+}
+
+export function useDepartmentMembers(id: number) {
+  return useQuery<DepartmentMembershipOut[]>({
+    queryKey: queryKeys.departmentMembers(id),
+    queryFn: () => apiFetch<DepartmentMembershipOut[]>(`/departments/${id}/members`),
+  });
+}
+
+export function useAddDepartmentMember(id: number) {
+  const qc = useQueryClient();
+  return useMutation<DepartmentMembershipOut, ApiError, { ad_object_guid: string }>({
+    mutationFn: (body) =>
+      apiFetch<DepartmentMembershipOut>(`/departments/${id}/members`, { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentMembers(id) }),
+  });
+}
+
+export function useRemoveDepartmentMember(id: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (membershipId) =>
+      apiFetch<void>(`/departments/${id}/members/${membershipId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentMembers(id) }),
+  });
+}
+
+export function useDepartmentManagers(id: number) {
+  return useQuery<ManagerRoleOut[]>({
+    queryKey: queryKeys.departmentManagers(id),
+    queryFn: () => apiFetch<ManagerRoleOut[]>(`/departments/${id}/managers`),
+  });
+}
+
+export function useAssignManager(id: number) {
+  const qc = useQueryClient();
+  return useMutation<ManagerRoleOut, ApiError, ManagerRoleCreate>({
+    mutationFn: (body) =>
+      apiFetch<ManagerRoleOut>(`/departments/${id}/managers`, { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentManagers(id) }),
+  });
+}
+
+export function useRevokeManager(id: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) =>
+      apiFetch<void>(`/departments/${id}/managers/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentManagers(id) }),
   });
 }
 
