@@ -23,13 +23,8 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
+from magister_api.auth.capabilities import Capability, has_capability, require_capability
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import (
-    ROLE_ADMIN,
-    ROLE_SCHULLEITUNG,
-    ROLE_SMI,
-    require_role,
-)
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.import_job import (
@@ -62,20 +57,23 @@ from magister_api.services.imports import (
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
-# Broad gate: any staff role reaches the endpoints; the per-kind check below
-# then narrows access. Classes/memberships/teachers stay Admin+Schulleitung;
+# Broad gate: any management tier reaches the endpoints; the per-kind check
+# below then narrows access. Classes/memberships/teachers stay Admin+Schulleitung;
 # the `students` provisioning import is restricted to Admin+SMI (creates AD
 # accounts — a Schulträger-IT/Admin responsibility, not general Schulleitung).
-require_import_access = require_role(ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI)
+require_import_access = require_capability(Capability.IMPORT_RUN)  # admin + schulleitung + smi
 
 
 def _authorize_kind(user: AuthenticatedUser, kind: str) -> None:
-    """Enforce the per-kind role rule. Raises 403 on mismatch."""
-    # Provisioning imports create AD accounts → Admin + SMI only.
-    if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS):
-        if not (user.is_admin or ROLE_SMI in user.roles):
-            raise HTTPException(status_code=403, detail="forbidden")
-    elif not (user.is_admin or ROLE_SCHULLEITUNG in user.roles):
+    """Enforce the per-kind capability rule. Raises 403 on mismatch."""
+    # Provisioning imports create AD accounts → USER_ADMINISTER (admin + SMI);
+    # structural imports need ORGUNIT_MANAGE (admin + Schulleitung).
+    needed = (
+        Capability.USER_ADMINISTER
+        if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS)
+        else Capability.ORGUNIT_MANAGE
+    )
+    if not has_capability(user, needed):
         raise HTTPException(status_code=403, detail="forbidden")
 
 

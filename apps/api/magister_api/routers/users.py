@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.auth.capabilities import Capability, require_capability
 from magister_api.auth.class_perm import require_user_lifecycle_writer, require_user_writer
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_role
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
@@ -74,7 +74,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 # Until then, listing is open to Schulleitung-or-above and SMI; KL access is enabled in the next PR.
 # SMI sees users from every school it is assigned to (per-school grants accumulate
 # into ``school_scope``); the repository's scope filter does the rest.
-require_listing = require_role("schulleitung", "smi")
+require_listing = require_capability(Capability.USER_READ)  # admin + schulleitung + smi
 
 
 @router.get("", response_model=AdUserListResponse)
@@ -124,7 +124,7 @@ async def list_users(
 # Read-side dependency for the user-edit form: admin + SMI may see the
 # mail-domains allowlist so the UI can render a dropdown of valid
 # UPN/mail suffixes.
-require_user_edit_reader = require_role("smi")
+require_user_edit_reader = require_capability(Capability.USER_ADMINISTER)  # admin + smi
 
 
 @router.get("/mail-domains")
