@@ -121,8 +121,13 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
     jede toggelbare Modul-Route trägt den Guard, die `platform`-Basis nie;
     i18n-Locale-Parität (alle 4 Sprachen gleiche Keys) bereits durch
     `i18n.test.ts` erzwungen.
-  - ⏳ RBAC von Rollennamen auf Capabilities (`require_*` als dünne Wrapper
-    erhalten).
+  - ✅ **RBAC von Rollennamen auf Capabilities:** Endpoints deklarieren die
+    benötigte *Capability* (`auth/capabilities.py`), nicht die Rolle; eine
+    zentrale `ROLE_CAPABILITIES`-Map verbindet Rollen mit Capabilities. Die
+    `require_*`-Helfer bleiben als dünne `require_capability`-Wrapper erhalten
+    (`require_role` nur noch für direkte Rollen-Gates); die Ad-hoc-Gates in
+    users/audit/imports sind mitmigriert. Verhalten unverändert — eine
+    Äquivalenz-Matrix pinnt jedes Gate auf exakt die frühere Rollen-Menge.
   - ⏳ Optional: ein Modul bei Bedarf via `git subtree split` in einen eigenen
     Container promoten (Muster wie `cockpit/`, ADR-0003).
 
