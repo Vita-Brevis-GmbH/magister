@@ -108,11 +108,23 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
   `memberships` + On-/Offboarding als eigene Modul-Tabellen (parallel zu
   `classes`, nicht generischer Diskriminator — ADR-0008 D6); Firmen-Term-Pack;
   nutzt PW-Reset/Lifecycle/Devices/Imports/Audit/Reports der Plattform.
-- ⏳ **Phase 3 — Härten & optional splitten:** RBAC von Rollennamen auf
-  Capabilities (`require_*` als dünne Wrapper erhalten); Modul-Vertrags-CI
-  (Audit-Actions, Scope-Filter, RBAC-Dependency, i18n je Modul geprüft); ein
-  Modul bei Bedarf via `git subtree split` in einen eigenen Container promoten
-  (Muster wie `cockpit/`, ADR-0003).
+- ⏳ **Phase 3 — Härten & optional splitten:**
+  - ✅ **Request-Enforcement abgeschalteter Module:** Router werden statisch
+    gemountet; jedes *toggelbare* Modul bekommt beim Mounten eine Guard-Dependency,
+    die Requests an ein deaktiviertes Modul mit `404 module_disabled` abweist
+    (effektive Menge aus Profil + Overrides). „Aus" heisst damit API-aus, nicht
+    nur aus der Nav ausgeblendet; die nicht-toggelbare `platform`-Basis bleibt
+    immer erreichbar.
+  - ✅ **Modul-Vertrags-CI (Architektur-Fitness-Tests):** Registry-IDs == Katalog-IDs
+    (jedes gemountete Modul hat Toggle-/Guard-Policy); jede eigene Route ist
+    authentifiziert ausser auf einer expliziten, geprüften Public-Allowlist;
+    jede toggelbare Modul-Route trägt den Guard, die `platform`-Basis nie;
+    i18n-Locale-Parität (alle 4 Sprachen gleiche Keys) bereits durch
+    `i18n.test.ts` erzwungen.
+  - ⏳ RBAC von Rollennamen auf Capabilities (`require_*` als dünne Wrapper
+    erhalten).
+  - ⏳ Optional: ein Modul bei Bedarf via `git subtree split` in einen eigenen
+    Container promoten (Muster wie `cockpit/`, ADR-0003).
 
 **Bewusst nicht in M6:**
 
