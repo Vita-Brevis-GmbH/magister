@@ -1103,5 +1103,30 @@
     "role_deputy": "Vice",
     "assign_manager": "Assegna",
     "no_managers": "Nessun quadro attivo."
+  },
+  "rename": {
+    "button": "Cambio nome",
+    "title": "Cambio nome",
+    "subtitle": "Inserisci il nuovo nome — nome visualizzato, UPN, e-mail e nome account vengono proposti.",
+    "new_surname": "Nuovo cognome",
+    "new_given_name": "Nuovo nome (facoltativo)",
+    "new_given_name_hint": "Lasciare vuoto per mantenere il nome",
+    "compute": "Calcola proposta",
+    "computing": "Calcolo…",
+    "review_title": "Controlla la proposta e modifica se necessario:",
+    "field_given": "Nome",
+    "field_surname": "Cognome",
+    "field_display_name": "Nome visualizzato",
+    "field_upn": "Nome di accesso (UPN)",
+    "field_mail": "Indirizzo e-mail",
+    "field_sam": "Nome account (sAMAccountName)",
+    "keep_old_alias": "Mantieni l'indirizzo precedente {{mail}} come alias",
+    "back": "Indietro",
+    "apply": "Applica cambio nome",
+    "applying": "Applicazione…",
+    "error_admin_only": "Solo un amministratore può modificare UPN/nome account.",
+    "error_upn_conflict": "Questo nome di accesso è già in uso.",
+    "error_domain": "Il dominio non è nella lista consentita.",
+    "error_invalid": "I valori inseriti non sono validi."
   }
 }

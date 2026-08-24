@@ -733,5 +733,135 @@ class TestMailAliases:
         assert _proxy_addresses(mock_ad, _ANNA_DN) == {"SMTP:anna@schule.example.ch"}
 
 
+class TestRename:
+    @pytest.mark.asyncio
+    async def test_preview_suggests_cascaded_values(
+        self,
+        app: FastAPI,
+        as_admin: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        # give the seeded row a given/surname + mail to cascade from
+        from sqlalchemy import update as sql_update
+
+        await db_session.execute(
+            sql_update(AdUserCache)
+            .where(AdUserCache.ad_object_guid == TEACHER_GUID)
+            .values(given_name="Anna", surname="Meier", mail="anna.meier@schule.example.ch")
+        )
+        await db_session.commit()
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_admin.post(
+                f"/users/{TEACHER_GUID}/rename/preview",
+                json={"new_surname": "Müller"},
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["display_name"] == "Anna Müller"
+            assert body["mail"] == "anna.mueller@schule.example.ch"
+            assert body["old_mail_kept_as_alias"] == "anna.meier@schule.example.ch"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+    @pytest.mark.asyncio
+    async def test_apply_cascades_and_keeps_old_address_as_alias(
+        self,
+        app: FastAPI,
+        as_admin: AsyncClient,
+        app_settings: Settings,
+        db_session: AsyncSession,
+        school_a: int,
+        engine: AsyncEngine,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        from sqlalchemy import update as sql_update
+
+        await db_session.execute(
+            sql_update(AdUserCache)
+            .where(AdUserCache.ad_object_guid == TEACHER_GUID)
+            .values(given_name="Anna", surname="Meier", mail="anna.meier@schule.example.ch")
+        )
+        await db_session.commit()
+
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_admin.post(
+                f"/users/{TEACHER_GUID}/rename",
+                json={
+                    "given_name": "Anna",
+                    "surname": "Müller",
+                    "display_name": "Anna Müller",
+                    "upn": "anna.mueller@schule.example.ch",
+                    "mail": "anna.mueller@schule.example.ch",
+                    "sam_account_name": "anna.mueller",
+                    "keep_old_mail_as_alias": True,
+                },
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["surname"] == "Müller"
+            assert body["mail"] == "anna.mueller@schule.example.ch"
+            assert body["upn"] == "anna.mueller@schule.example.ch"
+            # the old primary is preserved as an alias
+            assert "anna.meier@schule.example.ch" in body["mail_aliases"]
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        # proxyAddresses: new primary + old address as smtp alias.
+        assert _proxy_addresses(mock_ad, _ANNA_DN) == {
+            "SMTP:anna.mueller@schule.example.ch",
+            "smtp:anna.meier@schule.example.ch",
+        }
+
+        # Audited as a single user_renamed event.
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            row = (
+                (
+                    await s.execute(
+                        select(AuditEvent)
+                        .where(AuditEvent.action == "user_renamed")
+                        .order_by(AuditEvent.id.desc())
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            assert row is not None
+            event = await AuditService(s, app_settings).read(row.id)
+        assert event is not None
+        assert "surname" in event.payload["changed_keys"]
+
+    @pytest.mark.asyncio
+    async def test_smi_cannot_rename_upn(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        # A rename that changes the UPN is admin-only; SMI is refused (the same
+        # per-field RBAC as PATCH, since rename reuses the attribute service).
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.post(
+                f"/users/{TEACHER_GUID}/rename",
+                json={"surname": "Müller", "upn": "anna.mueller@schule.example.ch"},
+            )
+            assert r.status_code == 403
+            assert r.json()["detail"].startswith("admin_only_field:")
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+
 # Keep imports happy.
 _ = ASGITransport

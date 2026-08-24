@@ -1100,5 +1100,30 @@
     "role_deputy": "Stellvertretung",
     "assign_manager": "Zuweisen",
     "no_managers": "Kein aktives Kader."
+  },
+  "rename": {
+    "button": "Namensänderung",
+    "title": "Namensänderung",
+    "subtitle": "Neuen Namen eingeben — Anzeigename, UPN, Mail und Kontoname werden vorgeschlagen.",
+    "new_surname": "Neuer Nachname",
+    "new_given_name": "Neuer Vorname (optional)",
+    "new_given_name_hint": "Leer lassen, wenn der Vorname gleich bleibt",
+    "compute": "Vorschlag berechnen",
+    "computing": "Berechne…",
+    "review_title": "Vorschlag prüfen und bei Bedarf anpassen:",
+    "field_given": "Vorname",
+    "field_surname": "Nachname",
+    "field_display_name": "Anzeigename",
+    "field_upn": "Anmeldename (UPN)",
+    "field_mail": "E-Mail-Adresse",
+    "field_sam": "Kontoname (sAMAccountName)",
+    "keep_old_alias": "Bisherige Adresse {{mail}} als Alias behalten",
+    "back": "Zurück",
+    "apply": "Namensänderung anwenden",
+    "applying": "Wird angewendet…",
+    "error_admin_only": "UPN/Kontoname darf nur ein Administrator ändern.",
+    "error_upn_conflict": "Dieser Anmeldename ist bereits vergeben.",
+    "error_domain": "Die Domain ist nicht in der Allowlist.",
+    "error_invalid": "Die eingegebenen Werte sind ungültig."
   }
 }

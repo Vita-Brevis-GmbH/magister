@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
+import { RenameModal } from "@/components/RenameModal";
 import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -119,6 +120,7 @@ function UserDetailPage(): JSX.Element {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [renameOpen, setRenameOpen] = useState(false);
   // Per-user AD group membership (edited inline in the edit form). Kept
   // separate from the attribute form because it writes via its own endpoint
   // (best-effort AD group modify), with its own save button + status.
@@ -412,6 +414,11 @@ function UserDetailPage(): JSX.Element {
           {!editing ? (
             <Button type="button" onClick={startEditing}>
               {t("users.detail.edit")}
+            </Button>
+          ) : null}
+          {!editing ? (
+            <Button type="button" variant="outline" onClick={() => setRenameOpen(true)}>
+              {t("rename.button")}
             </Button>
           ) : null}
           {/* Step 1: (de)activate. Not for one's own account. */}
@@ -864,6 +871,11 @@ function UserDetailPage(): JSX.Element {
 
       <SubjectAccessModal guid={privacyOpen ? guid : null} onClose={() => setPrivacyOpen(false)} />
       <UserStatusModal user={statusOpen ? user : null} onClose={() => setStatusOpen(false)} />
+      <RenameModal
+        user={renameOpen ? user : null}
+        canChangeLogin={canChangeLogin}
+        onClose={() => setRenameOpen(false)}
+      />
 
       <Dialog open={pdfOpen} onOpenChange={(o) => !pdfBusy && setPdfOpen(o)}>
         <DialogContent>

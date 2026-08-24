@@ -1103,5 +1103,30 @@
     "role_deputy": "Adjoint",
     "assign_manager": "Assigner",
     "no_managers": "Aucun cadre actif."
+  },
+  "rename": {
+    "button": "Changement de nom",
+    "title": "Changement de nom",
+    "subtitle": "Saisissez le nouveau nom — nom affiché, UPN, e-mail et nom de compte sont proposés.",
+    "new_surname": "Nouveau nom de famille",
+    "new_given_name": "Nouveau prénom (facultatif)",
+    "new_given_name_hint": "Laisser vide pour conserver le prénom",
+    "compute": "Calculer la proposition",
+    "computing": "Calcul…",
+    "review_title": "Vérifiez la proposition et ajustez si nécessaire :",
+    "field_given": "Prénom",
+    "field_surname": "Nom de famille",
+    "field_display_name": "Nom affiché",
+    "field_upn": "Nom de connexion (UPN)",
+    "field_mail": "Adresse e-mail",
+    "field_sam": "Nom de compte (sAMAccountName)",
+    "keep_old_alias": "Conserver l'adresse précédente {{mail}} comme alias",
+    "back": "Retour",
+    "apply": "Appliquer le changement de nom",
+    "applying": "Application…",
+    "error_admin_only": "Seul un administrateur peut modifier l'UPN/nom de compte.",
+    "error_upn_conflict": "Ce nom de connexion est déjà pris.",
+    "error_domain": "Le domaine n'est pas dans la liste d'autorisation.",
+    "error_invalid": "Les valeurs saisies sont invalides."
   }
 }

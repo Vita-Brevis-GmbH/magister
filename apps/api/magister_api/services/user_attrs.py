@@ -117,6 +117,7 @@ class UserAttributesService:
         mail_domains: list[str],
         ip: str | None,
         request_id: str,
+        audit_action: str = "user_attribute_changed",
     ) -> UserAttributesResult:
         # ------------------------------------------------------------------
         # 1) Slice the payload into "what the caller actually wants to change".
@@ -267,7 +268,7 @@ class UserAttributesService:
         #    before/after values to keep PII out of the audit trail.
         # ------------------------------------------------------------------
         await self.audit.emit(
-            action="user_attribute_changed",
+            action=audit_action,
             target_kind="ad_user",
             target_id=target.ad_object_guid,
             actor_upn=self.scope.upn,

@@ -73,6 +73,9 @@ import type {
   MailDomainsOut,
   SchoolOut,
   SchoolCreate,
+  RenameApplyRequest,
+  RenamePreviewOut,
+  RenamePreviewRequest,
   SchoolUpdate,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
@@ -656,6 +659,26 @@ export function useUpdateUser(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
     mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.user(guid), data);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+/** POST /users/{guid}/rename/preview — suggest cascaded values (no writes). */
+export function useRenamePreview(guid: string) {
+  return useMutation<RenamePreviewOut, ApiError, RenamePreviewRequest>({
+    mutationFn: (body) =>
+      apiFetch<RenamePreviewOut>(`/users/${guid}/rename/preview`, { method: "POST", body }),
+  });
+}
+
+/** POST /users/{guid}/rename — apply the confirmed name change. */
+export function useRenameApply(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<AdUserOut, ApiError, RenameApplyRequest>({
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}/rename`, { method: "POST", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
       qc.invalidateQueries({ queryKey: ["users"] });

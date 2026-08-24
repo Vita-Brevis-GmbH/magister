@@ -1100,5 +1100,30 @@
     "role_deputy": "Deputy",
     "assign_manager": "Assign",
     "no_managers": "No active managers."
+  },
+  "rename": {
+    "button": "Name change",
+    "title": "Name change",
+    "subtitle": "Enter the new name — display name, UPN, mail and account name are suggested.",
+    "new_surname": "New surname",
+    "new_given_name": "New given name (optional)",
+    "new_given_name_hint": "Leave empty to keep the given name",
+    "compute": "Compute suggestion",
+    "computing": "Computing…",
+    "review_title": "Review the suggestion and adjust if needed:",
+    "field_given": "Given name",
+    "field_surname": "Surname",
+    "field_display_name": "Display name",
+    "field_upn": "Sign-in name (UPN)",
+    "field_mail": "Email address",
+    "field_sam": "Account name (sAMAccountName)",
+    "keep_old_alias": "Keep the previous address {{mail}} as an alias",
+    "back": "Back",
+    "apply": "Apply name change",
+    "applying": "Applying…",
+    "error_admin_only": "Only an administrator may change UPN/account name.",
+    "error_upn_conflict": "This sign-in name is already taken.",
+    "error_domain": "The domain is not on the allowlist.",
+    "error_invalid": "The entered values are invalid."
   }
 }

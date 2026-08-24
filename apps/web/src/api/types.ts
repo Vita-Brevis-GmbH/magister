@@ -408,6 +408,34 @@ export interface UserStatusUpdate {
   reason?: string | null;
 }
 
+/** POST /users/{guid}/rename/preview — request the cascaded suggestion. */
+export interface RenamePreviewRequest {
+  new_surname: string;
+  new_given_name?: string | null;
+}
+
+/** POST /users/{guid}/rename/preview — suggested (editable) values. */
+export interface RenamePreviewOut {
+  given_name: string | null;
+  surname: string;
+  display_name: string;
+  upn: string | null;
+  mail: string | null;
+  sam_account_name: string | null;
+  old_mail_kept_as_alias: string | null;
+}
+
+/** POST /users/{guid}/rename — operator-confirmed final values. */
+export interface RenameApplyRequest {
+  given_name?: string | null;
+  surname?: string | null;
+  display_name?: string | null;
+  upn?: string | null;
+  sam_account_name?: string | null;
+  mail?: string | null;
+  keep_old_mail_as_alias?: boolean;
+}
+
 export interface MailDomainsOut {
   domains: string[];
 }
