@@ -38,6 +38,22 @@ class ManagerRoleRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def list_active_for_person(
+        self, ad_object_guid: str, *, now: datetime | None = None
+    ) -> list[ManagerRole]:
+        """Active manager roles of a person across ALL departments (unscoped).
+
+        The caller (offboarding) re-checks each row's department against the
+        actor's school scope, so this crosses scope by design.
+        """
+        ts = now or utcnow()
+        stmt = (
+            select(ManagerRole)
+            .where(ManagerRole.ad_object_guid == ad_object_guid)
+            .where(_active_window(ts))
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get(self, role_id: int) -> ManagerRole | None:
         return await self.session.get(ManagerRole, role_id)
 

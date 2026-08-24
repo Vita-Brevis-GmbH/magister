@@ -38,6 +38,22 @@ class DepartmentMembershipRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
+    async def list_active_for_person(
+        self, ad_object_guid: str, *, now: datetime | None = None
+    ) -> list[DepartmentMembership]:
+        """Active memberships of a person across ALL departments (unscoped).
+
+        The caller (offboarding) re-checks each row's department against the
+        actor's school scope, so this crosses scope by design.
+        """
+        ts = now or utcnow()
+        stmt = (
+            select(DepartmentMembership)
+            .where(DepartmentMembership.ad_object_guid == ad_object_guid)
+            .where(_active_window(ts))
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
     async def get(self, membership_id: int) -> DepartmentMembership | None:
         return await self.session.get(DepartmentMembership, membership_id)
 

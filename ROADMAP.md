@@ -104,7 +104,7 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
   Funktionen" mit Zwei-Ebenen-Schaltung (Profil-Preset + Einzel-Schieber je
   Modul), abhängigkeitsbewusst, „soft off" für Module mit Daten; Term-Packs
   (i18n-Overlay je Profil).
-- 🚧 **Phase 2 — Company-MVP:** `departments` + `manager_roles` +
+- ✅ **Phase 2 — Company-MVP:** `departments` + `manager_roles` +
   `memberships` + On-/Offboarding als eigene Modul-Tabellen (parallel zu
   `classes`, nicht generischer Diskriminator — ADR-0008 D6); Firmen-Term-Pack;
   nutzt PW-Reset/Lifecycle/Devices/Imports/Audit/Reports der Plattform.

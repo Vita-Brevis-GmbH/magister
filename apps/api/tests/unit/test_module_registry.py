@@ -30,10 +30,11 @@ def test_every_enabled_module_router_is_mounted() -> None:
 
 def test_router_count() -> None:
     # 25 routers were hard-listed in create_app() before the registry seam;
-    # M6 Phase 1 adds admin_modules (platform) → 26; Phase 2 adds departments +
-    # department_people (company) → 28. A drop or dup would change this count.
+    # M6 Phase 1 adds admin_modules (platform) → 26; Phase 2 adds departments,
+    # department_people and company_lifecycle (company) → 29. A drop or dup
+    # would change this count.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 28
+    assert total == 29
 
 
 def test_module_ids_unique_and_expected() -> None:
