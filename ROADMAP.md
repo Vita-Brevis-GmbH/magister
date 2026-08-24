@@ -133,16 +133,18 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
 
 **M6 — Benutzer-Zusatzfeatures (Product-Owner-Wunsch, ADR-0009):**
 
-- ⏳ **A — Mail-Aliase (proxyAddresses):** mehrere Adressen pro Benutzer
+- ✅ **A — Mail-Aliase (proxyAddresses):** mehrere Adressen pro Benutzer
   (Standard + Zusatz); Schreiben ins on-prem-AD-Attribut `proxyAddresses`,
   Azure AD Connect legt sie in Exchange an. Neue `mail_aliases`-Cache-Spalte,
   Domain-Allowlist gilt, Sync-Readback. Grundlage für C.
 - ⏳ **B — Editierbare Vorlagen:** `document_templates` in der DB, im Admin-UI
   editierbar (Betreff/HTML + Platzhalter, Live-Vorschau, pro Sprache),
   Sandbox-Renderer mit Fallback auf die eingebauten Templates. Kein SMTP.
-- ⏳ **C — Namensänderung-Assistent:** geführte Kaskade Nachname → Anzeigename
-  → UPN → Mail → sAMAccountName in einem auditierten Vorgang; alte Adresse
-  bleibt automatisch als Alias (nutzt A). Plus mehr editierbare AD-Attribute.
+- ✅ **C — Namensänderung-Assistent:** geführte Kaskade Nachname → Anzeigename
+  → UPN → Mail → sAMAccountName in einem auditierten `user_renamed`-Vorgang;
+  alte Adresse bleibt automatisch als Alias (nutzt A). Plus editierbare
+  Org-/Kontakt-Attribute (Titel, Abteilung, Firma, Telefon, Mobil, Büro,
+  Beschreibung, Personalnummer).
 
 **Bewusst nicht in M6:**
 
