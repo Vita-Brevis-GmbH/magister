@@ -268,7 +268,11 @@
       "credential_pdf_masked_hint": "Le PDF contient le nom d'utilisateur ; le mot de passe est masqué. Utilisez « Réinitialiser le mot de passe » pour remettre un vrai mot de passe.",
       "credential_pdf_heading": "Titre supplémentaire (facultatif)",
       "credential_pdf_body": "Texte supplémentaire (facultatif)",
-      "credential_pdf_download": "Télécharger le PDF"
+      "credential_pdf_download": "Télécharger le PDF",
+      "mail_aliases_desc": "Adresses de réception supplémentaires. Créées comme alias dans Exchange.",
+      "no_aliases": "Aucune adresse supplémentaire.",
+      "add_alias": "Ajouter une adresse",
+      "remove_alias": "Supprimer"
     },
     "field": {
       "display_name": "Nom affiché",
@@ -300,7 +304,9 @@
       "store_password": "Enregistrer le mot de passe dans Magister",
       "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres.",
       "ad_groups": "Groupes AD",
-      "can_change_password": "L'utilisateur peut changer le mot de passe"
+      "can_change_password": "L'utilisateur peut changer le mot de passe",
+      "mail_aliases": "Adresses supplémentaires (alias)",
+      "alias_nr": "Alias {{nr}}"
     },
     "new_user": "Nouvel utilisateur",
     "bulk": {

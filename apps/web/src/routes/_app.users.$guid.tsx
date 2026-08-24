@@ -56,6 +56,7 @@ interface FormState {
   sam_account_name: string;
   mail_local: string;
   mail_domain: string;
+  mail_aliases: Array<{ local: string; domain: string }>;
   street_address: string;
   locality: string;
   postal_code: string;
@@ -77,6 +78,7 @@ function emptyForm(): FormState {
     sam_account_name: "",
     mail_local: "",
     mail_domain: "",
+    mail_aliases: [],
     street_address: "",
     locality: "",
     postal_code: "",
@@ -193,6 +195,7 @@ function UserDetailPage(): JSX.Element {
       sam_account_name: userQ.data.sam_account_name ?? "",
       mail_local: mail.local,
       mail_domain: mail.domain,
+      mail_aliases: (userQ.data.mail_aliases ?? []).map((a) => splitMail(a)),
       street_address: userQ.data.street_address ?? "",
       locality: userQ.data.locality ?? "",
       postal_code: userQ.data.postal_code ?? "",
@@ -230,6 +233,24 @@ function UserDetailPage(): JSX.Element {
     update.reset();
   }
 
+  function addAlias(): void {
+    setField("mail_aliases", [...form.mail_aliases, { local: "", domain: form.mail_domain }]);
+  }
+
+  function removeAlias(index: number): void {
+    setField(
+      "mail_aliases",
+      form.mail_aliases.filter((_, i) => i !== index),
+    );
+  }
+
+  function setAlias(index: number, patch: Partial<{ local: string; domain: string }>): void {
+    setField(
+      "mail_aliases",
+      form.mail_aliases.map((a, i) => (i === index ? { ...a, ...patch } : a)),
+    );
+  }
+
   function buildPayload(): UserAttributesUpdate {
     if (!userQ.data) return {};
     const out: UserAttributesUpdate = {};
@@ -261,6 +282,16 @@ function UserDetailPage(): JSX.Element {
         ? `${form.mail_local.trim().toLowerCase()}@${form.mail_domain}`
         : null;
     if (mailNew !== current.mail) out.mail = mailNew;
+
+    // Secondary addresses (aliases): full replacement. Empty rows are dropped;
+    // a duplicate of the primary is dropped server-side.
+    const aliasesNew = form.mail_aliases
+      .map((a) => (a.local.trim() && a.domain ? `${a.local.trim().toLowerCase()}@${a.domain}` : ""))
+      .filter((a): a is string => a !== "");
+    const aliasesCur = current.mail_aliases ?? [];
+    const aliasesChanged =
+      aliasesNew.length !== aliasesCur.length || aliasesNew.some((a, i) => a !== aliasesCur[i]);
+    if (aliasesChanged) out.mail_aliases = aliasesNew;
 
     const addressFields: Array<
       "street_address" | "locality" | "postal_code" | "country" | "temp_device_name"
@@ -541,6 +572,49 @@ function UserDetailPage(): JSX.Element {
                 label={t("users.field.mail")}
                 allowEmpty
               />
+
+              <div className="space-y-2">
+                <Label>{t("users.field.mail_aliases")}</Label>
+                <p className="text-xs text-muted-foreground">
+                  {t("users.detail.mail_aliases_desc")}
+                </p>
+                {form.mail_aliases.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("users.detail.no_aliases")}</p>
+                ) : (
+                  form.mail_aliases.map((alias, i) => (
+                    <div key={i} className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <UpnField
+                          localValue={alias.local}
+                          domainValue={alias.domain}
+                          onLocal={(v) => setAlias(i, { local: v })}
+                          onDomain={(v) => setAlias(i, { domain: v })}
+                          domains={domains}
+                          label={t("users.field.alias_nr", { nr: i + 1 })}
+                          allowEmpty
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeAlias(i)}
+                      >
+                        {t("users.detail.remove_alias")}
+                      </Button>
+                    </div>
+                  ))
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addAlias}
+                  disabled={domains.length === 0}
+                >
+                  {t("users.detail.add_alias")}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -912,6 +986,10 @@ function UserReadView({
           <InfoRow label={t("users.field.display_name")} value={user.display_name} />
           <InfoRow label={t("users.field.upn")} value={user.upn} />
           <InfoRow label={t("users.field.mail")} value={user.mail} />
+          <InfoRow
+            label={t("users.field.mail_aliases")}
+            value={user.mail_aliases.length > 0 ? user.mail_aliases.join(", ") : null}
+          />
           <InfoRow label={t("users.detail.section_address")} value={address || null} />
           <InfoRow label={t("users.field.device_name")} value={user.device_name} />
           <InfoRow label={t("users.field.temp_device_name")} value={user.temp_device_name} />

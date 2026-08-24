@@ -162,6 +162,7 @@ class AdUserCacheSyncRepository:
                     "device_name": r.device_name,
                     "password_never_expires": r.password_never_expires,
                     "ad_groups": list(r.groups),
+                    "mail_aliases": list(r.mail_aliases),
                     # temp_device_name, jahrgangsstufe and cannot_change_password
                     # are Magister-only — do NOT overwrite on AD sync. We omit
                     # them from both VALUES and the ON-CONFLICT set; existing
@@ -198,6 +199,7 @@ class AdUserCacheSyncRepository:
                         AdUserCache
                     ).excluded.password_never_expires,
                     "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
+                    "mail_aliases": pg_insert(AdUserCache).excluded.mail_aliases,
                     # Present in AD again → clear any "missing" marker.
                     "ad_missing_since": None,
                 },

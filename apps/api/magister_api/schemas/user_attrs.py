@@ -38,6 +38,10 @@ class UserAttributesUpdate(BaseModel):
     upn: str | None = Field(default=None, max_length=320)
     sam_account_name: str | None = Field(default=None, max_length=20)
     mail: str | None = Field(default=None, max_length=320)
+    # Secondary SMTP addresses (aliases). Sending an empty list clears all
+    # aliases; omitting the field leaves them alone. Domain-allowlist checked in
+    # the service, same as ``mail``/``upn`` (ADR-0009).
+    mail_aliases: list[str] | None = Field(default=None, max_length=50)
     street_address: str | None = Field(default=None, max_length=200)
     locality: str | None = Field(default=None, max_length=100)
     postal_code: str | None = Field(default=None, max_length=16)
@@ -91,6 +95,27 @@ class UserAttributesUpdate(BaseModel):
         if not UPN_LOCAL_RE.match(local) or not domain:
             raise ValueError("mail_invalid_format")
         return v
+
+    @field_validator("mail_aliases")
+    @classmethod
+    def _check_aliases(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        seen: set[str] = set()
+        out: list[str] = []
+        for raw in v:
+            addr = raw.strip().lower()
+            if not addr:
+                continue  # skip blank rows from the UI
+            if "@" not in addr:
+                raise ValueError("alias_invalid_format")
+            local, _, domain = addr.partition("@")
+            if not UPN_LOCAL_RE.match(local) or not domain:
+                raise ValueError("alias_invalid_format")
+            if addr not in seen:
+                seen.add(addr)
+                out.append(addr)
+        return out
 
 
 class UserGroupsUpdate(BaseModel):

@@ -265,7 +265,11 @@
       "credential_pdf_masked_hint": "The PDF contains the username; the password is masked. Use “Reset password” to hand over a real password.",
       "credential_pdf_heading": "Extra heading (optional)",
       "credential_pdf_body": "Extra text (optional)",
-      "credential_pdf_download": "Download PDF"
+      "credential_pdf_download": "Download PDF",
+      "mail_aliases_desc": "Further receiving addresses. Created as aliases in Exchange.",
+      "no_aliases": "No additional addresses.",
+      "add_alias": "Add address",
+      "remove_alias": "Remove"
     },
     "field": {
       "display_name": "Display name",
@@ -297,7 +301,9 @@
       "store_password": "Store password in Magister",
       "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings.",
       "ad_groups": "AD groups",
-      "can_change_password": "User can change password"
+      "can_change_password": "User can change password",
+      "mail_aliases": "Additional addresses (aliases)",
+      "alias_nr": "Alias {{nr}}"
     },
     "new_user": "New user",
     "bulk": {

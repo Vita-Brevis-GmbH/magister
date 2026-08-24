@@ -265,7 +265,11 @@
       "credential_pdf_masked_hint": "Das PDF enthält den Benutzernamen; das Passwort wird maskiert. Für ein echtes Passwort «Passwort zurücksetzen» verwenden.",
       "credential_pdf_heading": "Zusätzliche Überschrift (optional)",
       "credential_pdf_body": "Zusätzlicher Text (optional)",
-      "credential_pdf_download": "PDF herunterladen"
+      "credential_pdf_download": "PDF herunterladen",
+      "mail_aliases_desc": "Weitere Empfangsadressen. Werden in Exchange als Aliase angelegt.",
+      "no_aliases": "Keine Zusatz-Adressen.",
+      "add_alias": "Adresse hinzufügen",
+      "remove_alias": "Entfernen"
     },
     "field": {
       "display_name": "Anzeigename",
@@ -297,7 +301,9 @@
       "store_password": "Passwort in Magister speichern",
       "store_password_hint": "Verschlüsselt (Server-Schlüssel). Beim Ausgeben der Zugangsdaten wird dieses PW verwendet statt eines neuen. Benötigt die globale Freigabe in den Einstellungen.",
       "ad_groups": "AD-Gruppen",
-      "can_change_password": "Benutzer kann Passwort ändern"
+      "can_change_password": "Benutzer kann Passwort ändern",
+      "mail_aliases": "Zusatz-Adressen (Aliase)",
+      "alias_nr": "Alias {{nr}}"
     },
     "new_user": "Neuer Benutzer",
     "bulk": {

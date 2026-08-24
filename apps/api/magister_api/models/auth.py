@@ -92,6 +92,13 @@ class AdUserCache(Base):
     ad_groups: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Secondary SMTP addresses (aliases). The primary address is ``mail``; these
+    # are the ``smtp:`` entries of the AD ``proxyAddresses`` set minus the
+    # primary. Written to AD as proxyAddresses; Azure AD Connect syncs them to
+    # Exchange (ADR-0009). Refreshed on every sync (readback).
+    mail_aliases: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
 

@@ -366,6 +366,8 @@ export interface AdUserOut {
   store_password: boolean;
   /** Synced AD group memberships (memberOf DNs). */
   ad_groups: string[];
+  /** Secondary SMTP addresses (aliases) mirrored from proxyAddresses. */
+  mail_aliases: string[];
 }
 
 export interface UserDeletionImpact {
@@ -387,6 +389,8 @@ export interface UserAttributesUpdate {
   upn?: string | null;
   sam_account_name?: string | null;
   mail?: string | null;
+  /** Full replacement of the secondary-address list; [] clears all aliases. */
+  mail_aliases?: string[] | null;
   street_address?: string | null;
   locality?: string | null;
   postal_code?: string | null;

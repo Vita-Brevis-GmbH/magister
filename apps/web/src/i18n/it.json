@@ -268,7 +268,11 @@
       "credential_pdf_masked_hint": "Il PDF contiene il nome utente; la password è mascherata. Usa «Reimposta password» per consegnare una password reale.",
       "credential_pdf_heading": "Titolo aggiuntivo (facoltativo)",
       "credential_pdf_body": "Testo aggiuntivo (facoltativo)",
-      "credential_pdf_download": "Scarica PDF"
+      "credential_pdf_download": "Scarica PDF",
+      "mail_aliases_desc": "Ulteriori indirizzi di ricezione. Creati come alias in Exchange.",
+      "no_aliases": "Nessun indirizzo aggiuntivo.",
+      "add_alias": "Aggiungi indirizzo",
+      "remove_alias": "Rimuovi"
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -300,7 +304,9 @@
       "store_password": "Salva la password in Magister",
       "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni.",
       "ad_groups": "Gruppi AD",
-      "can_change_password": "L'utente può cambiare la password"
+      "can_change_password": "L'utente può cambiare la password",
+      "mail_aliases": "Indirizzi aggiuntivi (alias)",
+      "alias_nr": "Alias {{nr}}"
     },
     "new_user": "Nuovo utente",
     "bulk": {
