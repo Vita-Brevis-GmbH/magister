@@ -131,6 +131,19 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
   - ⏳ Optional: ein Modul bei Bedarf via `git subtree split` in einen eigenen
     Container promoten (Muster wie `cockpit/`, ADR-0003).
 
+**M6 — Benutzer-Zusatzfeatures (Product-Owner-Wunsch, ADR-0009):**
+
+- ⏳ **A — Mail-Aliase (proxyAddresses):** mehrere Adressen pro Benutzer
+  (Standard + Zusatz); Schreiben ins on-prem-AD-Attribut `proxyAddresses`,
+  Azure AD Connect legt sie in Exchange an. Neue `mail_aliases`-Cache-Spalte,
+  Domain-Allowlist gilt, Sync-Readback. Grundlage für C.
+- ⏳ **B — Editierbare Vorlagen:** `document_templates` in der DB, im Admin-UI
+  editierbar (Betreff/HTML + Platzhalter, Live-Vorschau, pro Sprache),
+  Sandbox-Renderer mit Fallback auf die eingebauten Templates. Kein SMTP.
+- ⏳ **C — Namensänderung-Assistent:** geführte Kaskade Nachname → Anzeigename
+  → UPN → Mail → sAMAccountName in einem auditierten Vorgang; alte Adresse
+  bleibt automatisch als Alias (nutzt A). Plus mehr editierbare AD-Attribute.
+
 **Bewusst nicht in M6:**
 
 - Rename `school_id` → `org_unit_id` (Kosmetik; Vokabular wechselt über
