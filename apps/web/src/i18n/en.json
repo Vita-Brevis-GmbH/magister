@@ -269,7 +269,9 @@
       "mail_aliases_desc": "Further receiving addresses. Created as aliases in Exchange.",
       "no_aliases": "No additional addresses.",
       "add_alias": "Add address",
-      "remove_alias": "Remove"
+      "remove_alias": "Remove",
+      "section_org": "Organisation & contact",
+      "section_org_desc": "Further directory attributes (mirrored from AD)."
     },
     "field": {
       "display_name": "Display name",
@@ -303,7 +305,15 @@
       "ad_groups": "AD groups",
       "can_change_password": "User can change password",
       "mail_aliases": "Additional addresses (aliases)",
-      "alias_nr": "Alias {{nr}}"
+      "alias_nr": "Alias {{nr}}",
+      "title": "Title / role",
+      "department": "Department",
+      "company": "Company / organisation",
+      "telephone_number": "Phone",
+      "mobile": "Mobile",
+      "office": "Office",
+      "description": "Description",
+      "employee_id": "Employee ID"
     },
     "new_user": "New user",
     "bulk": {

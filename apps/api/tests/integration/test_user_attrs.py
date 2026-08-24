@@ -246,6 +246,46 @@ class TestHappyPath:
             app.dependency_overrides.pop(get_ad_client, None)
 
     @pytest.mark.asyncio
+    async def test_smi_can_set_org_attributes(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={
+                    "title": "Lehrperson",
+                    "department": "Primarstufe",
+                    "company": "Schule Musterhausen",
+                    "telephone_number": "+41 31 000 00 00",
+                    "mobile": "+41 79 000 00 00",
+                    "office": "B12",
+                    "description": "Klassenlehrperson 4a",
+                    "employee_id": "P-1234",
+                },
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["title"] == "Lehrperson"
+            assert body["department"] == "Primarstufe"
+            assert body["telephone_number"] == "+41 31 000 00 00"
+            assert body["employee_id"] == "P-1234"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        row = await db_session.get(AdUserCache, TEACHER_GUID)
+        assert row is not None
+        await db_session.refresh(row)
+        assert row.company == "Schule Musterhausen"
+        assert row.office == "B12"
+
+    @pytest.mark.asyncio
     async def test_smi_can_set_ad_policy_flags(
         self,
         app: FastAPI,

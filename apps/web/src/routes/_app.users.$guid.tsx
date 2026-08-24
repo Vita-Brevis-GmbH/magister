@@ -62,6 +62,14 @@ interface FormState {
   locality: string;
   postal_code: string;
   country: string;
+  title: string;
+  department: string;
+  company: string;
+  telephone_number: string;
+  mobile: string;
+  office: string;
+  description: string;
+  employee_id: string;
   temp_device_name: string;
   jahrgangsstufe: string;
   password_never_expires: boolean;
@@ -84,6 +92,14 @@ function emptyForm(): FormState {
     locality: "",
     postal_code: "",
     country: "",
+    title: "",
+    department: "",
+    company: "",
+    telephone_number: "",
+    mobile: "",
+    office: "",
+    description: "",
+    employee_id: "",
     temp_device_name: "",
     jahrgangsstufe: "",
     password_never_expires: false,
@@ -202,6 +218,14 @@ function UserDetailPage(): JSX.Element {
       locality: userQ.data.locality ?? "",
       postal_code: userQ.data.postal_code ?? "",
       country: userQ.data.country ?? "",
+      title: userQ.data.title ?? "",
+      department: userQ.data.department ?? "",
+      company: userQ.data.company ?? "",
+      telephone_number: userQ.data.telephone_number ?? "",
+      mobile: userQ.data.mobile ?? "",
+      office: userQ.data.office ?? "",
+      description: userQ.data.description ?? "",
+      employee_id: userQ.data.employee_id ?? "",
       temp_device_name: userQ.data.temp_device_name ?? "",
       jahrgangsstufe: userQ.data.jahrgangsstufe != null ? String(userQ.data.jahrgangsstufe) : "",
       password_never_expires: userQ.data.password_never_expires,
@@ -295,10 +319,36 @@ function UserDetailPage(): JSX.Element {
       aliasesNew.length !== aliasesCur.length || aliasesNew.some((a, i) => a !== aliasesCur[i]);
     if (aliasesChanged) out.mail_aliases = aliasesNew;
 
-    const addressFields: Array<
-      "street_address" | "locality" | "postal_code" | "country" | "temp_device_name"
-    > = ["street_address", "locality", "postal_code", "country", "temp_device_name"];
-    for (const f of addressFields) {
+    const plainFields: Array<
+      | "street_address"
+      | "locality"
+      | "postal_code"
+      | "country"
+      | "temp_device_name"
+      | "title"
+      | "department"
+      | "company"
+      | "telephone_number"
+      | "mobile"
+      | "office"
+      | "description"
+      | "employee_id"
+    > = [
+      "street_address",
+      "locality",
+      "postal_code",
+      "country",
+      "temp_device_name",
+      "title",
+      "department",
+      "company",
+      "telephone_number",
+      "mobile",
+      "office",
+      "description",
+      "employee_id",
+    ];
+    for (const f of plainFields) {
       const next = trimOrNull(form[f]);
       const cur = (current as unknown as Record<string, string | null>)[f] ?? null;
       if (next !== cur) out[f] = next;
@@ -664,6 +714,71 @@ function UserDetailPage(): JSX.Element {
             </CardContent>
           </Card>
 
+          {/* Organisation / Kontakt */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("users.detail.section_org")}</CardTitle>
+              <CardDescription>{t("users.detail.section_org_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <Field
+                  id="title"
+                  label={t("users.field.title")}
+                  value={form.title}
+                  onChange={(v) => setField("title", v)}
+                  maxLength={128}
+                />
+                <Field
+                  id="employee_id"
+                  label={t("users.field.employee_id")}
+                  value={form.employee_id}
+                  onChange={(v) => setField("employee_id", v)}
+                  maxLength={64}
+                />
+                <Field
+                  id="department"
+                  label={t("users.field.department")}
+                  value={form.department}
+                  onChange={(v) => setField("department", v)}
+                />
+                <Field
+                  id="company"
+                  label={t("users.field.company")}
+                  value={form.company}
+                  onChange={(v) => setField("company", v)}
+                />
+                <Field
+                  id="telephone_number"
+                  label={t("users.field.telephone_number")}
+                  value={form.telephone_number}
+                  onChange={(v) => setField("telephone_number", v)}
+                  maxLength={64}
+                />
+                <Field
+                  id="mobile"
+                  label={t("users.field.mobile")}
+                  value={form.mobile}
+                  onChange={(v) => setField("mobile", v)}
+                  maxLength={64}
+                />
+                <Field
+                  id="office"
+                  label={t("users.field.office")}
+                  value={form.office}
+                  onChange={(v) => setField("office", v)}
+                />
+              </div>
+              <Field
+                id="description"
+                label={t("users.field.description")}
+                value={form.description}
+                onChange={(v) => setField("description", v)}
+                maxLength={1024}
+              />
+            </CardContent>
+          </Card>
+
           {/* AD-Konto-Richtlinien */}
           <Card>
             <CardHeader>
@@ -1003,6 +1118,14 @@ function UserReadView({
             value={user.mail_aliases.length > 0 ? user.mail_aliases.join(", ") : null}
           />
           <InfoRow label={t("users.detail.section_address")} value={address || null} />
+          <InfoRow label={t("users.field.title")} value={user.title} />
+          <InfoRow label={t("users.field.department")} value={user.department} />
+          <InfoRow label={t("users.field.company")} value={user.company} />
+          <InfoRow label={t("users.field.telephone_number")} value={user.telephone_number} />
+          <InfoRow label={t("users.field.mobile")} value={user.mobile} />
+          <InfoRow label={t("users.field.office")} value={user.office} />
+          <InfoRow label={t("users.field.employee_id")} value={user.employee_id} />
+          <InfoRow label={t("users.field.description")} value={user.description} />
           <InfoRow label={t("users.field.device_name")} value={user.device_name} />
           <InfoRow label={t("users.field.temp_device_name")} value={user.temp_device_name} />
           {user.kind === "student" ? (

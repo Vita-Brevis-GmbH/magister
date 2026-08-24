@@ -269,7 +269,9 @@
       "mail_aliases_desc": "Weitere Empfangsadressen. Werden in Exchange als Aliase angelegt.",
       "no_aliases": "Keine Zusatz-Adressen.",
       "add_alias": "Adresse hinzufügen",
-      "remove_alias": "Entfernen"
+      "remove_alias": "Entfernen",
+      "section_org": "Organisation & Kontakt",
+      "section_org_desc": "Weitere Verzeichnis-Attribute (aus AD gespiegelt)."
     },
     "field": {
       "display_name": "Anzeigename",
@@ -303,7 +305,15 @@
       "ad_groups": "AD-Gruppen",
       "can_change_password": "Benutzer kann Passwort ändern",
       "mail_aliases": "Zusatz-Adressen (Aliase)",
-      "alias_nr": "Alias {{nr}}"
+      "alias_nr": "Alias {{nr}}",
+      "title": "Titel/Funktion",
+      "department": "Abteilung",
+      "company": "Firma / Organisation",
+      "telephone_number": "Telefon",
+      "mobile": "Mobil",
+      "office": "Büro",
+      "description": "Beschreibung",
+      "employee_id": "Personalnummer"
     },
     "new_user": "Neuer Benutzer",
     "bulk": {

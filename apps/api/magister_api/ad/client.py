@@ -83,6 +83,15 @@ DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "l",
     "postalCode",
     "co",
+    # Organisation / contact attributes (mirrored into ad_user_cache).
+    "title",
+    "department",
+    "company",
+    "telephoneNumber",
+    "mobile",
+    "physicalDeliveryOfficeName",
+    "description",
+    "employeeID",
     # Multi-valued SMTP addresses; secondary (``smtp:``) entries become aliases.
     "proxyAddresses",
 )
@@ -109,6 +118,15 @@ class AdUserRecord:
     locality: str | None
     postal_code: str | None
     country: str | None
+    # Organisation / contact attributes (ADR-0009 Feature C).
+    title: str | None = None
+    department: str | None = None
+    company: str | None = None
+    telephone_number: str | None = None
+    mobile: str | None = None
+    office: str | None = None
+    description: str | None = None
+    employee_id: str | None = None
     # Populated by the Phase-4 device sync from the Computer-OU
     # (``managedBy=<user-dn>``). None until then.
     device_name: str | None = None
@@ -312,6 +330,14 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         locality=_first_value(entry_attrs.get("l")),
         postal_code=_first_value(entry_attrs.get("postalCode")),
         country=_first_value(entry_attrs.get("co")),
+        title=_first_value(entry_attrs.get("title")),
+        department=_first_value(entry_attrs.get("department")),
+        company=_first_value(entry_attrs.get("company")),
+        telephone_number=_first_value(entry_attrs.get("telephoneNumber")),
+        mobile=_first_value(entry_attrs.get("mobile")),
+        office=_first_value(entry_attrs.get("physicalDeliveryOfficeName")),
+        description=_first_value(entry_attrs.get("description")),
+        employee_id=_first_value(entry_attrs.get("employeeID")),
         when_changed=_parse_generalized_time(_first_value(entry_attrs.get("whenChanged"))),
         groups=tuple(str(m) for m in member_of),
         mail_aliases=mail_aliases,

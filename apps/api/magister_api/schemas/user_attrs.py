@@ -46,6 +46,15 @@ class UserAttributesUpdate(BaseModel):
     locality: str | None = Field(default=None, max_length=100)
     postal_code: str | None = Field(default=None, max_length=16)
     country: str | None = Field(default=None, max_length=100)
+    # Organisation / contact (ADR-0009 Feature C). Free-text, cleared with "".
+    title: str | None = Field(default=None, max_length=128)
+    department: str | None = Field(default=None, max_length=200)
+    company: str | None = Field(default=None, max_length=200)
+    telephone_number: str | None = Field(default=None, max_length=64)
+    mobile: str | None = Field(default=None, max_length=64)
+    office: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=1024)
+    employee_id: str | None = Field(default=None, max_length=64)
     temp_device_name: str | None = Field(default=None, max_length=100)
     # Magister-only per-student grade (-1..13); null clears it.
     jahrgangsstufe: int | None = Field(default=None, ge=-1, le=13)

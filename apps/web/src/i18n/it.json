@@ -272,7 +272,9 @@
       "mail_aliases_desc": "Ulteriori indirizzi di ricezione. Creati come alias in Exchange.",
       "no_aliases": "Nessun indirizzo aggiuntivo.",
       "add_alias": "Aggiungi indirizzo",
-      "remove_alias": "Rimuovi"
+      "remove_alias": "Rimuovi",
+      "section_org": "Organizzazione e contatti",
+      "section_org_desc": "Ulteriori attributi di directory (rispecchiati da AD)."
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -306,7 +308,15 @@
       "ad_groups": "Gruppi AD",
       "can_change_password": "L'utente può cambiare la password",
       "mail_aliases": "Indirizzi aggiuntivi (alias)",
-      "alias_nr": "Alias {{nr}}"
+      "alias_nr": "Alias {{nr}}",
+      "title": "Titolo / funzione",
+      "department": "Reparto",
+      "company": "Azienda / organizzazione",
+      "telephone_number": "Telefono",
+      "mobile": "Cellulare",
+      "office": "Ufficio",
+      "description": "Descrizione",
+      "employee_id": "Numero personale"
     },
     "new_user": "Nuovo utente",
     "bulk": {

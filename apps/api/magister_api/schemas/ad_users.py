@@ -26,6 +26,14 @@ class AdUserOut(BaseModel):
     locality: str | None = None
     postal_code: str | None = None
     country: str | None = None
+    title: str | None = None
+    department: str | None = None
+    company: str | None = None
+    telephone_number: str | None = None
+    mobile: str | None = None
+    office: str | None = None
+    description: str | None = None
+    employee_id: str | None = None
     device_name: str | None = None
     temp_device_name: str | None = None
     jahrgangsstufe: int | None = None

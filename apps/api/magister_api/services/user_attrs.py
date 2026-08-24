@@ -41,6 +41,14 @@ _AD_ATTR_TO_COLUMN: dict[str, str] = {
     "l": "locality",
     "postalCode": "postal_code",
     "co": "country",
+    "title": "title",
+    "department": "department",
+    "company": "company",
+    "telephoneNumber": "telephone_number",
+    "mobile": "mobile",
+    "physicalDeliveryOfficeName": "office",
+    "description": "description",
+    "employeeID": "employee_id",
 }
 
 # Payload field → AD attribute name.
@@ -55,6 +63,14 @@ _PAYLOAD_TO_AD_ATTR: dict[str, str] = {
     "locality": "l",
     "postal_code": "postalCode",
     "country": "co",
+    "title": "title",
+    "department": "department",
+    "company": "company",
+    "telephone_number": "telephoneNumber",
+    "mobile": "mobile",
+    "office": "physicalDeliveryOfficeName",
+    "description": "description",
+    "employee_id": "employeeID",
 }
 
 # Fields a non-admin (SMI) is NOT allowed to change — login-relevant.
