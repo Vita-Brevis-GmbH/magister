@@ -23,7 +23,12 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
-from magister_api.auth.capabilities import Capability, has_capability, require_capability
+from magister_api.auth.capabilities import (
+    Capability,
+    RbacMatrix,
+    has_capability,
+    require_capability,
+)
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
@@ -54,6 +59,7 @@ from magister_api.services.imports import (
     InvalidCsvError,
     render_template,
 )
+from magister_api.services.rbac import get_rbac_matrix
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -64,7 +70,7 @@ router = APIRouter(prefix="/imports", tags=["imports"])
 require_import_access = require_capability(Capability.IMPORT_RUN)  # admin + schulleitung + smi
 
 
-def _authorize_kind(user: AuthenticatedUser, kind: str) -> None:
+def _authorize_kind(user: AuthenticatedUser, matrix: RbacMatrix, kind: str) -> None:
     """Enforce the per-kind capability rule. Raises 403 on mismatch."""
     # Provisioning imports create AD accounts → USER_ADMINISTER (admin + SMI);
     # structural imports need ORGUNIT_MANAGE (admin + Schulleitung).
@@ -73,7 +79,7 @@ def _authorize_kind(user: AuthenticatedUser, kind: str) -> None:
         if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS)
         else Capability.ORGUNIT_MANAGE
     )
-    if not has_capability(user, needed):
+    if not has_capability(user, matrix, needed):
         raise HTTPException(status_code=403, detail="forbidden")
 
 
@@ -133,10 +139,11 @@ async def stage_import(
     user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    matrix: RbacMatrix = Depends(get_rbac_matrix),
 ) -> ImportJobDetailOut:
     if kind not in ALLOWED_IMPORT_KINDS:
         raise HTTPException(status_code=400, detail="unknown_kind")
-    _authorize_kind(user, kind)
+    _authorize_kind(user, matrix, kind)
     target_school = _resolve_school_id(school_id, user)
 
     # Hardening-audit M-04: bound CSV uploads so a stray multi-GB upload
@@ -190,6 +197,7 @@ async def get_job(
     user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    matrix: RbacMatrix = Depends(get_rbac_matrix),
 ) -> ImportJobDetailOut:
     svc = ImportService(session, settings, user.to_scope())
     try:
@@ -198,7 +206,7 @@ async def get_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
-    _authorize_kind(user, job.kind)
+    _authorize_kind(user, matrix, job.kind)
     return ImportJobDetailOut(
         id=job.id,
         school_id=job.school_id,
@@ -222,6 +230,7 @@ async def apply_job(
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
     ad: AdClient = Depends(get_ad_client),
+    matrix: RbacMatrix = Depends(get_rbac_matrix),
 ) -> ImportApplyResultOut:
     svc = ImportService(session, settings, user.to_scope(), ad=ad)
     try:
@@ -230,7 +239,7 @@ async def apply_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job_pre.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
-    _authorize_kind(user, job_pre.kind)
+    _authorize_kind(user, matrix, job_pre.kind)
 
     ip, request_id = _ip_request_id(request)
     try:
@@ -259,6 +268,7 @@ async def apply_job(
 async def render_handouts(
     body: HandoutRequest,
     user: AuthenticatedUser = Depends(require_import_access),
+    matrix: RbacMatrix = Depends(get_rbac_matrix),
 ) -> Response:
     """Render the one-time provisioning credentials into a ZIP of two PDFs.
 
@@ -269,7 +279,7 @@ async def render_handouts(
     """
     teachers = body.audience == AUDIENCE_TEACHERS
     # Both provisioning imports create AD accounts → Admin/SMI only.
-    _authorize_kind(user, IMPORT_KIND_TEACHERS if teachers else IMPORT_KIND_STUDENTS)
+    _authorize_kind(user, matrix, IMPORT_KIND_TEACHERS if teachers else IMPORT_KIND_STUDENTS)
     if not body.credentials:
         raise HTTPException(status_code=400, detail="no_credentials")
     entries = [
@@ -306,6 +316,7 @@ async def cancel_job(
     user: AuthenticatedUser = Depends(require_import_access),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    matrix: RbacMatrix = Depends(get_rbac_matrix),
 ) -> None:
     svc = ImportService(session, settings, user.to_scope())
     try:
@@ -314,7 +325,7 @@ async def cancel_job(
         raise HTTPException(status_code=404, detail="import_job_not_found") from exc
     if not user.is_admin and job_pre.school_id not in user.school_scope:
         raise HTTPException(status_code=404, detail="import_job_not_found")
-    _authorize_kind(user, job_pre.kind)
+    _authorize_kind(user, matrix, job_pre.kind)
 
     ip, request_id = _ip_request_id(request)
     try:

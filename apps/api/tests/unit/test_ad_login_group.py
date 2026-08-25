@@ -44,31 +44,25 @@ class TestIsMemberOfGroup:
 
 
 class TestRoleGrantValidation:
-    def test_admin_requires_null_school(self) -> None:
+    """ADR-0010: role validity + the admin/scoped-role scope rule moved from the
+    schema to the DB-aware router (roles are dynamic now), so the schema only
+    enforces the request *shape*. The scope/role-validity rules are covered
+    end-to-end in ``tests/integration/test_admin_rbac.py``.
+    """
+
+    def test_shape_accepts_any_role_string(self) -> None:
         from magister_api.schemas.roles import RoleGrantRequest
 
-        RoleGrantRequest(role="admin", school_id=None)  # ok
-        with pytest.raises(ValueError):
-            RoleGrantRequest(role="admin", school_id=1)
+        # A custom role key with a school_id is a valid *shape*; whether it is
+        # assignable is decided by the router against the DB catalog.
+        req = RoleGrantRequest(role="teamlead", school_id=1)
+        assert req.role == "teamlead"
+        assert RoleGrantRequest(role="admin", school_id=None).school_id is None
 
-    def test_schulleitung_requires_school(self) -> None:
+    def test_empty_role_rejected(self) -> None:
+        from pydantic import ValidationError
+
         from magister_api.schemas.roles import RoleGrantRequest
 
-        RoleGrantRequest(role="schulleitung", school_id=1)  # ok
-        with pytest.raises(ValueError):
-            RoleGrantRequest(role="schulleitung", school_id=None)
-
-    def test_smi_requires_school(self) -> None:
-        from magister_api.schemas.roles import RoleGrantRequest
-
-        RoleGrantRequest(role="smi", school_id=2)  # ok
-        with pytest.raises(ValueError):
-            RoleGrantRequest(role="smi", school_id=None)
-
-    def test_unknown_role_rejected(self) -> None:
-        from magister_api.schemas.roles import RoleGrantRequest
-
-        with pytest.raises(ValueError):
-            RoleGrantRequest(role="kl", school_id=1)
-        with pytest.raises(ValueError):
-            RoleGrantRequest(role="root", school_id=None)
+        with pytest.raises(ValidationError):
+            RoleGrantRequest(role="", school_id=1)

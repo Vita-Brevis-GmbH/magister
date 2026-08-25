@@ -572,6 +572,7 @@
       "role_admin": "Administrateur",
       "role_schulleitung": "Direction",
       "role_smi": "IT du responsable (SMI)",
+      "role_kl": "Enseignant·e titulaire",
       "revoke": "Retirer",
       "grant_title": "Attribuer un rôle",
       "grant_desc": "Rechercher un utilisateur, choisir un rôle et (sauf admin) une école.",
@@ -1080,6 +1081,29 @@
       "member": "Personne",
       "member_plural": "Personnes"
     }
+  },
+  "rbac": {
+    "matrix_title": "Matrice des droits",
+    "matrix_desc": "Définissez quelle rôle détient quelle permission. L'administrateur détient toujours tous les droits ; les rôles dérivés (enseignant·e titulaire) proviennent des attributions de classe.",
+    "col_role": "Rôle",
+    "role_admin_hint": "Super-rôle — tous les droits",
+    "role_system_hint": "Rôle système",
+    "role_derived_hint": "Dérivé des attributions de classe",
+    "role_custom_hint": "Rôle personnalisé",
+    "delete_role": "Supprimer",
+    "add_role_title": "Ajouter un rôle personnalisé",
+    "role_key": "Clé",
+    "role_name": "Libellé",
+    "role_name_placeholder": "p. ex. Coordination",
+    "role_key_hint": "Minuscules, chiffres, - et _ ; au moins 2 caractères.",
+    "add_role_button": "Créer le rôle",
+    "role_exists": "Ce rôle existe déjà.",
+    "cap_system_administer": "Administration système",
+    "cap_orgunit_manage": "Gérer les unités organisationnelles",
+    "cap_user_administer": "Gérer les utilisateurs et mots de passe",
+    "cap_user_read": "Lire les utilisateurs et l'audit",
+    "cap_user_config": "Configuration des utilisateurs",
+    "cap_import_run": "Exécuter les imports"
   },
   "modules": {
     "title": "Modules et fonctions",

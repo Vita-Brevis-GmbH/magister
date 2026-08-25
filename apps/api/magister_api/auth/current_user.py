@@ -52,7 +52,10 @@ def _roles_to_user(
         roles.append(r.role)
         if r.role == "admin":
             is_admin = True
-        elif r.role in ("schulleitung", "smi") and r.school_id is not None:
+        # ADR-0010: any scoped grant (a non-null school_id) contributes to the
+        # org-unit scope — built-in schulleitung/smi and custom roles alike.
+        # admin is the only cross-school role (school_id null).
+        elif r.school_id is not None:
             schools.add(r.school_id)
     return AuthenticatedUser(
         ad_object_guid=ad_object_guid,

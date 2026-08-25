@@ -19,6 +19,7 @@ from magister_api.models.document_template import DocumentTemplate
 from magister_api.models.import_job import ImportJob, ImportStagedRow
 from magister_api.models.local_admin import LocalAdmin
 from magister_api.models.manager_role import ManagerRole
+from magister_api.models.rbac import Role, RoleCapability
 from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.models.subject_teacher_role import SubjectTeacherRole
@@ -41,7 +42,9 @@ __all__ = [
     "ImportStagedRow",
     "LocalAdmin",
     "ManagerRole",
+    "Role",
     "RoleAssignment",
+    "RoleCapability",
     "School",
     "SchoolClass",
     "Session",

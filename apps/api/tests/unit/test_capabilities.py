@@ -15,7 +15,9 @@ import pytest
 from fastapi import HTTPException
 
 from magister_api.auth.capabilities import (
+    ROLE_CAPABILITIES,
     Capability,
+    RbacMatrix,
     effective_capabilities,
     has_capability,
     require_capability,
@@ -30,6 +32,10 @@ from magister_api.auth.rbac import (
 from magister_api.routers.audit import require_audit_reader
 from magister_api.routers.imports import _authorize_kind, require_import_access
 from magister_api.routers.users import require_listing, require_user_edit_reader
+
+# The default matrix (ADR-0010): after seeding, the DB matrix equals this, so
+# these tests pin the authorization to the same historical role→capability map.
+_MATRIX = RbacMatrix(role_caps=dict(ROLE_CAPABILITIES), admin_roles=frozenset({"admin"}))
 
 _ADMIN = "admin"
 _SL = "schulleitung"
@@ -91,11 +97,11 @@ async def test_gate_authorization_matches_history(gate_name: str, caller: str) -
     user = _CALLERS[caller]
     should_pass = caller in _GATE_MATRIX[gate_name]
     if should_pass:
-        out = await gate(user)
+        out = await gate(user, _MATRIX)
         assert out is user
     else:
         with pytest.raises(HTTPException) as exc:
-            await gate(user)
+            await gate(user, _MATRIX)
         assert exc.value.status_code == 403
 
 
@@ -103,20 +109,20 @@ class TestRequireCapability:
     @pytest.mark.asyncio
     async def test_admin_holds_every_capability(self) -> None:
         for cap in Capability:
-            out = await require_capability(cap)(_CALLERS[_ADMIN])
+            out = await require_capability(cap)(_CALLERS[_ADMIN], _MATRIX)
             assert out.is_admin
 
     @pytest.mark.asyncio
     async def test_any_of_semantics(self) -> None:
         # schulleitung holds ORGUNIT_MANAGE but not USER_ADMINISTER; the OR gate passes.
         gate = require_capability(Capability.USER_ADMINISTER, Capability.ORGUNIT_MANAGE)
-        out = await gate(_CALLERS[_SL])
+        out = await gate(_CALLERS[_SL], _MATRIX)
         assert _SL in out.roles
 
     @pytest.mark.asyncio
     async def test_missing_capability_403(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            await require_capability(Capability.SYSTEM_ADMINISTER)(_CALLERS[_SL])
+            await require_capability(Capability.SYSTEM_ADMINISTER)(_CALLERS[_SL], _MATRIX)
         assert exc.value.status_code == 403
 
     def test_empty_capability_raises(self) -> None:
@@ -126,20 +132,20 @@ class TestRequireCapability:
 
 class TestEffectiveCapabilities:
     def test_admin_gets_full_set(self) -> None:
-        assert effective_capabilities(_CALLERS[_ADMIN]) == frozenset(Capability)
+        assert effective_capabilities(_CALLERS[_ADMIN], _MATRIX) == frozenset(Capability)
 
     def test_kl_and_anonymous_hold_nothing(self) -> None:
-        assert effective_capabilities(_CALLERS[_KL]) == frozenset()
-        assert effective_capabilities(_CALLERS["none"]) == frozenset()
+        assert effective_capabilities(_CALLERS[_KL], _MATRIX) == frozenset()
+        assert effective_capabilities(_CALLERS["none"], _MATRIX) == frozenset()
 
     def test_schulleitung_lacks_user_administer(self) -> None:
-        caps = effective_capabilities(_CALLERS[_SL])
+        caps = effective_capabilities(_CALLERS[_SL], _MATRIX)
         assert Capability.ORGUNIT_MANAGE in caps
         assert Capability.USER_ADMINISTER not in caps
 
     def test_has_capability_is_admin_short_circuit(self) -> None:
-        assert has_capability(_CALLERS[_ADMIN], Capability.SYSTEM_ADMINISTER)
-        assert not has_capability(_CALLERS[_SMI], Capability.SYSTEM_ADMINISTER)
+        assert has_capability(_CALLERS[_ADMIN], _MATRIX, Capability.SYSTEM_ADMINISTER)
+        assert not has_capability(_CALLERS[_SMI], _MATRIX, Capability.SYSTEM_ADMINISTER)
 
 
 class TestImportKindAuthorization:
@@ -148,16 +154,16 @@ class TestImportKindAuthorization:
     @pytest.mark.parametrize("kind", ["students", "teachers"])
     def test_provisioning_kinds_need_user_administer(self, kind: str) -> None:
         # smi (USER_ADMINISTER) and admin pass; schulleitung does not.
-        _authorize_kind(_CALLERS[_SMI], kind)
-        _authorize_kind(_CALLERS[_ADMIN], kind)
+        _authorize_kind(_CALLERS[_SMI], _MATRIX, kind)
+        _authorize_kind(_CALLERS[_ADMIN], _MATRIX, kind)
         with pytest.raises(HTTPException) as exc:
-            _authorize_kind(_CALLERS[_SL], kind)
+            _authorize_kind(_CALLERS[_SL], _MATRIX, kind)
         assert exc.value.status_code == 403
 
     def test_structural_kinds_need_orgunit_manage(self) -> None:
         # schulleitung (ORGUNIT_MANAGE) and admin pass; smi does not.
-        _authorize_kind(_CALLERS[_SL], "classes")
-        _authorize_kind(_CALLERS[_ADMIN], "classes")
+        _authorize_kind(_CALLERS[_SL], _MATRIX, "classes")
+        _authorize_kind(_CALLERS[_ADMIN], _MATRIX, "classes")
         with pytest.raises(HTTPException) as exc:
-            _authorize_kind(_CALLERS[_SMI], "classes")
+            _authorize_kind(_CALLERS[_SMI], _MATRIX, "classes")
         assert exc.value.status_code == 403

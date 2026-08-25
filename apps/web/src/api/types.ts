@@ -25,7 +25,9 @@ export interface AdLoginRequest {
   password: string;
 }
 
-export type GrantableRole = "admin" | "schulleitung" | "smi";
+// Built-in role keys still used for i18n label lookup; custom roles carry their
+// own name from the RBAC config (ADR-0010), so grants accept any role string.
+export type GrantableRole = string;
 
 export interface RoleAssignmentOut {
   ad_object_guid: string;
@@ -43,6 +45,29 @@ export interface RoleAssignmentOut {
 export interface RoleGrantRequest {
   role: GrantableRole;
   school_id: number | null;
+}
+
+// --- Dynamic roles + rights matrix (ADR-0010, /admin/rbac) -----------------
+export interface RbacRole {
+  key: string;
+  name: string;
+  is_system: boolean;
+  is_admin: boolean;
+  is_derived: boolean;
+  editable: boolean;
+  renamable: boolean;
+  deletable: boolean;
+  capabilities: string[];
+}
+
+export interface RbacConfig {
+  capabilities: string[];
+  roles: RbacRole[];
+}
+
+export interface RoleCreateRequest {
+  key: string;
+  name: string;
 }
 
 export interface LocalLoginRequest {

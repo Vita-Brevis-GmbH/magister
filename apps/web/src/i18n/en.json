@@ -569,6 +569,7 @@
       "role_admin": "Administrator",
       "role_schulleitung": "School management",
       "role_smi": "School-IT (SMI)",
+      "role_kl": "Class teacher",
       "revoke": "Revoke",
       "grant_title": "Grant a role",
       "grant_desc": "Search a user, pick a role and (except admin) a school.",
@@ -1077,6 +1078,29 @@
       "member": "Person",
       "member_plural": "People"
     }
+  },
+  "rbac": {
+    "matrix_title": "Rights matrix",
+    "matrix_desc": "Define which role holds which permission. The administrator always holds every right; derived roles (class teacher) come from class assignments.",
+    "col_role": "Role",
+    "role_admin_hint": "Super-role — all rights",
+    "role_system_hint": "System role",
+    "role_derived_hint": "Derived from class assignments",
+    "role_custom_hint": "Custom role",
+    "delete_role": "Delete",
+    "add_role_title": "Add a custom role",
+    "role_key": "Key",
+    "role_name": "Label",
+    "role_name_placeholder": "e.g. Coordination",
+    "role_key_hint": "Lowercase letters, digits, - and _; at least 2 characters.",
+    "add_role_button": "Create role",
+    "role_exists": "That role already exists.",
+    "cap_system_administer": "System administration",
+    "cap_orgunit_manage": "Manage organisational units",
+    "cap_user_administer": "Manage users & passwords",
+    "cap_user_read": "Read users & audit",
+    "cap_user_config": "User configuration",
+    "cap_import_run": "Run imports"
   },
   "modules": {
     "title": "Modules & Features",

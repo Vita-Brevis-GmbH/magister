@@ -27,7 +27,20 @@ from magister_api.db import get_session
 from magister_api.main import create_app
 from magister_api.models import Base
 from magister_api.models.school import School
+from magister_api.services.rbac import RbacService
 from tests.integration._helpers import seed_user_with_session
+
+
+async def _seed_rbac(engine: AsyncEngine) -> None:
+    """Seed the RBAC roles + default capability matrix (ADR-0010).
+
+    The lifespan seed does not run under ASGITransport, and ``_truncate_tables``
+    wipes the roles between tests, so seed it explicitly here.
+    """
+    sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    async with sm() as session:
+        await RbacService(session).seed_defaults_if_empty()
+        await session.commit()
 
 
 def _url() -> str | None:
@@ -67,6 +80,7 @@ async def engine(database_url: str) -> AsyncIterator[AsyncEngine]:
             "VALUES (1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb) "
             "ON CONFLICT DO NOTHING"
         )
+    await _seed_rbac(eng)
     yield eng
     await eng.dispose()
 
@@ -117,7 +131,8 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             "TRUNCATE import_staged_rows, import_jobs, class_memberships, "
             "class_teacher_roles, subject_teacher_roles, classes, "
             "department_memberships, manager_roles, departments, document_templates, "
-            "audit_events, sessions, role_assignments, ad_user_cache, schools, "
+            "audit_events, sessions, role_assignments, role_capabilities, roles, "
+            "ad_user_cache, schools, "
             "local_admins, app_settings, user_preferences RESTART IDENTITY CASCADE"
         )
         # The migration inserts the singleton; recreate it after each
@@ -128,6 +143,8 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             "VALUES (1, 1, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb) "
             "ON CONFLICT DO NOTHING"
         )
+    # Re-seed the RBAC roles + default matrix wiped by the truncate above.
+    await _seed_rbac(engine)
 
 
 @pytest.fixture(autouse=True)

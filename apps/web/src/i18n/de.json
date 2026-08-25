@@ -569,6 +569,7 @@
       "role_admin": "Administrator",
       "role_schulleitung": "Schulleitung",
       "role_smi": "Schulträger-IT (SMI)",
+      "role_kl": "Klassenlehrer",
       "revoke": "Entziehen",
       "grant_title": "Rolle vergeben",
       "grant_desc": "Benutzer suchen, Rolle und (ausser Admin) Schule wählen.",
@@ -1077,6 +1078,29 @@
       "member": "Person",
       "member_plural": "Personen"
     }
+  },
+  "rbac": {
+    "matrix_title": "Rechte-Matrix",
+    "matrix_desc": "Lege fest, welche Rolle welche Berechtigung hält. Der Administrator hält immer alle Rechte; abgeleitete Rollen (Klassenlehrer) ergeben sich aus Klassenzuweisungen.",
+    "col_role": "Rolle",
+    "role_admin_hint": "Super-Rolle — alle Rechte",
+    "role_system_hint": "System-Rolle",
+    "role_derived_hint": "Abgeleitet aus Klassenzuweisungen",
+    "role_custom_hint": "Eigene Rolle",
+    "delete_role": "Löschen",
+    "add_role_title": "Eigene Rolle hinzufügen",
+    "role_key": "Schlüssel",
+    "role_name": "Bezeichnung",
+    "role_name_placeholder": "z. B. Koordination",
+    "role_key_hint": "Kleinbuchstaben, Ziffern, - und _; mindestens 2 Zeichen.",
+    "add_role_button": "Rolle anlegen",
+    "role_exists": "Diese Rolle existiert bereits.",
+    "cap_system_administer": "System-Administration",
+    "cap_orgunit_manage": "Organisationseinheiten verwalten",
+    "cap_user_administer": "Benutzer verwalten & Passwörter",
+    "cap_user_read": "Benutzer lesen & Audit",
+    "cap_user_config": "Benutzer-Konfiguration",
+    "cap_import_run": "Importe ausführen"
   },
   "modules": {
     "title": "Module & Funktionen",

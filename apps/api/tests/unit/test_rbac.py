@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from fastapi import HTTPException
 
+from magister_api.auth.capabilities import ROLE_CAPABILITIES, RbacMatrix
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import (
     require_admin,
@@ -14,6 +15,10 @@ from magister_api.auth.rbac import (
     require_schulleitung,
     require_smi,
 )
+
+# Default matrix (ADR-0010) — the capability gates load it per request in prod;
+# here we pass it directly since these unit calls bypass FastAPI DI.
+_MATRIX = RbacMatrix(role_caps=dict(ROLE_CAPABILITIES), admin_roles=frozenset({"admin"}))
 
 
 def _user(*, is_admin: bool = False, roles: tuple[str, ...] = ()) -> AuthenticatedUser:
@@ -50,12 +55,12 @@ class TestRequireRole:
     @pytest.mark.asyncio
     async def test_require_admin_blocks_schulleitung(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            await require_admin(_user(roles=("schulleitung",)))
+            await require_admin(_user(roles=("schulleitung",)), _MATRIX)
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_require_schulleitung_passes_for_admin(self) -> None:
-        out = await require_schulleitung(_user(is_admin=True))
+        out = await require_schulleitung(_user(is_admin=True), _MATRIX)
         assert out.is_admin is True
 
     def test_require_role_empty_raises(self) -> None:
@@ -64,18 +69,18 @@ class TestRequireRole:
 
     @pytest.mark.asyncio
     async def test_require_smi_passes_for_smi_role(self) -> None:
-        out = await require_smi(_user(roles=("smi",)))
+        out = await require_smi(_user(roles=("smi",)), _MATRIX)
         assert "smi" in out.roles
 
     @pytest.mark.asyncio
     async def test_require_smi_passes_for_admin(self) -> None:
-        out = await require_smi(_user(is_admin=True))
+        out = await require_smi(_user(is_admin=True), _MATRIX)
         assert out.is_admin is True
 
     @pytest.mark.asyncio
     async def test_require_smi_blocks_schulleitung(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            await require_smi(_user(roles=("schulleitung",)))
+            await require_smi(_user(roles=("schulleitung",)), _MATRIX)
         assert exc.value.status_code == 403
 
     @pytest.mark.asyncio

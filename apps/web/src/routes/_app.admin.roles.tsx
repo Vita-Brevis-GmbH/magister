@@ -1,10 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useGrantRole, useRevokeRole, useRoles, useSchools, useUsers } from "@/api/hooks";
-import type { GrantableRole, RoleAssignmentOut } from "@/api/types";
+import {
+  useCreateRole,
+  useDeleteRole,
+  useGrantRole,
+  useRbacConfig,
+  useRevokeRole,
+  useRoles,
+  useSchools,
+  useSetRoleCapabilities,
+  useUsers,
+} from "@/api/hooks";
+import type { RbacRole, RoleAssignmentOut } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,10 +24,20 @@ export const Route = createFileRoute("/_app/admin/roles")({
   component: RolesPage,
 });
 
-const ROLES: GrantableRole[] = ["admin", "schulleitung", "smi"];
-
 const selectClasses =
   "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
+/** i18n key for a capability value ("orgunit.manage" → rbac.cap_orgunit_manage). */
+function capKey(cap: string): string {
+  return `rbac.cap_${cap.replace(/\./g, "_")}`;
+}
+
+/** Display label for a role: built-ins are translated by key, custom by name. */
+function useRoleLabel(): (role: Pick<RbacRole, "key" | "name" | "is_system">) => string {
+  const { t } = useTranslation();
+  return (role) =>
+    role.is_system ? t(`admin.roles.role_${role.key}`, { defaultValue: role.name }) : role.name;
+}
 
 function userLabel(a: {
   display_name: string | null;
@@ -40,6 +60,8 @@ function RolesPage(): JSX.Element {
         <h1 className="font-serif text-2xl font-semibold">{t("admin.roles.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("admin.roles.description")}</p>
       </header>
+
+      <RightsMatrix />
 
       <GrantCard />
 
@@ -81,6 +103,165 @@ function RolesPage(): JSX.Element {
   );
 }
 
+function RightsMatrix(): JSX.Element {
+  const { t } = useTranslation();
+  const cfg = useRbacConfig();
+  const setCaps = useSetRoleCapabilities();
+  const deleteRole = useDeleteRole();
+  const roleLabel = useRoleLabel();
+
+  const toggle = (role: RbacRole, cap: string, on: boolean): void => {
+    const next = on ? [...role.capabilities, cap] : role.capabilities.filter((c) => c !== cap);
+    setCaps.mutate({ key: role.key, capabilities: Array.from(new Set(next)) });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("rbac.matrix_title")}</CardTitle>
+        <CardDescription>{t("rbac.matrix_desc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {cfg.isLoading ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : cfg.isError || !cfg.data ? (
+          <p className="text-sm text-destructive">{t("errors.generic")}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-4">{t("rbac.col_role")}</th>
+                  {cfg.data.capabilities.map((cap) => (
+                    <th key={cap} className="px-2 py-2 text-center font-medium">
+                      {t(capKey(cap), { defaultValue: cap })}
+                    </th>
+                  ))}
+                  <th className="py-2 pl-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {cfg.data.roles.map((role) => (
+                  <tr key={role.key} className="border-b last:border-0">
+                    <td className="py-2 pr-4">
+                      <div className="font-medium">{roleLabel(role)}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {role.is_admin
+                          ? t("rbac.role_admin_hint")
+                          : role.is_derived
+                            ? t("rbac.role_derived_hint")
+                            : role.is_system
+                              ? t("rbac.role_system_hint")
+                              : t("rbac.role_custom_hint")}
+                      </div>
+                    </td>
+                    {cfg.data.capabilities.map((cap) => {
+                      const checked = role.is_admin || role.capabilities.includes(cap);
+                      return (
+                        <td key={cap} className="px-2 py-2 text-center">
+                          <input
+                            type="checkbox"
+                            aria-label={`${role.key}:${cap}`}
+                            checked={checked}
+                            disabled={!role.editable || setCaps.isPending}
+                            onChange={(e) => toggle(role, cap, e.target.checked)}
+                          />
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 pl-2 text-right">
+                      {role.deletable ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={deleteRole.isPending}
+                          onClick={() => deleteRole.mutate(role.key)}
+                        >
+                          {t("rbac.delete_role")}
+                        </Button>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {setCaps.isError ? (
+          <p className="text-sm text-destructive">{t("errors.generic")}</p>
+        ) : null}
+        <CreateRoleForm />
+      </CardContent>
+    </Card>
+  );
+}
+
+function CreateRoleForm(): JSX.Element {
+  const { t } = useTranslation();
+  const create = useCreateRole();
+  const [key, setKey] = useState("");
+  const [name, setName] = useState("");
+
+  const keyOk = /^[a-z][a-z0-9_-]*$/.test(key) && key.length >= 2;
+  const canCreate = keyOk && name.trim().length > 0;
+
+  return (
+    <div className="space-y-2 border-t pt-4">
+      <h3 className="text-sm font-medium">{t("rbac.add_role_title")}</h3>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="new-role-key">{t("rbac.role_key")}</Label>
+          <Input
+            id="new-role-key"
+            className="w-40"
+            placeholder="koordinator"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="new-role-name">{t("rbac.role_name")}</Label>
+          <Input
+            id="new-role-name"
+            className="w-56"
+            placeholder={t("rbac.role_name_placeholder")}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <Button
+          type="button"
+          disabled={!canCreate || create.isPending}
+          onClick={() =>
+            create.mutate(
+              { key, name: name.trim() },
+              {
+                onSuccess: () => {
+                  setKey("");
+                  setName("");
+                },
+              },
+            )
+          }
+        >
+          {t("rbac.add_role_button")}
+        </Button>
+      </div>
+      {key.length > 0 && !keyOk ? (
+        <p className="text-xs text-muted-foreground">{t("rbac.role_key_hint")}</p>
+      ) : null}
+      {create.isError ? (
+        <p className="text-sm text-destructive">
+          {create.error instanceof ApiError && create.error.status === 409
+            ? t("rbac.role_exists")
+            : t("errors.generic")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
   const { t } = useTranslation();
   const revoke = useRevokeRole();
@@ -90,7 +271,7 @@ function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
         <div className="font-medium">{userLabel(a)}</div>
         <div className="text-xs text-muted-foreground">{a.upn}</div>
       </td>
-      <td className="py-2 pr-4">{t(`admin.roles.role_${a.role}`)}</td>
+      <td className="py-2 pr-4">{t(`admin.roles.role_${a.role}`, { defaultValue: a.role })}</td>
       <td className="py-2 pr-4">{a.school_name ?? "—"}</td>
       <td className="py-2 pr-4 text-xs text-muted-foreground">{a.granted_by ?? "—"}</td>
       <td className="py-2 pr-4 text-right">
@@ -113,16 +294,25 @@ function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
 function GrantCard(): JSX.Element {
   const { t } = useTranslation();
   const schools = useSchools();
+  const cfg = useRbacConfig();
   const grant = useGrantRole();
+  const roleLabel = useRoleLabel();
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<{ guid: string; label: string } | null>(null);
-  const [role, setRole] = useState<GrantableRole>("schulleitung");
+  const [role, setRole] = useState<string>("schulleitung");
   const [schoolId, setSchoolId] = useState<number | "">("");
+
+  // Assignable roles: everything except derived roles (kl).
+  const assignable = useMemo(
+    () => (cfg.data?.roles ?? []).filter((r) => !r.is_derived),
+    [cfg.data?.roles],
+  );
+  const selectedRole = assignable.find((r) => r.key === role);
+  const needsSchool = selectedRole ? !selectedRole.is_admin : role !== "admin";
 
   const results = useUsers(search.trim().length >= 2 ? { search: search.trim(), limit: 8 } : {});
   const showResults = search.trim().length >= 2 && !selected;
-  const needsSchool = role !== "admin";
   const canGrant = !!selected && (!needsSchool || schoolId !== "");
 
   function submit(): void {
@@ -209,11 +399,11 @@ function GrantCard(): JSX.Element {
               id="role-select"
               className={selectClasses}
               value={role}
-              onChange={(e) => setRole(e.target.value as GrantableRole)}
+              onChange={(e) => setRole(e.target.value)}
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {t(`admin.roles.role_${r}`)}
+              {assignable.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {roleLabel(r)}
                 </option>
               ))}
             </select>

@@ -9,7 +9,6 @@ derived from class-teacher assignments (see class_teachers router).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,6 +23,7 @@ from magister_api.repositories.auth import RoleAssignmentRepository
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.roles import RoleAssignmentOut, RoleGrantRequest
 from magister_api.services._user_enrich import fetch_user_labels, user_label_fields
+from magister_api.services.rbac import RbacService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -72,6 +72,19 @@ async def grant_role(
     target = await session.get(AdUserCache, ad_object_guid)
     if target is None:
         raise HTTPException(status_code=404, detail="user_not_found")
+
+    # ADR-0010: validate the role against the DB role catalog (built-in OR
+    # custom), then apply the flag-dependent scope rule — admin is cross-school
+    # (school_id null), every other assignable role is scoped to one org unit.
+    role_def = await RbacService(session).get_role(payload.role)
+    if role_def is None:
+        raise HTTPException(status_code=404, detail="role_not_found")
+    if role_def.is_derived:
+        raise HTTPException(status_code=422, detail="role_not_assignable")
+    if role_def.is_admin and payload.school_id is not None:
+        raise HTTPException(status_code=422, detail="admin_is_cross_school")
+    if not role_def.is_admin and payload.school_id is None:
+        raise HTTPException(status_code=422, detail="role_requires_school")
     if payload.school_id is not None and await session.get(School, payload.school_id) is None:
         raise HTTPException(status_code=404, detail="school_not_found")
 
@@ -116,11 +129,6 @@ async def revoke_role(
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    # Reuse the grant validator to reject bad role/scope combinations.
-    try:
-        RoleGrantRequest(role=role, school_id=school_id)
-    except ValidationError as exc:
-        raise HTTPException(status_code=422, detail="invalid_role") from exc
     repo = RoleAssignmentRepository(session)
     revoked = await repo.revoke(
         ad_object_guid=ad_object_guid,

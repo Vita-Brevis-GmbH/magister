@@ -27,6 +27,7 @@ from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
+from magister_api.services.rbac import RbacService
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     sm = get_sessionmaker()
     async with sm() as seed_session:
         await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
+        # RBAC roles + default capability matrix (ADR-0010). Idempotent: only
+        # populates an empty install, so behaviour matches the former static map.
+        await RbacService(seed_session).seed_defaults_if_empty()
         app_settings_svc = AppSettingsService(seed_session, settings)
         await app_settings_svc.seed_from_env_if_empty(settings)
         # Materialize the webserver cert (custom or self-signed fallback) so the

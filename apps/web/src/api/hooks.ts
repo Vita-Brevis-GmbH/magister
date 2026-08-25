@@ -70,7 +70,10 @@ import type {
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
+  RbacConfig,
+  RbacRole,
   RoleAssignmentOut,
+  RoleCreateRequest,
   RoleGrantRequest,
   MailDomainsOut,
   SchoolOut,
@@ -123,6 +126,7 @@ export const queryKeys = {
   departmentManagers: (id: number) => ["departments", id, "managers"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
+  rbac: ["admin-rbac"] as const,
   devices: ["devices"] as const,
   device: (deviceId: number) => ["device", deviceId] as const,
 };
@@ -835,6 +839,59 @@ export function useRevokeRole() {
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
+  });
+}
+
+// --- Dynamic roles + rights matrix (admin-only, ADR-0010) -----------------
+
+export function useRbacConfig() {
+  return useQuery<RbacConfig>({
+    queryKey: queryKeys.rbac,
+    queryFn: () => apiFetch<RbacConfig>("/admin/rbac"),
+  });
+}
+
+export function useCreateRole() {
+  const qc = useQueryClient();
+  return useMutation<RbacRole, ApiError, RoleCreateRequest>({
+    mutationFn: (body) => apiFetch<RbacRole>("/admin/rbac/roles", { method: "POST", body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.rbac }),
+  });
+}
+
+export function useRenameRole() {
+  const qc = useQueryClient();
+  return useMutation<RbacRole, ApiError, { key: string; name: string }>({
+    mutationFn: ({ key, name }) =>
+      apiFetch<RbacRole>(`/admin/rbac/roles/${encodeURIComponent(key)}`, {
+        method: "PATCH",
+        body: { name },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.rbac }),
+  });
+}
+
+export function useSetRoleCapabilities() {
+  const qc = useQueryClient();
+  return useMutation<RbacRole, ApiError, { key: string; capabilities: string[] }>({
+    mutationFn: ({ key, capabilities }) =>
+      apiFetch<RbacRole>(`/admin/rbac/roles/${encodeURIComponent(key)}/capabilities`, {
+        method: "PUT",
+        body: { capabilities },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.rbac }),
+  });
+}
+
+export function useDeleteRole() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, string>({
+    mutationFn: (key) =>
+      apiFetch<void>(`/admin/rbac/roles/${encodeURIComponent(key)}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.rbac });
+      void qc.invalidateQueries({ queryKey: queryKeys.roles });
+    },
   });
 }
 
