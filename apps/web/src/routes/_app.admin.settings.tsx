@@ -149,6 +149,9 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
 function AppSettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const settings = useAppSettings();
+  // Read the profile here (page level) and pass it down, so the form component
+  // stays free of that extra query — keeps its unit test's fetch assertions valid.
+  const profile = useInstanceProfile().data ?? "school";
 
   return (
     <div className="space-y-6">
@@ -162,20 +165,25 @@ function AppSettingsPage(): JSX.Element {
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
       ) : settings.data ? (
-        <SettingsForm data={settings.data} />
+        <SettingsForm data={settings.data} profile={profile} />
       ) : null}
     </div>
   );
 }
 
-function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
+function SettingsForm({
+  data,
+  profile = "school",
+}: {
+  data: AppSettingsOut;
+  profile?: string;
+}): JSX.Element {
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
   const syncAd = useTriggerAdSync();
   // Zyklus/grade-year settings only make sense for the school profile; the
   // company profile has no school cycles (groups config stays for both).
-  const profile = useInstanceProfile().data ?? "school";
   const [form, setForm] = useState<FormState>(() => fromOut(data));
   const [success, setSuccess] = useState(false);
 
