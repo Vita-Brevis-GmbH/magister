@@ -52,7 +52,9 @@ MODULE_CATALOG: tuple[ModuleMeta, ...] = (
     # School superstructure.
     ModuleMeta(id="classes", default_in_profiles=("school",), depends_on=("platform",)),
     ModuleMeta(id="letters", default_in_profiles=("school",), depends_on=("classes",)),
-    ModuleMeta(id="imports", default_in_profiles=("school",), depends_on=("platform",)),
+    # Imports serve both editions (students/teachers for school, company_users
+    # for company), so the import module is on by default in both profiles.
+    ModuleMeta(id="imports", default_in_profiles=("school", "company"), depends_on=("platform",)),
     # Company superstructure.
     ModuleMeta(id="departments", default_in_profiles=("company",), depends_on=("platform",)),
     # Cross-domain fachfunctions (useful for both school and company).

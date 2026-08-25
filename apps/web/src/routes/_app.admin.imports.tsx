@@ -10,6 +10,7 @@ import {
   useCurrentUser,
   useImportJob,
   useImportJobs,
+  useInstanceProfile,
   useSchools,
   useStageImport,
 } from "@/api/hooks";
@@ -31,13 +32,16 @@ export const Route = createFileRoute("/_app/admin/imports")({
   component: ImportsPage,
 });
 
-const ALL_KINDS: ImportKind[] = [
+// The school edition imports classes + students/teachers; the company edition
+// (#7) imports company users. The kind list follows the instance profile.
+const SCHOOL_KINDS: ImportKind[] = [
   "classes",
   "class_memberships",
   "class_teachers",
   "students",
   "teachers",
 ];
+const COMPANY_KINDS: ImportKind[] = ["company_users"];
 
 function ImportsPage(): JSX.Element {
   const { t } = useTranslation();
@@ -131,7 +135,9 @@ function NewImportWizard({
   onStaged: (jobId: number) => void;
 }): JSX.Element {
   const { t } = useTranslation();
-  const [kind, setKind] = useState<ImportKind>("classes");
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
+  const kinds = isCompany ? COMPANY_KINDS : SCHOOL_KINDS;
+  const [kind, setKind] = useState<ImportKind>(kinds[0]);
   const [file, setFile] = useState<File | null>(null);
   const [schoolId, setSchoolId] = useState("");
   const stage = useStageImport();
@@ -168,7 +174,7 @@ function NewImportWizard({
             role="tablist"
             className="inline-flex flex-wrap rounded-md border bg-background p-0.5"
           >
-            {ALL_KINDS.map((k) => (
+            {kinds.map((k) => (
               <button
                 key={k}
                 role="tab"
@@ -288,7 +294,11 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
   async function handleDownloadHandouts() {
     setHandoutError(false);
     try {
-      const audience = q.data?.kind === "teachers" ? "teachers" : "students";
+      // Company users are adults → the teacher (formal) hand-out wording.
+      const audience =
+        q.data?.kind === "teachers" || q.data?.kind === "company_users"
+          ? "teachers"
+          : "students";
       await downloadHandouts(credentials, "", handoutLang, audience);
     } catch {
       setHandoutError(true);

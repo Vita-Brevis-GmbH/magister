@@ -128,10 +128,12 @@ export interface SchoolAdConfig {
   ad_ou_students_other?: string | null;
   ad_ou_teachers?: string | null;
   ad_ou_devices?: string | null;
+  ad_ou_company_users?: string | null;
   ad_groups_teacher?: string[] | null;
   ad_groups_student_zyklus1?: string[] | null;
   ad_groups_student_zyklus2?: string[] | null;
   ad_groups_student_zyklus3?: string[] | null;
+  ad_groups_company?: string[] | null;
 }
 
 export interface SchoolOut {
@@ -151,10 +153,12 @@ export interface SchoolOut {
   ad_ou_students_other: string | null;
   ad_ou_teachers: string | null;
   ad_ou_devices: string | null;
+  ad_ou_company_users: string | null;
   ad_groups_teacher: string[];
   ad_groups_student_zyklus1: string[];
   ad_groups_student_zyklus2: string[];
   ad_groups_student_zyklus3: string[];
+  ad_groups_company: string[];
 }
 
 export interface SchoolCreate extends SchoolAdConfig {
@@ -937,7 +941,8 @@ export type ImportKind =
   | "class_memberships"
   | "class_teachers"
   | "students"
-  | "teachers";
+  | "teachers"
+  | "company_users";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";
 

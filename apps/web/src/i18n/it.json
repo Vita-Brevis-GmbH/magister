@@ -735,7 +735,9 @@
     "school_hint": "L’importazione viene assegnata a questa scuola.",
     "error_school_required": "Seleziona prima la scuola di destinazione.",
     "kind_teachers": "Docenti",
-    "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno."
+    "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno.",
+    "kind_company_users": "Collaboratori",
+    "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires."
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",
@@ -1038,10 +1040,12 @@
         "ad_ou_students_other": "OU allievi (altri)",
         "ad_ou_teachers": "OU docenti",
         "ad_ou_devices": "OU dispositivi",
+        "ad_ou_company_users": "OU collaboratori (OU di destinazione)",
         "ad_groups_teacher": "Gruppi per docenti",
         "ad_groups_student_zyklus1": "Gruppi per allievi ciclo 1",
         "ad_groups_student_zyklus2": "Gruppi per allievi ciclo 2",
-        "ad_groups_student_zyklus3": "Gruppi per allievi ciclo 3"
+        "ad_groups_student_zyklus3": "Gruppi per allievi ciclo 3",
+        "ad_groups_company": "Gruppi predefiniti collaboratori"
       }
     }
   },

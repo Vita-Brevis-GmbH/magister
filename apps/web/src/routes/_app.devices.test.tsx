@@ -108,10 +108,12 @@ describe("AssignDeviceModal", () => {
             ad_ou_students_other: null,
             ad_ou_teachers: null,
             ad_ou_devices: null,
+            ad_ou_company_users: null,
             ad_groups_teacher: [],
             ad_groups_student_zyklus1: [],
             ad_groups_student_zyklus2: [],
             ad_groups_student_zyklus3: [],
+            ad_groups_company: [],
           },
         ]}
         classes={[]}

@@ -7,6 +7,7 @@ import {
   useAdGroups,
   useCreateSchool,
   useDeleteSchool,
+  useInstanceProfile,
   useSchools,
   useUpdateSchool,
 } from "@/api/hooks";
@@ -174,9 +175,11 @@ type GroupKey =
   | "ad_groups_teacher"
   | "ad_groups_student_zyklus1"
   | "ad_groups_student_zyklus2"
-  | "ad_groups_student_zyklus3";
+  | "ad_groups_student_zyklus3"
+  | "ad_groups_company";
 
-const GROUP_KEYS: GroupKey[] = [
+// School-profile group pickers only (company uses ad_groups_company on its own).
+const GROUP_KEYS: Exclude<GroupKey, "ad_groups_company">[] = [
   "ad_groups_teacher",
   "ad_groups_student_zyklus1",
   "ad_groups_student_zyklus2",
@@ -198,10 +201,12 @@ interface FormState {
   ad_ou_students_other: string;
   ad_ou_teachers: string;
   ad_ou_devices: string;
+  ad_ou_company_users: string;
   ad_groups_teacher: string[];
   ad_groups_student_zyklus1: string[];
   ad_groups_student_zyklus2: string[];
   ad_groups_student_zyklus3: string[];
+  ad_groups_company: string[];
 }
 
 function emptyForm(): FormState {
@@ -220,10 +225,12 @@ function emptyForm(): FormState {
     ad_ou_students_other: "",
     ad_ou_teachers: "",
     ad_ou_devices: "",
+    ad_ou_company_users: "",
     ad_groups_teacher: [],
     ad_groups_student_zyklus1: [],
     ad_groups_student_zyklus2: [],
     ad_groups_student_zyklus3: [],
+    ad_groups_company: [],
   };
 }
 
@@ -243,10 +250,12 @@ function fromSchool(s: SchoolOut): FormState {
     ad_ou_students_other: s.ad_ou_students_other ?? "",
     ad_ou_teachers: s.ad_ou_teachers ?? "",
     ad_ou_devices: s.ad_ou_devices ?? "",
+    ad_ou_company_users: s.ad_ou_company_users ?? "",
     ad_groups_teacher: [...s.ad_groups_teacher],
     ad_groups_student_zyklus1: [...s.ad_groups_student_zyklus1],
     ad_groups_student_zyklus2: [...s.ad_groups_student_zyklus2],
     ad_groups_student_zyklus3: [...s.ad_groups_student_zyklus3],
+    ad_groups_company: [...s.ad_groups_company],
   };
 }
 
@@ -261,6 +270,7 @@ export function SchoolForm({
   onDone: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
   const [form, setForm] = useState<FormState>(() => (target ? fromSchool(target) : emptyForm()));
   const create = useCreateSchool();
   const update = useUpdateSchool(target?.id ?? 0);
@@ -303,10 +313,12 @@ export function SchoolForm({
       ad_ou_students_other: form.ad_ou_students_other.trim() || null,
       ad_ou_teachers: form.ad_ou_teachers.trim() || null,
       ad_ou_devices: form.ad_ou_devices.trim() || null,
+      ad_ou_company_users: form.ad_ou_company_users.trim() || null,
       ad_groups_teacher: form.ad_groups_teacher,
       ad_groups_student_zyklus1: form.ad_groups_student_zyklus1,
       ad_groups_student_zyklus2: form.ad_groups_student_zyklus2,
       ad_groups_student_zyklus3: form.ad_groups_student_zyklus3,
+      ad_groups_company: form.ad_groups_company,
     };
     if (target) {
       update.mutate(body, { onSuccess: onDone });
@@ -318,7 +330,7 @@ export function SchoolForm({
   const lat = numOrNull(form.latitude);
   const lon = numOrNull(form.longitude);
 
-  const GROUP_LABELS: Record<GroupKey, string> = {
+  const GROUP_LABELS: Record<Exclude<GroupKey, "ad_groups_company">, string> = {
     ad_groups_teacher: "schools.ad_config.field.ad_groups_teacher",
     ad_groups_student_zyklus1: "schools.ad_config.field.ad_groups_student_zyklus1",
     ad_groups_student_zyklus2: "schools.ad_config.field.ad_groups_student_zyklus2",
@@ -470,36 +482,59 @@ export function SchoolForm({
           <CardDescription>{t("schools.ad_config.ou_section_desc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="ou-z3">{t("schools.ad_config.field.ad_ou_students_zyklus3")}</Label>
-            <Input
-              id="ou-z3"
-              value={form.ad_ou_students_zyklus3}
-              onChange={(e) => set("ad_ou_students_zyklus3", e.target.value)}
-              placeholder="OU=SekI,OU=Schule,DC=…"
-              maxLength={512}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="ou-other">{t("schools.ad_config.field.ad_ou_students_other")}</Label>
-            <Input
-              id="ou-other"
-              value={form.ad_ou_students_other}
-              onChange={(e) => set("ad_ou_students_other", e.target.value)}
-              placeholder="OU=Schueler,OU=Schule,DC=…"
-              maxLength={512}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="ou-teachers">{t("schools.ad_config.field.ad_ou_teachers")}</Label>
-            <Input
-              id="ou-teachers"
-              value={form.ad_ou_teachers}
-              onChange={(e) => set("ad_ou_teachers", e.target.value)}
-              placeholder="OU=Lehrer,OU=Schule,DC=…"
-              maxLength={512}
-            />
-          </div>
+          {isCompany ? (
+            <div className="space-y-1">
+              <Label htmlFor="ou-company">
+                {t("schools.ad_config.field.ad_ou_company_users")}
+              </Label>
+              <Input
+                id="ou-company"
+                value={form.ad_ou_company_users}
+                onChange={(e) => set("ad_ou_company_users", e.target.value)}
+                placeholder="OU=Mitarbeitende,OU=Firma,DC=…"
+                maxLength={512}
+              />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-1">
+                <Label htmlFor="ou-z3">
+                  {t("schools.ad_config.field.ad_ou_students_zyklus3")}
+                </Label>
+                <Input
+                  id="ou-z3"
+                  value={form.ad_ou_students_zyklus3}
+                  onChange={(e) => set("ad_ou_students_zyklus3", e.target.value)}
+                  placeholder="OU=SekI,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ou-other">
+                  {t("schools.ad_config.field.ad_ou_students_other")}
+                </Label>
+                <Input
+                  id="ou-other"
+                  value={form.ad_ou_students_other}
+                  onChange={(e) => set("ad_ou_students_other", e.target.value)}
+                  placeholder="OU=Schueler,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ou-teachers">
+                  {t("schools.ad_config.field.ad_ou_teachers")}
+                </Label>
+                <Input
+                  id="ou-teachers"
+                  value={form.ad_ou_teachers}
+                  onChange={(e) => set("ad_ou_teachers", e.target.value)}
+                  placeholder="OU=Lehrer,OU=Schule,DC=…"
+                  maxLength={512}
+                />
+              </div>
+            </>
+          )}
           <div className="space-y-1">
             <Label htmlFor="ou-devices">{t("schools.ad_config.field.ad_ou_devices")}</Label>
             <Input
@@ -520,16 +555,26 @@ export function SchoolForm({
           <CardDescription>{t("schools.ad_config.groups_section_desc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {GROUP_KEYS.map((key) => (
+          {isCompany ? (
             <GroupPicker
-              key={key}
-              label={t(GROUP_LABELS[key])}
+              label={t("schools.ad_config.field.ad_groups_company")}
               hint={t("schools.ad_config.group_pick_hint")}
               catalog={Array.isArray(groups.data) ? groups.data : []}
-              selected={form[key]}
-              onChange={(next) => setGroups(key, next)}
+              selected={form.ad_groups_company}
+              onChange={(next) => setGroups("ad_groups_company", next)}
             />
-          ))}
+          ) : (
+            GROUP_KEYS.map((key) => (
+              <GroupPicker
+                key={key}
+                label={t(GROUP_LABELS[key])}
+                hint={t("schools.ad_config.group_pick_hint")}
+                catalog={Array.isArray(groups.data) ? groups.data : []}
+                selected={form[key]}
+                onChange={(next) => setGroups(key, next)}
+              />
+            ))
+          )}
         </CardContent>
       </Card>
 

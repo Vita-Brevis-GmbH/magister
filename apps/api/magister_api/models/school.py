@@ -43,6 +43,13 @@ class School(Base):
     ad_ou_students_other: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_ou_teachers: Mapped[str | None] = mapped_column(String(512), nullable=True)
     ad_ou_devices: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Company edition (#6): a single custom-named target OU for company users
+    # (there is no Zyklus/teacher split in a company), plus optional default
+    # groups. Only used in the company profile; school instances leave it unset.
+    ad_ou_company_users: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ad_groups_company: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     ad_groups_teacher: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )

@@ -12,10 +12,12 @@ class SchoolAdConfig(BaseModel):
     ad_ou_students_other: str | None = Field(default=None, max_length=512)
     ad_ou_teachers: str | None = Field(default=None, max_length=512)
     ad_ou_devices: str | None = Field(default=None, max_length=512)
+    ad_ou_company_users: str | None = Field(default=None, max_length=512)
     ad_groups_teacher: list[str] | None = None
     ad_groups_student_zyklus1: list[str] | None = None
     ad_groups_student_zyklus2: list[str] | None = None
     ad_groups_student_zyklus3: list[str] | None = None
+    ad_groups_company: list[str] | None = None
 
 
 class SchoolBase(BaseModel):
@@ -61,10 +63,12 @@ class SchoolOut(BaseModel):
     ad_ou_students_other: str | None = None
     ad_ou_teachers: str | None = None
     ad_ou_devices: str | None = None
+    ad_ou_company_users: str | None = None
     ad_groups_teacher: list[str] = Field(default_factory=list)
     ad_groups_student_zyklus1: list[str] = Field(default_factory=list)
     ad_groups_student_zyklus2: list[str] = Field(default_factory=list)
     ad_groups_student_zyklus3: list[str] = Field(default_factory=list)
+    ad_groups_company: list[str] = Field(default_factory=list)
 
 
 __all__ = ["SchoolAdConfig", "SchoolCreate", "SchoolOut", "SchoolUpdate"]

@@ -21,9 +21,10 @@ def test_school_profile_defaults() -> None:
 
 def test_company_profile_defaults() -> None:
     enabled = set(catalog.effective_enabled_ids("company", {}))
-    assert {"platform", "departments", "reports", "devices"} <= enabled
-    # School superstructure off in the company profile.
-    assert enabled.isdisjoint({"classes", "letters", "imports"})
+    # imports is on in both editions (company_users provisioning, #7).
+    assert {"platform", "departments", "reports", "devices", "imports"} <= enabled
+    # School superstructure (classes + its letters) is off in the company profile.
+    assert enabled.isdisjoint({"classes", "letters"})
     assert catalog.dependency_violations(enabled) == []
 
 

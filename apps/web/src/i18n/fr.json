@@ -735,7 +735,9 @@
     "school_hint": "L’import est attribué à cette école.",
     "error_school_required": "Veuillez d’abord sélectionner l’école cible.",
     "kind_teachers": "Enseignants",
-    "kind_teachers_desc": "Créer de nouveaux comptes AD enseignants (dans l'OU enseignants). Colonnes : given_name, surname, display_name, upn, sam_account_name, force_change. Sans classe/degré."
+    "kind_teachers_desc": "Créer de nouveaux comptes AD enseignants (dans l'OU enseignants). Colonnes : given_name, surname, display_name, upn, sam_account_name, force_change. Sans classe/degré.",
+    "kind_company_users": "Collaborateurs",
+    "kind_company_users_desc": "Créer de nouveaux comptes AD pour les collaborateurs (dans l'OU d'entreprise configurée). Colonnes : given_name, surname, display_name, upn, sam_account_name, force_change, mail (vide = UPN), mail_aliases (adresses supplémentaires, séparées par des points-virgules), cannot_change_password, password_never_expires."
   },
   "privacy": {
     "section_title": "Export de données (LPD art. 25)",
@@ -1038,10 +1040,12 @@
         "ad_ou_students_other": "OU élèves (autres)",
         "ad_ou_teachers": "OU enseignant·es",
         "ad_ou_devices": "OU appareils",
+        "ad_ou_company_users": "OU collaborateurs (OU cible)",
         "ad_groups_teacher": "Groupes pour enseignant·es",
         "ad_groups_student_zyklus1": "Groupes pour élèves cycle 1",
         "ad_groups_student_zyklus2": "Groupes pour élèves cycle 2",
-        "ad_groups_student_zyklus3": "Groupes pour élèves cycle 3"
+        "ad_groups_student_zyklus3": "Groupes pour élèves cycle 3",
+        "ad_groups_company": "Groupes par défaut collaborateurs"
       }
     }
   },

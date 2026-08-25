@@ -29,6 +29,9 @@ IMPORT_KIND_CLASS_TEACHERS = "class_teachers"
 # Provisioning imports: create NEW AD accounts (see ADR 0006).
 IMPORT_KIND_STUDENTS = "students"
 IMPORT_KIND_TEACHERS = "teachers"
+# Company edition (#7): provision company users into the Standort's company OU,
+# with target OU + optional mail + additional mail addresses (proxyAddresses).
+IMPORT_KIND_COMPANY_USERS = "company_users"
 ALLOWED_IMPORT_KINDS: frozenset[str] = frozenset(
     {
         IMPORT_KIND_CLASSES,
@@ -36,6 +39,7 @@ ALLOWED_IMPORT_KINDS: frozenset[str] = frozenset(
         IMPORT_KIND_CLASS_TEACHERS,
         IMPORT_KIND_STUDENTS,
         IMPORT_KIND_TEACHERS,
+        IMPORT_KIND_COMPANY_USERS,
     }
 )
 
@@ -74,7 +78,8 @@ class ImportJob(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('classes', 'class_memberships', 'class_teachers', 'students', 'teachers')",
+            "kind IN ('classes', 'class_memberships', 'class_teachers', "
+            "'students', 'teachers', 'company_users')",
             name="ck_import_jobs_kind",
         ),
         CheckConstraint(

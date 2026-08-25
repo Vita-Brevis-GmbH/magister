@@ -732,7 +732,9 @@
     "school_hint": "Der Import wird dieser Schule zugeordnet.",
     "error_school_required": "Bitte zuerst die Ziel-Schule auswählen.",
     "kind_teachers": "Lehrpersonen",
-    "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe."
+    "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe.",
+    "kind_company_users": "Mitarbeitende",
+    "kind_company_users_desc": "Neue AD-Konten für Mitarbeitende anlegen (in der konfigurierten Firmen-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change, mail (leer = UPN), mail_aliases (weitere Adressen, mit Strichpunkt getrennt), cannot_change_password, password_never_expires."
   },
   "privacy": {
     "section_title": "Datenauskunft (revDSG Art. 25)",
@@ -1035,10 +1037,12 @@
         "ad_ou_students_other": "OU Schüler:innen (übrige)",
         "ad_ou_teachers": "OU Lehrpersonen",
         "ad_ou_devices": "OU Geräte",
+        "ad_ou_company_users": "OU Mitarbeitende (Ziel-OU)",
         "ad_groups_teacher": "Gruppen für Lehrpersonen",
         "ad_groups_student_zyklus1": "Gruppen für Schüler:innen Zyklus 1",
         "ad_groups_student_zyklus2": "Gruppen für Schüler:innen Zyklus 2",
-        "ad_groups_student_zyklus3": "Gruppen für Schüler:innen Zyklus 3"
+        "ad_groups_student_zyklus3": "Gruppen für Schüler:innen Zyklus 3",
+        "ad_groups_company": "Standard-Gruppen Mitarbeitende"
       }
     }
   },

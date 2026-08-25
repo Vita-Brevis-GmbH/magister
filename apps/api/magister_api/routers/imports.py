@@ -34,6 +34,7 @@ from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.import_job import (
     ALLOWED_IMPORT_KINDS,
+    IMPORT_KIND_COMPANY_USERS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
 )
@@ -76,7 +77,7 @@ def _authorize_kind(user: AuthenticatedUser, matrix: RbacMatrix, kind: str) -> N
     # structural imports need ORGUNIT_MANAGE (admin + Schulleitung).
     needed = (
         Capability.USER_ADMINISTER
-        if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS)
+        if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS, IMPORT_KIND_COMPANY_USERS)
         else Capability.ORGUNIT_MANAGE
     )
     if not has_capability(user, matrix, needed):

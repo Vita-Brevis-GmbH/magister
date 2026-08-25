@@ -732,7 +732,9 @@
     "school_hint": "The import is assigned to this school.",
     "error_school_required": "Please select the target school first.",
     "kind_teachers": "Teachers",
-    "kind_teachers_desc": "Create new AD teacher accounts (in the teacher OU). Columns: given_name, surname, display_name, upn, sam_account_name, force_change. No class/grade."
+    "kind_teachers_desc": "Create new AD teacher accounts (in the teacher OU). Columns: given_name, surname, display_name, upn, sam_account_name, force_change. No class/grade.",
+    "kind_company_users": "Employees",
+    "kind_company_users_desc": "Create new AD accounts for employees (in the configured company OU). Columns: given_name, surname, display_name, upn, sam_account_name, force_change, mail (blank = UPN), mail_aliases (extra addresses, semicolon-separated), cannot_change_password, password_never_expires."
   },
   "privacy": {
     "section_title": "Data export (revDSG Art. 25)",
@@ -1035,10 +1037,12 @@
         "ad_ou_students_other": "OU students (other)",
         "ad_ou_teachers": "OU teachers",
         "ad_ou_devices": "OU devices",
+        "ad_ou_company_users": "OU employees (target OU)",
         "ad_groups_teacher": "Groups for teachers",
         "ad_groups_student_zyklus1": "Groups for students Zyklus 1",
         "ad_groups_student_zyklus2": "Groups for students Zyklus 2",
-        "ad_groups_student_zyklus3": "Groups for students Zyklus 3"
+        "ad_groups_student_zyklus3": "Groups for students Zyklus 3",
+        "ad_groups_company": "Default groups employees"
       }
     }
   },

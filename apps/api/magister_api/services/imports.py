@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -45,6 +46,7 @@ from magister_api.models.import_job import (
     IMPORT_KIND_CLASS_MEMBERSHIPS,
     IMPORT_KIND_CLASS_TEACHERS,
     IMPORT_KIND_CLASSES,
+    IMPORT_KIND_COMPANY_USERS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
     IMPORT_STATUS_APPLIED,
@@ -177,6 +179,53 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             ["Sven", "Vertret", "", "sven.vertret@schule.ch", "", "", "", ""],
         ],
     ),
+    IMPORT_KIND_COMPANY_USERS: (
+        # Provisioning (company edition): creates NEW AD company-user accounts in
+        # the Standort's company OU. Like teachers but with an explicit primary
+        # ``mail`` (blank = UPN) and ``mail_aliases`` — extra SMTP addresses,
+        # semicolon-separated (written as proxyAddresses).
+        # Optional columns (mail, mail_aliases, cannot_change_password,
+        # password_never_expires) are TRAILING so old files without them still
+        # validate (see OPTIONAL_HEADERS below).
+        [
+            "given_name",
+            "surname",
+            "display_name",
+            "upn",
+            "sam_account_name",
+            "force_change",
+            "mail",
+            "mail_aliases",
+            "cannot_change_password",
+            "password_never_expires",
+        ],
+        [
+            [
+                "Karin",
+                "Kader",
+                "",
+                "karin.kader@firma.ch",
+                "",
+                "true",
+                "",
+                "k.kader@firma.ch;karin@firma.ch",
+                "",
+                "",
+            ],  # noqa: E501
+            [
+                "Peter",
+                "Muster",
+                "Peter M.",
+                "peter.muster@firma.ch",
+                "p.muster",
+                "false",
+                "peter.muster@firma.ch",
+                "",
+                "true",
+                "true",
+            ],  # noqa: E501
+        ],
+    ),
 }
 
 
@@ -190,7 +239,53 @@ OPTIONAL_HEADERS: dict[str, list[str]] = {
         "password_never_expires",
     ],
     IMPORT_KIND_TEACHERS: ["cannot_change_password", "password_never_expires"],
+    IMPORT_KIND_COMPANY_USERS: [
+        "mail",
+        "mail_aliases",
+        "cannot_change_password",
+        "password_never_expires",
+    ],
 }
+
+# Local-part of an email address (mirrors schemas.user_attrs.UPN_LOCAL_RE) —
+# used to validate ``mail_aliases`` cells on the company import.
+_ALIAS_LOCAL_RE = re.compile(r"^[A-Za-z0-9._%+\-]{1,64}$")
+_MAX_ALIASES = 50
+
+
+def _parse_aliases_cell(
+    cell: str, *, primary: str, allowed_domains: list[str]
+) -> tuple[list[str], list[str]]:
+    """Parse a semicolon-separated ``mail_aliases`` cell → (aliases, errors).
+
+    Lowercases, de-dups, drops an alias equal to the primary, validates the
+    shape and (when configured) the domain allowlist. Mirrors the user-edit
+    alias validator so the import and the UI accept exactly the same shapes.
+    """
+    errors: list[str] = []
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in (cell or "").split(";"):
+        alias = raw.strip().lower()
+        if not alias:
+            continue
+        if "@" not in alias:
+            errors.append(f"mail alias {alias!r} must look like name@domain.tld")
+            continue
+        local, domain = alias.split("@", 1)
+        if not _ALIAS_LOCAL_RE.match(local) or "." not in domain:
+            errors.append(f"mail alias {alias!r} has an invalid format")
+            continue
+        if allowed_domains and domain not in allowed_domains:
+            errors.append(f"mail alias domain {domain!r} not in allowed mail domains")
+            continue
+        if alias == primary.lower() or alias in seen:
+            continue
+        seen.add(alias)
+        out.append(alias)
+    if len(out) > _MAX_ALIASES:
+        errors.append(f"too many mail aliases (max {_MAX_ALIASES})")
+    return out, errors
 
 
 def render_template(kind: str) -> str:
@@ -463,6 +558,8 @@ class ImportService:
                 return await self._classify_student(school_id, row)
             if kind == IMPORT_KIND_TEACHERS:
                 return await self._classify_teacher_provision(school_id, row)
+            if kind == IMPORT_KIND_COMPANY_USERS:
+                return await self._classify_company_user(school_id, row)
         except Exception as exc:  # noqa: BLE001 — defensive fallback
             return IMPORT_ACTION_ERROR, [str(exc)]
         return IMPORT_ACTION_ERROR, ["unsupported kind"]
@@ -806,6 +903,101 @@ class ImportService:
 
         return IMPORT_ACTION_CREATE, []
 
+    async def _classify_company_user(
+        self, school_id: int, row: dict[str, str]
+    ) -> tuple[str, list[str]]:
+        """Validate a company-user provisioning row (company edition, #7).
+
+        Like a teacher, but the account lands in the Standort's company OU
+        (``ad_ou_company_users``) and may carry an explicit ``mail`` plus
+        ``mail_aliases`` (extra proxyAddresses).
+        """
+        errors: list[str] = []
+        given = row.get("given_name", "").strip()
+        surname = row.get("surname", "").strip()
+        upn = row.get("upn", "").strip().lower()
+
+        if not given:
+            errors.append("given_name is required")
+        if not surname:
+            errors.append("surname is required")
+        if not upn or "@" not in upn or "." not in upn.split("@", 1)[1]:
+            errors.append("upn is required and must look like name@domain.tld")
+        try:
+            _parse_force_change(row.get("force_change", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+        for flag_col in ("cannot_change_password", "password_never_expires"):
+            try:
+                _parse_bool_flag(row.get(flag_col, ""), column=flag_col)
+            except ValueError as exc:
+                errors.append(str(exc))
+        if upn and "@" in upn:
+            sam = _derive_sam(upn, row.get("sam_account_name", ""))
+            if len(sam) > _SAM_MAX_LEN:
+                errors.append(
+                    f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
+                )
+        if errors:
+            return IMPORT_ACTION_ERROR, errors
+
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"duplicate upn {upn} in this file"]
+        self._seen_upns.add(upn)
+        if sam in self._seen_sams:
+            return IMPORT_ACTION_ERROR, [f"duplicate sam_account_name {sam!r} in this file"]
+        self._seen_sams.add(sam)
+
+        display = (row.get("display_name") or "").strip() or f"{given} {surname}"
+        name_key = _norm_name(display)
+        if name_key in self._seen_names:
+            return IMPORT_ACTION_ERROR, [
+                f"duplicate name {display!r} in this file — CN must be unique in the company OU; "
+                "give one an explicit display_name"
+            ]
+        self._seen_names.add(name_key)
+
+        settings_row = await self._app_settings_row()
+        allowed = list(settings_row.mail_domains or [])
+        domain = upn.split("@", 1)[1]
+        if allowed and domain not in allowed:
+            return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
+
+        # Explicit primary mail (blank = UPN); its domain is allowlist-checked too.
+        mail = (row.get("mail") or "").strip().lower() or upn
+        if "@" not in mail:
+            return IMPORT_ACTION_ERROR, [f"mail {mail!r} must look like name@domain.tld"]
+        if allowed and mail.split("@", 1)[1] not in allowed:
+            return IMPORT_ACTION_ERROR, [f"mail domain {mail.split('@', 1)[1]!r} not allowed"]
+
+        _, alias_errors = _parse_aliases_cell(
+            row.get("mail_aliases", ""), primary=mail, allowed_domains=allowed
+        )
+        if alias_errors:
+            return IMPORT_ACTION_ERROR, alias_errors
+
+        school = await self._school_row(school_id)
+        if not school.ad_ou_company_users:
+            return IMPORT_ACTION_ERROR, ["company-users OU not configured for this Standort"]
+
+        # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
+        # checked across all org units, not just the import's Standort.
+        existing = (
+            await self.session.execute(select(AdUserCache).where(AdUserCache.upn == upn))
+        ).scalar_one_or_none()
+        if existing is not None:
+            return IMPORT_ACTION_ERROR, [f"upn {upn} already exists"]
+        existing_sam = (
+            await self.session.execute(
+                select(AdUserCache).where(AdUserCache.sam_account_name == sam)
+            )
+        ).scalar_one_or_none()
+        if existing_sam is not None:
+            return IMPORT_ACTION_ERROR, [f"sam_account_name {sam!r} already exists"]
+
+        return IMPORT_ACTION_CREATE, []
+
     async def _lookup_user(self, upn: str, *, kind: str) -> AdUserCache | None:
         stmt = select(AdUserCache).where(
             AdUserCache.upn == upn,
@@ -879,6 +1071,8 @@ class ImportService:
                     cred = await self._apply_teacher_provision(
                         job.school_id, staged, ip, request_id
                     )
+                elif job.kind == IMPORT_KIND_COMPANY_USERS:
+                    cred = await self._apply_company_user(job.school_id, staged, ip, request_id)
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
                 await sp.commit()
@@ -1251,6 +1445,114 @@ class ImportService:
             ip=ip,
             request_id=request_id,
             payload={"upn": upn, "force_change": force_change},
+        )
+        return ProvisionedCredential(
+            upn=upn,
+            sam_account_name=sam,
+            display_name=display,
+            class_name="",
+            password=password,
+            force_change=force_change,
+        )
+
+    async def _apply_company_user(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> ProvisionedCredential:
+        """Provision a company user into the Standort's company OU (#7).
+
+        Mirrors teacher provisioning, but writes into ``ad_ou_company_users``,
+        may set an explicit primary ``mail`` and, when given, extra
+        ``mail_aliases`` as proxyAddresses (a second AD write, best-effort).
+        """
+        if self.ad is None:
+            raise ValueError("ad_client_unavailable")
+        row = staged.raw_data
+        given = row["given_name"].strip()
+        surname = row["surname"].strip()
+        upn = row["upn"].strip().lower()
+        display = (row.get("display_name") or "").strip() or f"{given} {surname}"
+        sam = _derive_sam(upn, row.get("sam_account_name", ""))
+        mail = (row.get("mail") or "").strip().lower() or upn
+        force_change = _parse_force_change(row.get("force_change", ""))
+        cannot_change_password = _parse_bool_flag(
+            row.get("cannot_change_password", ""), column="cannot_change_password"
+        )
+        password_never_expires = _parse_bool_flag(
+            row.get("password_never_expires", ""), column="password_never_expires"
+        )
+
+        settings_row = await self._app_settings_row()
+        school = await self._school_row(school_id)
+        ou = school.ad_ou_company_users
+        if not ou:
+            raise ValueError("company_ou_not_configured")
+        aliases, _ = _parse_aliases_cell(
+            row.get("mail_aliases", ""),
+            primary=mail,
+            allowed_domains=list(settings_row.mail_domains or []),
+        )
+
+        password = generate_teacher_password()
+        guid = await self.ad.create_user(
+            ou_dn=ou,
+            common_name=display,
+            sam_account_name=sam,
+            user_principal_name=upn,
+            mail=mail,
+            given_name=given,
+            surname=surname,
+            display_name=display,
+            password=password,
+            force_change=force_change,
+            password_never_expires=password_never_expires,
+            cannot_change_password=cannot_change_password,
+            group_dns=list(school.ad_groups_company or []),
+        )
+
+        # Extra mail addresses → proxyAddresses (best-effort second write, like
+        # the user-edit path). A failure here must not orphan the account, so it
+        # is logged and swallowed; the aliases can be re-applied from the UI.
+        if aliases:
+            try:
+                user_dn = await self.ad.find_user_dn(guid)
+                if user_dn:
+                    await self.ad.set_proxy_addresses(
+                        user_dn=user_dn, primary=mail, aliases=aliases
+                    )
+            except Exception:  # noqa: BLE001 — never orphan over an alias write
+                logger.exception("company import: failed to set proxyAddresses for %s", upn)
+
+        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
+        self.session.add(
+            AdUserCache(
+                ad_object_guid=guid,
+                school_id=school_id,
+                upn=upn,
+                sam_account_name=sam,
+                given_name=given,
+                surname=surname,
+                display_name=display,
+                mail=mail,
+                mail_aliases=aliases,
+                kind="company",
+                enabled=True,
+                last_sync_at=utcnow(),
+                password_never_expires=password_never_expires,
+                cannot_change_password=cannot_change_password,
+                store_password=store_pw,
+                password_enc=password_enc,
+            )
+        )
+        await self.audit.emit(
+            action="company_user_provisioned",
+            target_kind="ad_user",
+            target_id=guid,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"upn": upn, "force_change": force_change, "aliases": len(aliases)},
         )
         return ProvisionedCredential(
             upn=upn,
