@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Integer, and_, case, func, or_, select
+from sqlalchemy import Integer, and_, case, distinct, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.audit import AuditEvent
@@ -16,10 +16,15 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.department import DEPARTMENT_STATUS_ACTIVE, Department
+from magister_api.models.department_membership import DepartmentMembership
+from magister_api.models.manager_role import MANAGER_ROLE_DEPUTY, MANAGER_ROLE_LEAD, ManagerRole
 from magister_api.models.school_class import CLASS_STATUS_ACTIVE, SchoolClass
 from magister_api.repositories.base import BaseRepository, ScopeContext
 from magister_api.schemas.reports import (
     ActivityRow,
+    ManagerWorkloadRow,
+    MembersByDepartmentRow,
     StudentsByClassRow,
     StudentsBySchoolYearRow,
     TeacherWorkloadRow,
@@ -140,6 +145,107 @@ class ReportsRepository(BaseRepository):
                 stellvertretung_count=r[5] or 0,
                 total=r[6],
                 classes=sorted({c for c in (r[7] or []) if c}),
+            )
+            for r in rows
+        ]
+
+    async def members_by_department(self) -> list[MembersByDepartmentRow]:
+        """Count active members (and active Kader/leads) per active department, scoped.
+
+        Parallel to :meth:`students_by_class`. A person may sit in several
+        departments at once (matrix org), so this counts memberships, not
+        distinct people. Both outer joins can fan out, so the counts use
+        ``distinct`` to avoid the membership×manager cartesian double-count.
+        """
+        now = utcnow()
+        membership_active = and_(
+            DepartmentMembership.valid_from <= now,
+            or_(DepartmentMembership.valid_to.is_(None), DepartmentMembership.valid_to > now),
+        )
+        manager_active = and_(
+            ManagerRole.valid_from <= now,
+            or_(ManagerRole.valid_to.is_(None), ManagerRole.valid_to > now),
+        )
+        lead_id = case((ManagerRole.role == MANAGER_ROLE_LEAD, ManagerRole.id))
+        stmt = (
+            select(
+                Department.id,
+                Department.school_id,
+                Department.name,
+                Department.kuerzel,
+                func.count(distinct(DepartmentMembership.id)).label("member_count"),
+                func.count(distinct(lead_id)).label("lead_count"),
+            )
+            .select_from(Department)
+            .outerjoin(
+                DepartmentMembership,
+                and_(DepartmentMembership.department_id == Department.id, membership_active),
+            )
+            .outerjoin(
+                ManagerRole,
+                and_(ManagerRole.department_id == Department.id, manager_active),
+            )
+            .where(Department.status == DEPARTMENT_STATUS_ACTIVE)
+            .group_by(Department.id, Department.school_id, Department.name, Department.kuerzel)
+            .order_by(Department.name)
+        )
+        stmt = self.apply_scope(stmt, Department.school_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            MembersByDepartmentRow(
+                department_id=r[0],
+                school_id=r[1],
+                name=r[2],
+                kuerzel=r[3],
+                member_count=r[4],
+                lead_count=r[5],
+            )
+            for r in rows
+        ]
+
+    async def manager_workload(self) -> list[ManagerWorkloadRow]:
+        """Count active Kader (manager) roles per person, broken down by role.
+
+        Parallel to :meth:`teacher_workload`: ``lead`` (Verantwortliche:r) vs
+        ``deputy`` (Stellvertretung) over active departments only.
+        """
+        now = utcnow()
+        role_active = and_(
+            ManagerRole.valid_from <= now,
+            or_(ManagerRole.valid_to.is_(None), ManagerRole.valid_to > now),
+        )
+        lead = func.sum(case((ManagerRole.role == MANAGER_ROLE_LEAD, 1), else_=0)).cast(Integer)
+        deputy = func.sum(case((ManagerRole.role == MANAGER_ROLE_DEPUTY, 1), else_=0)).cast(Integer)
+        dept_label = func.coalesce(Department.kuerzel, Department.name)
+        stmt = (
+            select(
+                ManagerRole.ad_object_guid,
+                AdUserCache.upn,
+                AdUserCache.display_name,
+                lead.label("lead_count"),
+                deputy.label("deputy_count"),
+                func.count(ManagerRole.id).label("total"),
+                func.array_agg(dept_label).label("dept_labels"),
+            )
+            .select_from(ManagerRole)
+            .join(Department, Department.id == ManagerRole.department_id)
+            .outerjoin(AdUserCache, AdUserCache.ad_object_guid == ManagerRole.ad_object_guid)
+            .where(role_active)
+            .where(Department.status == DEPARTMENT_STATUS_ACTIVE)
+            .group_by(ManagerRole.ad_object_guid, AdUserCache.upn, AdUserCache.display_name)
+            .order_by(func.count(ManagerRole.id).desc(), AdUserCache.upn)
+        )
+        stmt = self.apply_scope(stmt, Department.school_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            ManagerWorkloadRow(
+                ad_object_guid=r[0],
+                upn=r[1],
+                display_name=r[2],
+                lead_count=r[3] or 0,
+                deputy_count=r[4] or 0,
+                total=r[5],
+                departments=sorted({d for d in (r[6] or []) if d}),
             )
             for r in rows
         ]

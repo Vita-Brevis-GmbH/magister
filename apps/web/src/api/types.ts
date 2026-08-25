@@ -851,6 +851,34 @@ export interface ActivityReport {
   rows: ActivityRow[];
 }
 
+// Company edition (M6 #8): department-centric reports.
+export interface MembersByDepartmentRow {
+  department_id: number;
+  school_id: number;
+  name: string;
+  kuerzel: string | null;
+  member_count: number;
+  lead_count: number;
+}
+export interface MembersByDepartmentReport {
+  rows: MembersByDepartmentRow[];
+  total_members: number;
+  total_departments: number;
+}
+
+export interface ManagerWorkloadRow {
+  ad_object_guid: string;
+  upn: string | null;
+  display_name: string | null;
+  lead_count: number;
+  deputy_count: number;
+  total: number;
+  departments: string[];
+}
+export interface ManagerWorkloadReport {
+  rows: ManagerWorkloadRow[];
+}
+
 export type LetterTemplate = "enrollment" | "class_change" | "password_handout";
 
 export interface LetterRequest {

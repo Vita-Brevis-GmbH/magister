@@ -768,7 +768,18 @@
     "activity_title": "Vue d'ensemble de l'activité",
     "last_n_days": "{{count}} jours",
     "col_action": "Action",
-    "col_count": "Nombre"
+    "col_count": "Nombre",
+    "members_title": "Collaborateurs par département",
+    "members_total": "Total : {{members}} collaborateurs dans {{departments}} départements",
+    "col_department": "Département",
+    "col_members": "Nombre",
+    "col_leads": "Cadres",
+    "manager_title": "Charge des cadres",
+    "manager_intro": "Rôles de cadre actifs par personne, répartis entre responsable/suppléant·e et avec les départements gérés.",
+    "col_manager": "Personne",
+    "role_lead": "Responsable",
+    "role_deputy": "Suppléant·e",
+    "col_departments": "Départements"
   },
   "system": {
     "title": "Système",

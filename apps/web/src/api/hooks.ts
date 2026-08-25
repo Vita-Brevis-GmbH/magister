@@ -61,6 +61,8 @@ import type {
   ProvisionedCredential,
   LetterRequest,
   LetterTemplate,
+  ManagerWorkloadReport,
+  MembersByDepartmentReport,
   StudentsByClassReport,
   StudentsBySchoolYearReport,
   SubjectAccessReport,
@@ -1349,6 +1351,25 @@ export function useActivityReport(days: number = 30) {
   return useQuery<ActivityReport>({
     queryKey: ["reports", "activity", days],
     queryFn: () => apiFetch<ActivityReport>(`/reports/activity?days=${days}`),
+  });
+}
+
+// Company edition (M6 #8): department-centric reports. `enabled` lets the page
+// fetch these only in the company profile (and the school reports only in the
+// school profile), so a school instance never issues the department queries.
+export function useMembersByDepartment(enabled = true) {
+  return useQuery<MembersByDepartmentReport>({
+    queryKey: ["reports", "members-by-department"],
+    queryFn: () => apiFetch<MembersByDepartmentReport>("/reports/members-by-department"),
+    enabled,
+  });
+}
+
+export function useManagerWorkload(enabled = true) {
+  return useQuery<ManagerWorkloadReport>({
+    queryKey: ["reports", "manager-workload"],
+    queryFn: () => apiFetch<ManagerWorkloadReport>("/reports/manager-workload"),
+    enabled,
   });
 }
 

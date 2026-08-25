@@ -60,9 +60,50 @@ class ActivityReport(BaseModel):
     rows: list[ActivityRow]
 
 
+# --- Company edition (M6 #8): department-centric aggregates. -----------------
+# Parallel to the class/teacher reports above, but over Abteilungen/Teams and
+# their Kader (manager) roles. Surfaced in the company profile instead of the
+# school reports; the endpoints stay reachable in both profiles and simply
+# return empty rows where there are no departments.
+
+
+class MembersByDepartmentRow(BaseModel):
+    department_id: int
+    school_id: int
+    name: str
+    kuerzel: str | None
+    member_count: int
+    lead_count: int
+
+
+class MembersByDepartmentReport(BaseModel):
+    rows: list[MembersByDepartmentRow]
+    total_members: int
+    total_departments: int
+
+
+class ManagerWorkloadRow(BaseModel):
+    ad_object_guid: str
+    upn: str | None
+    display_name: str | None
+    lead_count: int
+    deputy_count: int
+    total: int
+    # Labels (Kürzel/Name) of the departments this person manages.
+    departments: list[str]
+
+
+class ManagerWorkloadReport(BaseModel):
+    rows: list[ManagerWorkloadRow]
+
+
 __all__ = [
     "ActivityReport",
     "ActivityRow",
+    "ManagerWorkloadReport",
+    "ManagerWorkloadRow",
+    "MembersByDepartmentReport",
+    "MembersByDepartmentRow",
     "StudentsByClassReport",
     "StudentsByClassRow",
     "StudentsBySchoolYearReport",

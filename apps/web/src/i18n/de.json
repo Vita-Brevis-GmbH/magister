@@ -765,7 +765,18 @@
     "activity_title": "Aktivitäts-Übersicht",
     "last_n_days": "{{count}} Tage",
     "col_action": "Aktion",
-    "col_count": "Anzahl"
+    "col_count": "Anzahl",
+    "members_title": "Mitarbeitende pro Abteilung",
+    "members_total": "Total: {{members}} Mitarbeitende in {{departments}} Abteilungen",
+    "col_department": "Abteilung",
+    "col_members": "Anzahl",
+    "col_leads": "Kader",
+    "manager_title": "Kader-Auslastung",
+    "manager_intro": "Aktive Kader-Rollen pro Person, aufgeschlüsselt nach Leitung/Stellvertretung und mit den geführten Abteilungen.",
+    "col_manager": "Person",
+    "role_lead": "Leitung",
+    "role_deputy": "Stellvertretung",
+    "col_departments": "Abteilungen"
   },
   "system": {
     "title": "System",

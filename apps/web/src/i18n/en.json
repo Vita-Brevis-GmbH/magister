@@ -765,7 +765,18 @@
     "activity_title": "Activity overview",
     "last_n_days": "{{count}} days",
     "col_action": "Action",
-    "col_count": "Count"
+    "col_count": "Count",
+    "members_title": "Members per department",
+    "members_total": "Total: {{members}} members across {{departments}} departments",
+    "col_department": "Department",
+    "col_members": "Count",
+    "col_leads": "Leads",
+    "manager_title": "Manager workload",
+    "manager_intro": "Active manager (Kader) roles per person, split by lead/deputy and with the departments they manage.",
+    "col_manager": "Person",
+    "role_lead": "Lead",
+    "role_deputy": "Deputy",
+    "col_departments": "Departments"
   },
   "system": {
     "title": "System",

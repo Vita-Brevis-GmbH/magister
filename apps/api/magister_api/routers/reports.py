@@ -20,6 +20,8 @@ from magister_api.models.base import utcnow
 from magister_api.repositories.reports import ReportsRepository
 from magister_api.schemas.reports import (
     ActivityReport,
+    ManagerWorkloadReport,
+    MembersByDepartmentReport,
     StudentsByClassReport,
     StudentsBySchoolYearReport,
     TeacherWorkloadReport,
@@ -61,6 +63,30 @@ async def teacher_workload(
 ) -> TeacherWorkloadReport:
     rows = await ReportsRepository(session, user.to_scope()).teacher_workload()
     return TeacherWorkloadReport(rows=rows)
+
+
+@router.get("/members-by-department", response_model=MembersByDepartmentReport)
+async def members_by_department(
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    session: AsyncSession = Depends(get_session),
+) -> MembersByDepartmentReport:
+    """Company edition (M6 #8): active members + Kader per department, scoped."""
+    rows = await ReportsRepository(session, user.to_scope()).members_by_department()
+    return MembersByDepartmentReport(
+        rows=rows,
+        total_members=sum(r.member_count for r in rows),
+        total_departments=len(rows),
+    )
+
+
+@router.get("/manager-workload", response_model=ManagerWorkloadReport)
+async def manager_workload(
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    session: AsyncSession = Depends(get_session),
+) -> ManagerWorkloadReport:
+    """Company edition (M6 #8): active Kader (manager) roles per person, scoped."""
+    rows = await ReportsRepository(session, user.to_scope()).manager_workload()
+    return ManagerWorkloadReport(rows=rows)
 
 
 @router.get("/activity", response_model=ActivityReport)

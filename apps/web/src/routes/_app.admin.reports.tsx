@@ -4,6 +4,9 @@ import { useTranslation } from "react-i18next";
 
 import {
   useActivityReport,
+  useInstanceProfile,
+  useManagerWorkload,
+  useMembersByDepartment,
   useStudentsByClass,
   useStudentsBySchoolYear,
   useTeacherWorkload,
@@ -38,6 +41,10 @@ function ErrorRow({ columns }: { columns: number }): JSX.Element {
 
 function ReportsPage(): JSX.Element {
   const { t } = useTranslation();
+  // M6 #8: the company profile reports over Abteilungen/Kader instead of
+  // Klassen/Lehrpersonen. Only the matching sections mount, so a school
+  // instance never issues the department queries (and vice-versa).
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
   return (
     <div className="space-y-8">
       <header>
@@ -45,11 +52,119 @@ function ReportsPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{t("reports.intro")}</p>
       </header>
 
-      <StudentsByClassSection />
-      <StudentsBySchoolYearSection />
-      <TeacherWorkloadSection />
+      {isCompany ? (
+        <>
+          <MembersByDepartmentSection />
+          <ManagerWorkloadSection />
+        </>
+      ) : (
+        <>
+          <StudentsByClassSection />
+          <StudentsBySchoolYearSection />
+          <TeacherWorkloadSection />
+        </>
+      )}
       <ActivitySection />
     </div>
+  );
+}
+
+function MembersByDepartmentSection(): JSX.Element {
+  const { t } = useTranslation();
+  const q = useMembersByDepartment();
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">{t("reports.members_title")}</h2>
+        {q.data && (
+          <p className="text-sm text-muted-foreground">
+            {t("reports.members_total", {
+              members: q.data.total_members,
+              departments: q.data.total_departments,
+            })}
+          </p>
+        )}
+      </div>
+      <div className="overflow-hidden rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("reports.col_department")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_leads")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_members")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={3} />)
+            ) : q.isError ? (
+              <ErrorRow columns={3} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.department_id}>
+                  <TableCell className="font-medium">
+                    {row.name}
+                    {row.kuerzel ? (
+                      <span className="ml-2 text-xs text-muted-foreground">({row.kuerzel})</span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.lead_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.member_count}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
+function ManagerWorkloadSection(): JSX.Element {
+  const { t } = useTranslation();
+  const q = useManagerWorkload();
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold">{t("reports.manager_title")}</h2>
+      <p className="text-sm text-muted-foreground">{t("reports.manager_intro")}</p>
+      <div className="overflow-hidden rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("reports.col_manager")}</TableHead>
+              <TableHead className="text-right">{t("reports.role_lead")}</TableHead>
+              <TableHead className="text-right">{t("reports.role_deputy")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_total")}</TableHead>
+              <TableHead>{t("reports.col_departments")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {q.isLoading ? (
+              Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} columns={5} />)
+            ) : q.isError ? (
+              <ErrorRow columns={5} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.ad_object_guid}>
+                  <TableCell>
+                    <div className="flex flex-col leading-tight">
+                      <span className="font-medium">{row.display_name ?? row.upn ?? "—"}</span>
+                      {row.upn && <span className="text-xs text-muted-foreground">{row.upn}</span>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{row.lead_count}</TableCell>
+                  <TableCell className="text-right tabular-nums">{row.deputy_count}</TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">{row.total}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {row.departments.length > 0 ? row.departments.join(", ") : "—"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }
 

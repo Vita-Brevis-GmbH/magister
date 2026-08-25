@@ -768,7 +768,18 @@
     "activity_title": "Panoramica dell'attività",
     "last_n_days": "{{count}} giorni",
     "col_action": "Azione",
-    "col_count": "Numero"
+    "col_count": "Numero",
+    "members_title": "Collaboratori per reparto",
+    "members_total": "Totale: {{members}} collaboratori in {{departments}} reparti",
+    "col_department": "Reparto",
+    "col_members": "Numero",
+    "col_leads": "Quadri",
+    "manager_title": "Carico dei quadri",
+    "manager_intro": "Ruoli di quadro attivi per persona, suddivisi tra responsabile/supplente e con i reparti gestiti.",
+    "col_manager": "Persona",
+    "role_lead": "Responsabile",
+    "role_deputy": "Supplente",
+    "col_departments": "Reparti"
   },
   "system": {
     "title": "Sistema",

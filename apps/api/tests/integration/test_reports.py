@@ -10,6 +10,9 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.department import Department
+from magister_api.models.department_membership import DepartmentMembership
+from magister_api.models.manager_role import ManagerRole
 from magister_api.models.school_class import SchoolClass
 
 
@@ -366,3 +369,150 @@ async def test_activity_days_param_validated(
 async def test_reports_require_schulleitung(client: AsyncClient) -> None:
     r = await client.get("/reports/students-by-class")
     assert r.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Company edition (M6 #8): department reports
+# ---------------------------------------------------------------------------
+
+
+async def _seed_department(
+    db: AsyncSession, *, school_id: int, name: str, members: int, guid_offset: int
+) -> int:
+    dep = Department(school_id=school_id, name=name, kuerzel=name)
+    db.add(dep)
+    await db.flush()
+    for i in range(members):
+        guid = f"00000000-0000-0000-0000-{guid_offset + i:012d}"
+        db.add(
+            DepartmentMembership(
+                department_id=dep.id,
+                ad_object_guid=guid,
+                valid_from=utcnow(),
+            )
+        )
+    await db.commit()
+    return dep.id
+
+
+@pytest.mark.asyncio
+async def test_members_by_department_aggregates_scoped(
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+    school_b: int,
+) -> None:
+    did = await _seed_department(
+        db_session, school_id=school_a, name="Sekretariat", members=3, guid_offset=2000
+    )
+    await _seed_department(
+        db_session, school_id=school_a, name="Hauswartung", members=1, guid_offset=2100
+    )
+    # A lead on the first department shows up in lead_count.
+    db_session.add(
+        ManagerRole(
+            department_id=did,
+            ad_object_guid="00000000-0000-0000-0000-00000000c001",
+            role="lead",
+            valid_from=utcnow(),
+        )
+    )
+    # Another school's department must be excluded for a unit admin scoped to A.
+    await _seed_department(
+        db_session, school_id=school_b, name="Fremd", members=9, guid_offset=2200
+    )
+    await db_session.commit()
+
+    r = await as_schulleitung_a.get("/reports/members-by-department")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["total_members"] == 4
+    assert body["total_departments"] == 2
+    by_name = {row["name"]: row for row in body["rows"]}
+    assert by_name["Sekretariat"]["member_count"] == 3
+    assert by_name["Sekretariat"]["lead_count"] == 1
+    assert by_name["Hauswartung"]["member_count"] == 1
+    assert all(row["school_id"] == school_a for row in body["rows"])
+
+
+@pytest.mark.asyncio
+async def test_empty_department_counted_with_zero(
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    await _seed_department(db_session, school_id=school_a, name="Leer", members=0, guid_offset=2300)
+    r = await as_schulleitung_a.get("/reports/members-by-department")
+    body = r.json()
+    assert body["total_departments"] == 1
+    assert body["rows"][0]["member_count"] == 0
+    assert body["rows"][0]["lead_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_manager_workload_role_breakdown(
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    d1 = await _seed_department(
+        db_session, school_id=school_a, name="TeamA", members=0, guid_offset=2400
+    )
+    d2 = await _seed_department(
+        db_session, school_id=school_a, name="TeamB", members=0, guid_offset=2500
+    )
+    mgr_guid = "00000000-0000-0000-0000-00000000d001"
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=mgr_guid,
+            school_id=school_a,
+            upn="kader@example.ch",
+            display_name="Karin Kader",
+            kind="teacher",
+            enabled=True,
+            ms_ds_consistency_guid=mgr_guid,
+        )
+    )
+    db_session.add(
+        ManagerRole(department_id=d1, ad_object_guid=mgr_guid, role="lead", valid_from=utcnow())
+    )
+    db_session.add(
+        ManagerRole(department_id=d2, ad_object_guid=mgr_guid, role="deputy", valid_from=utcnow())
+    )
+    await db_session.commit()
+
+    r = await as_schulleitung_a.get("/reports/manager-workload")
+    assert r.status_code == 200, r.text
+    rows = r.json()["rows"]
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["upn"] == "kader@example.ch"
+    assert row["lead_count"] == 1
+    assert row["deputy_count"] == 1
+    assert row["total"] == 2
+    assert row["departments"] == ["TeamA", "TeamB"]
+
+
+@pytest.mark.asyncio
+async def test_manager_workload_excludes_archived_departments(
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    dep = Department(school_id=school_a, name="Alt", kuerzel="Alt", status="archived")
+    db_session.add(dep)
+    await db_session.flush()
+    mgr_guid = "00000000-0000-0000-0000-00000000d002"
+    db_session.add(
+        ManagerRole(department_id=dep.id, ad_object_guid=mgr_guid, role="lead", valid_from=utcnow())
+    )
+    await db_session.commit()
+
+    r = await as_schulleitung_a.get("/reports/manager-workload")
+    assert r.json()["rows"] == []
+
+
+@pytest.mark.asyncio
+async def test_department_reports_require_schulleitung(client: AsyncClient) -> None:
+    assert (await client.get("/reports/members-by-department")).status_code == 401
+    assert (await client.get("/reports/manager-workload")).status_code == 401
