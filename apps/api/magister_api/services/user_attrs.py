@@ -41,6 +41,14 @@ _AD_ATTR_TO_COLUMN: dict[str, str] = {
     "l": "locality",
     "postalCode": "postal_code",
     "co": "country",
+    "title": "title",
+    "department": "department",
+    "company": "company",
+    "telephoneNumber": "telephone_number",
+    "mobile": "mobile",
+    "physicalDeliveryOfficeName": "office",
+    "description": "description",
+    "employeeID": "employee_id",
 }
 
 # Payload field → AD attribute name.
@@ -55,6 +63,14 @@ _PAYLOAD_TO_AD_ATTR: dict[str, str] = {
     "locality": "l",
     "postal_code": "postalCode",
     "country": "co",
+    "title": "title",
+    "department": "department",
+    "company": "company",
+    "telephone_number": "telephoneNumber",
+    "mobile": "mobile",
+    "office": "physicalDeliveryOfficeName",
+    "description": "description",
+    "employee_id": "employeeID",
 }
 
 # Fields a non-admin (SMI) is NOT allowed to change — login-relevant.
@@ -117,6 +133,7 @@ class UserAttributesService:
         mail_domains: list[str],
         ip: str | None,
         request_id: str,
+        audit_action: str = "user_attribute_changed",
     ) -> UserAttributesResult:
         # ------------------------------------------------------------------
         # 1) Slice the payload into "what the caller actually wants to change".
@@ -151,6 +168,16 @@ class UserAttributesService:
             if domain not in {d.lower() for d in mail_domains}:
                 raise DomainNotAllowedError(f"{field}:{domain}")
 
+        # Aliases run through the same allowlist (validated shape from Pydantic).
+        aliases_in = provided.get("mail_aliases")
+        if aliases_in:
+            allowed = {d.lower() for d in mail_domains}
+            for alias in aliases_in:
+                if not mail_domains:
+                    raise DomainAllowlistEmptyError("mail_aliases")
+                if alias.rsplit("@", 1)[1] not in allowed:
+                    raise DomainNotAllowedError(f"mail_aliases:{alias.rsplit('@', 1)[1]}")
+
         # ------------------------------------------------------------------
         # 4) Drop no-op changes (value identical to current cache row).
         #    For UPN: also check the upn unique-conflict before touching AD.
@@ -171,21 +198,51 @@ class UserAttributesService:
             await self._check_upn_unique(actual_changes["upn"], target.ad_object_guid)
 
         # ------------------------------------------------------------------
+        # 4b) proxyAddresses: rewrite the full set whenever the primary (mail)
+        #     or the aliases change. The primary is tagged ``SMTP:``; aliases
+        #     ``smtp:``. An alias equal to the primary is dropped (no dup). We
+        #     mirror the cleaned alias set back into ``actual_changes`` so the
+        #     cache and the AD write agree (ADR-0009).
+        # ------------------------------------------------------------------
+        rewrite_proxy = "mail" in actual_changes or "mail_aliases" in actual_changes
+        proxy_primary: str | None = None
+        proxy_aliases: list[str] = []
+        if rewrite_proxy:
+            proxy_primary = actual_changes.get("mail", target.mail)
+            if "mail_aliases" in actual_changes:
+                raw_aliases = actual_changes["mail_aliases"] or []
+            else:
+                raw_aliases = list(target.mail_aliases or [])
+            proxy_aliases = [a for a in raw_aliases if a and a != proxy_primary]
+            if proxy_aliases != list(target.mail_aliases or []):
+                actual_changes["mail_aliases"] = proxy_aliases
+            else:
+                actual_changes.pop("mail_aliases", None)
+            if not actual_changes:
+                # Only redundant alias churn — nothing genuinely changed.
+                return UserAttributesResult(changed_keys=[])
+
+        # ------------------------------------------------------------------
         # 5) Write AD-bound fields. Plain attributes go via one MODIFY_REPLACE;
         #    the account-policy flags use dedicated AD-client calls (UAC bit /
-        #    DACL edit). A single DN lookup covers both.
+        #    DACL edit); proxyAddresses is a multi-valued set replace. A single
+        #    DN lookup covers all.
         # ------------------------------------------------------------------
         ad_changes = {
             _PAYLOAD_TO_AD_ATTR[f]: v for f, v in actual_changes.items() if f in AD_FIELDS
         }
         flag_changes = {f: v for f, v in actual_changes.items() if f in AD_FLAG_FIELDS}
-        if ad_changes or flag_changes:
+        if ad_changes or flag_changes or rewrite_proxy:
             user_dn = await self.ad.find_user_dn(target.ad_object_guid)
             if not user_dn:
                 raise UserNotInAdError(target.ad_object_guid)
             try:
                 if ad_changes:
                     await self.ad.modify_user_attributes(user_dn=user_dn, attributes=ad_changes)
+                if rewrite_proxy:
+                    await self.ad.set_proxy_addresses(
+                        user_dn=user_dn, primary=proxy_primary, aliases=proxy_aliases
+                    )
                 if "password_never_expires" in flag_changes:
                     await self.ad.set_password_never_expires(
                         user_dn=user_dn, value=bool(flag_changes["password_never_expires"])
@@ -227,7 +284,7 @@ class UserAttributesService:
         #    before/after values to keep PII out of the audit trail.
         # ------------------------------------------------------------------
         await self.audit.emit(
-            action="user_attribute_changed",
+            action=audit_action,
             target_kind="ad_user",
             target_id=target.ad_object_guid,
             actor_upn=self.scope.upn,

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -35,9 +36,11 @@ from magister_api.models.class_teacher_role import (
     KL_ROLE_HAUPT,
     ClassTeacherRole,
 )
+from magister_api.models.document_template import DocumentTemplate
 from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
+from magister_api.services.document_templates import DocumentTemplateService
 
 TEMPLATE_ENROLLMENT = "enrollment"
 TEMPLATE_CLASS_CHANGE = "class_change"
@@ -137,6 +140,12 @@ class LetterService:
 
         self._require_inputs(template, ctx, has_class=active_class is not None)
 
+        # Feature B: an operator override (per school, else global) wins over the
+        # built-in template; falls back to the built-in when none is active.
+        custom = await DocumentTemplateService(self.session, self.settings).resolve(
+            key=template, language="de", school_id=student.school_id
+        )
+
         rendered_html = self._render_html(
             template=template,
             student=student,
@@ -144,6 +153,7 @@ class LetterService:
             active_class=active_class,
             kl_name=kl_name,
             ctx=ctx,
+            custom=custom,
         )
 
         await self.audit.emit(
@@ -233,6 +243,7 @@ class LetterService:
         active_class: SchoolClass | None,
         kl_name: str | None,
         ctx: LetterContext,
+        custom: DocumentTemplate | None = None,
     ) -> str:
         strings = LETTER_STRINGS_DE
         subject = strings[template]["subject"].format(
@@ -285,7 +296,23 @@ class LetterService:
             "temp_password": ctx.temp_password,
             "t": strings,
         }
+        if custom is not None:
+            if custom.subject:
+                template_ctx["subject"] = DocumentTemplateService.render_body(
+                    custom.subject, template_ctx
+                )
+            body = DocumentTemplateService.render_body(custom.body_html, template_ctx)
+            return self._wrap_custom(subject=str(template_ctx["subject"] or ""), body_html=body)
         return self.env.get_template(f"{template}.html").render(**template_ctx)
+
+    def _wrap_custom(self, *, subject: str, body_html: str) -> str:
+        """Wrap an operator body in the shared print layout (base CSS)."""
+        return (
+            '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+            f"<title>{escape(subject)}</title>"
+            f"<style>{self.base_css}</style></head>"
+            f'<body><main class="letter">{body_html}</main></body></html>'
+        )
 
 
 __all__ = [

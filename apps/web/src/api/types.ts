@@ -208,6 +208,79 @@ export interface MyStudentsOut {
   classes: MyClassStudents[];
 }
 
+/** M6: feature modules enabled for this instance (GET /me/modules). */
+export interface ModuleOut {
+  id: string;
+  depends_on: string[];
+}
+
+export interface ModulesOut {
+  profile: string;
+  modules: ModuleOut[];
+}
+
+/** M6 Phase 1: admin view + update of the module configuration. */
+export interface AdminModuleOut {
+  id: string;
+  toggleable: boolean;
+  enabled: boolean;
+  depends_on: string[];
+}
+
+export interface AdminModulesOut {
+  instance_profile: string;
+  known_profiles: string[];
+  modules: AdminModuleOut[];
+}
+
+export interface ModuleSettingsUpdate {
+  instance_profile?: string;
+  module_overrides?: Record<string, boolean>;
+}
+
+/** M6 Phase 2: company-edition departments + memberships + manager roles. */
+export interface DepartmentOut {
+  id: number;
+  school_id: number;
+  name: string;
+  kuerzel: string | null;
+  details: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DepartmentCreate {
+  name: string;
+  kuerzel?: string | null;
+  details?: string | null;
+  school_id?: number;
+}
+
+export interface DepartmentMembershipOut {
+  id: number;
+  department_id: number;
+  ad_object_guid: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ManagerRoleOut {
+  id: number;
+  department_id: number;
+  ad_object_guid: string;
+  role: string;
+  valid_from: string;
+  valid_to: string | null;
+  created_at: string;
+}
+
+export interface ManagerRoleCreate {
+  ad_object_guid: string;
+  role?: "lead" | "deputy";
+}
+
 export interface ClassMembershipOut {
   id: number;
   class_id: number;
@@ -282,6 +355,14 @@ export interface AdUserOut {
   locality: string | null;
   postal_code: string | null;
   country: string | null;
+  title: string | null;
+  department: string | null;
+  company: string | null;
+  telephone_number: string | null;
+  mobile: string | null;
+  office: string | null;
+  description: string | null;
+  employee_id: string | null;
   device_name: string | null;
   temp_device_name: string | null;
   jahrgangsstufe: number | null;
@@ -293,6 +374,8 @@ export interface AdUserOut {
   store_password: boolean;
   /** Synced AD group memberships (memberOf DNs). */
   ad_groups: string[];
+  /** Secondary SMTP addresses (aliases) mirrored from proxyAddresses. */
+  mail_aliases: string[];
 }
 
 export interface UserDeletionImpact {
@@ -314,10 +397,20 @@ export interface UserAttributesUpdate {
   upn?: string | null;
   sam_account_name?: string | null;
   mail?: string | null;
+  /** Full replacement of the secondary-address list; [] clears all aliases. */
+  mail_aliases?: string[] | null;
   street_address?: string | null;
   locality?: string | null;
   postal_code?: string | null;
   country?: string | null;
+  title?: string | null;
+  department?: string | null;
+  company?: string | null;
+  telephone_number?: string | null;
+  mobile?: string | null;
+  office?: string | null;
+  description?: string | null;
+  employee_id?: string | null;
   temp_device_name?: string | null;
   jahrgangsstufe?: number | null;
   password_never_expires?: boolean | null;
@@ -331,8 +424,80 @@ export interface UserStatusUpdate {
   reason?: string | null;
 }
 
+/** POST /users/{guid}/rename/preview — request the cascaded suggestion. */
+export interface RenamePreviewRequest {
+  new_surname: string;
+  new_given_name?: string | null;
+}
+
+/** POST /users/{guid}/rename/preview — suggested (editable) values. */
+export interface RenamePreviewOut {
+  given_name: string | null;
+  surname: string;
+  display_name: string;
+  upn: string | null;
+  mail: string | null;
+  sam_account_name: string | null;
+  old_mail_kept_as_alias: string | null;
+}
+
+/** POST /users/{guid}/rename — operator-confirmed final values. */
+export interface RenameApplyRequest {
+  given_name?: string | null;
+  surname?: string | null;
+  display_name?: string | null;
+  upn?: string | null;
+  sam_account_name?: string | null;
+  mail?: string | null;
+  keep_old_mail_as_alias?: boolean;
+}
+
 export interface MailDomainsOut {
   domains: string[];
+}
+
+// --- Document templates (M6 Feature B) ---
+
+export interface DocumentTemplateOut {
+  id: number;
+  key: string;
+  language: string;
+  school_id: number | null;
+  subject: string | null;
+  body_html: string;
+  is_active: boolean;
+  updated_by: string | null;
+  updated_at: string;
+}
+
+export interface DocumentTemplateMetaOut {
+  keys: string[];
+  placeholders: string[];
+  languages: string[];
+}
+
+export interface DocumentTemplateListOut {
+  templates: DocumentTemplateOut[];
+  meta: DocumentTemplateMetaOut;
+}
+
+export interface DocumentTemplateSave {
+  key: string;
+  language: string;
+  school_id?: number | null;
+  subject?: string | null;
+  body_html: string;
+  is_active?: boolean;
+}
+
+export interface DocumentTemplatePreviewRequest {
+  body_html: string;
+  subject?: string | null;
+}
+
+export interface DocumentTemplatePreviewOut {
+  subject: string | null;
+  html: string;
 }
 
 export interface AdUserListResponse {

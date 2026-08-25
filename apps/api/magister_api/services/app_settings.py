@@ -94,6 +94,15 @@ class EffectiveAppSettings:
     ad_sync_interval_minutes: int
 
 
+@dataclass(frozen=True)
+class ModuleConfig:
+    """M6 instance profile + per-module overrides (no secret decryption)."""
+
+    version: int
+    instance_profile: str
+    module_overrides: dict[str, bool]
+
+
 class AppSettingsService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self.session = session
@@ -118,6 +127,25 @@ class AppSettingsService:
         result = await self.session.execute(stmt)
         row = result.scalar_one_or_none()
         return int(row) if row is not None else 0
+
+    async def get_module_settings(self) -> ModuleConfig:
+        """Read the M6 instance profile + per-module overrides.
+
+        # scope-bypass: app_settings is a global singleton (no school scope).
+        """
+        stmt = select(
+            AppSettings.version,
+            AppSettings.instance_profile,
+            AppSettings.module_overrides,
+        ).where(AppSettings.id == 1)
+        row = (await self.session.execute(stmt)).one_or_none()
+        if row is None:
+            return ModuleConfig(version=0, instance_profile="school", module_overrides={})
+        return ModuleConfig(
+            version=row.version,
+            instance_profile=row.instance_profile or "school",
+            module_overrides=dict(row.module_overrides or {}),
+        )
 
     async def get_effective(self) -> EffectiveAppSettings:
         """Decrypt secrets and return the in-memory view.
@@ -370,6 +398,49 @@ class AppSettingsService:
         )
 
         return await self.get_redacted_for_api()
+
+    async def set_module_settings(
+        self,
+        *,
+        instance_profile: str | None,
+        module_overrides: dict[str, bool] | None,
+        actor_upn: str,
+        actor_object_guid: str | None,
+        ip: str | None,
+        request_id: str,
+    ) -> ModuleConfig:
+        """Update the M6 profile and/or per-module overrides; bump version + audit.
+
+        # scope-bypass: app_settings is a global singleton (no school scope).
+        """
+        values: dict[str, object] = {}
+        diff: dict[str, object] = {}
+        if instance_profile is not None:
+            values["instance_profile"] = instance_profile
+            diff["instance_profile"] = instance_profile
+        if module_overrides is not None:
+            values["module_overrides"] = module_overrides
+            diff["module_overrides"] = module_overrides
+
+        if values:
+            values["version"] = AppSettings.version + 1
+            values["updated_at"] = func.now()
+            values["updated_by_upn"] = actor_upn
+            await self.session.execute(
+                sqla_update(AppSettings).where(AppSettings.id == 1).values(**values)
+            )
+            await AuditService(self.session, self._settings).emit(
+                action="modules_configured",
+                target_kind="app_settings",
+                target_id="1",
+                actor_upn=actor_upn,
+                actor_object_guid=actor_object_guid,
+                school_id=None,
+                ip=ip,
+                request_id=request_id,
+                payload=diff,
+            )
+        return await self.get_module_settings()
 
     async def materialize_web_tls(self) -> str | None:
         """Write the effective webserver cert to ``settings.web_cert_dir``.

@@ -83,6 +83,17 @@ DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "l",
     "postalCode",
     "co",
+    # Organisation / contact attributes (mirrored into ad_user_cache).
+    "title",
+    "department",
+    "company",
+    "telephoneNumber",
+    "mobile",
+    "physicalDeliveryOfficeName",
+    "description",
+    "employeeID",
+    # Multi-valued SMTP addresses; secondary (``smtp:``) entries become aliases.
+    "proxyAddresses",
 )
 
 
@@ -107,6 +118,15 @@ class AdUserRecord:
     locality: str | None
     postal_code: str | None
     country: str | None
+    # Organisation / contact attributes (ADR-0009 Feature C).
+    title: str | None = None
+    department: str | None = None
+    company: str | None = None
+    telephone_number: str | None = None
+    mobile: str | None = None
+    office: str | None = None
+    description: str | None = None
+    employee_id: str | None = None
     # Populated by the Phase-4 device sync from the Computer-OU
     # (``managedBy=<user-dn>``). None until then.
     device_name: str | None = None
@@ -114,6 +134,8 @@ class AdUserRecord:
     when_changed: datetime | None = None
     # AD group memberships (memberOf DNs); refreshed on every sync.
     groups: tuple[str, ...] = ()
+    # Secondary SMTP addresses parsed from proxyAddresses (``smtp:`` entries).
+    mail_aliases: tuple[str, ...] = ()
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -281,6 +303,16 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
     else:
         consistency_guid = None
     sam = _first_value(entry_attrs.get("sAMAccountName"))
+    proxy_raw = entry_attrs.get("proxyAddresses") or []
+    if isinstance(proxy_raw, str):
+        proxy_raw = [proxy_raw]
+    # Secondary addresses carry the lowercase ``smtp:`` prefix (the primary is
+    # uppercase ``SMTP:`` and is already covered by ``mail``).
+    mail_aliases = tuple(
+        v.split(":", 1)[1].strip().lower()
+        for v in proxy_raw
+        if isinstance(v, str) and v[:5] == "smtp:" and ":" in v
+    )
     return AdUserRecord(
         ad_object_guid=_decode_object_guid(object_guid_raw),
         upn=str(upn).strip().lower(),
@@ -298,8 +330,17 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         locality=_first_value(entry_attrs.get("l")),
         postal_code=_first_value(entry_attrs.get("postalCode")),
         country=_first_value(entry_attrs.get("co")),
+        title=_first_value(entry_attrs.get("title")),
+        department=_first_value(entry_attrs.get("department")),
+        company=_first_value(entry_attrs.get("company")),
+        telephone_number=_first_value(entry_attrs.get("telephoneNumber")),
+        mobile=_first_value(entry_attrs.get("mobile")),
+        office=_first_value(entry_attrs.get("physicalDeliveryOfficeName")),
+        description=_first_value(entry_attrs.get("description")),
+        employee_id=_first_value(entry_attrs.get("employeeID")),
         when_changed=_parse_generalized_time(_first_value(entry_attrs.get("whenChanged"))),
         groups=tuple(str(m) for m in member_of),
+        mail_aliases=mail_aliases,
     )
 
 
@@ -1052,6 +1093,41 @@ class AdClient:
                 raise AdUnavailableError(f"ldap_modify_failed:{detail}")
         except LDAPException as exc:
             logger.warning("ldap modify raised for %s: %s", user_dn, exc)
+            raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def set_proxy_addresses(
+        self, *, user_dn: str, primary: str | None, aliases: list[str]
+    ) -> None:
+        """Replace the whole ``proxyAddresses`` set for a user.
+
+        Composes ``SMTP:<primary>`` (uppercase = primary) plus one
+        ``smtp:<alias>`` (lowercase = secondary) per alias and writes them as a
+        single MODIFY_REPLACE — idempotent set-replacement, no add/remove drift
+        (ADR-0009). An empty result clears the attribute. Azure AD Connect syncs
+        the set to Exchange, which materialises the aliases on the mailbox.
+        """
+        values: list[str] = []
+        if primary:
+            values.append(f"SMTP:{primary}")
+        values.extend(f"smtp:{a}" for a in aliases)
+        await run_in_threadpool(self._sync_replace_multi, user_dn, "proxyAddresses", values)
+
+    def _sync_replace_multi(self, user_dn: str, attr: str, values: list[str]) -> None:
+        conn, owned = self._acquire_connection()
+        try:
+            res = conn.modify(user_dn, {attr: [(MODIFY_REPLACE, list(values))]})
+            ok, detail = self._write_result(res, conn)
+            if not ok:
+                logger.warning("ldap modify (%s) failed for %s: %s", attr, user_dn, detail)
+                raise AdUnavailableError(f"ldap_modify_failed:{detail}")
+        except LDAPException as exc:
+            logger.warning("ldap modify (%s) raised for %s: %s", attr, user_dn, exc)
             raise AdUnavailableError("ldap_modify_failed") from exc
         finally:
             if owned:

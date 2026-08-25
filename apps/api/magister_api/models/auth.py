@@ -57,6 +57,16 @@ class AdUserCache(Base):
     locality: Mapped[str | None] = mapped_column(String(100), nullable=True)
     postal_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Organisation / contact attributes, mirrored from AD (ADR-0009 Feature C).
+    # Free-text; editable via PATCH /users like the address block.
+    title: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    department: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    company: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    telephone_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mobile: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    office: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    employee_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Device-Zuordnung. ``device_name`` mirrors the primary device synced
     # from AD's Computer-OU (``managedBy=<user-dn>``) — populated by the
     # Phase-4 device sync; settable manually as fallback.
@@ -90,6 +100,13 @@ class AdUserCache(Base):
     # AD group memberships (``memberOf`` DNs), refreshed on every sync. Purely
     # informational in Magister — display only.
     ad_groups: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
+    # Secondary SMTP addresses (aliases). The primary address is ``mail``; these
+    # are the ``smtp:`` entries of the AD ``proxyAddresses`` set minus the
+    # primary. Written to AD as proxyAddresses; Azure AD Connect syncs them to
+    # Exchange (ADR-0009). Refreshed on every sync (readback).
+    mail_aliases: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
 

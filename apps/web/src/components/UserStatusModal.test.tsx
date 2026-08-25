@@ -35,6 +35,15 @@ const ENABLED_USER: AdUserOut = {
   cannot_change_password: false,
   store_password: false,
   ad_groups: [],
+  mail_aliases: [],
+  title: null,
+  department: null,
+  company: null,
+  telephone_number: null,
+  mobile: null,
+  office: null,
+  description: null,
+  employee_id: null,
   ad_missing_since: null,
 };
 

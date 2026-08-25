@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.auth.capabilities import Capability, require_capability
 from magister_api.auth.class_perm import require_user_lifecycle_writer, require_user_writer
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_role
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
@@ -32,6 +32,11 @@ from magister_api.schemas.user_attrs import (
 )
 from magister_api.schemas.user_dashboard import UserDashboardOut
 from magister_api.schemas.user_lifecycle import UserStatusUpdate
+from magister_api.schemas.user_rename import (
+    RenameApplyRequest,
+    RenamePreviewOut,
+    RenamePreviewRequest,
+)
 from magister_api.services.ad_user_deletion import (
     AdUnavailableForDeletionError,
     AdUserDeletionService,
@@ -66,6 +71,7 @@ from magister_api.services.user_lifecycle import (
     CannotDisableSelfError,
     UserLifecycleService,
 )
+from magister_api.services.user_rename import RenameInvalidError, UserRenameService
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -74,7 +80,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 # Until then, listing is open to Schulleitung-or-above and SMI; KL access is enabled in the next PR.
 # SMI sees users from every school it is assigned to (per-school grants accumulate
 # into ``school_scope``); the repository's scope filter does the rest.
-require_listing = require_role("schulleitung", "smi")
+require_listing = require_capability(Capability.USER_READ)  # admin + schulleitung + smi
 
 
 @router.get("", response_model=AdUserListResponse)
@@ -124,7 +130,7 @@ async def list_users(
 # Read-side dependency for the user-edit form: admin + SMI may see the
 # mail-domains allowlist so the UI can render a dropdown of valid
 # UPN/mail suffixes.
-require_user_edit_reader = require_role("smi")
+require_user_edit_reader = require_capability(Capability.USER_ADMINISTER)  # admin + smi
 
 
 @router.get("/mail-domains")
@@ -275,6 +281,69 @@ async def patch_user_attributes(
     if refreshed is None:
         # The row was just written in this transaction; a miss means a
         # consistency problem rather than a client error.
+        raise HTTPException(status_code=500, detail="data_consistency_error")
+    return AdUserOut.model_validate(refreshed)
+
+
+@router.post("/{ad_object_guid}/rename/preview", response_model=RenamePreviewOut)
+async def rename_preview(
+    payload: RenamePreviewRequest,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+) -> RenamePreviewOut:
+    """Propose the cascaded identity attributes for a name change (no writes).
+
+    Same RBAC as the attribute edit. The operator reviews/edits the suggestion
+    before calling the apply endpoint.
+    """
+    _, target = user_and_target
+    return UserRenameService.preview(target=target, req=payload)
+
+
+@router.post("/{ad_object_guid}/rename", response_model=AdUserOut)
+async def rename_apply(
+    request: Request,
+    payload: RenameApplyRequest,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> AdUserOut:
+    """Apply a confirmed name change in one audited ``user_renamed`` operation.
+
+    Cascades the confirmed values through the attribute service (so the same
+    domain-allowlist, per-field RBAC — ``upn``/``sam`` stay admin-only — and
+    uniqueness checks apply) and keeps the old primary address as an alias.
+    """
+    user, target = user_and_target
+    settings_svc = AppSettingsService(session, settings)
+    mail_domains = (await settings_svc.get_effective()).mail_domains
+    svc = UserRenameService(UserAttributesService(session, settings, user.to_scope(), ad))
+    ip, request_id = _ip_request_id(request)
+    try:
+        await svc.apply(
+            target=target,
+            req=payload,
+            mail_domains=mail_domains,
+            ip=ip,
+            request_id=request_id,
+        )
+    except RenameInvalidError as exc:
+        raise HTTPException(status_code=422, detail=f"rename_invalid:{exc}") from exc
+    except AdminOnlyFieldError as exc:
+        raise HTTPException(status_code=403, detail=f"admin_only_field:{exc}") from exc
+    except DomainAllowlistEmptyError as exc:
+        raise HTTPException(status_code=422, detail=f"mail_domains_not_configured:{exc}") from exc
+    except DomainNotAllowedError as exc:
+        raise HTTPException(status_code=422, detail=f"domain_not_allowed:{exc}") from exc
+    except UpnConflictError as exc:
+        raise HTTPException(status_code=409, detail=f"upn_conflict:{exc}") from exc
+    except UserNotInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_not_in_ad") from exc
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+
+    refreshed = await session.get(AdUserCache, target.ad_object_guid)
+    if refreshed is None:
         raise HTTPException(status_code=500, detail="data_consistency_error")
     return AdUserOut.model_validate(refreshed)
 

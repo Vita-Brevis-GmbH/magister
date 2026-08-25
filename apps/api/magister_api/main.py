@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request
@@ -20,32 +20,10 @@ from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
 from magister_api.db import dispose_engine, get_sessionmaker, init_engine
 from magister_api.logging_config import configure_logging
-from magister_api.routers.admin_ad_groups import router as admin_ad_groups_router
-from magister_api.routers.admin_local_admin import router as admin_local_admin_router
-from magister_api.routers.admin_maintenance import router as admin_maintenance_router
-from magister_api.routers.admin_roles import router as admin_roles_router
-from magister_api.routers.admin_settings import router as admin_settings_router
-from magister_api.routers.admin_sync import router as admin_sync_router
-from magister_api.routers.admin_system import router as admin_system_router
-from magister_api.routers.admin_users import router as admin_users_router
-from magister_api.routers.audit import router as audit_router
+from magister_api.modules import catalog
+from magister_api.modules.enforcement import make_module_guard
+from magister_api.modules.registry import enabled_modules
 from magister_api.routers.auth import limiter as auth_limiter
-from magister_api.routers.auth import router as auth_router
-from magister_api.routers.class_memberships import router as class_memberships_router
-from magister_api.routers.class_teachers import router as class_teachers_router
-from magister_api.routers.classes import router as classes_router
-from magister_api.routers.devices import router as devices_router
-from magister_api.routers.imports import router as imports_router
-from magister_api.routers.letters import router as letters_router
-from magister_api.routers.me import router as me_router
-from magister_api.routers.privacy import router as privacy_router
-from magister_api.routers.reports import router as reports_router
-from magister_api.routers.schools import router as schools_router
-from magister_api.routers.student_password_reset import router as student_pw_reset_router
-from magister_api.routers.subject_teachers import router as subject_teachers_router
-from magister_api.routers.substitutions import router as substitutions_router
-from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
-from magister_api.routers.users import router as users_router
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
@@ -122,31 +100,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(CsrfMiddleware)
     app.add_middleware(AuditContextMiddleware)
 
-    app.include_router(auth_router)
-    app.include_router(classes_router)
-    app.include_router(devices_router)
-    app.include_router(schools_router)
-    app.include_router(class_teachers_router)
-    app.include_router(subject_teachers_router)
-    app.include_router(class_memberships_router)
-    app.include_router(users_router)
-    app.include_router(admin_sync_router)
-    app.include_router(admin_local_admin_router)
-    app.include_router(admin_settings_router)
-    app.include_router(admin_ad_groups_router)
-    app.include_router(admin_roles_router)
-    app.include_router(admin_users_router)
-    app.include_router(admin_maintenance_router)
-    app.include_router(admin_system_router)
-    app.include_router(audit_router)
-    app.include_router(imports_router)
-    app.include_router(letters_router)
-    app.include_router(privacy_router)
-    app.include_router(reports_router)
-    app.include_router(me_router)
-    app.include_router(student_pw_reset_router)
-    app.include_router(substitutions_router)
-    app.include_router(teacher_pw_reset_router)
+    # Feature modules own their routers (M6 — magister_api/modules). Toggleable
+    # modules get a mount-time guard dependency so a disabled module's routes
+    # 404 at request time (Phase 3), not just disappear from the nav; the
+    # non-toggleable platform base is always reachable.
+    for module in enabled_modules():
+        meta = catalog.get_meta(module.id)
+        guard = (
+            [Depends(make_module_guard(module.id))] if meta is not None and meta.toggleable else []
+        )
+        for router in module.routers:
+            app.include_router(router, dependencies=guard)
 
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:

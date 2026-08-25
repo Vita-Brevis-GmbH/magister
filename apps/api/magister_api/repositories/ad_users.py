@@ -159,9 +159,18 @@ class AdUserCacheSyncRepository:
                     "locality": r.locality,
                     "postal_code": r.postal_code,
                     "country": r.country,
+                    "title": r.title,
+                    "department": r.department,
+                    "company": r.company,
+                    "telephone_number": r.telephone_number,
+                    "mobile": r.mobile,
+                    "office": r.office,
+                    "description": r.description,
+                    "employee_id": r.employee_id,
                     "device_name": r.device_name,
                     "password_never_expires": r.password_never_expires,
                     "ad_groups": list(r.groups),
+                    "mail_aliases": list(r.mail_aliases),
                     # temp_device_name, jahrgangsstufe and cannot_change_password
                     # are Magister-only — do NOT overwrite on AD sync. We omit
                     # them from both VALUES and the ON-CONFLICT set; existing
@@ -193,11 +202,20 @@ class AdUserCacheSyncRepository:
                     "locality": pg_insert(AdUserCache).excluded.locality,
                     "postal_code": pg_insert(AdUserCache).excluded.postal_code,
                     "country": pg_insert(AdUserCache).excluded.country,
+                    "title": pg_insert(AdUserCache).excluded.title,
+                    "department": pg_insert(AdUserCache).excluded.department,
+                    "company": pg_insert(AdUserCache).excluded.company,
+                    "telephone_number": pg_insert(AdUserCache).excluded.telephone_number,
+                    "mobile": pg_insert(AdUserCache).excluded.mobile,
+                    "office": pg_insert(AdUserCache).excluded.office,
+                    "description": pg_insert(AdUserCache).excluded.description,
+                    "employee_id": pg_insert(AdUserCache).excluded.employee_id,
                     "device_name": pg_insert(AdUserCache).excluded.device_name,
                     "password_never_expires": pg_insert(
                         AdUserCache
                     ).excluded.password_never_expires,
                     "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
+                    "mail_aliases": pg_insert(AdUserCache).excluded.mail_aliases,
                     # Present in AD again → clear any "missing" marker.
                     "ad_missing_since": None,
                 },

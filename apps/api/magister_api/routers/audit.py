@@ -7,7 +7,7 @@ never via raw ``SELECT payload``. Schul-Scope:
   ``school_id IS NULL`` rows too.
 - Schulleitung / SMI: hard-restricted to ``school_id IN user.school_scope``;
   ``school_id IS NULL`` rows are excluded.
-- KL: not on the tier (require_role 403s).
+- KL: lacks the ``user.read`` capability, so the gate 403s.
 """
 
 from __future__ import annotations
@@ -19,15 +19,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditFilter, AuditService
+from magister_api.auth.capabilities import Capability, require_capability
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_role
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.schemas.audit import AuditEventListResponse, AuditEventOut
 
 router = APIRouter(prefix="/audit", tags=["audit"])
 
-require_audit_reader = require_role("schulleitung", "smi")
+require_audit_reader = require_capability(Capability.USER_READ)  # admin + schulleitung + smi
 
 
 @router.get("/events", response_model=AuditEventListResponse)

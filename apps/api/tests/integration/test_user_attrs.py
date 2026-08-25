@@ -246,6 +246,46 @@ class TestHappyPath:
             app.dependency_overrides.pop(get_ad_client, None)
 
     @pytest.mark.asyncio
+    async def test_smi_can_set_org_attributes(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={
+                    "title": "Lehrperson",
+                    "department": "Primarstufe",
+                    "company": "Schule Musterhausen",
+                    "telephone_number": "+41 31 000 00 00",
+                    "mobile": "+41 79 000 00 00",
+                    "office": "B12",
+                    "description": "Klassenlehrperson 4a",
+                    "employee_id": "P-1234",
+                },
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["title"] == "Lehrperson"
+            assert body["department"] == "Primarstufe"
+            assert body["telephone_number"] == "+41 31 000 00 00"
+            assert body["employee_id"] == "P-1234"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        row = await db_session.get(AdUserCache, TEACHER_GUID)
+        assert row is not None
+        await db_session.refresh(row)
+        assert row.company == "Schule Musterhausen"
+        assert row.office == "B12"
+
+    @pytest.mark.asyncio
     async def test_smi_can_set_ad_policy_flags(
         self,
         app: FastAPI,
@@ -583,6 +623,284 @@ class TestNoOp:
                 .all()
             )
         assert len(count) == 0
+
+
+def _proxy_addresses(mock_ad: AdClient, dn: str) -> set[str]:
+    conn = mock_ad.mock_connection()
+    conn.search(dn, "(objectClass=user)", attributes=["proxyAddresses"])
+    raw = conn.entries[0].proxyAddresses.values if conn.entries else []
+    return set(raw)
+
+
+_ANNA_DN = "CN=Anna,OU=Teachers,DC=schule,DC=local"
+
+
+class TestMailAliases:
+    @pytest.mark.asyncio
+    async def test_set_primary_and_aliases_writes_proxy_addresses(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={
+                    "mail": "anna@schule.example.ch",
+                    "mail_aliases": [
+                        "anna.beispiel@schule.example.ch",
+                        "a.b@schule.example.ch",
+                    ],
+                },
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["mail"] == "anna@schule.example.ch"
+            assert body["mail_aliases"] == [
+                "anna.beispiel@schule.example.ch",
+                "a.b@schule.example.ch",
+            ]
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        row = await db_session.get(AdUserCache, TEACHER_GUID)
+        assert row is not None
+        await db_session.refresh(row)
+        assert row.mail_aliases == [
+            "anna.beispiel@schule.example.ch",
+            "a.b@schule.example.ch",
+        ]
+        # proxyAddresses: uppercase SMTP: primary + lowercase smtp: aliases.
+        assert _proxy_addresses(mock_ad, _ANNA_DN) == {
+            "SMTP:anna@schule.example.ch",
+            "smtp:anna.beispiel@schule.example.ch",
+            "smtp:a.b@schule.example.ch",
+        }
+
+    @pytest.mark.asyncio
+    async def test_alias_domain_not_in_allowlist_rejected(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={"mail_aliases": ["x@evil.example.ch"]},
+            )
+            assert r.status_code == 422
+            assert r.json()["detail"].startswith("domain_not_allowed:mail_aliases:evil.example.ch")
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+    @pytest.mark.asyncio
+    async def test_alias_equal_to_primary_is_deduped(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={
+                    "mail": "anna@schule.example.ch",
+                    "mail_aliases": ["anna@schule.example.ch", "b@schule.example.ch"],
+                },
+            )
+            assert r.status_code == 200, r.text
+            # The alias identical to the primary is dropped.
+            assert r.json()["mail_aliases"] == ["b@schule.example.ch"]
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+        assert _proxy_addresses(mock_ad, _ANNA_DN) == {
+            "SMTP:anna@schule.example.ch",
+            "smtp:b@schule.example.ch",
+        }
+
+    @pytest.mark.asyncio
+    async def test_clear_aliases_empties_proxy_addresses(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={
+                    "mail": "anna@schule.example.ch",
+                    "mail_aliases": ["alias@schule.example.ch"],
+                },
+            )
+            # Now clear only the aliases (empty list).
+            r = await as_smi_a.patch(
+                f"/users/{TEACHER_GUID}",
+                json={"mail_aliases": []},
+            )
+            assert r.status_code == 200, r.text
+            assert r.json()["mail_aliases"] == []
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        row = await db_session.get(AdUserCache, TEACHER_GUID)
+        assert row is not None
+        await db_session.refresh(row)
+        assert row.mail_aliases == []
+        # Only the primary remains.
+        assert _proxy_addresses(mock_ad, _ANNA_DN) == {"SMTP:anna@schule.example.ch"}
+
+
+class TestRename:
+    @pytest.mark.asyncio
+    async def test_preview_suggests_cascaded_values(
+        self,
+        app: FastAPI,
+        as_admin: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        # give the seeded row a given/surname + mail to cascade from
+        from sqlalchemy import update as sql_update
+
+        await db_session.execute(
+            sql_update(AdUserCache)
+            .where(AdUserCache.ad_object_guid == TEACHER_GUID)
+            .values(given_name="Anna", surname="Meier", mail="anna.meier@schule.example.ch")
+        )
+        await db_session.commit()
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_admin.post(
+                f"/users/{TEACHER_GUID}/rename/preview",
+                json={"new_surname": "Müller"},
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["display_name"] == "Anna Müller"
+            assert body["mail"] == "anna.mueller@schule.example.ch"
+            assert body["old_mail_kept_as_alias"] == "anna.meier@schule.example.ch"
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+    @pytest.mark.asyncio
+    async def test_apply_cascades_and_keeps_old_address_as_alias(
+        self,
+        app: FastAPI,
+        as_admin: AsyncClient,
+        app_settings: Settings,
+        db_session: AsyncSession,
+        school_a: int,
+        engine: AsyncEngine,
+        mock_ad: AdClient,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        from sqlalchemy import update as sql_update
+
+        await db_session.execute(
+            sql_update(AdUserCache)
+            .where(AdUserCache.ad_object_guid == TEACHER_GUID)
+            .values(given_name="Anna", surname="Meier", mail="anna.meier@schule.example.ch")
+        )
+        await db_session.commit()
+
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_admin.post(
+                f"/users/{TEACHER_GUID}/rename",
+                json={
+                    "given_name": "Anna",
+                    "surname": "Müller",
+                    "display_name": "Anna Müller",
+                    "upn": "anna.mueller@schule.example.ch",
+                    "mail": "anna.mueller@schule.example.ch",
+                    "sam_account_name": "anna.mueller",
+                    "keep_old_mail_as_alias": True,
+                },
+            )
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["surname"] == "Müller"
+            assert body["mail"] == "anna.mueller@schule.example.ch"
+            assert body["upn"] == "anna.mueller@schule.example.ch"
+            # the old primary is preserved as an alias
+            assert "anna.meier@schule.example.ch" in body["mail_aliases"]
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+
+        # proxyAddresses: new primary + old address as smtp alias.
+        assert _proxy_addresses(mock_ad, _ANNA_DN) == {
+            "SMTP:anna.mueller@schule.example.ch",
+            "smtp:anna.meier@schule.example.ch",
+        }
+
+        # Audited as a single user_renamed event.
+        sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+        async with sm() as s:
+            row = (
+                (
+                    await s.execute(
+                        select(AuditEvent)
+                        .where(AuditEvent.action == "user_renamed")
+                        .order_by(AuditEvent.id.desc())
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            assert row is not None
+            event = await AuditService(s, app_settings).read(row.id)
+        assert event is not None
+        assert "surname" in event.payload["changed_keys"]
+
+    @pytest.mark.asyncio
+    async def test_smi_cannot_rename_upn(
+        self,
+        app: FastAPI,
+        as_smi_a: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad: AdClient,
+    ) -> None:
+        # A rename that changes the UPN is admin-only; SMI is refused (the same
+        # per-field RBAC as PATCH, since rename reuses the attribute service).
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["schule.example.ch"])
+        app.dependency_overrides[get_ad_client] = lambda: mock_ad
+        try:
+            r = await as_smi_a.post(
+                f"/users/{TEACHER_GUID}/rename",
+                json={"surname": "Müller", "upn": "anna.mueller@schule.example.ch"},
+            )
+            assert r.status_code == 403
+            assert r.json()["detail"].startswith("admin_only_field:")
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
 
 
 # Keep imports happy.

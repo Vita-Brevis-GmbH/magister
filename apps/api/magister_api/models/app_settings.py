@@ -119,6 +119,17 @@ class AppSettings(Base):
         Boolean, nullable=False, default=False, server_default=false()
     )
 
+    # --- M6 feature modules (ADR-0008, Phase 1) ---
+    # instance_profile seeds the default module set + vocabulary (soft — it
+    # never locks a module). module_overrides is the per-module source of
+    # truth: an explicit True/False here wins over the profile default.
+    instance_profile: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="school", server_default="school"
+    )
+    module_overrides: Mapped[dict[str, bool]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+
     # Default AD groups assigned to newly provisioned accounts, per category
     # (teacher / student by Zyklus). Each a JSON list of group DNs. Empty = none.
     ad_groups_teacher: Mapped[list[str]] = mapped_column(

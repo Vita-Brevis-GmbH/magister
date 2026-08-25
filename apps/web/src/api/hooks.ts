@@ -42,6 +42,14 @@ import type {
   ClassTeacherOut,
   ClassUpdate,
   MyStudentsOut,
+  ModulesOut,
+  ModuleSettingsUpdate,
+  AdminModulesOut,
+  DepartmentOut,
+  DepartmentCreate,
+  DepartmentMembershipOut,
+  ManagerRoleOut,
+  ManagerRoleCreate,
   SubjectTeacherCreate,
   SubjectTeacherOut,
   CurrentUserOut,
@@ -65,6 +73,14 @@ import type {
   MailDomainsOut,
   SchoolOut,
   SchoolCreate,
+  DocumentTemplateListOut,
+  DocumentTemplateOut,
+  DocumentTemplatePreviewOut,
+  DocumentTemplatePreviewRequest,
+  DocumentTemplateSave,
+  RenameApplyRequest,
+  RenamePreviewOut,
+  RenamePreviewRequest,
   SchoolUpdate,
   StudentPasswordResetRequest,
   StudentPasswordResetResponse,
@@ -96,6 +112,13 @@ export const queryKeys = {
   appSettings: ["app-settings"] as const,
   adGroups: ["ad-groups"] as const,
   myPreferences: ["me", "preferences"] as const,
+  myModules: ["me", "modules"] as const,
+  adminModules: ["admin-modules"] as const,
+  documentTemplates: ["admin-document-templates"] as const,
+  departments: ["departments"] as const,
+  department: (id: number) => ["departments", id] as const,
+  departmentMembers: (id: number) => ["departments", id, "members"] as const,
+  departmentManagers: (id: number) => ["departments", id, "managers"] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   devices: ["devices"] as const,
@@ -110,6 +133,173 @@ export function useCurrentUser(opts: { retryOn401?: boolean } = {}) {
     queryFn: () => apiFetch<CurrentUserOut>("/auth/me"),
     retry: opts.retryOn401 ? 2 : false,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * M6 Phase 0: the feature modules enabled for this instance. Selected into a
+ * Set of module ids so the nav can gate entries with `.has("school")` etc.
+ * In Phase 0 every module is enabled, so nothing is hidden.
+ */
+export function useEnabledModules() {
+  return useQuery<ModulesOut, ApiError, Set<string>>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => new Set(data.modules.map((m) => m.id)),
+  });
+}
+
+/** M6 Phase 1: the active instance profile (school/company/neutral). */
+export function useInstanceProfile() {
+  return useQuery<ModulesOut, ApiError, string>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => data.profile,
+  });
+}
+
+/** M6 Phase 1: admin read of the module configuration (profile + toggles). */
+export function useAdminModules() {
+  return useQuery<AdminModulesOut>({
+    queryKey: queryKeys.adminModules,
+    queryFn: () => apiFetch<AdminModulesOut>("/admin/modules"),
+  });
+}
+
+/** M6 Phase 1: admin write of the module configuration. */
+export function useUpdateModules() {
+  const qc = useQueryClient();
+  return useMutation<AdminModulesOut, ApiError, ModuleSettingsUpdate>({
+    mutationFn: (body) => apiFetch<AdminModulesOut>("/admin/modules", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.adminModules, data);
+      // The enabled set changed — refresh the nav-gating query.
+      void qc.invalidateQueries({ queryKey: queryKeys.myModules });
+    },
+  });
+}
+
+// --- Document templates (M6 Feature B) ---
+
+export function useDocumentTemplates() {
+  return useQuery<DocumentTemplateListOut>({
+    queryKey: queryKeys.documentTemplates,
+    queryFn: () => apiFetch<DocumentTemplateListOut>("/admin/document-templates"),
+  });
+}
+
+export function useSaveDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplateOut, ApiError, DocumentTemplateSave>({
+    mutationFn: (body) =>
+      apiFetch<DocumentTemplateOut>("/admin/document-templates", { method: "PUT", body }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+export function useDeleteDocumentTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/admin/document-templates/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+export function usePreviewDocumentTemplate() {
+  return useMutation<DocumentTemplatePreviewOut, ApiError, DocumentTemplatePreviewRequest>({
+    mutationFn: (body) =>
+      apiFetch<DocumentTemplatePreviewOut>("/admin/document-templates/preview", {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+// --- Departments (company edition, M6 Phase 2) ---
+
+export function useDepartments() {
+  return useQuery<DepartmentOut[]>({
+    queryKey: queryKeys.departments,
+    queryFn: () => apiFetch<DepartmentOut[]>("/departments"),
+  });
+}
+
+export function useDepartment(id: number) {
+  return useQuery<DepartmentOut>({
+    queryKey: queryKeys.department(id),
+    queryFn: () => apiFetch<DepartmentOut>(`/departments/${id}`),
+  });
+}
+
+export function useCreateDepartment() {
+  const qc = useQueryClient();
+  return useMutation<DepartmentOut, ApiError, DepartmentCreate>({
+    mutationFn: (body) => apiFetch<DepartmentOut>("/departments", { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departments }),
+  });
+}
+
+export function useArchiveDepartment() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/departments/${id}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departments }),
+  });
+}
+
+export function useDepartmentMembers(id: number) {
+  return useQuery<DepartmentMembershipOut[]>({
+    queryKey: queryKeys.departmentMembers(id),
+    queryFn: () => apiFetch<DepartmentMembershipOut[]>(`/departments/${id}/members`),
+  });
+}
+
+export function useAddDepartmentMember(id: number) {
+  const qc = useQueryClient();
+  return useMutation<DepartmentMembershipOut, ApiError, { ad_object_guid: string }>({
+    mutationFn: (body) =>
+      apiFetch<DepartmentMembershipOut>(`/departments/${id}/members`, { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentMembers(id) }),
+  });
+}
+
+export function useRemoveDepartmentMember(id: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (membershipId) =>
+      apiFetch<void>(`/departments/${id}/members/${membershipId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentMembers(id) }),
+  });
+}
+
+export function useDepartmentManagers(id: number) {
+  return useQuery<ManagerRoleOut[]>({
+    queryKey: queryKeys.departmentManagers(id),
+    queryFn: () => apiFetch<ManagerRoleOut[]>(`/departments/${id}/managers`),
+  });
+}
+
+export function useAssignManager(id: number) {
+  const qc = useQueryClient();
+  return useMutation<ManagerRoleOut, ApiError, ManagerRoleCreate>({
+    mutationFn: (body) =>
+      apiFetch<ManagerRoleOut>(`/departments/${id}/managers`, { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentManagers(id) }),
+  });
+}
+
+export function useRevokeManager(id: number) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (roleId) =>
+      apiFetch<void>(`/departments/${id}/managers/${roleId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentManagers(id) }),
   });
 }
 
@@ -515,6 +705,26 @@ export function useUpdateUser(guid: string) {
   const qc = useQueryClient();
   return useMutation<AdUserOut, ApiError, UserAttributesUpdate>({
     mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}`, { method: "PATCH", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.user(guid), data);
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+/** POST /users/{guid}/rename/preview — suggest cascaded values (no writes). */
+export function useRenamePreview(guid: string) {
+  return useMutation<RenamePreviewOut, ApiError, RenamePreviewRequest>({
+    mutationFn: (body) =>
+      apiFetch<RenamePreviewOut>(`/users/${guid}/rename/preview`, { method: "POST", body }),
+  });
+}
+
+/** POST /users/{guid}/rename — apply the confirmed name change. */
+export function useRenameApply(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<AdUserOut, ApiError, RenameApplyRequest>({
+    mutationFn: (body) => apiFetch<AdUserOut>(`/users/${guid}/rename`, { method: "POST", body }),
     onSuccess: (data) => {
       qc.setQueryData(queryKeys.user(guid), data);
       qc.invalidateQueries({ queryKey: ["users"] });
