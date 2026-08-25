@@ -77,3 +77,63 @@ async def test_cross_school_department_people_isolation(
     assert (await as_schulleitung_b.get(f"/departments/{did}/members")).status_code == 404
     r = await as_schulleitung_b.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
     assert r.status_code == 404
+
+
+async def test_member_list_is_enriched_with_names(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    from magister_api.models.auth import AdUserCache
+
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=_GUID,
+            school_id=school_a,
+            upn="mm@example.ch",
+            display_name="Max Muster",
+            kind="teacher",
+            enabled=True,
+            ms_ds_consistency_guid=_GUID,
+        )
+    )
+    await db_session.commit()
+
+    did = await _make_department(as_schulleitung_a, name="Team Enrich")
+    await as_schulleitung_a.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+
+    rows = (await as_schulleitung_a.get(f"/departments/{did}/members")).json()
+    assert rows[0]["display_name"] == "Max Muster"
+    assert rows[0]["upn"] == "mm@example.ch"
+
+
+async def test_user_can_belong_to_multiple_departments(
+    as_schulleitung_a: AsyncClient, as_schulleitung_b: AsyncClient
+) -> None:
+    d1 = await _make_department(as_schulleitung_a, name="Dept One")
+    d2 = await _make_department(as_schulleitung_a, name="Dept Two")
+    assert (
+        await as_schulleitung_a.post(f"/departments/{d1}/members", json={"ad_object_guid": _GUID})
+    ).status_code == 201
+    assert (
+        await as_schulleitung_a.post(f"/departments/{d2}/members", json={"ad_object_guid": _GUID})
+    ).status_code == 201
+
+    # User-centric view lists both departments, sorted by name.
+    r = await as_schulleitung_a.get(f"/departments/for-user/{_GUID}")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [d["name"] for d in body] == ["Dept One", "Dept Two"]
+    assert {d["department_id"] for d in body} == {d1, d2}
+    assert all(d["membership_id"] > 0 for d in body)
+
+    # Scope isolation: B's unit admin sees none of A's departments for this user.
+    assert (await as_schulleitung_b.get(f"/departments/for-user/{_GUID}")).json() == []
+
+
+async def test_for_user_drops_ended_membership(as_schulleitung_a: AsyncClient) -> None:
+    did = await _make_department(as_schulleitung_a, name="Dept End")
+    r = await as_schulleitung_a.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+    mid = r.json()["id"]
+    assert len((await as_schulleitung_a.get(f"/departments/for-user/{_GUID}")).json()) == 1
+
+    await as_schulleitung_a.delete(f"/departments/{did}/members/{mid}")
+    assert (await as_schulleitung_a.get(f"/departments/for-user/{_GUID}")).json() == []

@@ -9,17 +9,22 @@ import {
   downloadCredentialPdf,
   queryKeys,
   saveBlob,
+  useAddUserToDepartment,
   useAdGroups,
   useCurrentUser,
   useDeleteAdUser,
   useDeleteUser,
+  useDepartments,
   useDevices,
+  useEnabledModules,
   useMailDomains,
+  useRemoveUserFromDepartment,
   useUpdateUser,
   useUpdateUserGroups,
   useUser,
   useUserDashboard,
   useUserDeletionPreview,
+  useUserDepartments,
 } from "@/api/hooks";
 import type { AdUserOut, DeviceOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
@@ -1045,6 +1050,100 @@ function UserDetailPage(): JSX.Element {
 
 // --- Subcomponents --------------------------------------------------------
 
+/**
+ * #9: assign a user to one or more departments. Only shown when the departments
+ * module is on and the viewer may manage org units (admin/Schulleitung), since
+ * the backend gates the endpoints on ORGUNIT_MANAGE.
+ */
+function UserDepartmentsCard({ guid }: { guid: string }): JSX.Element | null {
+  const { t } = useTranslation();
+  const modules = useEnabledModules();
+  const me = useCurrentUser();
+  const show =
+    (modules.data?.has("departments") ?? false) &&
+    ((me.data?.is_admin ?? false) || (me.data?.roles?.includes("schulleitung") ?? false));
+
+  const memberships = useUserDepartments(guid, show);
+  const departments = useDepartments(show);
+  const add = useAddUserToDepartment(guid);
+  const remove = useRemoveUserFromDepartment(guid);
+  const [deptId, setDeptId] = useState<number | "">("");
+
+  if (!show) return null;
+
+  const current = memberships.data ?? [];
+  const currentIds = new Set(current.map((d) => d.department_id));
+  const addable = (departments.data ?? []).filter((d) => !currentIds.has(d.id));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("users.detail.section_departments")}</CardTitle>
+        <CardDescription>{t("users.detail.departments_desc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {current.length > 0 ? (
+          <ul className="divide-y rounded-md border">
+            {current.map((d) => (
+              <li key={d.membership_id} className="flex items-center justify-between gap-4 px-3 py-2">
+                <span className="text-sm font-medium">
+                  {d.name}
+                  {d.kuerzel ? (
+                    <span className="ml-2 text-xs text-muted-foreground">({d.kuerzel})</span>
+                  ) : null}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={remove.isPending}
+                  onClick={() =>
+                    remove.mutate({ departmentId: d.department_id, membershipId: d.membership_id })
+                  }
+                >
+                  {t("departments.remove")}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("users.detail.no_departments")}</p>
+        )}
+
+        <div className="flex flex-wrap items-end gap-3">
+          <select
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+            value={deptId}
+            onChange={(e) => setDeptId(e.target.value === "" ? "" : Number(e.target.value))}
+          >
+            <option value="">{t("users.detail.department_select")}</option>
+            {addable.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.kuerzel ? ` (${d.kuerzel})` : ""}
+              </option>
+            ))}
+          </select>
+          <Button
+            type="button"
+            size="sm"
+            disabled={deptId === "" || add.isPending}
+            onClick={() => {
+              if (deptId === "") return;
+              add.mutate(Number(deptId), { onSuccess: () => setDeptId("") });
+            }}
+          >
+            {t("users.detail.department_add")}
+          </Button>
+        </div>
+        {add.isError || remove.isError ? (
+          <p className="text-sm text-destructive">{t("errors.generic")}</p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function UserReadView({
   user,
   dashboard,
@@ -1104,6 +1203,8 @@ function UserReadView({
           )}
         </CardContent>
       </Card>
+
+      <UserDepartmentsCard guid={user.ad_object_guid} />
 
       <Card>
         <CardHeader>

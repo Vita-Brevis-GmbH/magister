@@ -231,6 +231,11 @@
       "section_classes": "Classes",
       "class_teachers": "Class teachers",
       "no_classes": "Not assigned to any active class.",
+      "section_departments": "Departments",
+      "departments_desc": "This person can belong to several departments.",
+      "no_departments": "Not assigned to any department.",
+      "department_select": "— Select department —",
+      "department_add": "Assign",
       "section_overview": "Overview",
       "section_identity": "Identity",
       "section_identity_desc": "Display name and sign-in name.",
@@ -1079,6 +1084,11 @@
       "member_plural": "People"
     }
   },
+  "user_picker": {
+    "placeholder": "Search name or UPN …",
+    "change": "Change",
+    "no_matches": "No matches."
+  },
   "rbac": {
     "matrix_title": "Rights matrix",
     "matrix_desc": "Define which role holds which permission. The administrator always holds every right; derived roles (class teacher) come from class assignments.",
@@ -1140,12 +1150,12 @@
     "empty": "No departments yet.",
     "archive": "Archive",
     "members": "Members",
-    "member_guid": "Employee (objectGUID)",
+    "member_user": "Employee",
     "add_member": "Add",
     "remove": "Remove",
     "no_members": "No active members.",
     "managers": "Managers",
-    "manager_guid": "Manager (objectGUID)",
+    "manager_user": "Manager",
     "role": "Role",
     "role_lead": "Lead",
     "role_deputy": "Deputy",

@@ -23,6 +23,12 @@ class DepartmentMembershipOut(BaseModel):
     valid_from: datetime
     valid_to: datetime | None
     created_at: datetime
+    # Display labels (from ad_user_cache) so the SPA can name the person; only
+    # populated on the list endpoints, None on the create response.
+    display_name: str | None = None
+    given_name: str | None = None
+    surname: str | None = None
+    upn: str | None = None
 
 
 class ManagerRoleCreate(BaseModel):
@@ -42,6 +48,21 @@ class ManagerRoleOut(BaseModel):
     valid_from: datetime
     valid_to: datetime | None
     created_at: datetime
+    # Display labels (from ad_user_cache); only populated on the list endpoint.
+    display_name: str | None = None
+    given_name: str | None = None
+    surname: str | None = None
+    upn: str | None = None
+
+
+class UserDepartmentOut(BaseModel):
+    """A department a given person is an active member of (user-centric view)."""
+
+    membership_id: int
+    department_id: int
+    name: str
+    kuerzel: str | None
+    valid_from: datetime
 
 
 __all__ = [
@@ -49,4 +70,5 @@ __all__ = [
     "DepartmentMembershipOut",
     "ManagerRoleCreate",
     "ManagerRoleOut",
+    "UserDepartmentOut",
 ]

@@ -22,6 +22,7 @@ from magister_api.schemas.department_people import (
     ManagerRoleCreate,
     ManagerRoleOut,
 )
+from magister_api.services._user_enrich import fetch_user_labels, user_label_fields
 from magister_api.services.department_people import (
     DepartmentNotInScopeError,
     DepartmentPeopleService,
@@ -47,7 +48,13 @@ async def list_members(
         rows = await svc.list_members(department_id)
     except DepartmentNotInScopeError as exc:
         raise HTTPException(status_code=404, detail="department_not_found") from exc
-    return [DepartmentMembershipOut.model_validate(r) for r in rows]
+    labels = await fetch_user_labels(session, (r.ad_object_guid for r in rows))
+    return [
+        DepartmentMembershipOut.model_validate(r).model_copy(
+            update=dict(user_label_fields(labels.get(r.ad_object_guid)))
+        )
+        for r in rows
+    ]
 
 
 @router.post(
@@ -117,7 +124,13 @@ async def list_managers(
         rows = await svc.list_managers(department_id)
     except DepartmentNotInScopeError as exc:
         raise HTTPException(status_code=404, detail="department_not_found") from exc
-    return [ManagerRoleOut.model_validate(r) for r in rows]
+    labels = await fetch_user_labels(session, (r.ad_object_guid for r in rows))
+    return [
+        ManagerRoleOut.model_validate(r).model_copy(
+            update=dict(user_label_fields(labels.get(r.ad_object_guid)))
+        )
+        for r in rows
+    ]
 
 
 @router.post("/managers", response_model=ManagerRoleOut, status_code=status.HTTP_201_CREATED)

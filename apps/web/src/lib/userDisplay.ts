@@ -20,6 +20,20 @@ export function displayLabel(row: NamedRow | AdUserOut | CurrentUserOut): string
   return row.upn;
 }
 
+/** Like {@link displayLabel} but tolerates a null UPN (enriched rows), falling
+ *  back to "?" when nothing identifying is known. */
+export function userLabel(row: {
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}): string {
+  if (row.display_name) return row.display_name;
+  const parts = [row.given_name, row.surname].filter(Boolean) as string[];
+  if (parts.length > 0) return parts.join(" ");
+  return row.upn ?? "?";
+}
+
 /** Two-letter initials for the avatar bubble. Falls back to the UPN's first char. */
 export function initials(row: NamedRow): string {
   const candidates = [row.given_name?.[0], row.surname?.[0]].filter(Boolean) as string[];

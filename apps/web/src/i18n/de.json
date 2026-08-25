@@ -231,6 +231,11 @@
       "section_classes": "Klassen",
       "class_teachers": "Klassenlehrpersonen",
       "no_classes": "Keiner aktiven Klasse zugewiesen.",
+      "section_departments": "Abteilungen",
+      "departments_desc": "Diese Person kann mehreren Abteilungen zugeordnet sein.",
+      "no_departments": "Keiner Abteilung zugewiesen.",
+      "department_select": "— Abteilung wählen —",
+      "department_add": "Zuordnen",
       "section_overview": "Stammdaten",
       "section_identity": "Identität",
       "section_identity_desc": "Anzeigename, Anmeldename und Login-Name.",
@@ -1079,6 +1084,11 @@
       "member_plural": "Personen"
     }
   },
+  "user_picker": {
+    "placeholder": "Name oder UPN suchen …",
+    "change": "Ändern",
+    "no_matches": "Keine Treffer."
+  },
   "rbac": {
     "matrix_title": "Rechte-Matrix",
     "matrix_desc": "Lege fest, welche Rolle welche Berechtigung hält. Der Administrator hält immer alle Rechte; abgeleitete Rollen (Klassenlehrer) ergeben sich aus Klassenzuweisungen.",
@@ -1140,12 +1150,12 @@
     "empty": "Noch keine Abteilungen.",
     "archive": "Archivieren",
     "members": "Mitglieder",
-    "member_guid": "Mitarbeiter (objectGUID)",
+    "member_user": "Mitarbeiter:in",
     "add_member": "Hinzufügen",
     "remove": "Entfernen",
     "no_members": "Keine aktiven Mitglieder.",
     "managers": "Kader",
-    "manager_guid": "Kader (objectGUID)",
+    "manager_user": "Kader",
     "role": "Rolle",
     "role_lead": "Leitung",
     "role_deputy": "Stellvertretung",

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -12,10 +12,24 @@ import {
   useRevokeManager,
 } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
+import { UserPicker, type PickedUser } from "@/components/UserPicker";
+import { userLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/departments/$departmentId")({
   component: DepartmentDetailPage,
 });
+
+/** Label for a member/manager row: name if enriched, else the raw GUID. */
+function personLabel(m: {
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+  ad_object_guid: string;
+}): string {
+  const label = userLabel(m);
+  return label === "?" ? m.ad_object_guid : label;
+}
 
 function DepartmentDetailPage(): JSX.Element {
   const { t } = useTranslation();
@@ -30,22 +44,23 @@ function DepartmentDetailPage(): JSX.Element {
   const assignManager = useAssignManager(id);
   const revokeManager = useRevokeManager(id);
 
-  const [memberGuid, setMemberGuid] = useState("");
-  const [managerGuid, setManagerGuid] = useState("");
+  const [memberPick, setMemberPick] = useState<PickedUser | null>(null);
+  const [managerPick, setManagerPick] = useState<PickedUser | null>(null);
   const [managerRole, setManagerRole] = useState<"lead" | "deputy">("lead");
 
-  const submitMember = (e: FormEvent): void => {
-    e.preventDefault();
-    if (!memberGuid.trim()) return;
-    addMember.mutate({ ad_object_guid: memberGuid.trim() }, { onSuccess: () => setMemberGuid("") });
+  const submitMember = (): void => {
+    if (!memberPick) return;
+    addMember.mutate(
+      { ad_object_guid: memberPick.guid },
+      { onSuccess: () => setMemberPick(null) },
+    );
   };
 
-  const submitManager = (e: FormEvent): void => {
-    e.preventDefault();
-    if (!managerGuid.trim()) return;
+  const submitManager = (): void => {
+    if (!managerPick) return;
     assignManager.mutate(
-      { ad_object_guid: managerGuid.trim(), role: managerRole },
-      { onSuccess: () => setManagerGuid("") },
+      { ad_object_guid: managerPick.guid, role: managerRole },
+      { onSuccess: () => setManagerPick(null) },
     );
   };
 
@@ -65,27 +80,27 @@ function DepartmentDetailPage(): JSX.Element {
 
       <section className="rounded-md border bg-card">
         <h2 className="border-b px-4 py-2 text-sm font-medium">{t("departments.members")}</h2>
-        <form onSubmit={submitMember} className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
-          <label className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">
-              {t("departments.member_guid")}
+              {t("departments.member_user")}
             </span>
-            <input
-              value={memberGuid}
-              onChange={(e) => setMemberGuid(e.target.value)}
-              placeholder="objectGUID"
-              className="h-9 w-80 rounded-md border border-input bg-background px-3 text-sm"
-            />
-          </label>
-          <Button type="submit" size="sm" disabled={addMember.isPending || !memberGuid.trim()}>
+            <div className="w-80">
+              <UserPicker value={memberPick} onChange={setMemberPick} />
+            </div>
+          </div>
+          <Button type="button" size="sm" disabled={addMember.isPending || !memberPick} onClick={submitMember}>
             {t("departments.add_member")}
           </Button>
-        </form>
+        </div>
         <ul className="divide-y">
           {members.data && members.data.length > 0 ? (
             members.data.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-4 px-4 py-2">
-                <code className="text-xs">{m.ad_object_guid}</code>
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-medium">{personLabel(m)}</span>
+                  {m.upn ? <span className="text-xs text-muted-foreground">{m.upn}</span> : null}
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -106,21 +121,15 @@ function DepartmentDetailPage(): JSX.Element {
 
       <section className="rounded-md border bg-card">
         <h2 className="border-b px-4 py-2 text-sm font-medium">{t("departments.managers")}</h2>
-        <form
-          onSubmit={submitManager}
-          className="flex flex-wrap items-end gap-3 border-b px-4 py-3"
-        >
-          <label className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
+          <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">
-              {t("departments.manager_guid")}
+              {t("departments.manager_user")}
             </span>
-            <input
-              value={managerGuid}
-              onChange={(e) => setManagerGuid(e.target.value)}
-              placeholder="objectGUID"
-              className="h-9 w-80 rounded-md border border-input bg-background px-3 text-sm"
-            />
-          </label>
+            <div className="w-80">
+              <UserPicker value={managerPick} onChange={setManagerPick} />
+            </div>
+          </div>
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">
               {t("departments.role")}
@@ -134,20 +143,28 @@ function DepartmentDetailPage(): JSX.Element {
               <option value="deputy">{t("departments.role_deputy")}</option>
             </select>
           </label>
-          <Button type="submit" size="sm" disabled={assignManager.isPending || !managerGuid.trim()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={assignManager.isPending || !managerPick}
+            onClick={submitManager}
+          >
             {t("departments.assign_manager")}
           </Button>
-        </form>
+        </div>
         <ul className="divide-y">
           {managers.data && managers.data.length > 0 ? (
             managers.data.map((m) => (
               <li key={m.id} className="flex items-center justify-between gap-4 px-4 py-2">
-                <span className="text-sm">
-                  <code className="text-xs">{m.ad_object_guid}</code>
-                  <span className="ml-2 text-xs text-muted-foreground">
-                    {t(`departments.role_${m.role}`, { defaultValue: m.role })}
+                <div className="flex flex-col leading-tight">
+                  <span className="text-sm font-medium">
+                    {personLabel(m)}
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {t(`departments.role_${m.role}`, { defaultValue: m.role })}
+                    </span>
                   </span>
-                </span>
+                  {m.upn ? <span className="text-xs text-muted-foreground">{m.upn}</span> : null}
+                </div>
                 <Button
                   variant="ghost"
                   size="sm"

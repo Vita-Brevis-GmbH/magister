@@ -48,6 +48,7 @@ import type {
   DepartmentOut,
   DepartmentCreate,
   DepartmentMembershipOut,
+  UserDepartmentOut,
   ManagerRoleOut,
   ManagerRoleCreate,
   SubjectTeacherCreate,
@@ -124,6 +125,7 @@ export const queryKeys = {
   department: (id: number) => ["departments", id] as const,
   departmentMembers: (id: number) => ["departments", id, "members"] as const,
   departmentManagers: (id: number) => ["departments", id, "managers"] as const,
+  userDepartments: (guid: string) => ["user-departments", guid] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   rbac: ["admin-rbac"] as const,
@@ -229,10 +231,11 @@ export function usePreviewDocumentTemplate() {
 
 // --- Departments (company edition, M6 Phase 2) ---
 
-export function useDepartments() {
+export function useDepartments(enabled = true) {
   return useQuery<DepartmentOut[]>({
     queryKey: queryKeys.departments,
     queryFn: () => apiFetch<DepartmentOut[]>("/departments"),
+    enabled,
   });
 }
 
@@ -306,6 +309,37 @@ export function useRevokeManager(id: number) {
     mutationFn: (roleId) =>
       apiFetch<void>(`/departments/${id}/managers/${roleId}`, { method: "DELETE" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departmentManagers(id) }),
+  });
+}
+
+// #9: user-centric department assignment — a person may belong to several
+// departments at once, managed from their user page.
+export function useUserDepartments(guid: string, enabled = true) {
+  return useQuery<UserDepartmentOut[]>({
+    queryKey: queryKeys.userDepartments(guid),
+    queryFn: () => apiFetch<UserDepartmentOut[]>(`/departments/for-user/${encodeURIComponent(guid)}`),
+    enabled,
+  });
+}
+
+export function useAddUserToDepartment(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<DepartmentMembershipOut, ApiError, number>({
+    mutationFn: (departmentId) =>
+      apiFetch<DepartmentMembershipOut>(`/departments/${departmentId}/members`, {
+        method: "POST",
+        body: { ad_object_guid: guid },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.userDepartments(guid) }),
+  });
+}
+
+export function useRemoveUserFromDepartment(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, { departmentId: number; membershipId: number }>({
+    mutationFn: ({ departmentId, membershipId }) =>
+      apiFetch<void>(`/departments/${departmentId}/members/${membershipId}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.userDepartments(guid) }),
   });
 }
 

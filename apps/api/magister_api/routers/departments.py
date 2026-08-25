@@ -15,7 +15,9 @@ from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.schemas.department_people import UserDepartmentOut
 from magister_api.schemas.departments import DepartmentCreate, DepartmentOut, DepartmentUpdate
+from magister_api.services.department_people import DepartmentPeopleService
 from magister_api.services.departments import (
     DepartmentNotFoundError,
     DepartmentPermissionError,
@@ -73,6 +75,32 @@ async def list_departments(
     svc = DepartmentService(session, settings, user.to_scope())
     rows = await svc.list_active()
     return [DepartmentOut.model_validate(r) for r in rows]
+
+
+@router.get("/for-user/{ad_object_guid}", response_model=list[UserDepartmentOut])
+async def list_user_departments(
+    ad_object_guid: str,
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> list[UserDepartmentOut]:
+    """The active departments a person belongs to, restricted to in-scope units.
+
+    Powers the user-centric assignment view (#9): a person may sit in several
+    departments at once, so this is a list.
+    """
+    svc = DepartmentPeopleService(session, settings, user.to_scope())
+    pairs = await svc.list_user_memberships(ad_object_guid)
+    return [
+        UserDepartmentOut(
+            membership_id=m.id,
+            department_id=d.id,
+            name=d.name,
+            kuerzel=d.kuerzel,
+            valid_from=m.valid_from,
+        )
+        for m, d in pairs
+    ]
 
 
 @router.get("/{department_id}", response_model=DepartmentOut)

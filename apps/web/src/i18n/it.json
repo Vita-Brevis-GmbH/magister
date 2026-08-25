@@ -234,6 +234,11 @@
       "section_classes": "Classi",
       "class_teachers": "Docenti di classe",
       "no_classes": "Nessuna classe attiva assegnata.",
+      "section_departments": "Reparti",
+      "departments_desc": "Questa persona può appartenere a più reparti.",
+      "no_departments": "Nessun reparto assegnato.",
+      "department_select": "— Scegli un reparto —",
+      "department_add": "Assegna",
       "section_overview": "Dati anagrafici",
       "section_identity": "Identità",
       "section_identity_desc": "Nome visualizzato e nome di accesso.",
@@ -1082,6 +1087,11 @@
       "member_plural": "Persone"
     }
   },
+  "user_picker": {
+    "placeholder": "Cerca nome o UPN …",
+    "change": "Modifica",
+    "no_matches": "Nessun risultato."
+  },
   "rbac": {
     "matrix_title": "Matrice dei diritti",
     "matrix_desc": "Definisci quale ruolo detiene quale permesso. L'amministratore detiene sempre tutti i diritti; i ruoli derivati (docente di classe) derivano dalle assegnazioni di classe.",
@@ -1143,12 +1153,12 @@
     "empty": "Nessun reparto.",
     "archive": "Archivia",
     "members": "Membri",
-    "member_guid": "Collaboratore (objectGUID)",
+    "member_user": "Collaboratore",
     "add_member": "Aggiungi",
     "remove": "Rimuovi",
     "no_members": "Nessun membro attivo.",
     "managers": "Quadri",
-    "manager_guid": "Quadro (objectGUID)",
+    "manager_user": "Quadro",
     "role": "Ruolo",
     "role_lead": "Responsabile",
     "role_deputy": "Vice",

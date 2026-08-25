@@ -289,6 +289,10 @@ export interface DepartmentMembershipOut {
   valid_from: string;
   valid_to: string | null;
   created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
 }
 
 export interface ManagerRoleOut {
@@ -299,6 +303,19 @@ export interface ManagerRoleOut {
   valid_from: string;
   valid_to: string | null;
   created_at: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string | null;
+}
+
+// #9: a department a user is an active member of (user-centric assignment view).
+export interface UserDepartmentOut {
+  membership_id: number;
+  department_id: number;
+  name: string;
+  kuerzel: string | null;
+  valid_from: string;
 }
 
 export interface ManagerRoleCreate {

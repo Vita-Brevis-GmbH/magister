@@ -234,6 +234,11 @@
       "section_classes": "Classes",
       "class_teachers": "Enseignants de classe",
       "no_classes": "Aucune classe active attribuée.",
+      "section_departments": "Départements",
+      "departments_desc": "Cette personne peut appartenir à plusieurs départements.",
+      "no_departments": "Aucun département attribué.",
+      "department_select": "— Choisir un département —",
+      "department_add": "Attribuer",
       "section_overview": "Données de base",
       "section_identity": "Identité",
       "section_identity_desc": "Nom affiché et identifiants de connexion.",
@@ -1082,6 +1087,11 @@
       "member_plural": "Personnes"
     }
   },
+  "user_picker": {
+    "placeholder": "Rechercher un nom ou UPN …",
+    "change": "Modifier",
+    "no_matches": "Aucun résultat."
+  },
   "rbac": {
     "matrix_title": "Matrice des droits",
     "matrix_desc": "Définissez quelle rôle détient quelle permission. L'administrateur détient toujours tous les droits ; les rôles dérivés (enseignant·e titulaire) proviennent des attributions de classe.",
@@ -1143,12 +1153,12 @@
     "empty": "Aucun département.",
     "archive": "Archiver",
     "members": "Membres",
-    "member_guid": "Collaborateur (objectGUID)",
+    "member_user": "Collaborateur",
     "add_member": "Ajouter",
     "remove": "Retirer",
     "no_members": "Aucun membre actif.",
     "managers": "Cadres",
-    "manager_guid": "Cadre (objectGUID)",
+    "manager_user": "Cadre",
     "role": "Rôle",
     "role_lead": "Responsable",
     "role_deputy": "Adjoint",

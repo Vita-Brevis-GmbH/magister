@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.base import utcnow
-from magister_api.models.department import Department
+from magister_api.models.department import DEPARTMENT_STATUS_ACTIVE, Department
 from magister_api.models.department_membership import DepartmentMembership
 from magister_api.models.manager_role import ManagerRole
 from magister_api.repositories.base import ScopeContext
@@ -56,6 +56,25 @@ class DepartmentPeopleService:
     async def list_members(self, department_id: int) -> list[DepartmentMembership]:
         await self._department(department_id)
         return await self.members.list_active(department_id)
+
+    async def list_user_memberships(
+        self, ad_object_guid: str
+    ) -> list[tuple[DepartmentMembership, Department]]:
+        """Active memberships of one person, restricted to in-scope active depts.
+
+        The person's memberships are read across all departments, then each is
+        re-checked against the caller's org-unit scope via the scoped
+        DepartmentRepository — so a unit admin only sees the departments they may
+        manage, and archived departments are dropped.
+        """
+        rows = await self.members.list_active_for_person(ad_object_guid)
+        out: list[tuple[DepartmentMembership, Department]] = []
+        for m in rows:
+            dep = await self.departments.get(m.department_id)
+            if dep is not None and dep.status == DEPARTMENT_STATUS_ACTIVE:
+                out.append((m, dep))
+        out.sort(key=lambda pair: (pair[1].name, pair[1].id))
+        return out
 
     async def add_member(
         self,
