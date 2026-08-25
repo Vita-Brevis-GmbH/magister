@@ -48,6 +48,49 @@ PLACEHOLDERS: tuple[str, ...] = (
 )
 
 
+# Starter content per key — the "template for the template". The editor loads
+# this as a sensible starting point so operators edit real text instead of a
+# blank field. Self-contained HTML (wrapped in the print layout at render time);
+# uses only the declared PLACEHOLDERS.
+STARTER_TEMPLATES: dict[str, dict[str, str]] = {
+    "enrollment": {
+        "subject": "Eintritt in die Klasse {{ class_.name }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>Wir freuen uns, {{ student.display_name }} in der Klasse "
+            "<strong>{{ class_.name }}</strong> begrüssen zu dürfen. "
+            "Der erste Schultag ist der {{ first_day }} (Schuljahr {{ school_year }}).</p>\n"
+            "<p>Klassenlehrperson: {{ class_teacher }}.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "class_change": {
+        "subject": "Klassenwechsel von {{ old_class_name }} nach {{ class_.name }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>{{ student.display_name }} wechselt per {{ effective_date }} von der Klasse "
+            "{{ old_class_name }} in die Klasse <strong>{{ class_.name }}</strong>.</p>\n"
+            "<p>Neue Klassenlehrperson: {{ class_teacher }}.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "password_handout": {
+        "subject": "Neue Zugangsdaten für {{ student.display_name }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>Das Passwort für {{ student.display_name }} "
+            "({{ student.upn }}) wurde neu gesetzt:</p>\n"
+            '<p style="font-size:1.4em"><strong>{{ temp_password }}</strong></p>\n'
+            "<p>Bitte das Passwort beim ersten Anmelden ändern und sicher aufbewahren.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+}
+
+
 class TemplateRenderError(ValueError):
     """A template body failed to render (bad Jinja / undefined variable)."""
 
@@ -194,6 +237,7 @@ class DocumentTemplateService:
 __all__ = [
     "EDITABLE_KEYS",
     "PLACEHOLDERS",
+    "STARTER_TEMPLATES",
     "DocumentTemplateService",
     "RenderedTemplate",
     "TemplateRenderError",

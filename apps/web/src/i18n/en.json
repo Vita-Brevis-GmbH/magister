@@ -1161,6 +1161,7 @@
     "error_invalid": "The template is invalid (Jinja error or unknown placeholder).",
     "key_enrollment": "Enrolment",
     "key_class_change": "Class change",
-    "key_password_handout": "Password handout"
+    "key_password_handout": "Password handout",
+    "load_starter": "Load default template"
   }
 }

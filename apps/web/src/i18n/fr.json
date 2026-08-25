@@ -1164,6 +1164,7 @@
     "error_invalid": "Le modèle est invalide (erreur Jinja ou espace réservé inconnu).",
     "key_enrollment": "Admission",
     "key_class_change": "Changement de classe",
-    "key_password_handout": "Remise du mot de passe"
+    "key_password_handout": "Remise du mot de passe",
+    "load_starter": "Charger le modèle par défaut"
   }
 }

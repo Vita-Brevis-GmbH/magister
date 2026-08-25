@@ -80,6 +80,15 @@ function DocumentTemplatesPage(): JSX.Element {
     if (existing) del.mutate(existing.id);
   }
 
+  function onLoadStarter(): void {
+    const starter = meta?.starters[key];
+    if (!starter) return;
+    setSubject(starter.subject);
+    setBody(starter.body_html);
+    setPreviewHtml(null);
+    save.reset();
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -182,6 +191,14 @@ function DocumentTemplatesPage(): JSX.Element {
                 disabled={preview.isPending || !body.trim()}
               >
                 {t("doc_templates.preview")}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onLoadStarter}
+                disabled={!meta.starters[key]}
+              >
+                {t("doc_templates.load_starter")}
               </Button>
               {existing ? (
                 <Button type="button" variant="ghost" onClick={onDelete} disabled={del.isPending}>

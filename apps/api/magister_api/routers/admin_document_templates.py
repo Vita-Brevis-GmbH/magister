@@ -23,10 +23,12 @@ from magister_api.schemas.document_templates import (
     DocumentTemplatePreviewOut,
     DocumentTemplatePreviewRequest,
     DocumentTemplateSave,
+    DocumentTemplateStarter,
 )
 from magister_api.services.document_templates import (
     EDITABLE_KEYS,
     PLACEHOLDERS,
+    STARTER_TEMPLATES,
     DocumentTemplateService,
     TemplateRenderError,
     UnknownTemplateKeyError,
@@ -43,6 +45,10 @@ def _meta() -> DocumentTemplateMetaOut:
         keys=list(EDITABLE_KEYS),
         placeholders=list(PLACEHOLDERS),
         languages=list(_LANGUAGES),
+        starters={
+            key: DocumentTemplateStarter(subject=s["subject"], body_html=s["body_html"])
+            for key, s in STARTER_TEMPLATES.items()
+        },
     )
 
 

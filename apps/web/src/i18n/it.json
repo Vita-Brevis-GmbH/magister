@@ -1164,6 +1164,7 @@
     "error_invalid": "Il modello non è valido (errore Jinja o segnaposto sconosciuto).",
     "key_enrollment": "Iscrizione",
     "key_class_change": "Cambio classe",
-    "key_password_handout": "Consegna password"
+    "key_password_handout": "Consegna password",
+    "load_starter": "Carica modello predefinito"
   }
 }

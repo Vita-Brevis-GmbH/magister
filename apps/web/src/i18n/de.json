@@ -1161,6 +1161,7 @@
     "error_invalid": "Die Vorlage ist ungültig (Jinja-Fehler oder unbekannter Platzhalter).",
     "key_enrollment": "Eintritt (Anmeldung)",
     "key_class_change": "Klassenwechsel",
-    "key_password_handout": "Passwort-Übergabe"
+    "key_password_handout": "Passwort-Übergabe",
+    "load_starter": "Standardvorlage laden"
   }
 }
