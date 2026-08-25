@@ -968,12 +968,12 @@
     }
   },
   "schools": {
-    "title": "Écoles",
-    "subtitle": "Gérer les bâtiments scolaires avec adresse, contact et emplacement.",
-    "empty": "Aucune école pour l’instant.",
-    "create_button": "Ajouter une école",
-    "create_title": "Nouvelle école",
-    "edit_title": "Modifier l’école",
+    "title": "{{unit_plural}}",
+    "subtitle": "Enregistrer les {{unit_plural}} avec adresse, contact et emplacement.",
+    "empty": "Aucun {{unit_plural}} enregistré.",
+    "create_button": "Ajouter {{unit}}",
+    "create_title": "Ajouter {{unit}}",
+    "edit_title": "Modifier {{unit}}",
     "form_hint": "Le nom, le code court et le code de périmètre sont requis ; l’adresse et le contact sont facultatifs.",
     "save": "Enregistrer",
     "edit_button": "Modifier",

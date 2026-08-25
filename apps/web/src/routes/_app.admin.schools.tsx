@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/table";
 import { mapPointUrl, mapSearchUrl, osmEmbedUrl } from "@/lib/mapLink";
 import { useSortable } from "@/lib/useSortable";
+import { useTerms } from "@/lib/useTerms";
 import { SortableHead } from "@/components/SortableHead";
 
 export const Route = createFileRoute("/_app/admin/schools")({
@@ -57,6 +58,8 @@ function schoolMapUrl(s: SchoolOut): string | null {
 
 function SchoolsPage(): JSX.Element {
   const { t } = useTranslation();
+  const terms = useTerms();
+  const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const navigate = useNavigate();
   const childMatches = useChildMatches();
   const q = useSchools();
@@ -80,11 +83,11 @@ function SchoolsPage(): JSX.Element {
     <div className="space-y-4">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="font-serif text-2xl font-semibold">{t("schools.title")}</h1>
-          <p className="text-sm text-muted-foreground">{t("schools.subtitle")}</p>
+          <h1 className="font-serif text-2xl font-semibold">{t("schools.title", unitVars)}</h1>
+          <p className="text-sm text-muted-foreground">{t("schools.subtitle", unitVars)}</p>
         </div>
         <Button type="button" onClick={() => navigate({ to: "/admin/schools/new" })}>
-          {t("schools.create_button")}
+          {t("schools.create_button", unitVars)}
         </Button>
       </header>
 
@@ -93,7 +96,7 @@ function SchoolsPage(): JSX.Element {
       ) : q.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
       ) : (q.data ?? []).length === 0 ? (
-        <p className="text-muted-foreground">{t("schools.empty")}</p>
+        <p className="text-muted-foreground">{t("schools.empty", unitVars)}</p>
       ) : (
         <Table>
           <TableHeader>

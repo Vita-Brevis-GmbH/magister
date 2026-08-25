@@ -965,12 +965,12 @@
     }
   },
   "schools": {
-    "title": "Schools",
-    "subtitle": "Manage school buildings with address, contact and location.",
-    "empty": "No schools yet.",
-    "create_button": "Add school",
-    "create_title": "New school",
-    "edit_title": "Edit school",
+    "title": "{{unit_plural}}",
+    "subtitle": "Capture {{unit_plural}} with address, contact and location.",
+    "empty": "No {{unit_plural}} yet.",
+    "create_button": "Add {{unit}}",
+    "create_title": "Add {{unit}}",
+    "edit_title": "Edit {{unit}}",
     "form_hint": "Name, short code and scope code are required; address and contact are optional.",
     "save": "Save",
     "edit_button": "Edit",

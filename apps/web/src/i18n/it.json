@@ -968,12 +968,12 @@
     }
   },
   "schools": {
-    "title": "Scuole",
-    "subtitle": "Gestisci gli edifici scolastici con indirizzo, contatto e posizione.",
-    "empty": "Ancora nessuna scuola.",
-    "create_button": "Aggiungi scuola",
-    "create_title": "Nuova scuola",
-    "edit_title": "Modifica scuola",
+    "title": "{{unit_plural}}",
+    "subtitle": "Registrare {{unit_plural}} con indirizzo, contatto e posizione.",
+    "empty": "Nessun {{unit_plural}} registrato.",
+    "create_button": "Aggiungi {{unit}}",
+    "create_title": "Aggiungi {{unit}}",
+    "edit_title": "Modifica {{unit}}",
     "form_hint": "Nome, sigla e sigla dell’ambito sono obbligatori; indirizzo e contatto sono facoltativi.",
     "save": "Salva",
     "edit_button": "Modifica",
