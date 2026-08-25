@@ -1090,8 +1090,12 @@
     "off": "Désactivé",
     "save_error": "Échec de l'enregistrement.",
     "mod_platform": "Base (plateforme)",
-    "mod_school": "École — classes, enseignant·e·s titulaires, imports",
-    "mod_company": "Entreprise — départements/équipes"
+    "mod_classes": "Classes — classes, enseignant·e·s titulaires, enseignant·e·s de branche, remplacements",
+    "mod_letters": "Lettres et modèles",
+    "mod_imports": "Imports (synchro AD, import en masse)",
+    "mod_departments": "Départements / équipes",
+    "mod_reports": "Analyses et rapports",
+    "mod_devices": "Attribution d'appareils"
   },
   "departments": {
     "title": "Départements",

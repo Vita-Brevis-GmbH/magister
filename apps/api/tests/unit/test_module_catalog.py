@@ -1,4 +1,4 @@
-"""M6 Phase 1: the pure module-catalog policy + effective enablement."""
+"""M6 #5: the pure module-catalog policy + effective enablement (granular)."""
 
 from __future__ import annotations
 
@@ -12,41 +12,56 @@ def test_platform_is_always_on() -> None:
     assert "platform" in catalog.effective_enabled_ids("neutral", {"platform": False})
 
 
-def test_school_default_follows_profile() -> None:
-    assert "school" in catalog.effective_enabled_ids("school", {})
-    assert "school" not in catalog.effective_enabled_ids("company", {})
-    assert "school" not in catalog.effective_enabled_ids("neutral", {})
+def test_school_profile_defaults() -> None:
+    enabled = set(catalog.effective_enabled_ids("school", {}))
+    assert {"platform", "classes", "letters", "imports", "reports", "devices"} <= enabled
+    assert "departments" not in enabled
+    assert catalog.dependency_violations(enabled) == []
 
 
-def test_company_default_follows_profile() -> None:
-    assert "company" in catalog.effective_enabled_ids("company", {})
-    assert "company" not in catalog.effective_enabled_ids("school", {})
-    assert "company" not in catalog.effective_enabled_ids("neutral", {})
+def test_company_profile_defaults() -> None:
+    enabled = set(catalog.effective_enabled_ids("company", {}))
+    assert {"platform", "departments", "reports", "devices"} <= enabled
+    # School superstructure off in the company profile.
+    assert enabled.isdisjoint({"classes", "letters", "imports"})
+    assert catalog.dependency_violations(enabled) == []
 
 
-def test_school_and_company_can_coexist() -> None:
-    # Mischbetrieb: a school instance that also switches the company module on.
-    enabled = set(catalog.effective_enabled_ids("school", {"company": True}))
-    assert {"platform", "school", "company"} <= enabled
+def test_neutral_profile_is_minimal() -> None:
+    enabled = set(catalog.effective_enabled_ids("neutral", {}))
+    assert enabled == {"platform"}
+
+
+def test_mischbetrieb_school_plus_departments() -> None:
+    # A school that also switches the departments module on.
+    enabled = set(catalog.effective_enabled_ids("school", {"departments": True}))
+    assert {"classes", "departments"} <= enabled
     assert catalog.dependency_violations(enabled) == []
 
 
 def test_override_wins_over_profile_default() -> None:
-    # A school module can be switched on inside a company instance …
-    assert "school" in catalog.effective_enabled_ids("company", {"school": True})
-    # … and off inside a school instance.
-    assert "school" not in catalog.effective_enabled_ids("school", {"school": False})
+    # classes can be switched off inside a school instance …
+    assert "classes" not in catalog.effective_enabled_ids("school", {"classes": False})
+    # … and departments on inside a school instance.
+    assert "departments" in catalog.effective_enabled_ids("school", {"departments": True})
 
 
-def test_dependencies_satisfied_for_defaults() -> None:
-    enabled = set(catalog.effective_enabled_ids("school", {}))
-    assert catalog.dependency_violations(enabled) == []
-
-
-def test_dependency_violation_is_detected() -> None:
-    assert catalog.dependency_violations({"school"}) == [("school", "platform")]
+def test_letters_requires_classes() -> None:
+    meta = catalog.get_meta("letters")
+    assert meta is not None
+    assert "classes" in meta.depends_on
+    # letters on but classes off is a violation.
+    assert catalog.dependency_violations({"platform", "letters"}) == [("letters", "classes")]
 
 
 def test_known_profiles_and_ids() -> None:
     assert catalog.DEFAULT_PROFILE in catalog.KNOWN_PROFILES
-    assert set(catalog.module_ids()) == {"platform", "school", "company"}
+    assert set(catalog.module_ids()) == {
+        "platform",
+        "classes",
+        "letters",
+        "imports",
+        "departments",
+        "reports",
+        "devices",
+    }

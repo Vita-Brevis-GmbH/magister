@@ -18,7 +18,10 @@ _MGR = "22222222-2222-2222-2222-222222222222"
 async def _enable_company(db_session: AsyncSession) -> None:
     """The company module is off by default; enable it for these tests."""
     await db_session.execute(
-        text("UPDATE app_settings SET module_overrides = '{\"company\": true}'::jsonb WHERE id = 1")
+        text(
+            "UPDATE app_settings SET module_overrides = '{\"departments\": true}'::jsonb "
+            "WHERE id = 1"
+        )
     )
     await db_session.commit()
 

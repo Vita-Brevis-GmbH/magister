@@ -1087,8 +1087,12 @@
     "off": "Aus",
     "save_error": "Speichern fehlgeschlagen.",
     "mod_platform": "Basis (Plattform)",
-    "mod_school": "Schule — Klassen, Klassenlehrer, Importe",
-    "mod_company": "Firma — Abteilungen/Teams"
+    "mod_classes": "Klassen — Klassen, Klassenlehrer, Fachlehrer, Stellvertretungen",
+    "mod_letters": "Briefe & Vorlagen",
+    "mod_imports": "Importe (AD-Sync, Massen-Import)",
+    "mod_departments": "Abteilungen / Teams",
+    "mod_reports": "Auswertungen & Reports",
+    "mod_devices": "Geräte-Zuordnung"
   },
   "departments": {
     "title": "Abteilungen",

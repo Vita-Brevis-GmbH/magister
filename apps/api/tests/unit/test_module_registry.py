@@ -29,10 +29,9 @@ def test_every_enabled_module_router_is_mounted() -> None:
 
 
 def test_router_count() -> None:
-    # 25 routers were hard-listed in create_app() before the registry seam;
-    # M6 Phase 1 adds admin_modules (platform) → 26; Phase 2 adds departments,
-    # department_people and company_lifecycle (company) → 29; Feature B adds
-    # admin_document_templates (platform) → 30. A drop or dup changes this.
+    # 30 routers total. M6 #5 regrouped the coarse platform/school/company
+    # modules into fine-grained fachfunction modules WITHOUT adding or dropping
+    # any route, so the total is unchanged. A drop or dup would change it.
     total = sum(len(m.routers) for m in ALL_MODULES)
     assert total == 30
 
@@ -40,13 +39,13 @@ def test_router_count() -> None:
 def test_module_ids_unique_and_expected() -> None:
     ids = [m.id for m in ALL_MODULES]
     assert ids == list(dict.fromkeys(ids)), "duplicate module id"
-    assert {"platform", "school"} <= set(ids)
+    assert {"platform", "classes", "departments"} <= set(ids)
 
 
-def test_school_depends_on_platform() -> None:
+def test_classes_depends_on_platform() -> None:
     from magister_api.modules.catalog import get_meta
 
-    meta = get_meta("school")
+    meta = get_meta("classes")
     assert meta is not None
     assert "platform" in meta.depends_on
 

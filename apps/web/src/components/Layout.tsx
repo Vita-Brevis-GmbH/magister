@@ -63,12 +63,16 @@ export function Layout() {
   const isTeacher = me.data?.kind === "teacher";
   // Anyone with a management capability can open the Einstellungen menu.
   const canManage = isAdmin || isSchulleitung || isSmi;
-  // M6 Phase 0: gate the school-module nav entries by the enabled modules.
-  // Default visible while loading; in Phase 0 the school module is always on,
-  // so the navigation is unchanged.
-  const hasSchool = enabledModules.data?.has("school") ?? true;
-  // The company module is off by default; only surface its nav once enabled.
-  const hasCompany = enabledModules.data?.has("company") ?? false;
+  // M6 #5: gate each nav entry by its fine-grained fachfunction module.
+  // School-side modules default visible while loading (they are on in the
+  // school profile, the historical default); departments defaults hidden
+  // because it only ships in the company profile.
+  const hasClasses = enabledModules.data?.has("classes") ?? true;
+  const hasLetters = enabledModules.data?.has("letters") ?? true;
+  const hasImports = enabledModules.data?.has("imports") ?? true;
+  const hasReports = enabledModules.data?.has("reports") ?? true;
+  const hasDevices = enabledModules.data?.has("devices") ?? true;
+  const hasDepartments = enabledModules.data?.has("departments") ?? false;
 
   return (
     <div className="min-h-screen bg-background">
@@ -81,7 +85,7 @@ export function Layout() {
           </Link>
 
           <nav className="flex items-center gap-1 text-sm font-medium">
-            {hasSchool ? (
+            {hasClasses ? (
               <Link
                 to="/classes"
                 activeProps={{ className: navActive }}
@@ -90,7 +94,7 @@ export function Layout() {
                 {t("nav.classes")}
               </Link>
             ) : null}
-            {canManage && hasCompany ? (
+            {canManage && hasDepartments ? (
               <Link
                 to="/departments"
                 activeProps={{ className: navActive }}
@@ -99,7 +103,7 @@ export function Layout() {
                 {t("nav.departments")}
               </Link>
             ) : null}
-            {isTeacher && hasSchool ? (
+            {isTeacher && hasClasses ? (
               <Link
                 to="/my-students"
                 activeProps={{ className: navActive }}
@@ -108,7 +112,7 @@ export function Layout() {
                 {t("nav.my_students")}
               </Link>
             ) : null}
-            {isAdmin || isSmi ? (
+            {(isAdmin || isSmi) && hasDevices ? (
               <Link
                 to="/devices"
                 activeProps={{ className: navActive }}
@@ -126,7 +130,7 @@ export function Layout() {
                 >
                   {t("nav.usermanagement")}
                 </Link>
-                {hasSchool ? (
+                {hasImports ? (
                   <Link
                     to="/admin/imports"
                     activeProps={{ className: navActive }}
@@ -135,13 +139,15 @@ export function Layout() {
                     {t("nav.imports")}
                   </Link>
                 ) : null}
-                <Link
-                  to="/admin/reports"
-                  activeProps={{ className: navActive }}
-                  inactiveProps={{ className: navIdle }}
-                >
-                  {t("nav.reports")}
-                </Link>
+                {hasReports ? (
+                  <Link
+                    to="/admin/reports"
+                    activeProps={{ className: navActive }}
+                    inactiveProps={{ className: navIdle }}
+                  >
+                    {t("nav.reports")}
+                  </Link>
+                ) : null}
               </>
             ) : null}
             {canManage ? (
@@ -189,7 +195,7 @@ export function Layout() {
                         {t("nav.roles")}
                       </Link>
                     ) : null}
-                    {hasSchool ? (
+                    {hasClasses ? (
                       <Link
                         to="/admin/substitutions"
                         role="menuitem"
@@ -219,7 +225,7 @@ export function Layout() {
                         {t("nav.modules")}
                       </Link>
                     ) : null}
-                    {isAdmin ? (
+                    {isAdmin && hasLetters ? (
                       <Link
                         to="/admin/document-templates"
                         role="menuitem"

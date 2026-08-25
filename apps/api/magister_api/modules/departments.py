@@ -1,9 +1,7 @@
-"""Company module — the company-edition superstructure (M6 Phase 2, ADR-0008).
+"""Departments module — the company superstructure (M6 #5).
 
-Parallel to the school module: departments (Abteilungen/Teams) as the mid-level
-org unit. Enabled by default in the ``company`` profile; the platform below is
-shared unchanged. Memberships, manager roles and on-/offboarding are follow-up
-slices layered on the same pattern.
+Abteilungen/Teams als mittlere Org-Einheit, Mitgliedschaften, Kader-Rollen und
+On-/Offboarding. On by default in the company profile.
 """
 
 from __future__ import annotations
@@ -13,7 +11,7 @@ from magister_api.routers.company_lifecycle import router as company_lifecycle_r
 from magister_api.routers.department_people import router as department_people_router
 from magister_api.routers.departments import router as departments_router
 
-COMPANY_MODULE = ModuleManifest(
-    id="company",
+DEPARTMENTS_MODULE = ModuleManifest(
+    id="departments",
     routers=(departments_router, department_people_router, company_lifecycle_router),
 )

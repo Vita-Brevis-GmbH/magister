@@ -137,9 +137,9 @@ export function useCurrentUser(opts: { retryOn401?: boolean } = {}) {
 }
 
 /**
- * M6 Phase 0: the feature modules enabled for this instance. Selected into a
- * Set of module ids so the nav can gate entries with `.has("school")` etc.
- * In Phase 0 every module is enabled, so nothing is hidden.
+ * M6: the feature modules enabled for this instance. Selected into a Set of
+ * module ids so the nav can gate entries with `.has("classes")`,
+ * `.has("departments")`, `.has("reports")` etc. (#5 fine-grained modules).
  */
 export function useEnabledModules() {
   return useQuery<ModulesOut, ApiError, Set<string>>({

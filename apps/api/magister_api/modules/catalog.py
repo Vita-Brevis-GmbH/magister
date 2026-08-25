@@ -40,10 +40,24 @@ class ModuleMeta:
     depends_on: tuple[str, ...] = ()
 
 
+# Granular feature modules (M6 #5). The domain-neutral base is the single
+# non-toggleable ``platform`` module; every fachfunction is an individually
+# switchable module. The soft profile only seeds a sensible default set — the
+# school profile keeps every school feature on, so existing school instances see
+# no change; the company profile turns the school superstructure off and the
+# company one on. ``depends_on`` guards hard data couplings (letters render
+# class letters → need ``classes``).
 MODULE_CATALOG: tuple[ModuleMeta, ...] = (
     ModuleMeta(id="platform", toggleable=False),
-    ModuleMeta(id="school", default_in_profiles=("school",), depends_on=("platform",)),
-    ModuleMeta(id="company", default_in_profiles=("company",), depends_on=("platform",)),
+    # School superstructure.
+    ModuleMeta(id="classes", default_in_profiles=("school",), depends_on=("platform",)),
+    ModuleMeta(id="letters", default_in_profiles=("school",), depends_on=("classes",)),
+    ModuleMeta(id="imports", default_in_profiles=("school",), depends_on=("platform",)),
+    # Company superstructure.
+    ModuleMeta(id="departments", default_in_profiles=("company",), depends_on=("platform",)),
+    # Cross-domain fachfunctions (useful for both school and company).
+    ModuleMeta(id="reports", default_in_profiles=("school", "company"), depends_on=("platform",)),
+    ModuleMeta(id="devices", default_in_profiles=("school", "company"), depends_on=("platform",)),
 )
 
 

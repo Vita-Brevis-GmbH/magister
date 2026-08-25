@@ -1087,8 +1087,12 @@
     "off": "Off",
     "save_error": "Saving failed.",
     "mod_platform": "Base (platform)",
-    "mod_school": "School — classes, class teachers, imports",
-    "mod_company": "Company — departments/teams"
+    "mod_classes": "Classes — classes, class teachers, subject teachers, substitutions",
+    "mod_letters": "Letters & templates",
+    "mod_imports": "Imports (AD sync, bulk import)",
+    "mod_departments": "Departments / teams",
+    "mod_reports": "Analytics & reports",
+    "mod_devices": "Device assignment"
   },
   "departments": {
     "title": "Departments",

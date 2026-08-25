@@ -1090,8 +1090,12 @@
     "off": "Disattivato",
     "save_error": "Salvataggio non riuscito.",
     "mod_platform": "Base (piattaforma)",
-    "mod_school": "Scuola — classi, docenti di classe, importazioni",
-    "mod_company": "Azienda — reparti/team"
+    "mod_classes": "Classi — classi, docenti di classe, docenti di materia, supplenze",
+    "mod_letters": "Lettere e modelli",
+    "mod_imports": "Importazioni (sincronizzazione AD, importazione di massa)",
+    "mod_departments": "Reparti / team",
+    "mod_reports": "Analisi e rapporti",
+    "mod_devices": "Assegnazione dispositivi"
   },
   "departments": {
     "title": "Reparti",
