@@ -366,7 +366,8 @@
       "impact_sessions": "Sessioni attive",
       "error_still_in_ad": "L'utente esiste ancora in AD e non può essere eliminato.",
       "error_not_deletable": "Questo utente non può essere eliminato (solo studenti/docenti)."
-    }
+    },
+    "kind_user": "Utente"
   },
   "password_reset": {
     "button": "Reimposta password",

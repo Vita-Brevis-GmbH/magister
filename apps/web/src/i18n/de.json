@@ -363,7 +363,8 @@
       "impact_sessions": "Aktive Sitzungen",
       "error_still_in_ad": "Der User existiert noch im AD und kann nicht gelöscht werden.",
       "error_not_deletable": "Dieser Benutzer kann nicht gelöscht werden (nur Schüler/Lehrer)."
-    }
+    },
+    "kind_user": "Benutzer"
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",

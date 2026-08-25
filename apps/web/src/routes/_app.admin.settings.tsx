@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import {
   useAppSettings,
+  useInstanceProfile,
   useTestAdConnection,
   useTriggerAdSync,
   useUpdateAppSettings,
@@ -172,6 +173,9 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
   const syncAd = useTriggerAdSync();
+  // Zyklus/grade-year settings only make sense for the school profile; the
+  // company profile has no school cycles (groups config stays for both).
+  const profile = useInstanceProfile().data ?? "school";
   const [form, setForm] = useState<FormState>(() => fromOut(data));
   const [success, setSuccess] = useState(false);
 
@@ -517,17 +521,33 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
           <CardDescription>{t("admin.settings.provisioning_section_desc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
-              <Input id="z1max" type="number" min={1} max={13} {...field("zyklus1_max_grade")} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
-              <Input id="z2max" type="number" min={1} max={13} {...field("zyklus2_max_grade")} />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+          {profile !== "company" ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
+                  <Input
+                    id="z1max"
+                    type="number"
+                    min={1}
+                    max={13}
+                    {...field("zyklus1_max_grade")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
+                  <Input
+                    id="z2max"
+                    type="number"
+                    min={1}
+                    max={13}
+                    {...field("zyklus2_max_grade")}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+            </>
+          ) : null}
           <div className="space-y-1">
             <Label htmlFor="groups-base">{t("admin.settings.field.ad_groups_search_base")}</Label>
             <Input

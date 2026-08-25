@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   useBulkUserAction,
   useCurrentUser,
+  useInstanceProfile,
   useUsers,
   type BulkUserAction,
   type UseUsersParams,
@@ -48,6 +49,9 @@ function UsersPage(): JSX.Element {
   const { t } = useTranslation();
   const fmt = useFormatters();
   const [kind, setKind] = useState<KindFilter>("all");
+  // In the company profile there is no student/teacher split — every account is
+  // just a "Benutzer", so the kind filter + kind column collapse to that.
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(50);
@@ -187,24 +191,26 @@ function UsersPage(): JSX.Element {
       </header>
 
       <div className="flex flex-wrap items-center gap-3">
-        <div role="tablist" className="inline-flex rounded-md border bg-card p-0.5">
-          {(["all", "teacher", "student"] as const).map((k) => (
-            <button
-              key={k}
-              role="tab"
-              aria-selected={kind === k}
-              onClick={() => changeKind(k)}
-              className={cn(
-                "rounded px-3 py-1.5 text-sm font-medium transition-colors",
-                kind === k
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t(`users.filter_kind_${k}`)}
-            </button>
-          ))}
-        </div>
+        {!isCompany ? (
+          <div role="tablist" className="inline-flex rounded-md border bg-card p-0.5">
+            {(["all", "teacher", "student"] as const).map((k) => (
+              <button
+                key={k}
+                role="tab"
+                aria-selected={kind === k}
+                onClick={() => changeKind(k)}
+                className={cn(
+                  "rounded px-3 py-1.5 text-sm font-medium transition-colors",
+                  kind === k
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {t(`users.filter_kind_${k}`)}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <input
           type="search"
           placeholder={t("users.search_placeholder")}
@@ -377,7 +383,7 @@ function UsersPage(): JSX.Element {
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <KindPill kind={u.kind} />
+                        <KindPill kind={u.kind} company={isCompany} />
                       </TableCell>
                       <TableCell>
                         {u.ad_missing_since ? (
@@ -627,8 +633,12 @@ function PolicyBadges({ user }: { user: AdUserOut }): JSX.Element {
   );
 }
 
-function KindPill({ kind }: { kind: AdUserOut["kind"] }): JSX.Element {
+function KindPill({ kind, company }: { kind: AdUserOut["kind"]; company?: boolean }): JSX.Element {
   const { t } = useTranslation();
+  // Company profile: teacher/student collapse to a generic "Benutzer"; admin
+  // stays distinct.
+  if (company && kind !== "admin")
+    return <StatusPill tone="muted">{t("users.kind_user")}</StatusPill>;
   if (kind === "teacher") return <StatusPill tone="muted">{t("users.kind_teacher")}</StatusPill>;
   if (kind === "student") return <StatusPill tone="muted">{t("users.kind_student")}</StatusPill>;
   return <StatusPill tone="muted">{t("users.kind_admin")}</StatusPill>;

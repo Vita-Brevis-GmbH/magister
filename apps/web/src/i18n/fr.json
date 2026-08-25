@@ -366,7 +366,8 @@
       "impact_sessions": "Sessions actives",
       "error_still_in_ad": "L'utilisateur existe encore dans AD et ne peut pas être supprimé.",
       "error_not_deletable": "Cet utilisateur ne peut pas être supprimé (élèves/enseignants uniquement)."
-    }
+    },
+    "kind_user": "Utilisateur"
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",
