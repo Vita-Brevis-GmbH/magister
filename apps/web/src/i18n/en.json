@@ -1110,7 +1110,11 @@
     "role_lead": "Lead",
     "role_deputy": "Deputy",
     "assign_manager": "Assign",
-    "no_managers": "No active managers."
+    "no_managers": "No active managers.",
+    "no_units": "There is no {{unit}} yet. Please create one first.",
+    "no_units_link": "Create {{unit}}",
+    "select_unit": "— select {{unit}} —",
+    "create_failed": "Creation failed. Please check the inputs and the selected unit."
   },
   "rename": {
     "button": "Name change",

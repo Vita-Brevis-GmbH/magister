@@ -1110,7 +1110,11 @@
     "role_lead": "Leitung",
     "role_deputy": "Stellvertretung",
     "assign_manager": "Zuweisen",
-    "no_managers": "Kein aktives Kader."
+    "no_managers": "Kein aktives Kader.",
+    "no_units": "Es gibt noch keinen {{unit}}. Bitte zuerst einen erfassen.",
+    "no_units_link": "{{unit}} erfassen",
+    "select_unit": "— {{unit}} wählen —",
+    "create_failed": "Anlegen fehlgeschlagen. Bitte Eingaben und den gewählten Standort prüfen."
   },
   "rename": {
     "button": "Namensänderung",

@@ -1113,7 +1113,11 @@
     "role_lead": "Responsabile",
     "role_deputy": "Vice",
     "assign_manager": "Assegna",
-    "no_managers": "Nessun quadro attivo."
+    "no_managers": "Nessun quadro attivo.",
+    "no_units": "Non c'è ancora nessun {{unit}}. Crearne prima uno.",
+    "no_units_link": "Crea {{unit}}",
+    "select_unit": "— seleziona {{unit}} —",
+    "create_failed": "Creazione non riuscita. Controlla i dati e l'unità selezionata."
   },
   "rename": {
     "button": "Cambio nome",

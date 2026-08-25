@@ -1113,7 +1113,11 @@
     "role_lead": "Responsable",
     "role_deputy": "Adjoint",
     "assign_manager": "Assigner",
-    "no_managers": "Aucun cadre actif."
+    "no_managers": "Aucun cadre actif.",
+    "no_units": "Il n'y a pas encore de {{unit}}. Veuillez d'abord en créer un.",
+    "no_units_link": "Créer un {{unit}}",
+    "select_unit": "— choisir {{unit}} —",
+    "create_failed": "Échec de la création. Vérifiez les saisies et l'unité sélectionnée."
   },
   "rename": {
     "button": "Changement de nom",
