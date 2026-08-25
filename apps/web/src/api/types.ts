@@ -474,6 +474,8 @@ export interface DocumentTemplateMetaOut {
   keys: string[];
   placeholders: string[];
   languages: string[];
+  /** Built-in starter content per key — the "template for the template". */
+  starters: Record<string, { subject: string; body_html: string }>;
 }
 
 export interface DocumentTemplateListOut {

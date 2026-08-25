@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/api/client";
 import {
   useAppSettings,
+  useInstanceProfile,
   useTestAdConnection,
   useTriggerAdSync,
   useUpdateAppSettings,
@@ -148,6 +149,9 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
 function AppSettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const settings = useAppSettings();
+  // Read the profile here (page level) and pass it down, so the form component
+  // stays free of that extra query — keeps its unit test's fetch assertions valid.
+  const profile = useInstanceProfile().data ?? "school";
 
   return (
     <div className="space-y-6">
@@ -161,17 +165,25 @@ function AppSettingsPage(): JSX.Element {
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
       ) : settings.data ? (
-        <SettingsForm data={settings.data} />
+        <SettingsForm data={settings.data} profile={profile} />
       ) : null}
     </div>
   );
 }
 
-function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
+function SettingsForm({
+  data,
+  profile = "school",
+}: {
+  data: AppSettingsOut;
+  profile?: string;
+}): JSX.Element {
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
   const syncAd = useTriggerAdSync();
+  // Zyklus/grade-year settings only make sense for the school profile; the
+  // company profile has no school cycles (groups config stays for both).
   const [form, setForm] = useState<FormState>(() => fromOut(data));
   const [success, setSuccess] = useState(false);
 
@@ -517,17 +529,33 @@ function SettingsForm({ data }: { data: AppSettingsOut }): JSX.Element {
           <CardDescription>{t("admin.settings.provisioning_section_desc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
-              <Input id="z1max" type="number" min={1} max={13} {...field("zyklus1_max_grade")} />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
-              <Input id="z2max" type="number" min={1} max={13} {...field("zyklus2_max_grade")} />
-            </div>
-          </div>
-          <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+          {profile !== "company" ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="z1max">{t("admin.settings.field.zyklus1_max_grade")}</Label>
+                  <Input
+                    id="z1max"
+                    type="number"
+                    min={1}
+                    max={13}
+                    {...field("zyklus1_max_grade")}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="z2max">{t("admin.settings.field.zyklus2_max_grade")}</Label>
+                  <Input
+                    id="z2max"
+                    type="number"
+                    min={1}
+                    max={13}
+                    {...field("zyklus2_max_grade")}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">{t("admin.settings.zyklus_hint")}</p>
+            </>
+          ) : null}
           <div className="space-y-1">
             <Label htmlFor="groups-base">{t("admin.settings.field.ad_groups_search_base")}</Label>
             <Input

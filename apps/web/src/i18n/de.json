@@ -363,7 +363,8 @@
       "impact_sessions": "Aktive Sitzungen",
       "error_still_in_ad": "Der User existiert noch im AD und kann nicht gelöscht werden.",
       "error_not_deletable": "Dieser Benutzer kann nicht gelöscht werden (nur Schüler/Lehrer)."
-    }
+    },
+    "kind_user": "Benutzer"
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",
@@ -964,12 +965,12 @@
     }
   },
   "schools": {
-    "title": "Schulen",
-    "subtitle": "Schulhäuser mit Adresse, Kontakt und Standort erfassen.",
-    "empty": "Noch keine Schulen erfasst.",
-    "create_button": "Schule erfassen",
-    "create_title": "Neue Schule",
-    "edit_title": "Schule bearbeiten",
+    "title": "{{unit_plural}}",
+    "subtitle": "{{unit_plural}} mit Adresse, Kontakt und Standort erfassen.",
+    "empty": "Noch keine {{unit_plural}} erfasst.",
+    "create_button": "{{unit}} erfassen",
+    "create_title": "{{unit}} erfassen",
+    "edit_title": "{{unit}} bearbeiten",
     "form_hint": "Name, Kürzel und Bereichskürzel sind erforderlich; Adresse und Kontakt sind optional.",
     "save": "Speichern",
     "edit_button": "Bearbeiten",
@@ -1110,7 +1111,11 @@
     "role_lead": "Leitung",
     "role_deputy": "Stellvertretung",
     "assign_manager": "Zuweisen",
-    "no_managers": "Kein aktives Kader."
+    "no_managers": "Kein aktives Kader.",
+    "no_units": "Es gibt noch keinen {{unit}}. Bitte zuerst einen erfassen.",
+    "no_units_link": "{{unit}} erfassen",
+    "select_unit": "— {{unit}} wählen —",
+    "create_failed": "Anlegen fehlgeschlagen. Bitte Eingaben und den gewählten Standort prüfen."
   },
   "rename": {
     "button": "Namensänderung",
@@ -1156,6 +1161,7 @@
     "error_invalid": "Die Vorlage ist ungültig (Jinja-Fehler oder unbekannter Platzhalter).",
     "key_enrollment": "Eintritt (Anmeldung)",
     "key_class_change": "Klassenwechsel",
-    "key_password_handout": "Passwort-Übergabe"
+    "key_password_handout": "Passwort-Übergabe",
+    "load_starter": "Standardvorlage laden"
   }
 }

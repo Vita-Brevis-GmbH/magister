@@ -47,10 +47,17 @@ class DocumentTemplatePreviewOut(BaseModel):
     html: str
 
 
+class DocumentTemplateStarter(BaseModel):
+    subject: str
+    body_html: str
+
+
 class DocumentTemplateMetaOut(BaseModel):
     keys: list[str]
     placeholders: list[str]
     languages: list[str]
+    # Built-in starter content per key — the "template for the template".
+    starters: dict[str, DocumentTemplateStarter]
 
 
 class DocumentTemplateListOut(BaseModel):
@@ -61,6 +68,7 @@ class DocumentTemplateListOut(BaseModel):
 __all__ = [
     "DocumentTemplateListOut",
     "DocumentTemplateMetaOut",
+    "DocumentTemplateStarter",
     "DocumentTemplateOut",
     "DocumentTemplatePreviewOut",
     "DocumentTemplatePreviewRequest",

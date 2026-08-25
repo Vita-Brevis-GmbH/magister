@@ -366,7 +366,8 @@
       "impact_sessions": "Sessioni attive",
       "error_still_in_ad": "L'utente esiste ancora in AD e non può essere eliminato.",
       "error_not_deletable": "Questo utente non può essere eliminato (solo studenti/docenti)."
-    }
+    },
+    "kind_user": "Utente"
   },
   "password_reset": {
     "button": "Reimposta password",
@@ -967,12 +968,12 @@
     }
   },
   "schools": {
-    "title": "Scuole",
-    "subtitle": "Gestisci gli edifici scolastici con indirizzo, contatto e posizione.",
-    "empty": "Ancora nessuna scuola.",
-    "create_button": "Aggiungi scuola",
-    "create_title": "Nuova scuola",
-    "edit_title": "Modifica scuola",
+    "title": "{{unit_plural}}",
+    "subtitle": "Registrare {{unit_plural}} con indirizzo, contatto e posizione.",
+    "empty": "Nessun {{unit_plural}} registrato.",
+    "create_button": "Aggiungi {{unit}}",
+    "create_title": "Aggiungi {{unit}}",
+    "edit_title": "Modifica {{unit}}",
     "form_hint": "Nome, sigla e sigla dell’ambito sono obbligatori; indirizzo e contatto sono facoltativi.",
     "save": "Salva",
     "edit_button": "Modifica",
@@ -1113,7 +1114,11 @@
     "role_lead": "Responsabile",
     "role_deputy": "Vice",
     "assign_manager": "Assegna",
-    "no_managers": "Nessun quadro attivo."
+    "no_managers": "Nessun quadro attivo.",
+    "no_units": "Non c'è ancora nessun {{unit}}. Crearne prima uno.",
+    "no_units_link": "Crea {{unit}}",
+    "select_unit": "— seleziona {{unit}} —",
+    "create_failed": "Creazione non riuscita. Controlla i dati e l'unità selezionata."
   },
   "rename": {
     "button": "Cambio nome",
@@ -1159,6 +1164,7 @@
     "error_invalid": "Il modello non è valido (errore Jinja o segnaposto sconosciuto).",
     "key_enrollment": "Iscrizione",
     "key_class_change": "Cambio classe",
-    "key_password_handout": "Consegna password"
+    "key_password_handout": "Consegna password",
+    "load_starter": "Carica modello predefinito"
   }
 }

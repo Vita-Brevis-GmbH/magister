@@ -1,9 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useArchiveDepartment, useCreateDepartment, useDepartments } from "@/api/hooks";
+import { useArchiveDepartment, useCreateDepartment, useDepartments, useSchools } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/departments")({
   component: DepartmentsPage,
@@ -11,17 +12,26 @@ export const Route = createFileRoute("/_app/departments")({
 
 function DepartmentsPage(): JSX.Element {
   const { t } = useTranslation();
+  const terms = useTerms();
   const q = useDepartments();
+  const schools = useSchools();
   const create = useCreateDepartment();
   const archive = useArchiveDepartment();
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
+  const [schoolId, setSchoolId] = useState<number | "">("");
+
+  const schoolList = useMemo(() => schools.data ?? [], [schools.data]);
+  // Pre-select the org unit when there is exactly one to choose from.
+  useEffect(() => {
+    if (schoolId === "" && schoolList.length === 1) setSchoolId(schoolList[0].id);
+  }, [schoolList, schoolId]);
 
   const submit = (e: FormEvent): void => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || schoolId === "") return;
     create.mutate(
-      { name: name.trim(), kuerzel: kuerzel.trim() || null },
+      { name: name.trim(), kuerzel: kuerzel.trim() || null, school_id: schoolId },
       {
         onSuccess: () => {
           setName("");
@@ -30,6 +40,8 @@ function DepartmentsPage(): JSX.Element {
       },
     );
   };
+
+  const noUnits = !schools.isLoading && schoolList.length === 0;
 
   return (
     <div className="space-y-6">
@@ -40,33 +52,69 @@ function DepartmentsPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{t("departments.intro")}</p>
       </header>
 
-      <form
-        onSubmit={submit}
-        className="flex flex-wrap items-end gap-3 rounded-md border bg-card px-4 py-3"
-      >
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">{t("departments.name")}</span>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("departments.name_placeholder")}
-            className="h-9 w-56 rounded-md border border-input bg-background px-3 text-sm"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t("departments.kuerzel")}
-          </span>
-          <input
-            value={kuerzel}
-            onChange={(e) => setKuerzel(e.target.value)}
-            className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
-          />
-        </label>
-        <Button type="submit" size="sm" disabled={create.isPending || !name.trim()}>
-          {t("departments.create")}
-        </Button>
-      </form>
+      {noUnits ? (
+        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm">
+          {t("departments.no_units", { unit: terms.unit })}{" "}
+          <Link to="/admin/schools" className="font-medium underline">
+            {t("departments.no_units_link", { unit: terms.unit })}
+          </Link>
+        </div>
+      ) : (
+        <form
+          onSubmit={submit}
+          className="flex flex-wrap items-end gap-3 rounded-md border bg-card px-4 py-3"
+        >
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">{terms.unit}</span>
+            <select
+              value={schoolId}
+              onChange={(e) => setSchoolId(e.target.value ? Number(e.target.value) : "")}
+              className="h-9 w-56 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              <option value="">{t("departments.select_unit", { unit: terms.unit })}</option>
+              {schoolList.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t("departments.name")}
+            </span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("departments.name_placeholder")}
+              className="h-9 w-56 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-muted-foreground">
+              {t("departments.kuerzel")}
+            </span>
+            <input
+              value={kuerzel}
+              onChange={(e) => setKuerzel(e.target.value)}
+              className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+            />
+          </label>
+          <Button
+            type="submit"
+            size="sm"
+            disabled={create.isPending || !name.trim() || schoolId === ""}
+          >
+            {t("departments.create")}
+          </Button>
+        </form>
+      )}
+
+      {create.isError ? (
+        <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {t("departments.create_failed")}
+        </p>
+      ) : null}
 
       {q.isError ? (
         <p className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive">

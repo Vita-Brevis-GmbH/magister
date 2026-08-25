@@ -366,7 +366,8 @@
       "impact_sessions": "Sessions actives",
       "error_still_in_ad": "L'utilisateur existe encore dans AD et ne peut pas être supprimé.",
       "error_not_deletable": "Cet utilisateur ne peut pas être supprimé (élèves/enseignants uniquement)."
-    }
+    },
+    "kind_user": "Utilisateur"
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",
@@ -967,12 +968,12 @@
     }
   },
   "schools": {
-    "title": "Écoles",
-    "subtitle": "Gérer les bâtiments scolaires avec adresse, contact et emplacement.",
-    "empty": "Aucune école pour l’instant.",
-    "create_button": "Ajouter une école",
-    "create_title": "Nouvelle école",
-    "edit_title": "Modifier l’école",
+    "title": "{{unit_plural}}",
+    "subtitle": "Enregistrer les {{unit_plural}} avec adresse, contact et emplacement.",
+    "empty": "Aucun {{unit_plural}} enregistré.",
+    "create_button": "Ajouter {{unit}}",
+    "create_title": "Ajouter {{unit}}",
+    "edit_title": "Modifier {{unit}}",
     "form_hint": "Le nom, le code court et le code de périmètre sont requis ; l’adresse et le contact sont facultatifs.",
     "save": "Enregistrer",
     "edit_button": "Modifier",
@@ -1113,7 +1114,11 @@
     "role_lead": "Responsable",
     "role_deputy": "Adjoint",
     "assign_manager": "Assigner",
-    "no_managers": "Aucun cadre actif."
+    "no_managers": "Aucun cadre actif.",
+    "no_units": "Il n'y a pas encore de {{unit}}. Veuillez d'abord en créer un.",
+    "no_units_link": "Créer un {{unit}}",
+    "select_unit": "— choisir {{unit}} —",
+    "create_failed": "Échec de la création. Vérifiez les saisies et l'unité sélectionnée."
   },
   "rename": {
     "button": "Changement de nom",
@@ -1159,6 +1164,7 @@
     "error_invalid": "Le modèle est invalide (erreur Jinja ou espace réservé inconnu).",
     "key_enrollment": "Admission",
     "key_class_change": "Changement de classe",
-    "key_password_handout": "Remise du mot de passe"
+    "key_password_handout": "Remise du mot de passe",
+    "load_starter": "Charger le modèle par défaut"
   }
 }
