@@ -68,7 +68,6 @@ export function Layout() {
   // school profile, the historical default); departments defaults hidden
   // because it only ships in the company profile.
   const hasClasses = enabledModules.data?.has("classes") ?? true;
-  const hasLetters = enabledModules.data?.has("letters") ?? true;
   const hasImports = enabledModules.data?.has("imports") ?? true;
   const hasReports = enabledModules.data?.has("reports") ?? true;
   const hasDevices = enabledModules.data?.has("devices") ?? true;
@@ -225,7 +224,7 @@ export function Layout() {
                         {t("nav.modules")}
                       </Link>
                     ) : null}
-                    {isAdmin && hasLetters ? (
+                    {isAdmin ? (
                       <Link
                         to="/admin/document-templates"
                         role="menuitem"

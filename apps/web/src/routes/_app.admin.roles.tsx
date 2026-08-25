@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/roles")({
   component: RolesPage,
@@ -52,6 +53,8 @@ function userLabel(a: {
 
 function RolesPage(): JSX.Element {
   const { t } = useTranslation();
+  const terms = useTerms();
+  const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const roles = useRoles();
 
   return (
@@ -82,7 +85,7 @@ function RolesPage(): JSX.Element {
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-4">{t("admin.roles.col_user")}</th>
                     <th className="py-2 pr-4">{t("admin.roles.col_role")}</th>
-                    <th className="py-2 pr-4">{t("admin.roles.col_school")}</th>
+                    <th className="py-2 pr-4">{t("admin.roles.col_school", unitVars)}</th>
                     <th className="py-2 pr-4">{t("admin.roles.col_granted_by")}</th>
                     <th className="py-2 pr-4" />
                   </tr>
@@ -293,6 +296,8 @@ function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
 
 function GrantCard(): JSX.Element {
   const { t } = useTranslation();
+  const terms = useTerms();
+  const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const schools = useSchools();
   const cfg = useRbacConfig();
   const grant = useGrantRole();
@@ -336,7 +341,7 @@ function GrantCard(): JSX.Element {
     <Card>
       <CardHeader>
         <CardTitle className="text-base">{t("admin.roles.grant_title")}</CardTitle>
-        <CardDescription>{t("admin.roles.grant_desc")}</CardDescription>
+        <CardDescription>{t("admin.roles.grant_desc", unitVars)}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-1">
@@ -409,7 +414,7 @@ function GrantCard(): JSX.Element {
             </select>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="role-school">{t("admin.roles.col_school")}</Label>
+            <Label htmlFor="role-school">{t("admin.roles.col_school", unitVars)}</Label>
             <select
               id="role-school"
               className={selectClasses}
@@ -418,7 +423,9 @@ function GrantCard(): JSX.Element {
               onChange={(e) => setSchoolId(e.target.value === "" ? "" : Number(e.target.value))}
             >
               <option value="">
-                {needsSchool ? t("admin.roles.school_placeholder") : t("admin.roles.school_all")}
+                {needsSchool
+                  ? t("admin.roles.school_placeholder", unitVars)
+                  : t("admin.roles.school_all", unitVars)}
               </option>
               {(schools.data ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
