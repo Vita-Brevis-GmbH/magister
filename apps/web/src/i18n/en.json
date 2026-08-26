@@ -669,7 +669,7 @@
   },
   "dashboard": {
     "title": "Dashboard",
-    "intro": "Current figures for your school.",
+    "intro": "Current figures for your {{unit}}.",
     "stat_active_classes": "Active classes",
     "stat_archived_classes": "{{count}} archived",
     "stat_teachers": "Teachers",
@@ -755,7 +755,7 @@
   },
   "reports": {
     "title": "Reports",
-    "intro": "Aggregated metrics — read-only, school-scoped.",
+    "intro": "Aggregated metrics — read-only, scoped to your {{unit_plural}}.",
     "students_title": "Students per class",
     "students_total": "Total: {{students}} students across {{classes}} classes",
     "col_class": "Class",
@@ -916,13 +916,13 @@
     "assignment_type": "Assignment",
     "select_person": "Person",
     "select_class": "Class",
-    "select_school": "School",
+    "select_school": "{{unit}}",
     "select_placeholder": "Please select …",
     "person_search_placeholder": "Search by name or user …",
     "free": "Free / Available",
     "assigned_person": "Person: {{name}}",
     "assigned_class": "Class: {{name}}",
-    "assigned_school": "School: {{name}}",
+    "assigned_school": "{{unit}}: {{name}}",
     "delete_title": "Delete device",
     "delete_confirm": "Really remove device “{{name}}” from the inventory?",
     "delete_confirm_button": "Delete",
@@ -948,10 +948,10 @@
       "free": "Free / Available",
       "person": "Person",
       "class": "Class",
-      "school": "School"
+      "school": "{{unit}}"
     },
     "error": {
-      "out_of_scope": "Assignment outside your school scope is not allowed.",
+      "out_of_scope": "Assignment outside your scope is not allowed.",
       "assignment_invalid": "Invalid assignment target."
     },
     "person_selected": "selected",
@@ -972,7 +972,7 @@
     "history_type": {
       "person": "Person",
       "class": "Class",
-      "school": "School"
+      "school": "{{unit}}"
     },
     "detail": {
       "not_found": "Device not found.",

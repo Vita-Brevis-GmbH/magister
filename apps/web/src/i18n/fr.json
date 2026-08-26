@@ -672,7 +672,7 @@
   },
   "dashboard": {
     "title": "Tableau de bord",
-    "intro": "Chiffres actuels pour votre école.",
+    "intro": "Chiffres actuels pour votre {{unit}}.",
     "stat_active_classes": "Classes actives",
     "stat_archived_classes": "{{count}} archivées",
     "stat_teachers": "Enseignant·e·s",
@@ -758,7 +758,7 @@
   },
   "reports": {
     "title": "Rapports",
-    "intro": "Indicateurs agrégés — lecture seule, limités à votre périmètre.",
+    "intro": "Indicateurs agrégés — lecture seule, limités à vos {{unit_plural}}.",
     "students_title": "Élèves par classe",
     "students_total": "Total : {{students}} élèves dans {{classes}} classes",
     "col_class": "Classe",
@@ -919,13 +919,13 @@
     "assignment_type": "Attribution",
     "select_person": "Personne",
     "select_class": "Classe",
-    "select_school": "École",
+    "select_school": "{{unit}}",
     "select_placeholder": "Veuillez choisir …",
     "person_search_placeholder": "Rechercher par nom ou utilisateur …",
     "free": "Libre / Disponible",
     "assigned_person": "Personne : {{name}}",
     "assigned_class": "Classe : {{name}}",
-    "assigned_school": "École : {{name}}",
+    "assigned_school": "{{unit}} : {{name}}",
     "delete_title": "Supprimer l'appareil",
     "delete_confirm": "Vraiment retirer l'appareil « {{name}} » de l'inventaire ?",
     "delete_confirm_button": "Supprimer",
@@ -951,10 +951,10 @@
       "free": "Libre / Disponible",
       "person": "Personne",
       "class": "Classe",
-      "school": "École"
+      "school": "{{unit}}"
     },
     "error": {
-      "out_of_scope": "L'attribution hors de votre périmètre scolaire n'est pas autorisée.",
+      "out_of_scope": "L'attribution hors de votre périmètre n'est pas autorisée.",
       "assignment_invalid": "Cible d'attribution invalide."
     },
     "person_selected": "sélectionné",
@@ -975,7 +975,7 @@
     "history_type": {
       "person": "Personne",
       "class": "Classe",
-      "school": "École"
+      "school": "{{unit}}"
     },
     "detail": {
       "not_found": "Appareil introuvable.",

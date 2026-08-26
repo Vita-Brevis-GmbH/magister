@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { gradeLabel, gradeRangeLabel } from "@/lib/grade";
+import { useTerms } from "@/lib/useTerms";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_app/admin/reports")({
@@ -41,6 +42,7 @@ function ErrorRow({ columns }: { columns: number }): JSX.Element {
 
 function ReportsPage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   // M6 #8: the company profile reports over Abteilungen/Kader instead of
   // Klassen/Lehrpersonen. Only the matching sections mount, so a school
   // instance never issues the department queries (and vice-versa).
@@ -49,7 +51,7 @@ function ReportsPage(): JSX.Element {
     <div className="space-y-8">
       <header>
         <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("reports.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("reports.intro")}</p>
+        <p className="text-sm text-muted-foreground">{tt("reports.intro")}</p>
       </header>
 
       {isCompany ? (

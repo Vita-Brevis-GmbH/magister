@@ -10,11 +10,13 @@ import {
   useDeleteDevice,
   useDeviceHistory,
   useDevices,
+  useEnabledModules,
   useSchools,
   useUpdateDevice,
   useUser,
   useUsers,
 } from "@/api/hooks";
+import { useTerms } from "@/lib/useTerms";
 import type {
   DeviceAssignmentOut,
   DeviceAssignmentType,
@@ -69,6 +71,7 @@ function deviceErrorKey(err: unknown, t: TFn): string {
 
 function DevicesPage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const childMatches = useChildMatches();
   const q = useDevices();
   const schools = useSchools();
@@ -95,7 +98,7 @@ function DevicesPage(): JSX.Element {
       return t("devices.assigned_class", { name: className(d.class_id) });
     }
     if (d.school_id !== null) {
-      return t("devices.assigned_school", { name: schoolName(d.school_id) });
+      return tt("devices.assigned_school", { name: schoolName(d.school_id) });
     }
     return t("devices.free");
   }
@@ -478,6 +481,11 @@ export function AssignDeviceModal({
   onClose: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
+  // The "class" assignment target is a school-edition concept; hide it when the
+  // classes module is not enabled (company edition) so devices never offer a
+  // Klassen-Zuweisung there.
+  const hasClasses = useEnabledModules().data?.has("classes") ?? true;
   const [type, setType] = useState<DeviceAssignmentType>("free");
   const [personGuid, setPersonGuid] = useState("");
   const [personLabel, setPersonLabel] = useState("");
@@ -566,8 +574,8 @@ export function AssignDeviceModal({
             >
               <option value="free">{t("devices.assignment.free")}</option>
               <option value="person">{t("devices.assignment.person")}</option>
-              <option value="class">{t("devices.assignment.class")}</option>
-              <option value="school">{t("devices.assignment.school")}</option>
+              {hasClasses ? <option value="class">{t("devices.assignment.class")}</option> : null}
+              <option value="school">{tt("devices.assignment.school")}</option>
             </select>
           </div>
 
@@ -692,7 +700,7 @@ export function AssignDeviceModal({
 
           {type === "school" ? (
             <div className="space-y-1">
-              <Label htmlFor="assign-school">{t("devices.select_school")}</Label>
+              <Label htmlFor="assign-school">{tt("devices.select_school")}</Label>
               <select
                 id="assign-school"
                 value={schoolId}
@@ -789,13 +797,14 @@ function DeviceHistoryModal({
   onClose: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const fmt = useFormatters();
   const history = useDeviceHistory(target?.id ?? null);
 
   const assignmentTypeLabel = (type: DeviceAssignmentOut["assignment_type"]): string => {
     if (type === "person") return t("devices.history_type.person");
     if (type === "class") return t("devices.history_type.class");
-    return t("devices.history_type.school");
+    return tt("devices.history_type.school");
   };
 
   return (

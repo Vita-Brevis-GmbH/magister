@@ -672,7 +672,7 @@
   },
   "dashboard": {
     "title": "Panoramica",
-    "intro": "Dati attuali della tua scuola.",
+    "intro": "Dati attuali della tua {{unit}}.",
     "stat_active_classes": "Classi attive",
     "stat_archived_classes": "{{count}} archiviate",
     "stat_teachers": "Docenti",
@@ -758,7 +758,7 @@
   },
   "reports": {
     "title": "Rapporti",
-    "intro": "Indicatori aggregati — sola lettura, limitati alle proprie scuole.",
+    "intro": "Indicatori aggregati — sola lettura, limitati ai tuoi {{unit_plural}}.",
     "students_title": "Alunni/e per classe",
     "students_total": "Totale: {{students}} alunni/e in {{classes}} classi",
     "col_class": "Classe",
@@ -919,13 +919,13 @@
     "assignment_type": "Assegnazione",
     "select_person": "Persona",
     "select_class": "Classe",
-    "select_school": "Scuola",
+    "select_school": "{{unit}}",
     "select_placeholder": "Selezionare …",
     "person_search_placeholder": "Cerca per nome o utente …",
     "free": "Libero / Disponibile",
     "assigned_person": "Persona: {{name}}",
     "assigned_class": "Classe: {{name}}",
-    "assigned_school": "Scuola: {{name}}",
+    "assigned_school": "{{unit}}: {{name}}",
     "delete_title": "Elimina dispositivo",
     "delete_confirm": "Rimuovere davvero il dispositivo “{{name}}” dall'inventario?",
     "delete_confirm_button": "Elimina",
@@ -951,10 +951,10 @@
       "free": "Libero / Disponibile",
       "person": "Persona",
       "class": "Classe",
-      "school": "Scuola"
+      "school": "{{unit}}"
     },
     "error": {
-      "out_of_scope": "Assegnazione fuori dal tuo ambito scolastico non consentita.",
+      "out_of_scope": "Assegnazione fuori dal tuo ambito non consentita.",
       "assignment_invalid": "Destinazione di assegnazione non valida."
     },
     "person_selected": "selezionato",
@@ -975,7 +975,7 @@
     "history_type": {
       "person": "Persona",
       "class": "Classe",
-      "school": "Scuola"
+      "school": "{{unit}}"
     },
     "detail": {
       "not_found": "Dispositivo non trovato.",

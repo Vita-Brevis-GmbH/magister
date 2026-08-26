@@ -669,7 +669,7 @@
   },
   "dashboard": {
     "title": "Übersicht",
-    "intro": "Aktuelle Kennzahlen für deine Schule.",
+    "intro": "Aktuelle Kennzahlen für deine {{unit}}.",
     "stat_active_classes": "Aktive Klassen",
     "stat_archived_classes": "{{count}} archiviert",
     "stat_teachers": "Lehrpersonen",
@@ -755,7 +755,7 @@
   },
   "reports": {
     "title": "Reports",
-    "intro": "Aggregierte Kennzahlen — read-only, schulgefiltert.",
+    "intro": "Aggregierte Kennzahlen — read-only, auf {{unit_plural}} gefiltert.",
     "students_title": "Schüler:innen pro Klasse",
     "students_total": "Total: {{students}} Schüler:innen in {{classes}} Klassen",
     "col_class": "Klasse",
@@ -916,13 +916,13 @@
     "assignment_type": "Zuweisung",
     "select_person": "Person",
     "select_class": "Klasse",
-    "select_school": "Schule",
+    "select_school": "{{unit}}",
     "select_placeholder": "Bitte auswählen …",
     "person_search_placeholder": "Nach Name oder Benutzer suchen …",
     "free": "Frei / Verfügbar",
     "assigned_person": "Person: {{name}}",
     "assigned_class": "Klasse: {{name}}",
-    "assigned_school": "Schule: {{name}}",
+    "assigned_school": "{{unit}}: {{name}}",
     "delete_title": "Gerät löschen",
     "delete_confirm": "Gerät „{{name}}“ wirklich aus dem Inventar entfernen?",
     "delete_confirm_button": "Löschen",
@@ -948,10 +948,10 @@
       "free": "Frei / Verfügbar",
       "person": "Person",
       "class": "Klasse",
-      "school": "Schule"
+      "school": "{{unit}}"
     },
     "error": {
-      "out_of_scope": "Zuweisung ausserhalb Ihres Schul-Bereichs nicht erlaubt.",
+      "out_of_scope": "Zuweisung ausserhalb Ihres Bereichs nicht erlaubt.",
       "assignment_invalid": "Ungültiges Zuweisungsziel."
     },
     "person_selected": "ausgewählt",
@@ -972,7 +972,7 @@
     "history_type": {
       "person": "Person",
       "class": "Klasse",
-      "school": "Schule"
+      "school": "{{unit}}"
     },
     "detail": {
       "not_found": "Gerät nicht gefunden.",

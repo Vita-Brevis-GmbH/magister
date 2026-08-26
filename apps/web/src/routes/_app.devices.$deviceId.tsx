@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useClasses, useDevice, useDeviceHistory, useSchools } from "@/api/hooks";
 import type { DeviceAssignmentOut, DeviceOut } from "@/api/types";
 import { AssignDeviceModal, DeleteDeviceDialog, EditDeviceModal } from "@/routes/_app.devices";
+import { useTerms } from "@/lib/useTerms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -33,6 +34,7 @@ function InfoRow({ label, children }: { label: string; children: React.ReactNode
 
 function DeviceDetailPage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const navigate = useNavigate();
   const { deviceId } = Route.useParams();
   const id = Number(deviceId);
@@ -81,14 +83,14 @@ function DeviceDetailPage(): JSX.Element {
     }
     if (d.class_id !== null) return t("devices.assigned_class", { name: className(d.class_id) });
     if (d.school_id !== null)
-      return t("devices.assigned_school", { name: schoolName(d.school_id) });
+      return tt("devices.assigned_school", { name: schoolName(d.school_id) });
     return t("devices.free");
   };
 
   const assignmentTypeLabel = (type: DeviceAssignmentOut["assignment_type"]): string => {
     if (type === "person") return t("devices.history_type.person");
     if (type === "class") return t("devices.history_type.class");
-    return t("devices.history_type.school");
+    return tt("devices.history_type.school");
   };
 
   return (

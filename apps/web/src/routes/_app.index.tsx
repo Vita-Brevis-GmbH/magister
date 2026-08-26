@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { gradeRangeLabel } from "@/lib/grade";
+import { useTerms } from "@/lib/useTerms";
 import { displayLabel } from "@/lib/userDisplay";
 
 export const Route = createFileRoute("/_app/")({
@@ -38,6 +39,7 @@ function DashboardPage(): JSX.Element {
 
 function SchulleitungDashboard(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const classes = useClasses();
   const allStudents = useUsers({ kind: "student", limit: 1 });
   const allTeachers = useUsers({ kind: "teacher", limit: 1 });
@@ -50,7 +52,7 @@ function SchulleitungDashboard(): JSX.Element {
     <div className="space-y-8">
       <header>
         <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("dashboard.intro")}</p>
+        <p className="text-sm text-muted-foreground">{tt("dashboard.intro")}</p>
       </header>
 
       {/* Summary cards */}
