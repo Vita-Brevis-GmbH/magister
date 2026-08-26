@@ -69,6 +69,36 @@ function deviceErrorKey(err: unknown, t: TFn): string {
   return t("errors.generic");
 }
 
+/** A device carries an assignment when it is bound to a person, class or unit. */
+function isAssigned(d: DeviceOut): boolean {
+  return d.assigned_person_guid !== null || d.class_id !== null || d.school_id !== null;
+}
+
+/** Clears a device's assignment (sets it back to free). Renders nothing when
+ *  the device is already unassigned. */
+export function UnassignButton({
+  device,
+  variant = "ghost",
+}: {
+  device: DeviceOut;
+  variant?: "ghost" | "outline";
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  const unassign = useAssignDevice(device.id);
+  if (!isAssigned(device)) return null;
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant={variant}
+      disabled={unassign.isPending}
+      onClick={() => unassign.mutate({ assignment_type: "free" })}
+    >
+      {t("devices.unassign_button")}
+    </Button>
+  );
+}
+
 function DevicesPage(): JSX.Element {
   const { t } = useTranslation();
   const { tt } = useTerms();
@@ -192,6 +222,7 @@ function DevicesPage(): JSX.Element {
                   >
                     {t("devices.assign_button")}
                   </Button>
+                  <UnassignButton device={d} />
                   <Button type="button" size="sm" variant="ghost" onClick={() => setEditTarget(d)}>
                     {t("devices.edit_button")}
                   </Button>

@@ -856,7 +856,15 @@ class AdClient:
                 logger.warning("find_user_dn: unparseable objectGUID %r", ad_object_guid)
                 return None
             search_filter = "(objectGUID=" + "".join(f"\\{b:02x}" for b in guid_bytes) + ")"
-            base = self._settings.ad_users_search_base or ""
+            configured = self._settings.ad_users_search_base or ""
+            # objectGUID is unique domain-wide, so we search from the DOMAIN ROOT
+            # (the DC= tail of the configured user-search base) rather than the
+            # sync base itself. This locates a user provisioned into a custom OU
+            # OUTSIDE the sync subtree — e.g. a company OU (ad_ou_company_users) —
+            # so name changes and attribute edits find the account instead of
+            # failing with "user not in AD".
+            dcs = [p.strip() for p in configured.split(",") if p.strip().lower().startswith("dc=")]
+            base = ",".join(dcs) or configured
             result, entries = self._single_search(
                 conn,
                 base=base,
@@ -874,7 +882,7 @@ class AdClient:
             if not entries:
                 logger.warning(
                     "find_user_dn: no AD object matched objectGUID under base=%r "
-                    "(user-search-base may not cover this user's OU)",
+                    "(domain root derived from ad_users_search_base)",
                     base,
                 )
                 return None

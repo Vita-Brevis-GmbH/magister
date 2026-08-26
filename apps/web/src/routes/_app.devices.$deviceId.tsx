@@ -4,7 +4,12 @@ import { useTranslation } from "react-i18next";
 
 import { useClasses, useDevice, useDeviceHistory, useSchools } from "@/api/hooks";
 import type { DeviceAssignmentOut, DeviceOut } from "@/api/types";
-import { AssignDeviceModal, DeleteDeviceDialog, EditDeviceModal } from "@/routes/_app.devices";
+import {
+  AssignDeviceModal,
+  DeleteDeviceDialog,
+  EditDeviceModal,
+  UnassignButton,
+} from "@/routes/_app.devices";
 import { useTerms } from "@/lib/useTerms";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -151,9 +156,12 @@ function DeviceDetailPage(): JSX.Element {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
           <CardTitle className="text-base">{t("devices.detail.assignment_title")}</CardTitle>
-          <Button type="button" size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
-            {t("devices.assign_button")}
-          </Button>
+          <div className="flex gap-2">
+            <UnassignButton device={device} variant="outline" />
+            <Button type="button" size="sm" variant="outline" onClick={() => setAssignOpen(true)}>
+              {t("devices.assign_button")}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <p className="text-sm">

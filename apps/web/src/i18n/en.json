@@ -345,6 +345,7 @@
       "assign_label": "Assign a free device",
       "assign_placeholder": "— choose device —",
       "assign_button": "Assign",
+      "unassign_button": "Clear assignment",
       "none_free": "No free devices available.",
       "error": "Device assignment failed."
     },
@@ -595,6 +596,7 @@
       "surname": "Last name",
       "sam": "Sign-in name (sAMAccountName)",
       "upn": "UPN (sign-in email)",
+      "upn_domain": "UPN domain",
       "mail": "Email (optional)",
       "unit": "Target {{unit}}",
       "unit_placeholder": "Select {{unit}} …",

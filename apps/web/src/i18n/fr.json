@@ -348,6 +348,7 @@
       "assign_label": "Attribuer un appareil libre",
       "assign_placeholder": "— choisir un appareil —",
       "assign_button": "Attribuer",
+      "unassign_button": "Retirer l’attribution",
       "none_free": "Aucun appareil libre disponible.",
       "error": "Échec de l'attribution."
     },
@@ -598,6 +599,7 @@
       "surname": "Nom",
       "sam": "Nom de connexion (sAMAccountName)",
       "upn": "UPN (e-mail de connexion)",
+      "upn_domain": "Domaine UPN",
       "mail": "E-mail (facultatif)",
       "unit": "{{unit}} cible",
       "unit_placeholder": "Choisir {{unit}} …",

@@ -348,6 +348,7 @@
       "assign_label": "Assegna dispositivo libero",
       "assign_placeholder": "— scegli dispositivo —",
       "assign_button": "Assegna",
+      "unassign_button": "Rimuovi assegnazione",
       "none_free": "Nessun dispositivo libero disponibile.",
       "error": "Assegnazione non riuscita."
     },
@@ -598,6 +599,7 @@
       "surname": "Cognome",
       "sam": "Nome di accesso (sAMAccountName)",
       "upn": "UPN (email di accesso)",
+      "upn_domain": "Dominio UPN",
       "mail": "Email (facoltativa)",
       "unit": "{{unit}} di destinazione",
       "unit_placeholder": "Seleziona {{unit}} …",

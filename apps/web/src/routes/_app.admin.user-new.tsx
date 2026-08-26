@@ -3,7 +3,13 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "@/api/client";
-import { useClasses, useCreateAdUser, useInstanceProfile, useSchools } from "@/api/hooks";
+import {
+  useClasses,
+  useCreateAdUser,
+  useInstanceProfile,
+  useMailDomains,
+  useSchools,
+} from "@/api/hooks";
 import type { AdUserOuKey } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +37,8 @@ const INITIAL = {
   display_name: "",
   sam_account_name: "",
   user_principal_name: "",
+  upn_local: "",
+  upn_domain: "",
   mail: "",
   school_id: "",
   ou_key: "teacher" as AdUserOuKey,
@@ -56,6 +64,12 @@ function NewUserPage(): JSX.Element {
   const classes = useClasses();
   const schools = useSchools();
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
+  // Configured UPN/mail domains (app_settings.mail_domains): when present, the
+  // UPN is composed as localpart + a domain picked from a dropdown; otherwise
+  // the admin types the full UPN (fallback for instances with no domains set).
+  const mailDomainsQ = useMailDomains();
+  const domains = mailDomainsQ.data?.domains ?? [];
+  const useDomainPicker = domains.length > 0;
 
   const [form, setForm] = useState(INITIAL);
   const [password, setPassword] = useState<string | null>(null);
@@ -77,6 +91,19 @@ function NewUserPage(): JSX.Element {
       );
     }
   }, [schools.data]);
+  // Default the UPN domain to the first configured one.
+  useEffect(() => {
+    const list = mailDomainsQ.data?.domains ?? [];
+    if (list.length > 0) {
+      setForm((prev) => (prev.upn_domain === "" ? { ...prev, upn_domain: list[0] } : prev));
+    }
+  }, [mailDomainsQ.data]);
+
+  // The effective UPN: composed from localpart + picked domain, or the raw
+  // free-text field when no domains are configured.
+  const composedUpn = useDomainPicker
+    ? `${form.upn_local.trim()}@${form.upn_domain}`
+    : form.user_principal_name.trim();
 
   function field(key: keyof typeof form) {
     return {
@@ -89,6 +116,7 @@ function NewUserPage(): JSX.Element {
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
     if (!form.school_id) return;
+    if (useDomainPicker && !form.upn_local.trim()) return;
     setPassword(null);
     setClassWarn(false);
     const grade = form.jahrgangsstufe.trim();
@@ -98,7 +126,7 @@ function NewUserPage(): JSX.Element {
         surname: form.surname,
         display_name: form.display_name.trim() || null,
         sam_account_name: form.sam_account_name,
-        user_principal_name: form.user_principal_name,
+        user_principal_name: composedUpn,
         mail: form.mail || null,
         ou_key: ouKey,
         school_id: Number(form.school_id),
@@ -210,13 +238,39 @@ function NewUserPage(): JSX.Element {
             </div>
             <div className="space-y-1">
               <Label htmlFor="upn">{t("admin.user_new.upn")}</Label>
-              <Input
-                id="upn"
-                required
-                autoComplete="off"
-                placeholder="vorname.nachname@schule.ch"
-                {...field("user_principal_name")}
-              />
+              {useDomainPicker ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="upn"
+                    required
+                    autoComplete="off"
+                    placeholder="vorname.nachname"
+                    className="flex-1"
+                    {...field("upn_local")}
+                  />
+                  <span className="text-sm text-muted-foreground">@</span>
+                  <select
+                    aria-label={t("admin.user_new.upn_domain")}
+                    className={`${selectClasses} w-auto`}
+                    value={form.upn_domain}
+                    onChange={(e) => setForm((prev) => ({ ...prev, upn_domain: e.target.value }))}
+                  >
+                    {domains.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <Input
+                  id="upn"
+                  required
+                  autoComplete="off"
+                  placeholder="vorname.nachname@schule.ch"
+                  {...field("user_principal_name")}
+                />
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="mail">{t("admin.user_new.mail")}</Label>
@@ -316,7 +370,12 @@ function NewUserPage(): JSX.Element {
               </label>
             </div>
 
-            <Button type="submit" disabled={create.isPending || !form.school_id}>
+            <Button
+              type="submit"
+              disabled={
+                create.isPending || !form.school_id || (useDomainPicker && !form.upn_local.trim())
+              }
+            >
               {create.isPending ? t("common.loading") : t("admin.user_new.submit")}
             </Button>
           </form>

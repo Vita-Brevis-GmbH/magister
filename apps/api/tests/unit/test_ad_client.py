@@ -78,6 +78,28 @@ class TestFindUserDnSafeSync:
 
         assert await client.find_user_dn(guid) is None
 
+    @pytest.mark.asyncio
+    async def test_searches_from_domain_root_not_sync_base(self, monkeypatch: Any) -> None:
+        # A user in a custom OU (e.g. a company OU) outside the narrower sync
+        # base must still be found: the search runs from the domain root (DC=…).
+        guid = "12345678-90ab-cdef-1234-567890abcdef"
+        dn = "CN=Mara,OU=Company,DC=schule,DC=local"
+        captured: dict[str, Any] = {}
+
+        class _RecordingConn(_FakeSafeSyncConn):
+            def search(
+                self, **kwargs: Any
+            ) -> tuple[bool, dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
+                captured["base"] = kwargs.get("search_base")
+                return super().search(**kwargs)
+
+        entries = [{"type": "searchResEntry", "dn": dn, "attributes": {}}]
+        client = AdClient(Settings(ad_users_search_base="OU=Users,DC=schule,DC=local"))
+        monkeypatch.setattr(client, "_acquire_connection", lambda: (_RecordingConn(entries), False))
+
+        assert await client.find_user_dn(guid) == dn
+        assert captured["base"] == "DC=schule,DC=local"
+
 
 class TestDecodeObjectGuid:
     def test_canonical_string_passthrough(self) -> None:

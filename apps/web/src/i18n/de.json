@@ -345,6 +345,7 @@
       "assign_label": "Freies Gerät zuweisen",
       "assign_placeholder": "— Gerät wählen —",
       "assign_button": "Zuweisen",
+      "unassign_button": "Zuweisung aufheben",
       "none_free": "Keine freien Geräte verfügbar.",
       "error": "Geräte-Zuweisung fehlgeschlagen."
     },
@@ -595,6 +596,7 @@
       "surname": "Nachname",
       "sam": "Anmeldename (sAMAccountName)",
       "upn": "UPN (Anmelde-E-Mail)",
+      "upn_domain": "UPN-Domain",
       "mail": "E-Mail (optional)",
       "unit": "Ziel-{{unit}}",
       "unit_placeholder": "{{unit}} wählen …",
