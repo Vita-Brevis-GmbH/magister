@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFormatters } from "@/lib/useFormatters";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/imports")({
   component: ImportsPage,
@@ -135,6 +136,7 @@ function NewImportWizard({
   onStaged: (jobId: number) => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
   const kinds = isCompany ? COMPANY_KINDS : SCHOOL_KINDS;
   const [kind, setKind] = useState<ImportKind>(kinds[0]);
@@ -212,7 +214,7 @@ function NewImportWizard({
         {mustPickSchool && (
           <div className="space-y-1">
             <label htmlFor="import-school" className="text-sm font-medium">
-              {t("imports.school_label")}
+              {tt("imports.school_label")}
             </label>
             <select
               id="import-school"
@@ -220,14 +222,14 @@ function NewImportWizard({
               onChange={(e) => setSchoolId(e.target.value)}
               className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
             >
-              <option value="">{t("imports.school_placeholder")}</option>
+              <option value="">{tt("imports.school_placeholder")}</option>
               {(schools.data ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.kuerzel})
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">{t("imports.school_hint")}</p>
+            <p className="text-xs text-muted-foreground">{tt("imports.school_hint")}</p>
           </div>
         )}
 
@@ -249,7 +251,7 @@ function NewImportWizard({
             role="alert"
             className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
-            {stageErrorMessage(stage.error, t)}
+            {stageErrorMessage(stage.error, tt)}
           </div>
         )}
 

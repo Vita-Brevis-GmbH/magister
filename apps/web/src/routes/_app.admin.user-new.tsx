@@ -1,20 +1,26 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "@/api/client";
-import { useClasses, useCreateAdUser } from "@/api/hooks";
+import { useClasses, useCreateAdUser, useInstanceProfile, useSchools } from "@/api/hooks";
 import type { AdUserOuKey } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/user-new")({
   component: NewUserPage,
 });
 
-const OU_KEYS: AdUserOuKey[] = ["teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3"];
+const SCHOOL_OU_KEYS: AdUserOuKey[] = [
+  "teacher",
+  "student_zyklus1",
+  "student_zyklus2",
+  "student_zyklus3",
+];
 
 const selectClasses =
   "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
@@ -26,6 +32,7 @@ const INITIAL = {
   sam_account_name: "",
   user_principal_name: "",
   mail: "",
+  school_id: "",
   ou_key: "teacher" as AdUserOuKey,
   jahrgangsstufe: "",
   class_id: "",
@@ -43,15 +50,33 @@ function createErrorKey(err: ApiError): string {
 
 function NewUserPage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const navigate = useNavigate();
   const create = useCreateAdUser();
   const classes = useClasses();
+  const schools = useSchools();
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
 
   const [form, setForm] = useState(INITIAL);
   const [password, setPassword] = useState<string | null>(null);
   const [classWarn, setClassWarn] = useState(false);
 
-  const isStudent = form.ou_key !== "teacher";
+  // Company provisions a single "company" category into the org unit's company
+  // OU; school offers teacher + student Zyklen. Students carry a grade + class.
+  const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
+  const ouKey: AdUserOuKey = isCompany ? "company" : form.ou_key;
+  const isStudent = !isCompany && form.ou_key !== "teacher";
+
+  const schoolList = schools.data ?? [];
+  // Pre-select the target org unit when there is exactly one to choose from.
+  useEffect(() => {
+    const list = schools.data ?? [];
+    if (list.length === 1) {
+      setForm((prev) =>
+        prev.school_id === "" ? { ...prev, school_id: String(list[0].id) } : prev,
+      );
+    }
+  }, [schools.data]);
 
   function field(key: keyof typeof form) {
     return {
@@ -63,6 +88,7 @@ function NewUserPage(): JSX.Element {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
+    if (!form.school_id) return;
     setPassword(null);
     setClassWarn(false);
     const grade = form.jahrgangsstufe.trim();
@@ -74,7 +100,8 @@ function NewUserPage(): JSX.Element {
         sam_account_name: form.sam_account_name,
         user_principal_name: form.user_principal_name,
         mail: form.mail || null,
-        ou_key: form.ou_key,
+        ou_key: ouKey,
+        school_id: Number(form.school_id),
         force_change: form.force_change,
         cannot_change_password: form.cannot_change_password,
         password_never_expires: form.password_never_expires,
@@ -196,18 +223,34 @@ function NewUserPage(): JSX.Element {
               <Input id="mail" type="email" autoComplete="off" {...field("mail")} />
             </div>
             <div className="space-y-1">
+              <Label htmlFor="unit">{tt("admin.user_new.unit")}</Label>
+              <select
+                id="unit"
+                className={selectClasses}
+                value={form.school_id}
+                onChange={(e) => setForm((prev) => ({ ...prev, school_id: e.target.value }))}
+              >
+                <option value="">{tt("admin.user_new.unit_placeholder")}</option>
+                {schoolList.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="ou">{t("admin.user_new.ou")}</Label>
               <select
                 id="ou"
                 className={selectClasses}
-                value={form.ou_key}
+                value={ouKey}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, ou_key: e.target.value as AdUserOuKey }))
                 }
               >
-                {OU_KEYS.map((k) => (
+                {ouKeys.map((k) => (
                   <option key={k} value={k}>
-                    {t(`admin.user_new.ou_${k}`)}
+                    {tt(`admin.user_new.ou_${k}`)}
                   </option>
                 ))}
               </select>
@@ -273,7 +316,7 @@ function NewUserPage(): JSX.Element {
               </label>
             </div>
 
-            <Button type="submit" disabled={create.isPending}>
+            <Button type="submit" disabled={create.isPending || !form.school_id}>
               {create.isPending ? t("common.loading") : t("admin.user_new.submit")}
             </Button>
           </form>

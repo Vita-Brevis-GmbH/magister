@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ApiError } from "@/api/client";
 import { useAdminModules, useUpdateModules } from "@/api/hooks";
 import type { AdminModuleOut, AdminModulesOut, ModuleSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,13 @@ export function ModulesPage(): JSX.Element {
   const [pendingProfile, setPendingProfile] = useState<string | null>(null);
 
   const applyModule = (patch: ModuleSettingsUpdate): void => update.mutate(patch);
+
+  // A module can only be enabled once every module it depends on is already on
+  // (mirrors the backend, which 409s otherwise). We use this to disable the
+  // "turn on" checkbox for a module with an unmet dependency — e.g. Briefe
+  // needs Klassen, so it cannot be switched on in the company edition.
+  const enabledIds = new Set((q.data?.modules ?? []).filter((m) => m.enabled).map((m) => m.id));
+  const depsMet = (m: AdminModuleOut): boolean => m.depends_on.every((d) => enabledIds.has(d));
 
   const confirmSwitch = (): void => {
     if (!pendingProfile) return;
@@ -100,7 +108,11 @@ export function ModulesPage(): JSX.Element {
                       {t(`modules.mod_${m.id}`, { defaultValue: m.id })}
                     </div>
                     {m.depends_on.length > 0 ? (
-                      <div className="text-xs text-muted-foreground">
+                      <div
+                        className={
+                          depsMet(m) ? "text-xs text-muted-foreground" : "text-xs text-amber-600"
+                        }
+                      >
                         {t("modules.requires", { deps: m.depends_on.join(", ") })}
                       </div>
                     ) : null}
@@ -110,7 +122,7 @@ export function ModulesPage(): JSX.Element {
                       <input
                         type="checkbox"
                         checked={m.enabled}
-                        disabled={update.isPending}
+                        disabled={update.isPending || (!m.enabled && !depsMet(m))}
                         onChange={(e) =>
                           applyModule({ module_overrides: { [m.id]: e.target.checked } })
                         }
@@ -128,7 +140,11 @@ export function ModulesPage(): JSX.Element {
           </section>
 
           {update.isError && pendingProfile === null ? (
-            <p className="text-sm text-destructive">{t("modules.save_error")}</p>
+            <p className="text-sm text-destructive">
+              {update.error instanceof ApiError && update.error.code.startsWith("dependency:")
+                ? t("modules.err_dependency")
+                : t("modules.save_error")}
+            </p>
           ) : null}
 
           {pendingProfile !== null ? (

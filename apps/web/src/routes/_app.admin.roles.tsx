@@ -198,29 +198,39 @@ function RightsMatrix(): JSX.Element {
   );
 }
 
+/** machine-key slug from a display name: lowercase, ascii, _-separated. */
+function slugifyRoleKey(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32);
+}
+
 function CreateRoleForm(): JSX.Element {
   const { t } = useTranslation();
   const create = useCreateRole();
   const [key, setKey] = useState("");
   const [name, setName] = useState("");
+  // The technical key is auto-derived from the name until the admin edits it
+  // by hand, so simply typing a name is enough to enable "Rolle anlegen".
+  const [keyTouched, setKeyTouched] = useState(false);
+  const effectiveKey = keyTouched ? key : slugifyRoleKey(name);
 
-  const keyOk = /^[a-z][a-z0-9_-]*$/.test(key) && key.length >= 2;
+  const keyOk = /^[a-z][a-z0-9_-]*$/.test(effectiveKey) && effectiveKey.length >= 2;
   const canCreate = keyOk && name.trim().length > 0;
+
+  function reset(): void {
+    setKey("");
+    setName("");
+    setKeyTouched(false);
+  }
 
   return (
     <div className="space-y-2 border-t pt-4">
       <h3 className="text-sm font-medium">{t("rbac.add_role_title")}</h3>
       <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="new-role-key">{t("rbac.role_key")}</Label>
-          <Input
-            id="new-role-key"
-            className="w-40"
-            placeholder="koordinator"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-          />
-        </div>
         <div className="space-y-1">
           <Label htmlFor="new-role-name">{t("rbac.role_name")}</Label>
           <Input
@@ -231,27 +241,38 @@ function CreateRoleForm(): JSX.Element {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
+        <div className="space-y-1">
+          <Label htmlFor="new-role-key">{t("rbac.role_key")}</Label>
+          <Input
+            id="new-role-key"
+            className="w-40"
+            placeholder="koordinator"
+            value={effectiveKey}
+            onChange={(e) => {
+              setKeyTouched(true);
+              setKey(e.target.value);
+            }}
+          />
+        </div>
         <Button
           type="button"
           disabled={!canCreate || create.isPending}
           onClick={() =>
-            create.mutate(
-              { key, name: name.trim() },
-              {
-                onSuccess: () => {
-                  setKey("");
-                  setName("");
-                },
-              },
-            )
+            create.mutate({ key: effectiveKey, name: name.trim() }, { onSuccess: reset })
           }
         >
           {t("rbac.add_role_button")}
         </Button>
       </div>
-      {key.length > 0 && !keyOk ? (
-        <p className="text-xs text-muted-foreground">{t("rbac.role_key_hint")}</p>
-      ) : null}
+      <p
+        className={
+          effectiveKey.length > 0 && !keyOk
+            ? "text-xs text-amber-600"
+            : "text-xs text-muted-foreground"
+        }
+      >
+        {t("rbac.role_key_hint")}
+      </p>
       {create.isError ? (
         <p className="text-sm text-destructive">
           {create.error instanceof ApiError && create.error.status === 409

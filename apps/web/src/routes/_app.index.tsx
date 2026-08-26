@@ -6,6 +6,7 @@ import {
   useCurrentUser,
   useDepartments,
   useEnabledModules,
+  useInstanceProfile,
   useSchools,
   useUsers,
 } from "@/api/hooks";
@@ -31,21 +32,26 @@ export const Route = createFileRoute("/_app/")({
 
 function DashboardPage(): JSX.Element {
   const me = useCurrentUser();
+  const profile = useInstanceProfile().data ?? "school";
   const modules = useEnabledModules();
   const hasClasses = modules.data?.has("classes") ?? true;
   const hasDepartments = modules.data?.has("departments") ?? false;
   const isManager =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
 
-  // Edition is decided by which superstructure module is mounted, not by role:
-  // the company edition (departments, no classes) gets a company overview with
-  // Standorte/Abteilungen/Mitarbeitende instead of Klassen. Non-managers get the
-  // lightweight nav dashboard, itself gated to whatever modules are enabled.
+  // The edition decides the overview, driven by the INSTANCE PROFILE (not the
+  // module set): the company edition never renders the school dashboard — which
+  // would query the disabled /classes endpoint and surface a spurious error —
+  // it always gets the company overview (Standorte/Abteilungen/Mitarbeitende).
+  if (profile === "company") {
+    return isManager ? (
+      <CompanyDashboard />
+    ) : (
+      <SimpleDashboard hasClasses={false} hasDepartments={hasDepartments} />
+    );
+  }
   if (!isManager) {
     return <SimpleDashboard hasClasses={hasClasses} hasDepartments={hasDepartments} />;
-  }
-  if (!hasClasses && hasDepartments) {
-    return <CompanyDashboard />;
   }
   return <SchulleitungDashboard />;
 }
@@ -223,9 +229,7 @@ function CompanyDashboard(): JSX.Element {
           </Link>
         </div>
 
-        {departments.isError ? (
-          <ErrorBanner message={t("errors.generic")} />
-        ) : departments.isLoading ? (
+        {departments.isLoading ? (
           <div className="overflow-hidden rounded-md border bg-card">
             <Table>
               <TableBody>
@@ -235,7 +239,7 @@ function CompanyDashboard(): JSX.Element {
               </TableBody>
             </Table>
           </div>
-        ) : activeDepartments.length === 0 ? (
+        ) : departments.isError || activeDepartments.length === 0 ? (
           <p className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
             {t("dashboard.departments_empty")}
           </p>

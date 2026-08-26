@@ -44,6 +44,13 @@ async def _set_teacher_ou(session: AsyncSession, school_id: int, ou: str) -> Non
     await session.commit()
 
 
+async def _set_company_ou(session: AsyncSession, school_id: int, ou: str) -> None:
+    school = await session.get(School, school_id)
+    assert school is not None
+    school.ad_ou_company_users = ou
+    await session.commit()
+
+
 @pytest.mark.asyncio
 async def test_create_user_success(
     as_admin: AsyncClient,
@@ -77,6 +84,40 @@ async def test_create_user_success(
     ).scalar_one()
     assert row.kind == "teacher"
     assert row.upn == "hans.muster@schule.ch"
+
+
+@pytest.mark.asyncio
+async def test_create_user_company_ou(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    mock_ad: AdClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    # Company edition: ou_key="company" provisions into the org unit's company
+    # OU and classifies the account as kind="company".
+    await _set_company_ou(db_session, school_a, "OU=Company,DC=schule,DC=local")
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    r = await as_admin.post(
+        "/admin/ad-users",
+        json={
+            "given_name": "Mara",
+            "surname": "Firma",
+            "sam_account_name": "mfirma",
+            "user_principal_name": "mara.firma@firma.ch",
+            "ou_key": "company",
+            "school_id": school_a,
+        },
+    )
+    assert r.status_code == 201, r.text
+    body = r.json()
+    row = (
+        await db_session.execute(
+            select(AdUserCache).where(AdUserCache.ad_object_guid == body["ad_object_guid"])
+        )
+    ).scalar_one()
+    assert row.kind == "company"
+    assert row.upn == "mara.firma@firma.ch"
 
 
 @pytest.mark.asyncio

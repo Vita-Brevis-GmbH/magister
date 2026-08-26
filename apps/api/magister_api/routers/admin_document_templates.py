@@ -25,14 +25,15 @@ from magister_api.schemas.document_templates import (
     DocumentTemplateSave,
     DocumentTemplateStarter,
 )
+from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.document_templates import (
     EDITABLE_KEYS,
     PLACEHOLDERS,
-    STARTER_TEMPLATES,
     DocumentTemplateService,
     TemplateRenderError,
     UnknownTemplateKeyError,
     sample_context,
+    starters_for_profile,
 )
 
 router = APIRouter(prefix="/admin/document-templates", tags=["admin"])
@@ -40,14 +41,14 @@ router = APIRouter(prefix="/admin/document-templates", tags=["admin"])
 _LANGUAGES = ("de", "fr", "it", "en")
 
 
-def _meta() -> DocumentTemplateMetaOut:
+def _meta(profile: str) -> DocumentTemplateMetaOut:
     return DocumentTemplateMetaOut(
         keys=list(EDITABLE_KEYS),
         placeholders=list(PLACEHOLDERS),
         languages=list(_LANGUAGES),
         starters={
             key: DocumentTemplateStarter(subject=s["subject"], body_html=s["body_html"])
-            for key, s in STARTER_TEMPLATES.items()
+            for key, s in starters_for_profile(profile).items()
         },
     )
 
@@ -61,9 +62,10 @@ async def list_templates(
 ) -> DocumentTemplateListOut:
     svc = DocumentTemplateService(session, settings)
     rows = await svc.list_for_admin(school_id=school_id)
+    cfg = await AppSettingsService(session, settings).get_module_settings()
     return DocumentTemplateListOut(
         templates=[DocumentTemplateOut.model_validate(r) for r in rows],
-        meta=_meta(),
+        meta=_meta(cfg.instance_profile),
     )
 
 

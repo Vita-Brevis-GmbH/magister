@@ -621,7 +621,12 @@ export interface AdSyncResultOut {
   group_count: number;
 }
 
-export type AdUserOuKey = "teacher" | "student_zyklus1" | "student_zyklus2" | "student_zyklus3";
+export type AdUserOuKey =
+  | "teacher"
+  | "student_zyklus1"
+  | "student_zyklus2"
+  | "student_zyklus3"
+  | "company";
 
 export interface AdUserCreateRequest {
   given_name: string;
@@ -630,6 +635,7 @@ export interface AdUserCreateRequest {
   user_principal_name: string;
   mail?: string | null;
   ou_key: AdUserOuKey;
+  school_id: number;
   display_name?: string | null;
   force_change?: boolean;
   cannot_change_password?: boolean;

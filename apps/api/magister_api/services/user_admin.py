@@ -31,8 +31,9 @@ from magister_api.services.devices import release_person_devices
 
 # Categories offered to the admin. Determine both the target OU and the default
 # AD groups. Students are split by Zyklus (1/2/3); the OU still only has two
-# student buckets (Zyklus 3 vs the rest), the groups have three.
-OU_CHOICES = ("teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3")
+# student buckets (Zyklus 3 vs the rest), the groups have three. The company
+# edition provisions a single "company" category into the org unit's company OU.
+OU_CHOICES = ("teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3", "company")
 
 
 class UserAdminError(Exception):
@@ -62,6 +63,11 @@ class UserAdminService:
 
         OUs + group templates come from the target school (per-school config).
         """
+        if ou_key == "company":
+            # Company edition: one flat target OU + the org unit's company groups.
+            if not school.ad_ou_company_users:
+                raise UserAdminError("ou_not_configured")
+            return school.ad_ou_company_users, list(school.ad_groups_company or [])
         ou = {
             "teacher": school.ad_ou_teachers,
             "student_zyklus1": school.ad_ou_students_other,
@@ -120,7 +126,7 @@ class UserAdminService:
         if school is None:
             raise UserAdminError("school_not_found")
         ou_dn, group_dns = await self._provision_target(ou_key, school)
-        kind = "teacher" if ou_key == "teacher" else "student"
+        kind = {"teacher": "teacher", "company": "company"}.get(ou_key, "student")
         display = (
             (display_name or "").strip() or f"{given_name} {surname}".strip() or sam_account_name
         )

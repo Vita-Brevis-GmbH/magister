@@ -90,6 +90,52 @@ STARTER_TEMPLATES: dict[str, dict[str, str]] = {
     },
 }
 
+# Company-edition starter variants for the same keys: same placeholders, but
+# worded for a firm (Standort/Mitarbeitende) instead of a school (Klasse/Eltern).
+# Served by the meta endpoint when the instance profile is "company" so the
+# template editor starts from company text (M6 hard-separation).
+COMPANY_STARTER_TEMPLATES: dict[str, dict[str, str]] = {
+    "enrollment": {
+        "subject": "Willkommen bei {{ school.name }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>Wir freuen uns, {{ student.display_name }} bei "
+            "<strong>{{ school.name }}</strong> begrüssen zu dürfen. "
+            "Der erste Arbeitstag ist der {{ first_day }}.</p>\n"
+            "<p>Die Zugangsdaten werden separat übergeben.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "class_change": {
+        "subject": "Interner Wechsel per {{ effective_date }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>{{ student.display_name }} wechselt per {{ effective_date }} intern.</p>\n"
+            "<p>Bei Fragen stehen wir gerne zur Verfügung.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "password_handout": {
+        "subject": "Neue Zugangsdaten für {{ student.display_name }}",
+        "body_html": (
+            "<h1>{{ subject }}</h1>\n"
+            "<p>{{ salutation }}</p>\n"
+            "<p>Das Passwort für {{ student.display_name }} "
+            "({{ student.upn }}) wurde neu gesetzt:</p>\n"
+            '<p style="font-size:1.4em"><strong>{{ temp_password }}</strong></p>\n'
+            "<p>Bitte das Passwort beim ersten Anmelden ändern und sicher aufbewahren.</p>\n"
+            "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+}
+
+
+def starters_for_profile(profile: str) -> dict[str, dict[str, str]]:
+    """Starter templates for the active instance profile (company vs school)."""
+    return COMPANY_STARTER_TEMPLATES if profile == "company" else STARTER_TEMPLATES
+
 
 class TemplateRenderError(ValueError):
     """A template body failed to render (bad Jinja / undefined variable)."""
@@ -238,9 +284,11 @@ __all__ = [
     "EDITABLE_KEYS",
     "PLACEHOLDERS",
     "STARTER_TEMPLATES",
+    "COMPANY_STARTER_TEMPLATES",
     "DocumentTemplateService",
     "RenderedTemplate",
     "TemplateRenderError",
     "UnknownTemplateKeyError",
     "sample_context",
+    "starters_for_profile",
 ]
