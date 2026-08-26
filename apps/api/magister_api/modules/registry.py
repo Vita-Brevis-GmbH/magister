@@ -9,6 +9,8 @@ overrides (see :mod:`magister_api.modules.catalog`).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from magister_api.modules.classes import CLASSES_MODULE
 from magister_api.modules.departments import DEPARTMENTS_MODULE
 from magister_api.modules.devices import DEVICES_MODULE
@@ -31,14 +33,37 @@ ALL_MODULES: tuple[ModuleManifest, ...] = (
 )
 
 
-def enabled_modules() -> tuple[ModuleManifest, ...]:
+# The always-mounted base: it carries auth/session/me, so every container —
+# including a per-module split container — needs it to authenticate.
+_BASE_MODULE_ID = PLATFORM_MODULE.id
+
+
+class UnknownModuleError(ValueError):
+    """A ``container_modules`` entry names a module that does not exist."""
+
+
+def enabled_modules(container_modules: Sequence[str] | None = None) -> tuple[ModuleManifest, ...]:
     """Modules whose routers ``create_app`` mounts.
 
-    Routers are mounted once at startup and cannot be unmounted at runtime, so
-    this returns every module: mounting is static. Which modules are
-    *effectively enabled* for a running instance (driven by the instance
-    profile + per-module overrides in ``app_settings``) is answered at request
-    time by :func:`magister_api.modules.catalog.effective_enabled_ids`, which
-    gates the nav (``GET /me/modules``) and the request guard. See ADR-0008.
+    Two independent axes (ADR-0008 D5):
+
+    - **Deployment / container split.** With ``container_modules`` empty
+      (default) this returns *every* module — the single-container monolith.
+      Passing a subset (from ``MAGISTER_CONTAINER_MODULES``) mounts only those
+      modules plus the always-on ``platform`` base, so the same image can run as
+      a dedicated per-module container behind a path-routing reverse proxy.
+    - **Runtime enable/disable.** Which mounted modules are *effectively enabled*
+      for a request (instance profile + per-module overrides) is decided at
+      request time by :func:`magister_api.modules.catalog.effective_enabled_ids`
+      and the mount-time guard — orthogonal to what a container mounts.
     """
-    return ALL_MODULES
+    if not container_modules:
+        return ALL_MODULES
+    wanted = {m.strip() for m in container_modules if m.strip()}
+    known = {m.id for m in ALL_MODULES}
+    unknown = sorted(wanted - known)
+    if unknown:
+        raise UnknownModuleError(
+            f"MAGISTER_CONTAINER_MODULES names unknown module(s): {unknown}; known: {sorted(known)}"
+        )
+    return tuple(m for m in ALL_MODULES if m.id == _BASE_MODULE_ID or m.id in wanted)

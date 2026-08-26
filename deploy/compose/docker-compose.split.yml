@@ -1,0 +1,59 @@
+# Magister — OPTIONAL per-module container overlay (ADR-0008 D5, M6 Phase 3).
+#
+# Promotes ONE feature module (here: `departments`) into its own container,
+# using the SAME image but with MAGISTER_CONTAINER_MODULES set so it mounts only
+# that module plus the always-on `platform` base. Reach for this only "bei
+# Bedarf" — own scaling, fault isolation, a separate release cadence, or split
+# delivery/licensing. The default single-container monolith needs none of this.
+#
+# It is a DEPLOYMENT split, not a data split: per ADR-0008 D5 every container
+# shares the SAME database, session secret, CSRF secret and audit key (they read
+# the identical MAGISTER_* env from .env), so a split module is a distributed
+# system with a shared secret — not an isolated service. The routing is done in
+# Caddy (see docs/runbooks/promote-module-to-container.md); this file only adds
+# the module container.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.split.yml up -d
+#   # then point Caddy's /api/departments* at magister-api-departments:8000
+
+services:
+  magister-api-departments:
+    image: ${MAGISTER_API_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-api:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # This container serves ONLY the departments module (+ platform base).
+      MAGISTER_CONTAINER_MODULES: departments
+      MAGISTER_ENVIRONMENT: production
+      MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}
+      # Same DB + secrets as the main api container (D5: shared-secret split).
+      MAGISTER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-magister}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-magister}
+      MAGISTER_AUDIT_KEY: ${MAGISTER_AUDIT_KEY:?MAGISTER_AUDIT_KEY is required}
+      MAGISTER_SESSION_SECRET: ${MAGISTER_SESSION_SECRET:?MAGISTER_SESSION_SECRET is required}
+      MAGISTER_CSRF_SECRET: ${MAGISTER_CSRF_SECRET:?MAGISTER_CSRF_SECRET is required}
+      MAGISTER_SESSION_COOKIE_SECURE: "true"
+      MAGISTER_OIDC_ISSUER: ${MAGISTER_OIDC_ISSUER}
+      MAGISTER_OIDC_CLIENT_ID: ${MAGISTER_OIDC_CLIENT_ID}
+      MAGISTER_OIDC_CLIENT_SECRET: ${MAGISTER_OIDC_CLIENT_SECRET}
+      MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/api/auth/callback
+      MAGISTER_AD_DCS: ${MAGISTER_AD_DCS:-}
+      MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
+      MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
+      MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
+      # This container runs migrations at start too; harmless (idempotent) but if
+      # you prefer a single migrator, set MAGISTER_SKIP_MIGRATIONS=1 here.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status == 200 else 1)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks: [internal]
+    # No public ports — only Caddy reaches it on the internal network.

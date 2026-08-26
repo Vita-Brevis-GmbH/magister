@@ -75,6 +75,16 @@ class Settings(BaseSettings):
 
     bootstrap_admins: Annotated[list[str], NoDecode] = Field(default_factory=list)
 
+    # M6 Phase 3 / ADR-0008 D5 — split-fähig: which feature modules THIS
+    # container mounts. Empty (default) = every module (the single-container
+    # monolith). Set e.g. ``MAGISTER_CONTAINER_MODULES=departments`` to run this
+    # image as a dedicated per-module container (own scaling / fault isolation)
+    # behind a path-routing reverse proxy. The non-toggleable ``platform`` base
+    # is ALWAYS mounted (auth/session/me), so a module container can still
+    # authenticate. Unknown ids are rejected at startup. This is the deployment
+    # axis; the per-request enable/disable "Schieber" stays independent.
+    container_modules: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     # Local-admin (break-glass) — only consulted on first boot when the
     # `local_admins` table is empty. Always pass a pre-computed argon2id
     # hash; plaintext is refused. See `magister-cli hash-password`.
@@ -181,7 +191,9 @@ class Settings(BaseSettings):
     rate_limit_auth: str = Field(default="10/minute")
     rate_limit_password_reset: str = Field(default="10/minute")
 
-    @field_validator("bootstrap_admins", "ad_dcs", "oidc_scopes", mode="before")
+    @field_validator(
+        "bootstrap_admins", "ad_dcs", "oidc_scopes", "container_modules", mode="before"
+    )
     @classmethod
     def _split_csv(cls, v: Any) -> Any:
         if isinstance(v, str):

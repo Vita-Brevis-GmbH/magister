@@ -108,7 +108,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # modules get a mount-time guard dependency so a disabled module's routes
     # 404 at request time (Phase 3), not just disappear from the nav; the
     # non-toggleable platform base is always reachable.
-    for module in enabled_modules():
+    for module in enabled_modules(s.container_modules):
         meta = catalog.get_meta(module.id)
         guard = (
             [Depends(make_module_guard(module.id))] if meta is not None and meta.toggleable else []

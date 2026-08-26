@@ -53,3 +53,41 @@ def test_classes_depends_on_platform() -> None:
 
 def test_healthz_still_present() -> None:
     assert ("/healthz", frozenset({"GET"})) in _app_route_keys()
+
+
+# --- M6 Phase 3 / ADR-0008 D5: split-fähig (per-module container) ----------
+
+
+def test_enabled_modules_default_is_all() -> None:
+    assert enabled_modules() == ALL_MODULES
+    assert enabled_modules([]) == ALL_MODULES
+
+
+def test_enabled_modules_container_subset_keeps_platform() -> None:
+    ids = [m.id for m in enabled_modules(["departments"])]
+    assert "platform" in ids  # base is always mounted (auth/session/me)
+    assert "departments" in ids
+    assert "classes" not in ids  # a school module is NOT mounted in this container
+
+
+def test_enabled_modules_rejects_unknown_id() -> None:
+    import pytest
+
+    from magister_api.modules.registry import UnknownModuleError
+
+    with pytest.raises(UnknownModuleError):
+        enabled_modules(["nope"])
+
+
+def test_container_app_mounts_only_selected_module() -> None:
+    from magister_api.config import get_settings
+
+    settings = get_settings().model_copy(update={"container_modules": ["departments"]})
+    app = create_app(settings)
+    keys = {(r.path, frozenset(r.methods or ())) for r in app.routes if isinstance(r, APIRoute)}
+    paths = {p for p, _ in keys}
+    # platform base + departments are served; classes routes are not.
+    assert "/departments" in paths
+    assert any(p.startswith("/auth") for p in paths)  # platform auth present
+    assert "/classes" not in paths
+    assert ("/healthz", frozenset({"GET"})) in keys
