@@ -254,12 +254,14 @@ export interface AdminModuleOut {
   toggleable: boolean;
   enabled: boolean;
   depends_on: string[];
+  default_in_profiles: string[];
 }
 
 export interface AdminModulesOut {
   instance_profile: string;
   known_profiles: string[];
   modules: AdminModuleOut[];
+  module_overrides: Record<string, boolean>;
 }
 
 export interface ModuleSettingsUpdate {

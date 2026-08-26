@@ -34,9 +34,11 @@ def _view(profile: str, overrides: dict[str, bool]) -> AdminModulesOut:
                 toggleable=m.toggleable,
                 enabled=m.id in enabled,
                 depends_on=list(m.depends_on),
+                default_in_profiles=list(m.default_in_profiles),
             )
             for m in catalog.MODULE_CATALOG
         ],
+        module_overrides=dict(overrides),
     )
 
 
