@@ -348,7 +348,6 @@
       "assign_label": "Attribuer un appareil libre",
       "assign_placeholder": "— choisir un appareil —",
       "assign_button": "Attribuer",
-      "unassign_button": "Retirer l’attribution",
       "none_free": "Aucun appareil libre disponible.",
       "error": "Échec de l'attribution."
     },
@@ -923,6 +922,7 @@
     "edit_title": "Modifier l'appareil",
     "save": "Enregistrer",
     "assign_button": "Attribuer",
+    "unassign_button": "Retirer l’attribution",
     "edit_button": "Modifier",
     "delete_button": "Supprimer",
     "assign_title": "Attribuer l'appareil",

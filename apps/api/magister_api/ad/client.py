@@ -1109,6 +1109,43 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def rename_user(self, *, user_dn: str, new_common_name: str) -> str:
+        """Rename the object's RDN (``CN=…``) so the AD "name"/cn tracks the new
+        display name. Returns the resulting DN (unchanged if already matching).
+
+        AD keeps ``cn`` (the object name shown in ADUC) separate from
+        ``displayName``; a name change must move the RDN too, otherwise the
+        object still appears under the old full name. objectGUID is stable
+        across the rename, so cached references by GUID keep working.
+        """
+        return await run_in_threadpool(self._sync_rename_user, user_dn, new_common_name)
+
+    def _sync_rename_user(self, user_dn: str, new_common_name: str) -> str:
+        new_rdn = f"CN={escape_rdn(new_common_name)}"
+        # Parent DN is everything after the (unescaped) RDN separator; escape_rdn
+        # has escaped any comma inside the CN value, so the first comma is it.
+        parent = user_dn.split(",", 1)[1] if "," in user_dn else ""
+        new_dn = f"{new_rdn},{parent}" if parent else new_rdn
+        if new_dn == user_dn:
+            return user_dn
+        conn, owned = self._acquire_connection()
+        try:
+            res = conn.modify_dn(user_dn, new_rdn)
+            ok, detail = self._write_result(res, conn)
+            if not ok:
+                logger.warning("ldap modify_dn failed for %s: %s", user_dn, detail)
+                raise AdUnavailableError(f"ldap_rename_failed:{detail}")
+        except LDAPException as exc:
+            logger.warning("ldap modify_dn raised for %s: %s", user_dn, exc)
+            raise AdUnavailableError("ldap_rename_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+        return new_dn
+
     async def set_proxy_addresses(
         self, *, user_dn: str, primary: str | None, aliases: list[str]
     ) -> None:

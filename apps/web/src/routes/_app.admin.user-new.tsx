@@ -245,13 +245,13 @@ function NewUserPage(): JSX.Element {
                     required
                     autoComplete="off"
                     placeholder="vorname.nachname"
-                    className="flex-1"
+                    className="min-w-0 flex-1"
                     {...field("upn_local")}
                   />
-                  <span className="text-sm text-muted-foreground">@</span>
+                  <span className="shrink-0 text-sm text-muted-foreground">@</span>
                   <select
                     aria-label={t("admin.user_new.upn_domain")}
-                    className={`${selectClasses} w-auto`}
+                    className="h-10 max-w-[45%] shrink-0 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     value={form.upn_domain}
                     onChange={(e) => setForm((prev) => ({ ...prev, upn_domain: e.target.value }))}
                   >

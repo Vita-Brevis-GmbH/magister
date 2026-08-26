@@ -239,6 +239,16 @@ class UserAttributesService:
             try:
                 if ad_changes:
                     await self.ad.modify_user_attributes(user_dn=user_dn, attributes=ad_changes)
+                # Keep the object's RDN (cn / "Full Name" in ADUC) in sync with a
+                # changed display name — displayName alone leaves the old cn.
+                new_display = ad_changes.get("displayName")
+                if new_display:
+                    # The RDN moves; the objectGUID is stable, so the cache (keyed
+                    # by GUID, no DN column) needs no update — but later writes in
+                    # THIS request must target the new DN.
+                    user_dn = await self.ad.rename_user(
+                        user_dn=user_dn, new_common_name=new_display
+                    )
                 if rewrite_proxy:
                     await self.ad.set_proxy_addresses(
                         user_dn=user_dn, primary=proxy_primary, aliases=proxy_aliases

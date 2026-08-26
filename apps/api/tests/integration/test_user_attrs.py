@@ -853,8 +853,10 @@ class TestRename:
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
 
-        # proxyAddresses: new primary + old address as smtp alias.
-        assert _proxy_addresses(mock_ad, _ANNA_DN) == {
+        # The rename moved the RDN (cn) to the new display name, so proxyAddresses
+        # live on the new DN — the old CN=Anna entry no longer exists.
+        renamed_dn = "CN=Anna Müller,OU=Teachers,DC=schule,DC=local"
+        assert _proxy_addresses(mock_ad, renamed_dn) == {
             "SMTP:anna.mueller@schule.example.ch",
             "smtp:anna.meier@schule.example.ch",
         }

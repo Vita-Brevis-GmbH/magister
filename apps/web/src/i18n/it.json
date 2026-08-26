@@ -348,7 +348,6 @@
       "assign_label": "Assegna dispositivo libero",
       "assign_placeholder": "— scegli dispositivo —",
       "assign_button": "Assegna",
-      "unassign_button": "Rimuovi assegnazione",
       "none_free": "Nessun dispositivo libero disponibile.",
       "error": "Assegnazione non riuscita."
     },
@@ -923,6 +922,7 @@
     "edit_title": "Modifica dispositivo",
     "save": "Salva",
     "assign_button": "Assegna",
+    "unassign_button": "Rimuovi assegnazione",
     "edit_button": "Modifica",
     "delete_button": "Elimina",
     "assign_title": "Assegna dispositivo",

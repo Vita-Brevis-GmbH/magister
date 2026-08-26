@@ -345,7 +345,6 @@
       "assign_label": "Assign a free device",
       "assign_placeholder": "— choose device —",
       "assign_button": "Assign",
-      "unassign_button": "Clear assignment",
       "none_free": "No free devices available.",
       "error": "Device assignment failed."
     },
@@ -920,6 +919,7 @@
     "edit_title": "Edit device",
     "save": "Save",
     "assign_button": "Assign",
+    "unassign_button": "Clear assignment",
     "edit_button": "Edit",
     "delete_button": "Delete",
     "assign_title": "Assign device",

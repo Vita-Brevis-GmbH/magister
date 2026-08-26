@@ -345,7 +345,6 @@
       "assign_label": "Freies Gerät zuweisen",
       "assign_placeholder": "— Gerät wählen —",
       "assign_button": "Zuweisen",
-      "unassign_button": "Zuweisung aufheben",
       "none_free": "Keine freien Geräte verfügbar.",
       "error": "Geräte-Zuweisung fehlgeschlagen."
     },
@@ -920,6 +919,7 @@
     "edit_title": "Gerät bearbeiten",
     "save": "Speichern",
     "assign_button": "Zuweisen",
+    "unassign_button": "Zuweisung aufheben",
     "edit_button": "Bearbeiten",
     "delete_button": "Löschen",
     "assign_title": "Gerät zuweisen",
