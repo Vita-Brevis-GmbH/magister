@@ -1,8 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 
-import { useClasses, useCurrentUser, useUsers } from "@/api/hooks";
-import type { AdUserOut, ClassOut } from "@/api/types";
+import {
+  useClasses,
+  useCurrentUser,
+  useDepartments,
+  useEnabledModules,
+  useSchools,
+  useUsers,
+} from "@/api/hooks";
+import type { AdUserOut, ClassOut, DepartmentOut } from "@/api/types";
 import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,11 +31,21 @@ export const Route = createFileRoute("/_app/")({
 
 function DashboardPage(): JSX.Element {
   const me = useCurrentUser();
-  const isSchulleitung =
+  const modules = useEnabledModules();
+  const hasClasses = modules.data?.has("classes") ?? true;
+  const hasDepartments = modules.data?.has("departments") ?? false;
+  const isManager =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
 
-  if (!isSchulleitung) {
-    return <KlassenlehrerDashboard />;
+  // Edition is decided by which superstructure module is mounted, not by role:
+  // the company edition (departments, no classes) gets a company overview with
+  // Standorte/Abteilungen/Mitarbeitende instead of Klassen. Non-managers get the
+  // lightweight nav dashboard, itself gated to whatever modules are enabled.
+  if (!isManager) {
+    return <SimpleDashboard hasClasses={hasClasses} hasDepartments={hasDepartments} />;
+  }
+  if (!hasClasses && hasDepartments) {
+    return <CompanyDashboard />;
   }
   return <SchulleitungDashboard />;
 }
@@ -152,10 +169,135 @@ function SchulleitungDashboard(): JSX.Element {
 }
 
 // ---------------------------------------------------------------------------
-// KL fallback view (unchanged look, just simple nav cards)
+// Company edition view (Standorte / Abteilungen / Mitarbeitende)
 // ---------------------------------------------------------------------------
 
-function KlassenlehrerDashboard(): JSX.Element {
+function CompanyDashboard(): JSX.Element {
+  const { t } = useTranslation();
+  const { tt } = useTerms();
+  const units = useSchools();
+  const departments = useDepartments();
+  const allMembers = useUsers({ limit: 1 });
+  const disabledUsers = useUsers({ enabled: false, limit: 50 });
+
+  const activeDepartments = departments.data?.filter((d) => d.status === "active") ?? [];
+
+  return (
+    <div className="space-y-8">
+      <header>
+        <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("dashboard.title")}</h1>
+        <p className="text-sm text-muted-foreground">{tt("dashboard.intro")}</p>
+      </header>
+
+      {/* Summary cards — company vocabulary, no Klassen anywhere. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label={tt("dashboard.stat_units")}
+          value={units.isLoading ? null : (units.data?.length ?? null)}
+          href="/admin/schools"
+        />
+        <StatCard
+          label={t("dashboard.stat_departments")}
+          value={departments.isLoading ? null : activeDepartments.length}
+          href="/departments"
+        />
+        <StatCard
+          label={tt("dashboard.stat_members")}
+          value={allMembers.isLoading ? null : (allMembers.data?.total ?? null)}
+          href="/users"
+        />
+        <StatCard
+          label={t("dashboard.stat_disabled")}
+          value={disabledUsers.isLoading ? null : (disabledUsers.data?.total ?? null)}
+          tone={!disabledUsers.isLoading && (disabledUsers.data?.total ?? 0) > 0 ? "warn" : "ok"}
+          href="/users"
+        />
+      </div>
+
+      {/* Active departments */}
+      <section className="space-y-3">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-lg font-semibold">{t("dashboard.departments_section")}</h2>
+          <Link to="/departments" className="text-sm text-primary hover:underline">
+            {t("dashboard.departments_all")}
+          </Link>
+        </div>
+
+        {departments.isError ? (
+          <ErrorBanner message={t("errors.generic")} />
+        ) : departments.isLoading ? (
+          <div className="overflow-hidden rounded-md border bg-card">
+            <Table>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <SkeletonRow key={i} columns={2} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : activeDepartments.length === 0 ? (
+          <p className="rounded-md border border-dashed bg-muted/30 px-4 py-8 text-center text-sm text-muted-foreground">
+            {t("dashboard.departments_empty")}
+          </p>
+        ) : (
+          <div className="overflow-hidden rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("departments.name")}</TableHead>
+                  <TableHead>{t("departments.kuerzel")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {activeDepartments.map((d) => (
+                  <DepartmentRow key={d.id} dept={d} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </section>
+
+      {/* Disabled accounts — Off-Boarding queue (edition-neutral) */}
+      {(disabledUsers.data?.total ?? 0) > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-lg font-semibold">{t("dashboard.disabled_section")}</h2>
+          <p className="text-sm text-muted-foreground">{t("dashboard.disabled_intro")}</p>
+          <div className="overflow-hidden rounded-md border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{t("users.name")}</TableHead>
+                  <TableHead>{t("users.kind")}</TableHead>
+                  <TableHead className="text-right">{t("users.actions")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {disabledUsers.isLoading
+                  ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} columns={3} />)
+                  : disabledUsers.data?.items.map((u) => (
+                      <DisabledUserRow key={u.ad_object_guid} user={u} />
+                    ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Non-manager fallback: simple nav cards, gated to the enabled modules
+// ---------------------------------------------------------------------------
+
+function SimpleDashboard({
+  hasClasses,
+  hasDepartments,
+}: {
+  hasClasses: boolean;
+  hasDepartments: boolean;
+}): JSX.Element {
   const { t } = useTranslation();
   const me = useCurrentUser();
   return (
@@ -175,13 +317,24 @@ function KlassenlehrerDashboard(): JSX.Element {
         </CardContent>
       </Card>
       <div className="grid gap-4 md:grid-cols-2">
-        <Link to="/classes" className="block">
-          <Card className="transition hover:bg-accent hover:text-accent-foreground">
-            <CardHeader>
-              <CardTitle className="text-base">{t("nav.classes")}</CardTitle>
-            </CardHeader>
-          </Card>
-        </Link>
+        {hasClasses ? (
+          <Link to="/classes" className="block">
+            <Card className="transition hover:bg-accent hover:text-accent-foreground">
+              <CardHeader>
+                <CardTitle className="text-base">{t("nav.classes")}</CardTitle>
+              </CardHeader>
+            </Card>
+          </Link>
+        ) : null}
+        {hasDepartments ? (
+          <Link to="/departments" className="block">
+            <Card className="transition hover:bg-accent hover:text-accent-foreground">
+              <CardHeader>
+                <CardTitle className="text-base">{t("nav.departments")}</CardTitle>
+              </CardHeader>
+            </Card>
+          </Link>
+        ) : null}
         <Link to="/users" className="block">
           <Card className="transition hover:bg-accent hover:text-accent-foreground">
             <CardHeader>
@@ -259,6 +412,23 @@ function ClassRow({ cls }: { cls: ClassOut }): JSX.Element {
           <StatusPill tone="muted">{t("classes.status_archived")}</StatusPill>
         )}
       </TableCell>
+    </TableRow>
+  );
+}
+
+function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
+  return (
+    <TableRow>
+      <TableCell>
+        <Link
+          to="/departments/$departmentId"
+          params={{ departmentId: String(dept.id) }}
+          className="font-medium hover:underline"
+        >
+          {dept.name}
+        </Link>
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground">{dept.kuerzel ?? "—"}</TableCell>
     </TableRow>
   );
 }
