@@ -1085,7 +1085,10 @@ function UserDepartmentsCard({ guid }: { guid: string }): JSX.Element | null {
         {current.length > 0 ? (
           <ul className="divide-y rounded-md border">
             {current.map((d) => (
-              <li key={d.membership_id} className="flex items-center justify-between gap-4 px-3 py-2">
+              <li
+                key={d.membership_id}
+                className="flex items-center justify-between gap-4 px-3 py-2"
+              >
                 <span className="text-sm font-medium">
                   {d.name}
                   {d.kuerzel ? (

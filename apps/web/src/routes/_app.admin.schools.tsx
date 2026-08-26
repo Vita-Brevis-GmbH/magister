@@ -484,9 +484,7 @@ export function SchoolForm({
         <CardContent className="space-y-4">
           {isCompany ? (
             <div className="space-y-1">
-              <Label htmlFor="ou-company">
-                {t("schools.ad_config.field.ad_ou_company_users")}
-              </Label>
+              <Label htmlFor="ou-company">{t("schools.ad_config.field.ad_ou_company_users")}</Label>
               <Input
                 id="ou-company"
                 value={form.ad_ou_company_users}
@@ -498,9 +496,7 @@ export function SchoolForm({
           ) : (
             <>
               <div className="space-y-1">
-                <Label htmlFor="ou-z3">
-                  {t("schools.ad_config.field.ad_ou_students_zyklus3")}
-                </Label>
+                <Label htmlFor="ou-z3">{t("schools.ad_config.field.ad_ou_students_zyklus3")}</Label>
                 <Input
                   id="ou-z3"
                   value={form.ad_ou_students_zyklus3}
@@ -522,9 +518,7 @@ export function SchoolForm({
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="ou-teachers">
-                  {t("schools.ad_config.field.ad_ou_teachers")}
-                </Label>
+                <Label htmlFor="ou-teachers">{t("schools.ad_config.field.ad_ou_teachers")}</Label>
                 <Input
                   id="ou-teachers"
                   value={form.ad_ou_teachers}

@@ -296,9 +296,7 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
     try {
       // Company users are adults → the teacher (formal) hand-out wording.
       const audience =
-        q.data?.kind === "teachers" || q.data?.kind === "company_users"
-          ? "teachers"
-          : "students";
+        q.data?.kind === "teachers" || q.data?.kind === "company_users" ? "teachers" : "students";
       await downloadHandouts(credentials, "", handoutLang, audience);
     } catch {
       setHandoutError(true);

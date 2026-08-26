@@ -191,9 +191,7 @@ function RightsMatrix(): JSX.Element {
             </table>
           </div>
         )}
-        {setCaps.isError ? (
-          <p className="text-sm text-destructive">{t("errors.generic")}</p>
-        ) : null}
+        {setCaps.isError ? <p className="text-sm text-destructive">{t("errors.generic")}</p> : null}
         <CreateRoleForm />
       </CardContent>
     </Card>

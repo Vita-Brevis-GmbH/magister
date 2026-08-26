@@ -317,7 +317,8 @@ export function useRevokeManager(id: number) {
 export function useUserDepartments(guid: string, enabled = true) {
   return useQuery<UserDepartmentOut[]>({
     queryKey: queryKeys.userDepartments(guid),
-    queryFn: () => apiFetch<UserDepartmentOut[]>(`/departments/for-user/${encodeURIComponent(guid)}`),
+    queryFn: () =>
+      apiFetch<UserDepartmentOut[]>(`/departments/for-user/${encodeURIComponent(guid)}`),
     enabled,
   });
 }

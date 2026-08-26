@@ -7,7 +7,9 @@ behave exactly like the former static map until an admin edits them here.
 
 from __future__ import annotations
 
-from httpx import AsyncClient
+from collections.abc import Awaitable
+
+from httpx import AsyncClient, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -125,7 +127,7 @@ async def test_grant_scope_rules_and_custom_role(
     )
     await db_session.commit()
 
-    def _grant(role: str, school_id: int | None) -> object:
+    def _grant(role: str, school_id: int | None) -> Awaitable[Response]:
         return as_admin.post(
             f"/admin/users/{guid}/roles", json={"role": role, "school_id": school_id}
         )

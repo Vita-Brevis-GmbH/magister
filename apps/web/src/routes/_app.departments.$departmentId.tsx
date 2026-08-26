@@ -50,10 +50,7 @@ function DepartmentDetailPage(): JSX.Element {
 
   const submitMember = (): void => {
     if (!memberPick) return;
-    addMember.mutate(
-      { ad_object_guid: memberPick.guid },
-      { onSuccess: () => setMemberPick(null) },
-    );
+    addMember.mutate({ ad_object_guid: memberPick.guid }, { onSuccess: () => setMemberPick(null) });
   };
 
   const submitManager = (): void => {
@@ -89,7 +86,12 @@ function DepartmentDetailPage(): JSX.Element {
               <UserPicker value={memberPick} onChange={setMemberPick} />
             </div>
           </div>
-          <Button type="button" size="sm" disabled={addMember.isPending || !memberPick} onClick={submitMember}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={addMember.isPending || !memberPick}
+            onClick={submitMember}
+          >
             {t("departments.add_member")}
           </Button>
         </div>
