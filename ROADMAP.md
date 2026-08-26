@@ -132,11 +132,14 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
     getrennt von der Runtime-Achse. `MAGISTER_CONTAINER_MODULES` lässt dasselbe
     `magister-api`-Image als dedizierten Modul-Container laufen (nur die
     genannten Module + die immer aktive `platform`-Basis); unbekannte Ids werden
-    beim Start abgewiesen. Overlay `deploy/compose/docker-compose.split.yml` +
-    Runbook `docs/runbooks/promote-module-to-container.md` (leichter Env-Split
-    **und** voller `git subtree split` wie `cockpit/`, ADR-0003), inkl.
-    D5-Vorbehalt (geteilte DB/Secrets). Contract-Tests decken die
-    Container-Auswahl ab.
+    beim Start abgewiesen. Overlays `deploy/compose/docker-compose.split.yml`
+    (ein Modul) **und** `docker-compose.editions.yml` (Pro-Edition:
+    `--profile company` → Abteilungen-Container, `--profile school` →
+    Klassen/Briefe-Container; geteilte Module + `platform` bleiben im
+    Haupt-Container) + Runbook `docs/runbooks/promote-module-to-container.md`
+    (leichter Env-Split **und** voller `git subtree split` wie `cockpit/`,
+    ADR-0003), inkl. D5-Vorbehalt (geteilte DB/Secrets). Contract-Tests decken
+    die Container-Auswahl ab.
 
 **M6 — Benutzer-Zusatzfeatures (Product-Owner-Wunsch, ADR-0009):**
 

@@ -1,0 +1,87 @@
+# Magister — OPTIONAL per-EDITION container overlay (ADR-0008 D5, M6).
+#
+# Promotes the edition-specific superstructure into its OWN container, so a
+# company instance runs company code in company containers and never mounts the
+# school modules (and vice-versa). Same image, but MAGISTER_CONTAINER_MODULES
+# restricts what each container serves (plus the always-on `platform` base).
+#
+# It is a DEPLOYMENT split, not a data split: per ADR-0008 D5 every container
+# shares the SAME database, session secret, CSRF secret and audit key (identical
+# MAGISTER_* env), so a split edition is a distributed system with a shared
+# secret — not an isolated service.
+#
+# Compose PROFILES gate the two services, so you bring up ONLY the edition this
+# instance actually runs — matching its instance_profile:
+#
+#   # Company instance — start the departments/company container:
+#   docker compose -f docker-compose.yml -f docker-compose.editions.yml \
+#     --profile company up -d
+#
+#   # School instance — start the classes/letters container:
+#   docker compose -f docker-compose.yml -f docker-compose.editions.yml \
+#     --profile school up -d
+#
+# Then point Caddy's edition prefixes at the matching container — see
+# docs/runbooks/promote-module-to-container.md ("Pro-Edition-Split").
+#
+# For a single generic one-module split, docker-compose.split.yml stays as the
+# minimal example; this file is the edition-scoped generalization.
+
+x-edition-api: &edition-api
+  image: ${MAGISTER_API_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-api:latest}
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+  # Same DB + secrets as the main api container (D5: shared-secret split).
+  environment: &edition-env
+    MAGISTER_ENVIRONMENT: production
+    MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}
+    MAGISTER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-magister}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-magister}
+    MAGISTER_AUDIT_KEY: ${MAGISTER_AUDIT_KEY:?MAGISTER_AUDIT_KEY is required}
+    MAGISTER_SESSION_SECRET: ${MAGISTER_SESSION_SECRET:?MAGISTER_SESSION_SECRET is required}
+    MAGISTER_CSRF_SECRET: ${MAGISTER_CSRF_SECRET:?MAGISTER_CSRF_SECRET is required}
+    MAGISTER_SESSION_COOKIE_SECURE: "true"
+    MAGISTER_OIDC_ISSUER: ${MAGISTER_OIDC_ISSUER}
+    MAGISTER_OIDC_CLIENT_ID: ${MAGISTER_OIDC_CLIENT_ID}
+    MAGISTER_OIDC_CLIENT_SECRET: ${MAGISTER_OIDC_CLIENT_SECRET}
+    MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/api/auth/callback
+    MAGISTER_AD_DCS: ${MAGISTER_AD_DCS:-}
+    MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
+    MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
+    MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
+    # Only one container needs to run migrations; the edition containers skip
+    # them and let the main api container be the single migrator.
+    MAGISTER_SKIP_MIGRATIONS: "1"
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status == 200 else 1)"
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 30s
+  networks: [internal]
+  # No public ports — only Caddy reaches it on the internal network.
+
+services:
+  # School edition: Klassen, Klassenlehrer, Fachlehrer, Stellvertretungen +
+  # Briefe/Vorlagen. Caddy routes /api/classes*, /api/substitutions*,
+  # /api/letters* here.
+  magister-api-school:
+    <<: *edition-api
+    profiles: ["school"]
+    environment:
+      <<: *edition-env
+      MAGISTER_CONTAINER_MODULES: "classes,letters"
+
+  # Company edition: Abteilungen/Teams + On-/Off-Boarding. Caddy routes
+  # /api/departments*, /api/company* here.
+  magister-api-company:
+    <<: *edition-api
+    profiles: ["company"]
+    environment:
+      <<: *edition-env
+      MAGISTER_CONTAINER_MODULES: "departments"

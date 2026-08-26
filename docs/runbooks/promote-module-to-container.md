@@ -102,6 +102,65 @@ docker compose -f docker-compose.yml -f docker-compose.split.yml rm -f magister-
 Nichts an den Daten ändert sich — der Haupt-Container serviert das Modul sofort
 wieder mit.
 
+### Pro-Edition-Split (`docker-compose.editions.yml`)
+
+`docker-compose.split.yml` promotet *ein* Modul (Beispiel `departments`). Für die
+**harte Edition-Trennung** (M6) gibt es die editions-skalierte Variante
+`docker-compose.editions.yml`: sie bringt die Edition-Superstruktur in einen
+eigenen Container, gegated über Compose-**Profiles**, damit du nur die Edition
+hochziehst, die diese Instanz wirklich fährt (passend zum `instance_profile`):
+
+| Edition | Container | `MAGISTER_CONTAINER_MODULES` | Caddy-Präfixe |
+|---------|-----------|------------------------------|---------------|
+| Firma   | `magister-api-company` | `departments` | `/api/departments*`, `/api/company*` |
+| Schule  | `magister-api-school`  | `classes,letters` | `/api/classes*`, `/api/substitutions*`, `/api/letters*` |
+
+```bash
+cd /opt/magister/deploy/compose
+# Firmen-Instanz:
+docker compose -f docker-compose.yml -f docker-compose.editions.yml \
+  --profile company up -d
+# Schul-Instanz:
+docker compose -f docker-compose.yml -f docker-compose.editions.yml \
+  --profile school up -d
+```
+
+Nur der Migrations-Lauf gehört *einem* Container: die Edition-Container setzen
+`MAGISTER_SKIP_MIGRATIONS=1`, der Haupt-`magister-api` bleibt der einzige
+Migrator.
+
+Caddy-Routing analog zu Variante A, aber mit dem/den Edition-Präfix(en) VOR dem
+generischen `/api/*`-Block. Firma:
+
+```caddy
+	# Firmen-Superstruktur läuft im eigenen Container.
+	handle_path /api/departments* {
+		reverse_proxy magister-api-company:8000
+	}
+	handle_path /api/company* {
+		reverse_proxy magister-api-company:8000
+	}
+```
+
+Schule:
+
+```caddy
+	handle_path /api/classes* {
+		reverse_proxy magister-api-school:8000
+	}
+	handle_path /api/substitutions* {
+		reverse_proxy magister-api-school:8000
+	}
+	handle_path /api/letters* {
+		reverse_proxy magister-api-school:8000
+	}
+```
+
+> Auch hier zählt die Reihenfolge: die spezifischen Edition-Präfixe müssen VOR
+> dem generischen `/api/*` stehen. Die geteilten Module (Geräte, Reports,
+> Importe) sowie `platform` bleiben im Haupt-Container — sie bedienen beide
+> Editionen.
+
 ---
 
 ## Variante B — echter Split: `git subtree split` in ein eigenes Repo
