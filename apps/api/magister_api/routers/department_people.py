@@ -11,11 +11,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.department_people import (
     DepartmentMembershipCreate,
     DepartmentMembershipOut,
@@ -67,8 +69,9 @@ async def add_member(
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
 ) -> DepartmentMembershipOut:
-    svc = DepartmentPeopleService(session, settings, user.to_scope())
+    svc = DepartmentPeopleService(session, settings, user.to_scope(), ad)
     ip, request_id = _ip_request_id(request)
     try:
         row = await svc.add_member(
@@ -92,8 +95,9 @@ async def remove_member(
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
 ) -> Response:
-    svc = DepartmentPeopleService(session, settings, user.to_scope())
+    svc = DepartmentPeopleService(session, settings, user.to_scope(), ad)
     ip, request_id = _ip_request_id(request)
     try:
         await svc.remove_member(

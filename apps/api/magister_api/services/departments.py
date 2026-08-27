@@ -39,19 +39,24 @@ class DepartmentService:
     async def create(
         self,
         *,
-        school_id: int,
+        school_id: int | None,
         name: str,
         kuerzel: str | None,
         details: str | None = None,
+        ad_groups: list[str] | None = None,
         ip: str | None,
         request_id: str,
     ) -> Department:
         try:
             row = await self.repo.create(
-                school_id=school_id, name=name, kuerzel=kuerzel, details=details
+                school_id=school_id,
+                name=name,
+                kuerzel=kuerzel,
+                details=details,
+                ad_groups=ad_groups,
             )
         except PermissionError as exc:
-            raise DepartmentPermissionError("school_out_of_scope") from exc
+            raise DepartmentPermissionError(str(exc) or "school_out_of_scope") from exc
         await self.audit.emit(
             action="department_created",
             target_kind="department",
@@ -72,13 +77,16 @@ class DepartmentService:
         name: str | None,
         kuerzel: str | None,
         details: str | None,
+        ad_groups: list[str] | None = None,
         ip: str | None,
         request_id: str,
     ) -> Department:
         row = await self.get(department_id)
         old_name, old_kuerzel = row.name, row.kuerzel
         old_details = row.details
-        changed = await self.repo.update(row, name=name, kuerzel=kuerzel, details=details)
+        changed = await self.repo.update(
+            row, name=name, kuerzel=kuerzel, details=details, ad_groups=ad_groups
+        )
         if changed:
             await self.audit.emit(
                 action="department_updated",

@@ -6,6 +6,7 @@ import { ApiError, apiFetch } from "@/api/client";
 import {
   useClasses,
   useCreateAdUser,
+  useGroupTemplates,
   useInstanceProfile,
   useMailDomains,
   useSchools,
@@ -42,6 +43,7 @@ const INITIAL = {
   mail: "",
   school_id: "",
   ou_key: "teacher" as AdUserOuKey,
+  group_template_id: "",
   jahrgangsstufe: "",
   class_id: "",
   force_change: true,
@@ -50,6 +52,9 @@ const INITIAL = {
 };
 
 function createErrorKey(err: ApiError): string {
+  if (err.code === "group_template_not_found") return "admin.user_new.err_template_not_found";
+  if (err.code === "group_template_not_for_school")
+    return "admin.user_new.err_template_not_for_school";
   if (err.status === 409) return "admin.user_new.err_ou_not_configured";
   if (err.status === 503) return "admin.user_new.err_ad";
   if (err.status === 422) return "admin.user_new.err_invalid";
@@ -74,6 +79,12 @@ function NewUserPage(): JSX.Element {
   const [form, setForm] = useState(INITIAL);
   const [password, setPassword] = useState<string | null>(null);
   const [classWarn, setClassWarn] = useState(false);
+
+  // Zielrollen (group templates) offered at the picked Standort. Optional: when
+  // none is chosen the school's default provisioning groups apply.
+  const selectedSchoolId = form.school_id ? Number(form.school_id) : undefined;
+  const templatesQ = useGroupTemplates(selectedSchoolId, !!selectedSchoolId);
+  const templates = templatesQ.data ?? [];
 
   // Company provisions a single "company" category into the org unit's company
   // OU; school offers teacher + student Zyklen. Students carry a grade + class.
@@ -130,6 +141,7 @@ function NewUserPage(): JSX.Element {
         mail: form.mail || null,
         ou_key: ouKey,
         school_id: Number(form.school_id),
+        group_template_id: form.group_template_id ? Number(form.group_template_id) : null,
         force_change: form.force_change,
         cannot_change_password: form.cannot_change_password,
         password_never_expires: form.password_never_expires,
@@ -282,7 +294,13 @@ function NewUserPage(): JSX.Element {
                 id="unit"
                 className={selectClasses}
                 value={form.school_id}
-                onChange={(e) => setForm((prev) => ({ ...prev, school_id: e.target.value }))}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    school_id: e.target.value,
+                    group_template_id: "",
+                  }))
+                }
               >
                 <option value="">{tt("admin.user_new.unit_placeholder")}</option>
                 {schoolList.map((s) => (
@@ -309,6 +327,29 @@ function NewUserPage(): JSX.Element {
                 ))}
               </select>
               <p className="text-xs text-muted-foreground">{t("admin.user_new.ou_hint")}</p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="ziel">{t("admin.user_new.group_template")}</Label>
+              <select
+                id="ziel"
+                className={selectClasses}
+                value={form.group_template_id}
+                disabled={!form.school_id}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, group_template_id: e.target.value }))
+                }
+              >
+                <option value="">{t("admin.user_new.group_template_default")}</option>
+                {templates.map((tpl) => (
+                  <option key={tpl.id} value={String(tpl.id)}>
+                    {tpl.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {t("admin.user_new.group_template_hint")}
+              </p>
             </div>
 
             {isStudent ? (

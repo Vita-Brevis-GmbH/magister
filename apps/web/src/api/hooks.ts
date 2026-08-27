@@ -48,6 +48,9 @@ import type {
   DepartmentOut,
   DepartmentCreate,
   DepartmentUpdate,
+  GroupTemplateOut,
+  GroupTemplateCreate,
+  GroupTemplateUpdate,
   DepartmentMembershipOut,
   UserDepartmentOut,
   ManagerRoleOut,
@@ -118,6 +121,8 @@ export const queryKeys = {
   localAdmin: ["local-admin"] as const,
   appSettings: ["app-settings"] as const,
   adGroups: ["ad-groups"] as const,
+  groupTemplates: (schoolId?: number) =>
+    schoolId ? (["group-templates", schoolId] as const) : (["group-templates"] as const),
   myPreferences: ["me", "preferences"] as const,
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
@@ -354,6 +359,45 @@ export function useRemoveUserFromDepartment(guid: string) {
     mutationFn: ({ departmentId, membershipId }) =>
       apiFetch<void>(`/departments/${departmentId}/members/${membershipId}`, { method: "DELETE" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.userDepartments(guid) }),
+  });
+}
+
+// AD group templates ("Zielrollen"). `schoolId` filters the list to templates
+// offered at that Standort (linked or global); omit for the full catalog.
+export function useGroupTemplates(schoolId?: number, enabled = true) {
+  return useQuery<GroupTemplateOut[]>({
+    queryKey: queryKeys.groupTemplates(schoolId),
+    queryFn: () =>
+      apiFetch<GroupTemplateOut[]>(
+        schoolId ? `/admin/group-templates?school_id=${schoolId}` : "/admin/group-templates",
+      ),
+    enabled,
+  });
+}
+
+export function useCreateGroupTemplate() {
+  const qc = useQueryClient();
+  return useMutation<GroupTemplateOut, ApiError, GroupTemplateCreate>({
+    mutationFn: (body) =>
+      apiFetch<GroupTemplateOut>("/admin/group-templates", { method: "POST", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+export function useUpdateGroupTemplate() {
+  const qc = useQueryClient();
+  return useMutation<GroupTemplateOut, ApiError, { id: number; body: GroupTemplateUpdate }>({
+    mutationFn: ({ id, body }) =>
+      apiFetch<GroupTemplateOut>(`/admin/group-templates/${id}`, { method: "PATCH", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+export function useArchiveGroupTemplate() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/admin/group-templates/${id}`, { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
   });
 }
 

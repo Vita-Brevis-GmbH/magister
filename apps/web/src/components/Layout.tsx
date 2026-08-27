@@ -194,6 +194,14 @@ export function Layout() {
                         {t("nav.roles")}
                       </Link>
                     ) : null}
+                    <Link
+                      to="/admin/group-templates"
+                      role="menuitem"
+                      activeProps={{ className: menuActive }}
+                      inactiveProps={{ className: menuIdle }}
+                    >
+                      {t("nav.group_templates")}
+                    </Link>
                     {hasClasses ? (
                       <Link
                         to="/admin/substitutions"

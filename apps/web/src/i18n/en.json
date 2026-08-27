@@ -25,7 +25,8 @@
     "system": "System",
     "modules": "Modules & Features",
     "departments": "Departments",
-    "document_templates": "Templates"
+    "document_templates": "Templates",
+    "group_templates": "Access roles"
   },
   "auth": {
     "login_title": "Sign in",
@@ -630,7 +631,12 @@
       "cannot_change_password": "User cannot change password",
       "password_never_expires": "Password never expires",
       "class_assign_failed": "Account created, but the class assignment failed. Please assign it manually.",
-      "can_change_password": "User can change password"
+      "can_change_password": "User can change password",
+      "group_template": "Access role (groups)",
+      "group_template_default": "Default groups (from provisioning)",
+      "group_template_hint": "Optional. Replaces the default groups with the chosen role.",
+      "err_template_not_found": "Access role not found.",
+      "err_template_not_for_school": "The role is not available at this location."
     },
     "user_settings": {
       "title": "User configuration",
@@ -1058,7 +1064,8 @@
         "ad_groups_student_zyklus2": "Groups for students Zyklus 2",
         "ad_groups_student_zyklus3": "Groups for students Zyklus 3",
         "ad_groups_company": "Default groups employees"
-      }
+      },
+      "groups_moved_hint": "AD group templates are now managed centrally under “Access roles”."
     }
   },
   "user_groups": {
@@ -1194,7 +1201,11 @@
     "no_units": "There is no {{unit}} yet. Please create one first.",
     "no_units_link": "Create {{unit}}",
     "select_unit": "— select {{unit}} —",
-    "create_failed": "Creation failed. Please check the inputs and the selected unit."
+    "create_failed": "Creation failed. Please check the inputs and the selected unit.",
+    "groups_label": "AD groups",
+    "groups_hint": "Applied to members in AD when assigned.",
+    "groups_count": "{{count}} groups",
+    "global_option": "— no {{unit}} (global) —"
   },
   "rename": {
     "button": "Name change",
@@ -1242,5 +1253,28 @@
     "key_class_change": "Class change",
     "key_password_handout": "Password handout",
     "load_starter": "Load default template"
+  },
+  "group_templates": {
+    "title": "Access roles (AD groups)",
+    "intro": "Reusable AD group templates for permissions. Selectable when creating users, filtered by {{unit_plural}}.",
+    "new_title": "New access role",
+    "new_desc": "Set name, AD groups and scope.",
+    "name": "Name",
+    "name_placeholder": "e.g. Tool-X access",
+    "description": "Description",
+    "groups_label": "AD groups",
+    "groups_hint": "Groups this role grants access to.",
+    "schools_label": "{{unit_plural}}",
+    "schools_hint": "Available only at the selected {{unit_plural}}.",
+    "schools_global_hint": "With none selected the role applies to all {{unit_plural}}.",
+    "no_schools": "No {{unit_plural}} available.",
+    "global_badge": "Global (all)",
+    "count_groups": "{{count}} groups",
+    "create": "Create role",
+    "save": "Save",
+    "edit": "Edit",
+    "archive": "Archive",
+    "create_failed": "Saving failed.",
+    "empty": "No access roles yet."
   }
 }

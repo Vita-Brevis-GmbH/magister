@@ -272,10 +272,13 @@ export interface ModuleSettingsUpdate {
 /** M6 Phase 2: company-edition departments + memberships + manager roles. */
 export interface DepartmentOut {
   id: number;
-  school_id: number;
+  // Null = global (standortübergreifend, not bound to a Standort).
+  school_id: number | null;
   name: string;
   kuerzel: string | null;
   details: string | null;
+  // AD groups granted to members while their membership is active.
+  ad_groups: string[];
   status: string;
   created_at: string;
   updated_at: string;
@@ -286,13 +289,46 @@ export interface DepartmentCreate {
   name: string;
   kuerzel?: string | null;
   details?: string | null;
-  school_id?: number;
+  // Omit / null for a global (unbound) department (admin only).
+  school_id?: number | null;
+  ad_groups?: string[];
 }
 
 export interface DepartmentUpdate {
   name?: string | null;
   kuerzel?: string | null;
   details?: string | null;
+  ad_groups?: string[] | null;
+}
+
+/** AD group template ("Zielrolle"): a reusable bundle of AD group DNs,
+ *  assignable to one or more Standorte and chosen at user-create. */
+export interface GroupTemplateOut {
+  id: number;
+  name: string;
+  description: string | null;
+  kind: string | null;
+  ad_groups: string[];
+  school_ids: number[];
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GroupTemplateCreate {
+  name: string;
+  description?: string | null;
+  kind?: string | null;
+  ad_groups?: string[];
+  school_ids?: number[];
+}
+
+export interface GroupTemplateUpdate {
+  name?: string | null;
+  description?: string | null;
+  kind?: string | null;
+  ad_groups?: string[] | null;
+  school_ids?: number[] | null;
 }
 
 export interface DepartmentMembershipOut {
@@ -643,6 +679,9 @@ export interface AdUserCreateRequest {
   mail?: string | null;
   ou_key: AdUserOuKey;
   school_id: number;
+  // Optional "Zielrolle" (group template) — its AD groups replace the school's
+  // per-Zyklus/company default groups. Must be offered at school_id.
+  group_template_id?: number | null;
   display_name?: string | null;
   force_change?: boolean;
   cannot_change_password?: boolean;
@@ -915,7 +954,7 @@ export interface ActivityReport {
 // Company edition (M6 #8): department-centric reports.
 export interface MembersByDepartmentRow {
   department_id: number;
-  school_id: number;
+  school_id: number | null;
   name: string;
   kuerzel: string | null;
   member_count: number;

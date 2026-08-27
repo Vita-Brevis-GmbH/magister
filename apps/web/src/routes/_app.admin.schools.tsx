@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import {
-  useAdGroups,
   useCreateSchool,
   useDeleteSchool,
   useInstanceProfile,
@@ -12,7 +11,6 @@ import {
   useUpdateSchool,
 } from "@/api/hooks";
 import type { SchoolOut } from "@/api/types";
-import { GroupPicker } from "@/components/GroupPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -171,21 +169,6 @@ function SchoolsPage(): JSX.Element {
   );
 }
 
-type GroupKey =
-  | "ad_groups_teacher"
-  | "ad_groups_student_zyklus1"
-  | "ad_groups_student_zyklus2"
-  | "ad_groups_student_zyklus3"
-  | "ad_groups_company";
-
-// School-profile group pickers only (company uses ad_groups_company on its own).
-const GROUP_KEYS: Exclude<GroupKey, "ad_groups_company">[] = [
-  "ad_groups_teacher",
-  "ad_groups_student_zyklus1",
-  "ad_groups_student_zyklus2",
-  "ad_groups_student_zyklus3",
-];
-
 interface FormState {
   name: string;
   kuerzel: string;
@@ -202,11 +185,6 @@ interface FormState {
   ad_ou_teachers: string;
   ad_ou_devices: string;
   ad_ou_company_users: string;
-  ad_groups_teacher: string[];
-  ad_groups_student_zyklus1: string[];
-  ad_groups_student_zyklus2: string[];
-  ad_groups_student_zyklus3: string[];
-  ad_groups_company: string[];
 }
 
 function emptyForm(): FormState {
@@ -226,11 +204,6 @@ function emptyForm(): FormState {
     ad_ou_teachers: "",
     ad_ou_devices: "",
     ad_ou_company_users: "",
-    ad_groups_teacher: [],
-    ad_groups_student_zyklus1: [],
-    ad_groups_student_zyklus2: [],
-    ad_groups_student_zyklus3: [],
-    ad_groups_company: [],
   };
 }
 
@@ -251,11 +224,6 @@ function fromSchool(s: SchoolOut): FormState {
     ad_ou_teachers: s.ad_ou_teachers ?? "",
     ad_ou_devices: s.ad_ou_devices ?? "",
     ad_ou_company_users: s.ad_ou_company_users ?? "",
-    ad_groups_teacher: [...s.ad_groups_teacher],
-    ad_groups_student_zyklus1: [...s.ad_groups_student_zyklus1],
-    ad_groups_student_zyklus2: [...s.ad_groups_student_zyklus2],
-    ad_groups_student_zyklus3: [...s.ad_groups_student_zyklus3],
-    ad_groups_company: [...s.ad_groups_company],
   };
 }
 
@@ -274,7 +242,6 @@ export function SchoolForm({
   const [form, setForm] = useState<FormState>(() => (target ? fromSchool(target) : emptyForm()));
   const create = useCreateSchool();
   const update = useUpdateSchool(target?.id ?? 0);
-  const groups = useAdGroups();
   const mut = target ? update : create;
 
   useEffect(() => {
@@ -282,10 +249,6 @@ export function SchoolForm({
   }, [target]);
 
   function set<K extends keyof FormState>(key: K, value: string): void {
-    setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function setGroups(key: GroupKey, value: string[]): void {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
@@ -314,11 +277,6 @@ export function SchoolForm({
       ad_ou_teachers: form.ad_ou_teachers.trim() || null,
       ad_ou_devices: form.ad_ou_devices.trim() || null,
       ad_ou_company_users: form.ad_ou_company_users.trim() || null,
-      ad_groups_teacher: form.ad_groups_teacher,
-      ad_groups_student_zyklus1: form.ad_groups_student_zyklus1,
-      ad_groups_student_zyklus2: form.ad_groups_student_zyklus2,
-      ad_groups_student_zyklus3: form.ad_groups_student_zyklus3,
-      ad_groups_company: form.ad_groups_company,
     };
     if (target) {
       update.mutate(body, { onSuccess: onDone });
@@ -329,13 +287,6 @@ export function SchoolForm({
 
   const lat = numOrNull(form.latitude);
   const lon = numOrNull(form.longitude);
-
-  const GROUP_LABELS: Record<Exclude<GroupKey, "ad_groups_company">, string> = {
-    ad_groups_teacher: "schools.ad_config.field.ad_groups_teacher",
-    ad_groups_student_zyklus1: "schools.ad_config.field.ad_groups_student_zyklus1",
-    ad_groups_student_zyklus2: "schools.ad_config.field.ad_groups_student_zyklus2",
-    ad_groups_student_zyklus3: "schools.ad_config.field.ad_groups_student_zyklus3",
-  };
 
   return (
     <form onSubmit={handleSubmit} className="max-w-3xl space-y-6">
@@ -540,35 +491,9 @@ export function SchoolForm({
             />
           </div>
           <p className="text-xs text-muted-foreground">{t("schools.ad_config.ou_hint")}</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("schools.ad_config.groups_section")}</CardTitle>
-          <CardDescription>{t("schools.ad_config.groups_section_desc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isCompany ? (
-            <GroupPicker
-              label={t("schools.ad_config.field.ad_groups_company")}
-              hint={t("schools.ad_config.group_pick_hint")}
-              catalog={Array.isArray(groups.data) ? groups.data : []}
-              selected={form.ad_groups_company}
-              onChange={(next) => setGroups("ad_groups_company", next)}
-            />
-          ) : (
-            GROUP_KEYS.map((key) => (
-              <GroupPicker
-                key={key}
-                label={t(GROUP_LABELS[key])}
-                hint={t("schools.ad_config.group_pick_hint")}
-                catalog={Array.isArray(groups.data) ? groups.data : []}
-                selected={form[key]}
-                onChange={(next) => setGroups(key, next)}
-              />
-            ))
-          )}
+          <p className="text-xs text-muted-foreground">
+            {t("schools.ad_config.groups_moved_hint")}
+          </p>
         </CardContent>
       </Card>
 

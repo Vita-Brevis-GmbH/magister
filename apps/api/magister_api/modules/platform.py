@@ -22,6 +22,7 @@ from magister_api.routers.admin_system import router as admin_system_router
 from magister_api.routers.admin_users import router as admin_users_router
 from magister_api.routers.audit import router as audit_router
 from magister_api.routers.auth import router as auth_router
+from magister_api.routers.group_templates import router as group_templates_router
 from magister_api.routers.me import router as me_router
 from magister_api.routers.privacy import router as privacy_router
 from magister_api.routers.schools import router as schools_router
@@ -44,6 +45,7 @@ PLATFORM_MODULE = ModuleManifest(
         admin_local_admin_router,
         admin_settings_router,
         admin_ad_groups_router,
+        group_templates_router,
         admin_document_templates_router,
         admin_roles_router,
         admin_rbac_router,

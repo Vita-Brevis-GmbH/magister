@@ -3,13 +3,16 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  useAdGroups,
   useArchiveDepartment,
   useCreateDepartment,
+  useCurrentUser,
   useDepartments,
   useSchools,
   useUpdateDepartment,
 } from "@/api/hooks";
 import type { DepartmentOut } from "@/api/types";
+import { GroupPicker } from "@/components/GroupPicker";
 import { Button } from "@/components/ui/button";
 import { useTerms } from "@/lib/useTerms";
 
@@ -23,9 +26,12 @@ function DepartmentsPage(): JSX.Element {
   const q = useDepartments();
   const schools = useSchools();
   const create = useCreateDepartment();
+  const me = useCurrentUser();
+  const isAdmin = me.data?.is_admin ?? false;
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
-  const [schoolId, setSchoolId] = useState<number | "">("");
+  // "" = not chosen, "global" = standortübergreifend (admin only), number = Standort.
+  const [schoolId, setSchoolId] = useState<number | "" | "global">("");
 
   const schoolList = useMemo(() => schools.data ?? [], [schools.data]);
   // Pre-select the org unit when there is exactly one to choose from.
@@ -37,7 +43,11 @@ function DepartmentsPage(): JSX.Element {
     e.preventDefault();
     if (!name.trim() || schoolId === "") return;
     create.mutate(
-      { name: name.trim(), kuerzel: kuerzel.trim() || null, school_id: schoolId },
+      {
+        name: name.trim(),
+        kuerzel: kuerzel.trim() || null,
+        school_id: schoolId === "global" ? null : schoolId,
+      },
       {
         onSuccess: () => {
           setName("");
@@ -74,10 +84,18 @@ function DepartmentsPage(): JSX.Element {
             <span className="text-xs font-medium text-muted-foreground">{terms.unit}</span>
             <select
               value={schoolId}
-              onChange={(e) => setSchoolId(e.target.value ? Number(e.target.value) : "")}
+              onChange={(e) => {
+                const v = e.target.value;
+                setSchoolId(v === "" ? "" : v === "global" ? "global" : Number(v));
+              }}
               className="h-9 w-56 rounded-md border border-input bg-background px-3 text-sm"
             >
               <option value="">{t("departments.select_unit", { unit: terms.unit })}</option>
+              {isAdmin ? (
+                <option value="global">
+                  {t("departments.global_option", { unit: terms.unit })}
+                </option>
+              ) : null}
               {schoolList.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
@@ -149,13 +167,16 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
   const { t } = useTranslation();
   const archive = useArchiveDepartment();
   const update = useUpdateDepartment();
+  const groups = useAdGroups();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(dept.name);
   const [kuerzel, setKuerzel] = useState(dept.kuerzel ?? "");
+  const [adGroups, setAdGroups] = useState<string[]>(dept.ad_groups);
 
   const startEdit = (): void => {
     setName(dept.name);
     setKuerzel(dept.kuerzel ?? "");
+    setAdGroups(dept.ad_groups);
     update.reset();
     setEditing(true);
   };
@@ -163,40 +184,54 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
   const save = (): void => {
     if (!name.trim()) return;
     update.mutate(
-      { id: dept.id, body: { name: name.trim(), kuerzel: kuerzel.trim() || null } },
+      {
+        id: dept.id,
+        body: { name: name.trim(), kuerzel: kuerzel.trim() || null, ad_groups: adGroups },
+      },
       { onSuccess: () => setEditing(false) },
     );
   };
 
   if (editing) {
     return (
-      <li className="flex flex-wrap items-center gap-2 px-4 py-3">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder={t("departments.name")}
-          className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+      <li className="space-y-3 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder={t("departments.name")}
+            className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+          />
+          <input
+            value={kuerzel}
+            onChange={(e) => setKuerzel(e.target.value)}
+            placeholder={t("departments.kuerzel")}
+            className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <GroupPicker
+          label={t("departments.groups_label")}
+          hint={t("departments.groups_hint")}
+          catalog={Array.isArray(groups.data) ? groups.data : []}
+          selected={adGroups}
+          onChange={setAdGroups}
         />
-        <input
-          value={kuerzel}
-          onChange={(e) => setKuerzel(e.target.value)}
-          placeholder={t("departments.kuerzel")}
-          className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
-        />
-        <Button size="sm" disabled={update.isPending || !name.trim()} onClick={save}>
-          {t("departments.save")}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={update.isPending}
-          onClick={() => setEditing(false)}
-        >
-          {t("common.cancel")}
-        </Button>
-        {update.isError ? (
-          <span className="w-full text-xs text-destructive">{t("departments.create_failed")}</span>
-        ) : null}
+        <div className="flex items-center gap-2">
+          <Button size="sm" disabled={update.isPending || !name.trim()} onClick={save}>
+            {t("departments.save")}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={update.isPending}
+            onClick={() => setEditing(false)}
+          >
+            {t("common.cancel")}
+          </Button>
+          {update.isError ? (
+            <span className="text-xs text-destructive">{t("departments.create_failed")}</span>
+          ) : null}
+        </div>
       </li>
     );
   }
@@ -217,6 +252,11 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
           {t("departments.members_count", { count: dept.member_count })}
         </span>
+        {dept.ad_groups.length > 0 ? (
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+            {t("departments.groups_count", { count: dept.ad_groups.length })}
+          </span>
+        ) : null}
       </div>
       <div className="flex shrink-0 gap-1">
         <Button variant="ghost" size="sm" onClick={startEdit}>

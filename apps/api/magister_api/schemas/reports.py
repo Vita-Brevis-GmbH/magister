@@ -69,7 +69,8 @@ class ActivityReport(BaseModel):
 
 class MembersByDepartmentRow(BaseModel):
     department_id: int
-    school_id: int
+    # Null for a global (standortübergreifend) department.
+    school_id: int | None
     name: str
     kuerzel: str | None
     member_count: int

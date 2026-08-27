@@ -25,7 +25,8 @@
     "system": "System",
     "modules": "Module & Funktionen",
     "departments": "Abteilungen",
-    "document_templates": "Vorlagen"
+    "document_templates": "Vorlagen",
+    "group_templates": "Zielrollen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -630,7 +631,12 @@
       "cannot_change_password": "Benutzer kann Passwort nicht ändern",
       "password_never_expires": "Passwort läuft nie ab",
       "class_assign_failed": "Konto erstellt, aber die Klassenzuweisung ist fehlgeschlagen. Bitte manuell zuweisen.",
-      "can_change_password": "Benutzer kann Passwort ändern"
+      "can_change_password": "Benutzer kann Passwort ändern",
+      "group_template": "Zielrolle (Gruppen)",
+      "group_template_default": "Standard-Gruppen (aus Provisioning)",
+      "group_template_hint": "Optional. Ersetzt die Standard-Gruppen durch die gewählte Zielrolle.",
+      "err_template_not_found": "Zielrolle nicht gefunden.",
+      "err_template_not_for_school": "Die Zielrolle ist an diesem Standort nicht verfügbar."
     },
     "user_settings": {
       "title": "Userkonfiguration",
@@ -1058,7 +1064,8 @@
         "ad_groups_student_zyklus2": "Gruppen für Schüler:innen Zyklus 2",
         "ad_groups_student_zyklus3": "Gruppen für Schüler:innen Zyklus 3",
         "ad_groups_company": "Standard-Gruppen Mitarbeitende"
-      }
+      },
+      "groups_moved_hint": "AD-Gruppen-Vorlagen werden jetzt zentral unter „Zielrollen“ verwaltet."
     }
   },
   "user_groups": {
@@ -1194,7 +1201,11 @@
     "no_units": "Es gibt noch keinen {{unit}}. Bitte zuerst einen erfassen.",
     "no_units_link": "{{unit}} erfassen",
     "select_unit": "— {{unit}} wählen —",
-    "create_failed": "Anlegen fehlgeschlagen. Bitte Eingaben und den gewählten Standort prüfen."
+    "create_failed": "Anlegen fehlgeschlagen. Bitte Eingaben und den gewählten Standort prüfen.",
+    "groups_label": "AD-Gruppen",
+    "groups_hint": "Werden Mitgliedern bei der Zuweisung im AD gesetzt.",
+    "groups_count": "{{count}} Gruppen",
+    "global_option": "— kein {{unit}} (global) —"
   },
   "rename": {
     "button": "Namensänderung",
@@ -1242,5 +1253,28 @@
     "key_class_change": "Klassenwechsel",
     "key_password_handout": "Passwort-Übergabe",
     "load_starter": "Standardvorlage laden"
+  },
+  "group_templates": {
+    "title": "Zielrollen (AD-Gruppen)",
+    "intro": "Wiederverwendbare AD-Gruppen-Vorlagen für Berechtigungen. Beim Anlegen von Benutzern nach {{unit_plural}} gefiltert wählbar.",
+    "new_title": "Neue Zielrolle",
+    "new_desc": "Name, AD-Gruppen und Geltungsbereich festlegen.",
+    "name": "Name",
+    "name_placeholder": "z. B. Tool-X Zugang",
+    "description": "Beschreibung",
+    "groups_label": "AD-Gruppen",
+    "groups_hint": "Gruppen, die dieser Rolle Zugriff geben.",
+    "schools_label": "{{unit_plural}}",
+    "schools_hint": "Nur an den gewählten {{unit_plural}} verfügbar.",
+    "schools_global_hint": "Ohne Auswahl gilt die Rolle für alle {{unit_plural}}.",
+    "no_schools": "Keine {{unit_plural}} vorhanden.",
+    "global_badge": "Global (alle)",
+    "count_groups": "{{count}} Gruppen",
+    "create": "Zielrolle anlegen",
+    "save": "Speichern",
+    "edit": "Bearbeiten",
+    "archive": "Archivieren",
+    "create_failed": "Speichern fehlgeschlagen.",
+    "empty": "Noch keine Zielrollen."
   }
 }

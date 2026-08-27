@@ -16,6 +16,7 @@ from magister_api.models.department import Department
 from magister_api.models.department_membership import DepartmentMembership
 from magister_api.models.device import Device
 from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.group_template import GroupTemplate, GroupTemplateSchool
 from magister_api.models.import_job import ImportJob, ImportStagedRow
 from magister_api.models.local_admin import LocalAdmin
 from magister_api.models.manager_role import ManagerRole
@@ -38,6 +39,8 @@ __all__ = [
     "DepartmentMembership",
     "Device",
     "DocumentTemplate",
+    "GroupTemplate",
+    "GroupTemplateSchool",
     "ImportJob",
     "ImportStagedRow",
     "LocalAdmin",

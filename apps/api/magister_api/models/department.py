@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -24,12 +25,20 @@ class Department(Base):
     __tablename__ = "departments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    school_id: Mapped[int] = mapped_column(
-        ForeignKey("schools.id", ondelete="RESTRICT"), nullable=False, index=True
+    # Nullable: a department may be standortübergreifend / not bound to a
+    # Standort ("freies Arbeiten"). NULL = global (visible/managed everywhere).
+    school_id: Mapped[int | None] = mapped_column(
+        ForeignKey("schools.id", ondelete="RESTRICT"), nullable=True, index=True
     )
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     kuerzel: Mapped[str | None] = mapped_column(String(32), nullable=True)
     details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # AD groups granted to members while the membership is active (access to
+    # tools/data). Applied on membership add, revoked on membership end (unless
+    # another active membership of the same person still grants the group).
+    ad_groups: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=DEPARTMENT_STATUS_ACTIVE
     )

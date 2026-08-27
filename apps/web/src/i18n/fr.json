@@ -28,7 +28,8 @@
     "system": "Système",
     "modules": "Modules et fonctions",
     "departments": "Départements",
-    "document_templates": "Modèles"
+    "document_templates": "Modèles",
+    "group_templates": "Rôles d’accès"
   },
   "auth": {
     "login_title": "Connexion",
@@ -633,7 +634,12 @@
       "cannot_change_password": "L'utilisateur ne peut pas changer le mot de passe",
       "password_never_expires": "Le mot de passe n'expire jamais",
       "class_assign_failed": "Compte créé, mais l'affectation à la classe a échoué. Veuillez l'affecter manuellement.",
-      "can_change_password": "L'utilisateur peut changer le mot de passe"
+      "can_change_password": "L'utilisateur peut changer le mot de passe",
+      "group_template": "Rôle d’accès (groupes)",
+      "group_template_default": "Groupes par défaut (provisionnement)",
+      "group_template_hint": "Facultatif. Remplace les groupes par défaut par le rôle choisi.",
+      "err_template_not_found": "Rôle d’accès introuvable.",
+      "err_template_not_for_school": "Le rôle n’est pas disponible sur ce site."
     },
     "user_settings": {
       "title": "Configuration utilisateur",
@@ -1061,7 +1067,8 @@
         "ad_groups_student_zyklus2": "Groupes pour élèves cycle 2",
         "ad_groups_student_zyklus3": "Groupes pour élèves cycle 3",
         "ad_groups_company": "Groupes par défaut collaborateurs"
-      }
+      },
+      "groups_moved_hint": "Les modèles de groupes AD sont désormais gérés de manière centralisée sous « Rôles d’accès »."
     }
   },
   "user_groups": {
@@ -1197,7 +1204,11 @@
     "no_units": "Il n'y a pas encore de {{unit}}. Veuillez d'abord en créer un.",
     "no_units_link": "Créer un {{unit}}",
     "select_unit": "— choisir {{unit}} —",
-    "create_failed": "Échec de la création. Vérifiez les saisies et l'unité sélectionnée."
+    "create_failed": "Échec de la création. Vérifiez les saisies et l'unité sélectionnée.",
+    "groups_label": "Groupes AD",
+    "groups_hint": "Attribués aux membres dans l’AD lors de l’affectation.",
+    "groups_count": "{{count}} groupes",
+    "global_option": "— aucun {{unit}} (global) —"
   },
   "rename": {
     "button": "Changement de nom",
@@ -1245,5 +1256,28 @@
     "key_class_change": "Changement de classe",
     "key_password_handout": "Remise du mot de passe",
     "load_starter": "Charger le modèle par défaut"
+  },
+  "group_templates": {
+    "title": "Rôles d’accès (groupes AD)",
+    "intro": "Modèles de groupes AD réutilisables pour les autorisations. Sélectionnables à la création d’utilisateurs, filtrés par {{unit_plural}}.",
+    "new_title": "Nouveau rôle d’accès",
+    "new_desc": "Définir le nom, les groupes AD et la portée.",
+    "name": "Nom",
+    "name_placeholder": "p. ex. accès Tool-X",
+    "description": "Description",
+    "groups_label": "Groupes AD",
+    "groups_hint": "Groupes auxquels ce rôle donne accès.",
+    "schools_label": "{{unit_plural}}",
+    "schools_hint": "Disponible uniquement dans les {{unit_plural}} sélectionnés.",
+    "schools_global_hint": "Sans sélection, le rôle s’applique à tous les {{unit_plural}}.",
+    "no_schools": "Aucun {{unit_plural}} disponible.",
+    "global_badge": "Global (tous)",
+    "count_groups": "{{count}} groupes",
+    "create": "Créer le rôle",
+    "save": "Enregistrer",
+    "edit": "Modifier",
+    "archive": "Archiver",
+    "create_failed": "Échec de l’enregistrement.",
+    "empty": "Aucun rôle d’accès."
   }
 }

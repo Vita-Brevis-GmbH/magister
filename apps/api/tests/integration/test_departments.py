@@ -62,6 +62,44 @@ async def test_cross_school_isolation(
     assert all(d["id"] != did for d in (await as_schulleitung_b.get("/departments")).json())
 
 
+async def test_ad_groups_roundtrip(as_schulleitung_a: AsyncClient) -> None:
+    r = await as_schulleitung_a.post(
+        "/departments",
+        json={"name": "IT", "ad_groups": ["CN=IT-Tools,DC=x"]},
+    )
+    assert r.status_code == 201, r.text
+    dep = r.json()
+    assert dep["ad_groups"] == ["CN=IT-Tools,DC=x"]
+
+    r = await as_schulleitung_a.patch(
+        f"/departments/{dep['id']}", json={"ad_groups": ["CN=IT-Tools,DC=x", "CN=VPN,DC=x"]}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["ad_groups"] == ["CN=IT-Tools,DC=x", "CN=VPN,DC=x"]
+
+
+async def test_global_department_visible_everywhere(
+    as_admin: AsyncClient, as_schulleitung_a: AsyncClient, as_schulleitung_b: AsyncClient
+) -> None:
+    # Admin creates a global (standortübergreifend) department — no school_id.
+    r = await as_admin.post("/departments", json={"name": "Konzern-IT"})
+    assert r.status_code == 201, r.text
+    dep = r.json()
+    assert dep["school_id"] is None
+    did = dep["id"]
+
+    # A global department is visible to every unit admin.
+    assert any(d["id"] == did for d in (await as_schulleitung_a.get("/departments")).json())
+    assert any(d["id"] == did for d in (await as_schulleitung_b.get("/departments")).json())
+
+
+async def test_schulleitung_cannot_create_global(as_schulleitung_a: AsyncClient) -> None:
+    # A unit admin's department is always bound to their own Standort.
+    r = await as_schulleitung_a.post("/departments", json={"name": "Lokal"})
+    assert r.status_code == 201, r.text
+    assert r.json()["school_id"] is not None
+
+
 async def test_unauthenticated_rejected(client: AsyncClient) -> None:
     r = await client.get("/departments")
     assert r.status_code == 401

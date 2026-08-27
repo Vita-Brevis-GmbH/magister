@@ -33,6 +33,8 @@ _ERROR_STATUS = {
     "ou_not_configured": status.HTTP_409_CONFLICT,
     "invalid_ou_choice": status.HTTP_422_UNPROCESSABLE_ENTITY,
     "school_not_found": status.HTTP_404_NOT_FOUND,
+    "group_template_not_found": status.HTTP_404_NOT_FOUND,
+    "group_template_not_for_school": status.HTTP_409_CONFLICT,
 }
 
 
@@ -56,6 +58,7 @@ async def create_ad_user(
             mail=payload.mail,
             ou_key=payload.ou_key,
             school_id=payload.school_id,
+            group_template_id=payload.group_template_id,
             display_name=payload.display_name,
             force_change=payload.force_change,
             cannot_change_password=payload.cannot_change_password,

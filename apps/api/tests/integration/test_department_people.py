@@ -5,10 +5,20 @@ Skipped unless MAGISTER_TEST_DATABASE_URL is set (see integration conftest).
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
+
 import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from magister_api.ad.client import AdClient
+from magister_api.config import Settings
+from magister_api.routers.admin_sync import get_ad_client
+
+if TYPE_CHECKING:
+    from fastapi import FastAPI
 
 _GUID = "11111111-1111-1111-1111-111111111111"
 _MGR = "22222222-2222-2222-2222-222222222222"
@@ -24,6 +34,17 @@ async def _enable_company(db_session: AsyncSession) -> None:
         )
     )
     await db_session.commit()
+
+
+@pytest_asyncio.fixture
+async def mock_ad(app_settings: Settings) -> AsyncIterator[AdClient]:
+    client = AdClient(
+        app_settings.model_copy(
+            update={"ad_use_mock": True, "ad_users_search_base": "DC=schule,DC=local"}
+        )
+    )
+    yield client
+    await client.aclose()
 
 
 async def _make_department(client: AsyncClient, name: str = "Team A") -> int:
@@ -152,3 +173,39 @@ async def test_for_user_drops_ended_membership(as_schulleitung_a: AsyncClient) -
 
     await as_schulleitung_a.delete(f"/departments/{did}/members/{mid}")
     assert (await as_schulleitung_a.get(f"/departments/for-user/{_GUID}")).json() == []
+
+
+async def test_department_ad_groups_apply_and_revoke(
+    as_schulleitung_a: AsyncClient, app: FastAPI, mock_ad: AdClient
+) -> None:
+    # A department carrying AD groups drives the AD-group apply (on add) and
+    # revoke (on end) path. Mock directory → no real writes, but the code runs.
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    did = (
+        await as_schulleitung_a.post(
+            "/departments", json={"name": "IT", "ad_groups": ["CN=Tool,DC=schule,DC=local"]}
+        )
+    ).json()["id"]
+    r = await as_schulleitung_a.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+    assert r.status_code == 201, r.text
+    mid = r.json()["id"]
+    assert (await as_schulleitung_a.delete(f"/departments/{did}/members/{mid}")).status_code == 204
+
+
+async def test_department_groups_revoke_keeps_shared(
+    as_schulleitung_a: AsyncClient, app: FastAPI, mock_ad: AdClient
+) -> None:
+    # A group still granted by another active membership is not revoked on end.
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    shared = ["CN=Shared,DC=schule,DC=local"]
+    d1 = (
+        await as_schulleitung_a.post("/departments", json={"name": "D1", "ad_groups": shared})
+    ).json()["id"]
+    d2 = (
+        await as_schulleitung_a.post("/departments", json={"name": "D2", "ad_groups": shared})
+    ).json()["id"]
+    m1 = (
+        await as_schulleitung_a.post(f"/departments/{d1}/members", json={"ad_object_guid": _GUID})
+    ).json()["id"]
+    await as_schulleitung_a.post(f"/departments/{d2}/members", json={"ad_object_guid": _GUID})
+    assert (await as_schulleitung_a.delete(f"/departments/{d1}/members/{m1}")).status_code == 204

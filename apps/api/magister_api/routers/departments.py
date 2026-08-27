@@ -28,12 +28,15 @@ from magister_api.services.departments import (
 router = APIRouter(prefix="/departments", tags=["departments"])
 
 
-def _resolve_school_id(payload_school_id: int, user: AuthenticatedUser) -> int:
-    """Unit-admin implicitly writes into their own (single) org unit; Admin passes it."""
+def _resolve_school_id(payload_school_id: int | None, user: AuthenticatedUser) -> int | None:
+    """Resolve the target Standort for a new department.
+
+    Admin may target any Standort or create a *global* (unbound) department by
+    leaving it empty. A unit admin (Schulleitung) always writes into their own
+    single Standort and cannot create global departments.
+    """
     if user.is_admin:
-        if payload_school_id <= 0:
-            raise HTTPException(status_code=400, detail="school_id_required_for_admin")
-        return payload_school_id
+        return payload_school_id if payload_school_id and payload_school_id > 0 else None
     if len(user.school_scope) != 1:
         raise HTTPException(status_code=400, detail="schulleitung_scope_must_be_exactly_one_school")
     derived = user.school_scope[0]
@@ -59,6 +62,7 @@ async def create_department(
             name=payload.name,
             kuerzel=payload.kuerzel,
             details=payload.details,
+            ad_groups=payload.ad_groups,
             ip=ip,
             request_id=request_id,
         )
@@ -140,6 +144,7 @@ async def patch_department(
             name=payload.name,
             kuerzel=payload.kuerzel,
             details=payload.details,
+            ad_groups=payload.ad_groups,
             ip=ip,
             request_id=request_id,
         )

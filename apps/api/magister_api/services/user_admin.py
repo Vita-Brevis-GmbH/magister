@@ -27,6 +27,7 @@ from magister_api.models.school import School
 from magister_api.models.subject_teacher_role import SubjectTeacherRole
 from magister_api.models.user_preferences import UserPreference
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
+from magister_api.repositories.group_templates import GroupTemplateRepository
 from magister_api.services.devices import release_person_devices
 
 # Categories offered to the admin. Determine both the target OU and the default
@@ -88,6 +89,21 @@ class UserAdminService:
         )
         return ou, groups
 
+    async def _template_groups(self, template_id: int, school_id: int) -> list[str]:
+        """AD groups from a chosen Zielrolle, validated against the target school.
+
+        The template must be active and offered at ``school_id`` — either linked
+        to it or global (no Standort links).
+        """
+        repo = GroupTemplateRepository(self.session)
+        tpl = await repo.get(template_id)
+        if tpl is None or tpl.status != "active":
+            raise UserAdminError("group_template_not_found")
+        links = (await repo.school_ids_for([tpl.id])).get(tpl.id, [])
+        if links and school_id not in links:
+            raise UserAdminError("group_template_not_for_school")
+        return list(tpl.ad_groups or [])
+
     async def _school_resolver(self):
         # scope-bypass: provisioning runs as the admin service, not a scoped user.
         schools = list((await self.session.execute(select(School))).scalars().all())
@@ -110,6 +126,7 @@ class UserAdminService:
         mail: str | None,
         ou_key: str,
         school_id: int,
+        group_template_id: int | None = None,
         display_name: str | None = None,
         force_change: bool = True,
         cannot_change_password: bool = False,
@@ -126,6 +143,10 @@ class UserAdminService:
         if school is None:
             raise UserAdminError("school_not_found")
         ou_dn, group_dns = await self._provision_target(ou_key, school)
+        # A chosen "Zielrolle" (group template) overrides the school's per-Zyklus
+        # default groups. The target OU still comes from the school (unchanged).
+        if group_template_id is not None:
+            group_dns = await self._template_groups(group_template_id, school_id)
         kind = {"teacher": "teacher", "company": "company"}.get(ou_key, "student")
         display = (
             (display_name or "").strip() or f"{given_name} {surname}".strip() or sam_account_name
@@ -193,7 +214,12 @@ class UserAdminService:
             school_id=None,
             ip=ip,
             request_id=request_id,
-            payload={"kind": kind, "upn": record.upn, "ou_key": ou_key},
+            payload={
+                "kind": kind,
+                "upn": record.upn,
+                "ou_key": ou_key,
+                "group_template_id": group_template_id,
+            },
         )
         return CreatedUser(ad_object_guid=guid, temp_password=password, force_change=force_change)
 
