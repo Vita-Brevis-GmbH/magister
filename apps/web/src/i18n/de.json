@@ -278,7 +278,10 @@
       "add_alias": "Adresse hinzufügen",
       "remove_alias": "Entfernen",
       "section_org": "Organisation & Kontakt",
-      "section_org_desc": "Weitere Verzeichnis-Attribute (aus AD gespiegelt)."
+      "section_org_desc": "Weitere Verzeichnis-Attribute (aus AD gespiegelt).",
+      "section_groups": "AD-Gruppen",
+      "groups_desc": "Aktuelle AD-Gruppen-Mitgliedschaften (memberOf, aus dem AD synchronisiert).",
+      "no_groups": "Keine AD-Gruppen."
     },
     "field": {
       "display_name": "Anzeigename",

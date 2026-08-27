@@ -278,7 +278,10 @@
       "add_alias": "Add address",
       "remove_alias": "Remove",
       "section_org": "Organisation & contact",
-      "section_org_desc": "Further directory attributes (mirrored from AD)."
+      "section_org_desc": "Further directory attributes (mirrored from AD).",
+      "section_groups": "AD groups",
+      "groups_desc": "Current AD group memberships (memberOf, synced from AD).",
+      "no_groups": "No AD groups."
     },
     "field": {
       "display_name": "Display name",

@@ -10,12 +10,14 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.repositories.department_memberships import DepartmentMembershipRepository
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.department_people import UserDepartmentOut
 from magister_api.schemas.departments import DepartmentCreate, DepartmentOut, DepartmentUpdate
 from magister_api.services.department_people import DepartmentPeopleService
@@ -135,10 +137,15 @@ async def patch_department(
     user: AuthenticatedUser = Depends(require_schulleitung),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
 ) -> DepartmentOut:
     svc = DepartmentService(session, settings, user.to_scope())
     ip, request_id = _ip_request_id(request)
     try:
+        # Capture the old AD groups so a change can be reconciled onto members.
+        old_groups: list[str] | None = None
+        if payload.ad_groups is not None:
+            old_groups = list((await svc.get(department_id)).ad_groups or [])
         row = await svc.update(
             department_id=department_id,
             name=payload.name,
@@ -150,6 +157,18 @@ async def patch_department(
         )
     except DepartmentNotFoundError as exc:
         raise HTTPException(status_code=404, detail="department_not_found") from exc
+    # When the group set changed, propagate to every active member: grant added
+    # groups, revoke removed ones (unless another active department still grants
+    # them). The department row now holds the NEW groups.
+    if old_groups is not None:
+        new_groups = list(row.ad_groups or [])
+        added = [g for g in new_groups if g not in old_groups]
+        removed = [g for g in old_groups if g not in new_groups]
+        if added or removed:
+            people = DepartmentPeopleService(session, settings, user.to_scope(), ad)
+            await people.apply_group_delta(
+                department_id=department_id, added=added, removed=removed
+            )
     return DepartmentOut.model_validate(row)
 
 

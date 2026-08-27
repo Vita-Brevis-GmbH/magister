@@ -209,3 +209,24 @@ async def test_department_groups_revoke_keeps_shared(
     ).json()["id"]
     await as_schulleitung_a.post(f"/departments/{d2}/members", json={"ad_object_guid": _GUID})
     assert (await as_schulleitung_a.delete(f"/departments/{d1}/members/{m1}")).status_code == 204
+
+
+async def test_department_group_change_propagates_to_members(
+    as_schulleitung_a: AsyncClient, app: FastAPI, mock_ad: AdClient
+) -> None:
+    # Editing a department's AD groups reconciles every active member: the added
+    # group is granted, the removed one revoked (mock directory → no-op writes,
+    # but the reconcile path runs).
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    did = (
+        await as_schulleitung_a.post(
+            "/departments", json={"name": "Ops", "ad_groups": ["CN=Old,DC=schule,DC=local"]}
+        )
+    ).json()["id"]
+    await as_schulleitung_a.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+
+    r = await as_schulleitung_a.patch(
+        f"/departments/{did}", json={"ad_groups": ["CN=New,DC=schule,DC=local"]}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["ad_groups"] == ["CN=New,DC=schule,DC=local"]

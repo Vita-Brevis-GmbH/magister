@@ -170,14 +170,13 @@ class DepartmentPeopleService:
 
     # ---------- AD group application ----------
 
-    async def _apply_groups(self, dep: Department, ad_object_guid: str) -> None:
-        """Add the person to the department's AD groups (best-effort).
+    async def _add_to_ad(self, ad_object_guid: str, groups: list[str]) -> None:
+        """Best-effort: add the person to each AD group. Never raises.
 
-        No-op when the department has no groups, no AD client is wired, or the
-        directory is in mock mode. Never fails the membership write — a directory
+        No-op with no groups, no AD client, or mock directory. A directory
         hiccup is logged, not surfaced (parity with provisioning default groups).
         """
-        groups = _dedupe_strip(list(dep.ad_groups or []))
+        groups = _dedupe_strip(groups)
         if not groups or self.ad is None:
             return
         try:
@@ -188,39 +187,79 @@ class DepartmentPeopleService:
             failed = await self.ad.add_user_to_groups(user_dn=user_dn, group_dns=groups)
             if failed:
                 logger.warning("dept-group apply: %d group(s) not set for %s", len(failed), user_dn)
-        except Exception as exc:  # noqa: BLE001 — never fail the membership on AD trouble
+        except Exception as exc:  # noqa: BLE001 — never fail the caller on AD trouble
             logger.warning("dept-group apply failed for %s: %s", ad_object_guid, exc)
 
-    async def _revoke_groups(self, dep: Department, ad_object_guid: str) -> None:
-        """Revoke the department's AD groups the person no longer keeps.
-
-        A group also granted by another still-active membership of the same
-        person is kept. Best-effort; never fails the membership end.
-        """
-        removed = list(dep.ad_groups or [])
-        if not removed or self.ad is None:
-            return
-        keep: set[str] = set()
-        others = await self.members.list_active_for_person(ad_object_guid)
-        for m in others:
-            other_dep = await self.session.get(Department, m.department_id)
-            if other_dep is not None:
-                keep.update(_dedupe_strip(list(other_dep.ad_groups or [])))
-        to_revoke = groups_to_revoke(removed, keep)
-        if not to_revoke:
+    async def _revoke_from_ad(self, ad_object_guid: str, groups: list[str]) -> None:
+        """Best-effort: remove the person from each AD group. Never raises."""
+        groups = _dedupe_strip(groups)
+        if not groups or self.ad is None:
             return
         try:
             user_dn = await self.ad.find_user_dn(ad_object_guid)
             if user_dn is None:
                 logger.warning("dept-group revoke: user %s not found in AD", ad_object_guid)
                 return
-            failed = await self.ad.remove_user_from_groups(user_dn=user_dn, group_dns=to_revoke)
+            failed = await self.ad.remove_user_from_groups(user_dn=user_dn, group_dns=groups)
             if failed:
                 logger.warning(
                     "dept-group revoke: %d group(s) not removed for %s", len(failed), user_dn
                 )
-        except Exception as exc:  # noqa: BLE001 — never fail the membership end on AD trouble
+        except Exception as exc:  # noqa: BLE001 — never fail the caller on AD trouble
             logger.warning("dept-group revoke failed for %s: %s", ad_object_guid, exc)
+
+    async def _kept_groups(self, ad_object_guid: str) -> set[str]:
+        """Union of AD groups still granted by the person's active departments.
+
+        Reads across ALL active memberships (unscoped by design) so a group
+        granted by an out-of-scope department is never wrongly revoked, and uses
+        the in-session Department rows, so it reflects a just-applied change.
+        """
+        keep: set[str] = set()
+        for m in await self.members.list_active_for_person(ad_object_guid):
+            dep = await self.session.get(Department, m.department_id)
+            if dep is not None:
+                keep.update(_dedupe_strip(list(dep.ad_groups or [])))
+        return keep
+
+    async def _apply_groups(self, dep: Department, ad_object_guid: str) -> None:
+        """On membership add: grant the department's AD groups."""
+        await self._add_to_ad(ad_object_guid, list(dep.ad_groups or []))
+
+    async def _revoke_groups(self, dep: Department, ad_object_guid: str) -> None:
+        """On membership end: revoke the department's AD groups the person no
+        longer keeps via another still-active membership. The ended membership
+        is already closed, so it is excluded from the keep-set."""
+        keep = await self._kept_groups(ad_object_guid)
+        await self._revoke_from_ad(
+            ad_object_guid, groups_to_revoke(list(dep.ad_groups or []), keep)
+        )
+
+    async def apply_group_delta(
+        self, *, department_id: int, added: list[str], removed: list[str]
+    ) -> None:
+        """Reconcile all active members after a department's AD groups changed.
+
+        Each active member gets ``added`` granted and ``removed`` revoked —
+        except a removed group still granted by another active department of the
+        member (matrix orgs). Best-effort; never raises. The department's
+        ``ad_groups`` must already hold the NEW set before this is called.
+        """
+        added = _dedupe_strip(added)
+        removed = _dedupe_strip(removed)
+        if (not added and not removed) or self.ad is None:
+            return
+        seen: set[str] = set()
+        for m in await self.members.list_active(department_id):
+            guid = m.ad_object_guid
+            if guid in seen:
+                continue
+            seen.add(guid)
+            if added:
+                await self._add_to_ad(guid, added)
+            if removed:
+                keep = await self._kept_groups(guid)
+                await self._revoke_from_ad(guid, groups_to_revoke(removed, keep))
 
     # ---------- manager (Kader) roles ----------
 

@@ -1211,6 +1211,27 @@ function UserReadView({
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">{t("users.detail.section_groups")}</CardTitle>
+          <CardDescription>{t("users.detail.groups_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {user.ad_groups.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("users.detail.no_groups")}</p>
+          ) : (
+            <ul className="space-y-1 text-sm">
+              {user.ad_groups.map((dn) => (
+                <li key={dn} className="flex flex-col">
+                  <span className="font-medium">{groupCn(dn)}</span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">{dn}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">{t("users.detail.section_overview")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
@@ -1246,14 +1267,6 @@ function UserReadView({
             label={t("users.field.password_never_expires")}
             value={user.password_never_expires ? t("users.yes") : t("users.no")}
           />
-          <div className="flex gap-2 text-sm">
-            <span className="w-40 shrink-0 text-muted-foreground">
-              {t("users.field.ad_groups")}
-            </span>
-            <span className="font-medium">
-              {user.ad_groups.length > 0 ? user.ad_groups.map((dn) => groupCn(dn)).join(", ") : "–"}
-            </span>
-          </div>
         </CardContent>
       </Card>
 

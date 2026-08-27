@@ -281,7 +281,10 @@
       "add_alias": "Ajouter une adresse",
       "remove_alias": "Supprimer",
       "section_org": "Organisation & contact",
-      "section_org_desc": "Autres attributs d'annuaire (miroir d'AD)."
+      "section_org_desc": "Autres attributs d'annuaire (miroir d'AD).",
+      "section_groups": "Groupes AD",
+      "groups_desc": "Appartenances aux groupes AD actuelles (memberOf, synchronisées depuis l’AD).",
+      "no_groups": "Aucun groupe AD."
     },
     "field": {
       "display_name": "Nom affiché",

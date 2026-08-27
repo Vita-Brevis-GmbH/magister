@@ -281,7 +281,10 @@
       "add_alias": "Aggiungi indirizzo",
       "remove_alias": "Rimuovi",
       "section_org": "Organizzazione e contatti",
-      "section_org_desc": "Ulteriori attributi di directory (rispecchiati da AD)."
+      "section_org_desc": "Ulteriori attributi di directory (rispecchiati da AD).",
+      "section_groups": "Gruppi AD",
+      "groups_desc": "Appartenenze ai gruppi AD attuali (memberOf, sincronizzate dall’AD).",
+      "no_groups": "Nessun gruppo AD."
     },
     "field": {
       "display_name": "Nome visualizzato",
