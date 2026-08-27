@@ -179,6 +179,9 @@ class UserAdminService:
             mail=mail,
             enabled=True,
             kind=kind,
+            # Mirror the groups we just assigned so the user shows them
+            # immediately (a later AD sync reconciles to the real memberOf).
+            groups=tuple(group_dns),
             password_never_expires=password_never_expires,
             ms_ds_consistency_guid=None,
             distinguished_name=f"CN={display},{ou_dn}",

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.config import Settings
+from magister_api.models.auth import AdUserCache
 from magister_api.routers.admin_sync import get_ad_client
 
 if TYPE_CHECKING:
@@ -230,3 +231,34 @@ async def test_department_group_change_propagates_to_members(
     )
     assert r.status_code == 200, r.text
     assert r.json()["ad_groups"] == ["CN=New,DC=schule,DC=local"]
+
+
+async def test_membership_add_mirrors_groups_to_user_cache(
+    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # Assigning a member of a group-carrying department reflects the groups in
+    # the user's cached ad_groups immediately (no AD sync needed) → the user
+    # detail page shows them.
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=_GUID,
+            school_id=school_a,
+            upn="grp@example.ch",
+            kind="company",
+            enabled=True,
+            ms_ds_consistency_guid=_GUID,
+        )
+    )
+    await db_session.commit()
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    did = (
+        await as_admin.post(
+            "/departments",
+            json={"name": "IT", "school_id": school_a, "ad_groups": ["CN=Tool,DC=schule,DC=local"]},
+        )
+    ).json()["id"]
+    assert (
+        await as_admin.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+    ).status_code == 201
+    groups = (await as_admin.get(f"/users/{_GUID}")).json()["ad_groups"]
+    assert "CN=Tool,DC=schule,DC=local" in groups

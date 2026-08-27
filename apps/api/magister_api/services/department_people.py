@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.ad.client import AdClient
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.department import DEPARTMENT_STATUS_ACTIVE, Department
 from magister_api.models.department_membership import DepartmentMembership
@@ -222,32 +223,66 @@ class DepartmentPeopleService:
                 keep.update(_dedupe_strip(list(dep.ad_groups or [])))
         return keep
 
+    async def _cache_add(self, ad_object_guid: str, groups: list[str]) -> None:
+        """Union ``groups`` into the user's cached ``ad_groups`` (memberOf mirror).
+
+        Keeps the UI in sync immediately, without waiting for the next AD sync;
+        a later sync reconciles the cache to the true directory memberOf.
+        """
+        groups = _dedupe_strip(groups)
+        if not groups:
+            return
+        cache = await self.session.get(AdUserCache, ad_object_guid)
+        if cache is None:
+            return
+        current = list(cache.ad_groups or [])
+        merged = current + [g for g in groups if g not in current]
+        if merged != current:
+            cache.ad_groups = merged
+            await self.session.flush()
+
+    async def _cache_remove(self, ad_object_guid: str, groups: list[str]) -> None:
+        """Drop ``groups`` from the user's cached ``ad_groups`` (memberOf mirror)."""
+        drop = set(_dedupe_strip(groups))
+        if not drop:
+            return
+        cache = await self.session.get(AdUserCache, ad_object_guid)
+        if cache is None:
+            return
+        current = list(cache.ad_groups or [])
+        kept = [g for g in current if g not in drop]
+        if kept != current:
+            cache.ad_groups = kept
+            await self.session.flush()
+
     async def _apply_groups(self, dep: Department, ad_object_guid: str) -> None:
-        """On membership add: grant the department's AD groups."""
-        await self._add_to_ad(ad_object_guid, list(dep.ad_groups or []))
+        """On membership add: grant the department's AD groups (AD + cache)."""
+        groups = _dedupe_strip(list(dep.ad_groups or []))
+        await self._add_to_ad(ad_object_guid, groups)
+        await self._cache_add(ad_object_guid, groups)
 
     async def _revoke_groups(self, dep: Department, ad_object_guid: str) -> None:
         """On membership end: revoke the department's AD groups the person no
         longer keeps via another still-active membership. The ended membership
         is already closed, so it is excluded from the keep-set."""
         keep = await self._kept_groups(ad_object_guid)
-        await self._revoke_from_ad(
-            ad_object_guid, groups_to_revoke(list(dep.ad_groups or []), keep)
-        )
+        to_revoke = groups_to_revoke(list(dep.ad_groups or []), keep)
+        await self._revoke_from_ad(ad_object_guid, to_revoke)
+        await self._cache_remove(ad_object_guid, to_revoke)
 
     async def apply_group_delta(
         self, *, department_id: int, added: list[str], removed: list[str]
     ) -> None:
         """Reconcile all active members after a department's AD groups changed.
 
-        Each active member gets ``added`` granted and ``removed`` revoked —
-        except a removed group still granted by another active department of the
-        member (matrix orgs). Best-effort; never raises. The department's
-        ``ad_groups`` must already hold the NEW set before this is called.
+        Each active member gets ``added`` granted and ``removed`` revoked (in AD
+        and in the cache) — except a removed group still granted by another
+        active department of the member (matrix orgs). Best-effort; never raises.
+        The department's ``ad_groups`` must already hold the NEW set.
         """
         added = _dedupe_strip(added)
         removed = _dedupe_strip(removed)
-        if (not added and not removed) or self.ad is None:
+        if not added and not removed:
             return
         seen: set[str] = set()
         for m in await self.members.list_active(department_id):
@@ -257,9 +292,12 @@ class DepartmentPeopleService:
             seen.add(guid)
             if added:
                 await self._add_to_ad(guid, added)
+                await self._cache_add(guid, added)
             if removed:
                 keep = await self._kept_groups(guid)
-                await self._revoke_from_ad(guid, groups_to_revoke(removed, keep))
+                to_revoke = groups_to_revoke(removed, keep)
+                await self._revoke_from_ad(guid, to_revoke)
+                await self._cache_remove(guid, to_revoke)
 
     # ---------- manager (Kader) roles ----------
 
