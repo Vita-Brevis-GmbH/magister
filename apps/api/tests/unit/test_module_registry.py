@@ -29,12 +29,13 @@ def test_every_enabled_module_router_is_mounted() -> None:
 
 
 def test_router_count() -> None:
-    # 31 routers total. M6 #5 regrouped the coarse platform/school/company
+    # 32 routers total. M6 #5 regrouped the coarse platform/school/company
     # modules into fine-grained fachfunction modules WITHOUT adding or dropping
     # any route; M6 #3 (ADR-0010) then added the /admin/rbac router (dynamic
-    # role→capability matrix), taking the total from 30 to 31.
+    # role→capability matrix), taking the total from 30 to 31. The
+    # /admin/group-templates router (AD-Gruppen-Zielrollen) then took it to 32.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 31
+    assert total == 32
 
 
 def test_module_ids_unique_and_expected() -> None:
