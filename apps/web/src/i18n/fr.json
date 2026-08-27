@@ -589,7 +589,11 @@
       "school_all": "Tou(te)s les {{unit_plural}}",
       "grant_button": "Attribuer le rôle",
       "grant_ok": "Rôle attribué.",
-      "grant_not_found": "Utilisateur ou école introuvable."
+      "grant_not_found": "Utilisateur ou {{unit}} introuvable.",
+      "grant_user_not_found": "Utilisateur introuvable — peut-être pas encore synchronisé. Vérifier la synchro AD.",
+      "grant_school_not_found": "{{unit}} introuvable.",
+      "grant_role_not_found": "Rôle introuvable.",
+      "grant_invalid": "Attribution invalide — vérifier le rôle et le/la {{unit}}."
     },
     "user_new": {
       "title": "Créer un nouvel utilisateur",
@@ -1175,6 +1179,9 @@
     "loading": "Chargement …",
     "empty": "Aucun département.",
     "archive": "Archiver",
+    "edit": "Modifier",
+    "save": "Enregistrer",
+    "members_count": "{{count}} membres",
     "members": "Membres",
     "member_user": "Collaborateur",
     "add_member": "Ajouter",

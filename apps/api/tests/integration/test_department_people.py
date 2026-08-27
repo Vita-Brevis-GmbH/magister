@@ -51,6 +51,21 @@ async def test_membership_lifecycle(as_schulleitung_a: AsyncClient) -> None:
     assert r.json() == []
 
 
+async def test_list_reports_active_member_count(as_schulleitung_a: AsyncClient) -> None:
+    did = await _make_department(as_schulleitung_a, name="Team Count")
+
+    async def _count() -> int:
+        rows = (await as_schulleitung_a.get("/departments")).json()
+        return next(d["member_count"] for d in rows if d["id"] == did)
+
+    assert await _count() == 0
+    r = await as_schulleitung_a.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+    mid = r.json()["id"]
+    assert await _count() == 1
+    await as_schulleitung_a.delete(f"/departments/{did}/members/{mid}")
+    assert await _count() == 0
+
+
 async def test_manager_lifecycle(as_schulleitung_a: AsyncClient) -> None:
     did = await _make_department(as_schulleitung_a, name="Team B")
 

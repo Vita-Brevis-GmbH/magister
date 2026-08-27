@@ -51,6 +51,18 @@ function userLabel(a: {
   return name || a.upn || "?";
 }
 
+/** Map a role-grant failure to a specific i18n key so the operator sees which
+ *  entity is missing (user vs org unit vs role) instead of a lumped message. */
+function grantErrorKey(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === "user_not_found") return "admin.roles.grant_user_not_found";
+    if (err.code === "school_not_found") return "admin.roles.grant_school_not_found";
+    if (err.code === "role_not_found") return "admin.roles.grant_role_not_found";
+    if (err.status === 422) return "admin.roles.grant_invalid";
+  }
+  return "errors.generic";
+}
+
 function RolesPage(): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
@@ -456,11 +468,7 @@ function GrantCard(): JSX.Element {
         </div>
 
         {grant.isError ? (
-          <p className="text-sm text-destructive">
-            {grant.error instanceof ApiError && grant.error.status === 404
-              ? t("admin.roles.grant_not_found")
-              : t("errors.generic")}
-          </p>
+          <p className="text-sm text-destructive">{t(grantErrorKey(grant.error), unitVars)}</p>
         ) : grant.isSuccess ? (
           <p className="text-sm text-emerald-700">{t("admin.roles.grant_ok")}</p>
         ) : null}

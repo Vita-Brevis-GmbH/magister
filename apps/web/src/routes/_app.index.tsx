@@ -250,6 +250,7 @@ function CompanyDashboard(): JSX.Element {
                 <TableRow>
                   <TableHead>{t("departments.name")}</TableHead>
                   <TableHead>{t("departments.kuerzel")}</TableHead>
+                  <TableHead className="text-right">{t("departments.members")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -433,6 +434,7 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
         </Link>
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">{dept.kuerzel ?? "—"}</TableCell>
+      <TableCell className="text-right text-sm tabular-nums">{dept.member_count}</TableCell>
     </TableRow>
   );
 }

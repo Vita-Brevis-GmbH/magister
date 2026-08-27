@@ -2,7 +2,14 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useArchiveDepartment, useCreateDepartment, useDepartments, useSchools } from "@/api/hooks";
+import {
+  useArchiveDepartment,
+  useCreateDepartment,
+  useDepartments,
+  useSchools,
+  useUpdateDepartment,
+} from "@/api/hooks";
+import type { DepartmentOut } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { useTerms } from "@/lib/useTerms";
 
@@ -16,7 +23,6 @@ function DepartmentsPage(): JSX.Element {
   const q = useDepartments();
   const schools = useSchools();
   const create = useCreateDepartment();
-  const archive = useArchiveDepartment();
   const [name, setName] = useState("");
   const [kuerzel, setKuerzel] = useState("");
   const [schoolId, setSchoolId] = useState<number | "">("");
@@ -130,30 +136,101 @@ function DepartmentsPage(): JSX.Element {
         <div className="overflow-hidden rounded-md border bg-card">
           <ul className="divide-y">
             {q.data.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                <Link
-                  to="/departments/$departmentId"
-                  params={{ departmentId: String(d.id) }}
-                  className="text-sm font-medium hover:underline"
-                >
-                  {d.name}
-                  {d.kuerzel ? (
-                    <span className="ml-2 text-xs text-muted-foreground">{d.kuerzel}</span>
-                  ) : null}
-                </Link>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={archive.isPending}
-                  onClick={() => archive.mutate(d.id)}
-                >
-                  {t("departments.archive")}
-                </Button>
-              </li>
+              <DepartmentRow key={d.id} dept={d} />
             ))}
           </ul>
         </div>
       )}
     </div>
+  );
+}
+
+function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
+  const { t } = useTranslation();
+  const archive = useArchiveDepartment();
+  const update = useUpdateDepartment();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(dept.name);
+  const [kuerzel, setKuerzel] = useState(dept.kuerzel ?? "");
+
+  const startEdit = (): void => {
+    setName(dept.name);
+    setKuerzel(dept.kuerzel ?? "");
+    update.reset();
+    setEditing(true);
+  };
+
+  const save = (): void => {
+    if (!name.trim()) return;
+    update.mutate(
+      { id: dept.id, body: { name: name.trim(), kuerzel: kuerzel.trim() || null } },
+      { onSuccess: () => setEditing(false) },
+    );
+  };
+
+  if (editing) {
+    return (
+      <li className="flex flex-wrap items-center gap-2 px-4 py-3">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={t("departments.name")}
+          className="h-9 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+        />
+        <input
+          value={kuerzel}
+          onChange={(e) => setKuerzel(e.target.value)}
+          placeholder={t("departments.kuerzel")}
+          className="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+        />
+        <Button size="sm" disabled={update.isPending || !name.trim()} onClick={save}>
+          {t("departments.save")}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={update.isPending}
+          onClick={() => setEditing(false)}
+        >
+          {t("common.cancel")}
+        </Button>
+        {update.isError ? (
+          <span className="w-full text-xs text-destructive">{t("departments.create_failed")}</span>
+        ) : null}
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center justify-between gap-4 px-4 py-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Link
+          to="/departments/$departmentId"
+          params={{ departmentId: String(dept.id) }}
+          className="truncate text-sm font-medium hover:underline"
+        >
+          {dept.name}
+          {dept.kuerzel ? (
+            <span className="ml-2 text-xs text-muted-foreground">{dept.kuerzel}</span>
+          ) : null}
+        </Link>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+          {t("departments.members_count", { count: dept.member_count })}
+        </span>
+      </div>
+      <div className="flex shrink-0 gap-1">
+        <Button variant="ghost" size="sm" onClick={startEdit}>
+          {t("departments.edit")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={archive.isPending}
+          onClick={() => archive.mutate(dept.id)}
+        >
+          {t("departments.archive")}
+        </Button>
+      </div>
+    </li>
   );
 }

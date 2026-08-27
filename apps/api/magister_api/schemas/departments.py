@@ -36,6 +36,8 @@ class DepartmentOut(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
+    # Number of currently-active memberships; 0 unless the endpoint fills it in.
+    member_count: int = 0
 
 
 __all__ = ["DepartmentCreate", "DepartmentOut", "DepartmentUpdate"]

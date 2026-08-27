@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.base import utcnow
@@ -53,6 +53,21 @@ class DepartmentMembershipRepository:
             .where(_active_window(ts))
         )
         return list((await self.session.execute(stmt)).scalars().all())
+
+    async def active_counts(
+        self, department_ids: list[int], *, now: datetime | None = None
+    ) -> dict[int, int]:
+        """Active-membership count per department, for the ids given."""
+        if not department_ids:
+            return {}
+        ts = now or utcnow()
+        stmt = (
+            select(DepartmentMembership.department_id, func.count())
+            .where(DepartmentMembership.department_id.in_(department_ids))
+            .where(_active_window(ts))
+            .group_by(DepartmentMembership.department_id)
+        )
+        return {dept_id: count for dept_id, count in (await self.session.execute(stmt)).all()}
 
     async def get(self, membership_id: int) -> DepartmentMembership | None:
         return await self.session.get(DepartmentMembership, membership_id)

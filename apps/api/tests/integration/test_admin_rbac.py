@@ -149,3 +149,31 @@ async def test_grant_scope_rules_and_custom_role(
     # It shows up in the role-assignment overview.
     listing = (await as_admin.get("/admin/roles")).json()
     assert any(a["role"] == "teamlead" and a["ad_object_guid"] == guid for a in listing)
+
+
+async def test_grant_role_to_company_user(
+    as_admin: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # A company-edition user (kind="company") is granted a scoped role exactly
+    # like any other user — the grant is kind-agnostic.
+    from magister_api.models.auth import AdUserCache
+
+    guid = "00000000-0000-0000-0000-0000000000c0"
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=guid,
+            school_id=school_a,
+            upn="mitarbeiter@firma.ch",
+            kind="company",
+            enabled=True,
+            ms_ds_consistency_guid=guid,
+        )
+    )
+    await db_session.commit()
+
+    r = await as_admin.post(
+        f"/admin/users/{guid}/roles",
+        json={"role": "schulleitung", "school_id": school_a},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["ad_object_guid"] == guid

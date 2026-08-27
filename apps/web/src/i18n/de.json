@@ -586,7 +586,11 @@
       "school_all": "Alle {{unit_plural}}",
       "grant_button": "Rolle vergeben",
       "grant_ok": "Rolle vergeben.",
-      "grant_not_found": "Benutzer oder Schule nicht gefunden."
+      "grant_not_found": "Benutzer oder {{unit}} nicht gefunden.",
+      "grant_user_not_found": "Benutzer nicht gefunden — evtl. noch nicht synchronisiert. AD-Sync prüfen.",
+      "grant_school_not_found": "{{unit}} nicht gefunden.",
+      "grant_role_not_found": "Rolle nicht gefunden.",
+      "grant_invalid": "Ungültige Zuweisung — bitte Rolle und {{unit}} prüfen."
     },
     "user_new": {
       "title": "Neuen Benutzer anlegen",
@@ -1172,6 +1176,9 @@
     "loading": "Wird geladen …",
     "empty": "Noch keine Abteilungen.",
     "archive": "Archivieren",
+    "edit": "Bearbeiten",
+    "save": "Speichern",
+    "members_count": "{{count}} Mitglieder",
     "members": "Mitglieder",
     "member_user": "Mitarbeiter:in",
     "add_member": "Hinzufügen",

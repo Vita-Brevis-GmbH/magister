@@ -47,6 +47,7 @@ import type {
   AdminModulesOut,
   DepartmentOut,
   DepartmentCreate,
+  DepartmentUpdate,
   DepartmentMembershipOut,
   UserDepartmentOut,
   ManagerRoleOut,
@@ -251,6 +252,18 @@ export function useCreateDepartment() {
   return useMutation<DepartmentOut, ApiError, DepartmentCreate>({
     mutationFn: (body) => apiFetch<DepartmentOut>("/departments", { method: "POST", body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: queryKeys.departments }),
+  });
+}
+
+export function useUpdateDepartment() {
+  const qc = useQueryClient();
+  return useMutation<DepartmentOut, ApiError, { id: number; body: DepartmentUpdate }>({
+    mutationFn: ({ id, body }) =>
+      apiFetch<DepartmentOut>(`/departments/${id}`, { method: "PATCH", body }),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: queryKeys.departments });
+      qc.invalidateQueries({ queryKey: queryKeys.department(id) });
+    },
   });
 }
 

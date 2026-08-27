@@ -279,6 +279,7 @@ export interface DepartmentOut {
   status: string;
   created_at: string;
   updated_at: string;
+  member_count: number;
 }
 
 export interface DepartmentCreate {
@@ -286,6 +287,12 @@ export interface DepartmentCreate {
   kuerzel?: string | null;
   details?: string | null;
   school_id?: number;
+}
+
+export interface DepartmentUpdate {
+  name?: string | null;
+  kuerzel?: string | null;
+  details?: string | null;
 }
 
 export interface DepartmentMembershipOut {

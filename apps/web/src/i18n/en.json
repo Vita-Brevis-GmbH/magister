@@ -586,7 +586,11 @@
       "school_all": "All {{unit_plural}}",
       "grant_button": "Grant role",
       "grant_ok": "Role granted.",
-      "grant_not_found": "User or school not found."
+      "grant_not_found": "User or {{unit}} not found.",
+      "grant_user_not_found": "User not found — may not be synced yet. Check the AD sync.",
+      "grant_school_not_found": "{{unit}} not found.",
+      "grant_role_not_found": "Role not found.",
+      "grant_invalid": "Invalid assignment — check the role and {{unit}}."
     },
     "user_new": {
       "title": "Create a new user",
@@ -1172,6 +1176,9 @@
     "loading": "Loading …",
     "empty": "No departments yet.",
     "archive": "Archive",
+    "edit": "Edit",
+    "save": "Save",
+    "members_count": "{{count}} members",
     "members": "Members",
     "member_user": "Employee",
     "add_member": "Add",

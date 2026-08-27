@@ -589,7 +589,11 @@
       "school_all": "Tutti/e i/le {{unit_plural}}",
       "grant_button": "Assegna ruolo",
       "grant_ok": "Ruolo assegnato.",
-      "grant_not_found": "Utente o scuola non trovati."
+      "grant_not_found": "Utente o {{unit}} non trovati.",
+      "grant_user_not_found": "Utente non trovato — forse non ancora sincronizzato. Controlla la sincronizzazione AD.",
+      "grant_school_not_found": "{{unit}} non trovato.",
+      "grant_role_not_found": "Ruolo non trovato.",
+      "grant_invalid": "Assegnazione non valida — controlla il ruolo e il {{unit}}."
     },
     "user_new": {
       "title": "Crea un nuovo utente",
@@ -1175,6 +1179,9 @@
     "loading": "Caricamento …",
     "empty": "Nessun reparto.",
     "archive": "Archivia",
+    "edit": "Modifica",
+    "save": "Salva",
+    "members_count": "{{count}} membri",
     "members": "Membri",
     "member_user": "Collaboratore",
     "add_member": "Aggiungi",

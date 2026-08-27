@@ -14,6 +14,7 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_schulleitung
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.repositories.department_memberships import DepartmentMembershipRepository
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.department_people import UserDepartmentOut
 from magister_api.schemas.departments import DepartmentCreate, DepartmentOut, DepartmentUpdate
@@ -74,7 +75,11 @@ async def list_departments(
 ) -> list[DepartmentOut]:
     svc = DepartmentService(session, settings, user.to_scope())
     rows = await svc.list_active()
-    return [DepartmentOut.model_validate(r) for r in rows]
+    counts = await DepartmentMembershipRepository(session).active_counts([r.id for r in rows])
+    return [
+        DepartmentOut.model_validate(r).model_copy(update={"member_count": counts.get(r.id, 0)})
+        for r in rows
+    ]
 
 
 @router.get("/for-user/{ad_object_guid}", response_model=list[UserDepartmentOut])
