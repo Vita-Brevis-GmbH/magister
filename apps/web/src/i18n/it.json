@@ -284,7 +284,11 @@
       "section_org_desc": "Ulteriori attributi di directory (rispecchiati da AD).",
       "section_groups": "Gruppi AD",
       "groups_desc": "Appartenenze ai gruppi AD attuali (memberOf, sincronizzate dall’AD).",
-      "no_groups": "Nessun gruppo AD."
+      "no_groups": "Nessun gruppo AD.",
+      "groups_refresh": "Aggiorna dall’AD",
+      "groups_reapply": "Riassegna i diritti",
+      "groups_action_failed": "Azione non riuscita.",
+      "groups_reapply_partial": "{{count}} gruppo/i non impostabili nell’AD."
     },
     "field": {
       "display_name": "Nome visualizzato",

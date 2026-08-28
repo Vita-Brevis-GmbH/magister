@@ -894,6 +894,53 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def fetch_user_groups(self, ad_object_guid: str) -> list[str] | None:
+        """Live-read the user's direct group memberships (``memberOf``) from AD.
+
+        Returns the current group DNs, or ``None`` when the directory can't be
+        read (mock mode or user not found). A real LDAP error surfaces as
+        :class:`AdUnavailableError`.
+        """
+        if self._settings.ad_use_mock:
+            return None
+        return await run_in_threadpool(self._sync_fetch_user_groups, ad_object_guid)
+
+    def _sync_fetch_user_groups(self, ad_object_guid: str) -> list[str] | None:
+        conn, owned = self._acquire_connection()
+        try:
+            try:
+                guid_bytes = uuid.UUID(ad_object_guid).bytes_le
+            except ValueError:
+                logger.warning("fetch_user_groups: unparseable objectGUID %r", ad_object_guid)
+                return None
+            search_filter = "(objectGUID=" + "".join(f"\\{b:02x}" for b in guid_bytes) + ")"
+            configured = self._settings.ad_users_search_base or ""
+            dcs = [p.strip() for p in configured.split(",") if p.strip().lower().startswith("dc=")]
+            base = ",".join(dcs) or configured
+            result, entries = self._single_search(
+                conn,
+                base=base,
+                search_filter=search_filter,
+                scope=SUBTREE,
+                attributes=["memberOf"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                logger.warning("fetch_user_groups search failed under base=%r: %s", base, detail)
+                raise AdUnavailableError(f"ldap_search_failed:{detail}")
+            if not entries:
+                return None
+            member_of = entries[0].get("attributes", {}).get("memberOf") or []
+            if isinstance(member_of, str):
+                member_of = [member_of]
+            return [str(m) for m in member_of]
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
         """Reset ``unicodePwd`` and (optionally) set ``pwdLastSet=0`` for forced change."""
         await run_in_threadpool(self._sync_modify_password, user_dn, new_password, force_change)

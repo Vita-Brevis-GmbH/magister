@@ -5,6 +5,7 @@ Skipped unless MAGISTER_TEST_DATABASE_URL is set (see integration conftest).
 
 from __future__ import annotations
 
+import uuid
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
@@ -262,3 +263,69 @@ async def test_membership_add_mirrors_groups_to_user_cache(
     ).status_code == 201
     groups = (await as_admin.get(f"/users/{_GUID}")).json()["ad_groups"]
     assert "CN=Tool,DC=schule,DC=local" in groups
+
+
+async def test_refresh_user_groups_mock_keeps_cache(
+    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # Under the mock directory the live read returns None → cache is untouched.
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=_GUID,
+            school_id=school_a,
+            upn="rf@example.ch",
+            kind="company",
+            enabled=True,
+            ms_ds_consistency_guid=_GUID,
+            ad_groups=["CN=Keep,DC=schule,DC=local"],
+        )
+    )
+    await db_session.commit()
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    r = await as_admin.post(f"/users/{_GUID}/groups/refresh")
+    assert r.status_code == 200, r.text
+    assert r.json()["groups"] == ["CN=Keep,DC=schule,DC=local"]
+
+
+async def test_reapply_department_groups(
+    as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # "Rechte neu vergeben": re-add the union of the user's active departments'
+    # AD groups. find_user_dn must resolve → seed a mock AD entry for the GUID.
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=_GUID,
+            school_id=school_a,
+            upn="re@example.ch",
+            kind="company",
+            enabled=True,
+            ms_ds_consistency_guid=_GUID,
+        )
+    )
+    await db_session.commit()
+    conn = mock_ad.mock_connection()
+    conn.strategy.add_entry(
+        "CN=Re,OU=Users,DC=schule,DC=local",
+        {
+            "objectClass": ["user"],
+            "objectGUID": uuid.UUID(_GUID).bytes_le,
+            "userPrincipalName": "re@example.ch",
+            "userAccountControl": 512,
+        },
+    )
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    did = (
+        await as_admin.post(
+            "/departments",
+            json={
+                "name": "Ops",
+                "school_id": school_a,
+                "ad_groups": ["CN=Tool,DC=schule,DC=local"],
+            },
+        )
+    ).json()["id"]
+    await as_admin.post(f"/departments/{did}/members", json={"ad_object_guid": _GUID})
+
+    r = await as_admin.post(f"/users/{_GUID}/groups/reapply")
+    assert r.status_code == 200, r.text
+    assert "CN=Tool,DC=schule,DC=local" in r.json()["groups"]

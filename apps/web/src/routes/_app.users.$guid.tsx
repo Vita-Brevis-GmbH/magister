@@ -21,6 +21,8 @@ import {
   useRemoveUserFromDepartment,
   useUpdateUser,
   useUpdateUserGroups,
+  useRefreshUserGroups,
+  useReapplyUserGroups,
   useUser,
   useUserDashboard,
   useUserDeletionPreview,
@@ -1159,6 +1161,8 @@ function UserReadView({
   onOpenPrivacy: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const refreshGroups = useRefreshUserGroups(user.ad_object_guid);
+  const reapplyGroups = useReapplyUserGroups(user.ad_object_guid);
   const address = [
     user.street_address,
     [user.postal_code, user.locality].filter(Boolean).join(" "),
@@ -1214,7 +1218,7 @@ function UserReadView({
           <CardTitle className="text-base">{t("users.detail.section_groups")}</CardTitle>
           <CardDescription>{t("users.detail.groups_desc")}</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           {user.ad_groups.length === 0 ? (
             <p className="text-sm text-muted-foreground">{t("users.detail.no_groups")}</p>
           ) : (
@@ -1227,6 +1231,34 @@ function UserReadView({
               ))}
             </ul>
           )}
+          <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={refreshGroups.isPending || reapplyGroups.isPending}
+              onClick={() => refreshGroups.mutate()}
+            >
+              {refreshGroups.isPending ? t("common.loading") : t("users.detail.groups_refresh")}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={reapplyGroups.isPending || refreshGroups.isPending}
+              onClick={() => reapplyGroups.mutate()}
+            >
+              {reapplyGroups.isPending ? t("common.loading") : t("users.detail.groups_reapply")}
+            </Button>
+          </div>
+          {refreshGroups.isError || reapplyGroups.isError ? (
+            <p className="text-xs text-destructive">{t("users.detail.groups_action_failed")}</p>
+          ) : reapplyGroups.isSuccess && reapplyGroups.data.failed.length > 0 ? (
+            <p className="text-xs text-amber-600">
+              {t("users.detail.groups_reapply_partial", {
+                count: reapplyGroups.data.failed.length,
+              })}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

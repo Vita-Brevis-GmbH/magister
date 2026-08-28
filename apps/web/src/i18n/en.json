@@ -281,7 +281,11 @@
       "section_org_desc": "Further directory attributes (mirrored from AD).",
       "section_groups": "AD groups",
       "groups_desc": "Current AD group memberships (memberOf, synced from AD).",
-      "no_groups": "No AD groups."
+      "no_groups": "No AD groups.",
+      "groups_refresh": "Refresh from AD",
+      "groups_reapply": "Re-apply rights",
+      "groups_action_failed": "Action failed.",
+      "groups_reapply_partial": "{{count}} group(s) could not be set in AD."
     },
     "field": {
       "display_name": "Display name",

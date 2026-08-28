@@ -284,7 +284,11 @@
       "section_org_desc": "Autres attributs d'annuaire (miroir d'AD).",
       "section_groups": "Groupes AD",
       "groups_desc": "Appartenances aux groupes AD actuelles (memberOf, synchronisées depuis l’AD).",
-      "no_groups": "Aucun groupe AD."
+      "no_groups": "Aucun groupe AD.",
+      "groups_refresh": "Actualiser depuis l’AD",
+      "groups_reapply": "Réattribuer les droits",
+      "groups_action_failed": "Échec de l’action.",
+      "groups_reapply_partial": "{{count}} groupe(s) n’ont pas pu être définis dans l’AD."
     },
     "field": {
       "display_name": "Nom affiché",

@@ -281,7 +281,11 @@
       "section_org_desc": "Weitere Verzeichnis-Attribute (aus AD gespiegelt).",
       "section_groups": "AD-Gruppen",
       "groups_desc": "Aktuelle AD-Gruppen-Mitgliedschaften (memberOf, aus dem AD synchronisiert).",
-      "no_groups": "Keine AD-Gruppen."
+      "no_groups": "Keine AD-Gruppen.",
+      "groups_refresh": "Aus AD aktualisieren",
+      "groups_reapply": "Rechte neu vergeben",
+      "groups_action_failed": "Aktion fehlgeschlagen.",
+      "groups_reapply_partial": "{{count}} Gruppe(n) konnten im AD nicht gesetzt werden."
     },
     "field": {
       "display_name": "Anzeigename",

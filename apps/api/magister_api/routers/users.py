@@ -387,6 +387,58 @@ async def put_user_groups(
     )
 
 
+@router.post("/{ad_object_guid}/groups/refresh", response_model=UserGroupsResult)
+async def refresh_user_groups(
+    request: Request,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> UserGroupsResult:
+    """Re-read the user's live AD group memberships (``memberOf``) into the cache.
+
+    Shows the true directory state — including groups set outside Magister —
+    without waiting for the next full sync. Same RBAC as the group editor.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    svc = UserGroupsService(session, settings, actor.to_scope(), ad)
+    try:
+        result = await svc.refresh_from_ad(target=target, ip=ip, request_id=request_id)
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+    return UserGroupsResult(
+        added=result.added, removed=result.removed, failed=result.failed, groups=result.groups
+    )
+
+
+@router.post("/{ad_object_guid}/groups/reapply", response_model=UserGroupsResult)
+async def reapply_user_groups(
+    request: Request,
+    user_and_target: tuple[AuthenticatedUser, AdUserCache] = Depends(require_user_writer),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> UserGroupsResult:
+    """Re-assign the AD groups from the user's active departments (repair rights).
+
+    (Re-)adds the union of every active department's ``ad_groups`` in AD, then
+    refreshes the cache from the live directory. Same RBAC as the group editor.
+    """
+    actor, target = user_and_target
+    ip, request_id = _ip_request_id(request)
+    svc = UserGroupsService(session, settings, actor.to_scope(), ad)
+    try:
+        result = await svc.reapply_department_groups(target=target, ip=ip, request_id=request_id)
+    except GroupsUserNotInAdError as exc:
+        raise HTTPException(status_code=409, detail="user_not_in_ad") from exc
+    except AdUnavailableError as exc:
+        raise HTTPException(status_code=503, detail="ad_unavailable") from exc
+    return UserGroupsResult(
+        added=result.added, removed=result.removed, failed=result.failed, groups=result.groups
+    )
+
+
 @router.patch("/{ad_object_guid}/status", response_model=AdUserOut)
 async def patch_user_status(
     request: Request,

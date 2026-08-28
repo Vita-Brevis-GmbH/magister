@@ -1067,6 +1067,36 @@ export function useUpdateUserGroups(guid: string) {
   });
 }
 
+// Re-read the user's live AD group memberships (memberOf) into the cache.
+export function useRefreshUserGroups(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<UserGroupsResult, ApiError, void>({
+    mutationFn: () =>
+      apiFetch<UserGroupsResult>(`/users/${encodeURIComponent(guid)}/groups/refresh`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.user(guid) });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
+// Re-assign the AD groups from the user's active departments (repair rights).
+export function useReapplyUserGroups(guid: string) {
+  const qc = useQueryClient();
+  return useMutation<UserGroupsResult, ApiError, void>({
+    mutationFn: () =>
+      apiFetch<UserGroupsResult>(`/users/${encodeURIComponent(guid)}/groups/reapply`, {
+        method: "POST",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.user(guid) });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
 export function useCreateAdUser() {
   const qc = useQueryClient();
   return useMutation<AdUserCreateResponse, ApiError, AdUserCreateRequest>({
