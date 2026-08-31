@@ -47,6 +47,11 @@ export interface RoleGrantRequest {
   school_id: number | null;
 }
 
+/** The complete desired set of assignable roles for one person (bulk set). */
+export interface RoleSetRequest {
+  assignments: RoleGrantRequest[];
+}
+
 // --- Dynamic roles + rights matrix (ADR-0010, /admin/rbac) -----------------
 export interface RbacRole {
   key: string;

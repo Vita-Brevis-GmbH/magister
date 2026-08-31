@@ -6,15 +6,15 @@ import { ApiError } from "@/api/client";
 import {
   useCreateRole,
   useDeleteRole,
-  useGrantRole,
   useRbacConfig,
   useRevokeRole,
   useRoles,
   useSchools,
   useSetRoleCapabilities,
+  useSetUserRoles,
   useUsers,
 } from "@/api/hooks";
-import type { RbacRole, RoleAssignmentOut } from "@/api/types";
+import type { RbacRole, RoleAssignmentOut, RoleGrantRequest } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -24,9 +24,6 @@ import { useTerms } from "@/lib/useTerms";
 export const Route = createFileRoute("/_app/admin/roles")({
   component: RolesPage,
 });
-
-const selectClasses =
-  "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
 
 /** i18n key for a capability value ("orgunit.manage" → rbac.cap_orgunit_manage). */
 function capKey(cap: string): string {
@@ -78,7 +75,7 @@ function RolesPage(): JSX.Element {
 
       <RightsMatrix />
 
-      <GrantCard />
+      <AssignCard />
 
       <Card>
         <CardHeader>
@@ -325,48 +322,97 @@ function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
   );
 }
 
-function GrantCard(): JSX.Element {
+/** Membership key for one (role, org-unit) pair. Role keys match
+ *  `[a-z][a-z0-9_-]*`, so "::" can never collide with a role key. */
+function scopeKey(role: string, schoolId: number | null): string {
+  return `${role}::${schoolId ?? "null"}`;
+}
+
+function sameSet(a: Set<string>, b: Set<string>): boolean {
+  if (a.size !== b.size) return false;
+  for (const k of a) if (!b.has(k)) return false;
+  return true;
+}
+
+/** Per-person role editor: pick a person, then tick which assignable roles they
+ *  hold — and for scoped roles, at which org units (multiple-choice per site).
+ *  One "Speichern" diffs the ticks against the current grants and applies them
+ *  transactionally, so several roles across several sites go in one action. */
+function AssignCard(): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
   const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const schools = useSchools();
   const cfg = useRbacConfig();
-  const grant = useGrantRole();
+  const roles = useRoles();
+  const setUserRoles = useSetUserRoles();
   const roleLabel = useRoleLabel();
 
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<{ guid: string; label: string } | null>(null);
-  const [role, setRole] = useState<string>("schulleitung");
-  const [schoolId, setSchoolId] = useState<number | "">("");
+  // Pending edits; null means "unchanged, mirror the person's current grants".
+  const [draft, setDraft] = useState<Set<string> | null>(null);
 
   // Assignable roles: everything except derived roles (kl).
   const assignable = useMemo(
     () => (cfg.data?.roles ?? []).filter((r) => !r.is_derived),
     [cfg.data?.roles],
   );
-  const selectedRole = assignable.find((r) => r.key === role);
-  const needsSchool = selectedRole ? !selectedRole.is_admin : role !== "admin";
+  const schoolList = schools.data ?? [];
 
-  const results = useUsers(search.trim().length >= 2 ? { search: search.trim(), limit: 8 } : {});
-  const showResults = search.trim().length >= 2 && !selected;
-  const canGrant = !!selected && (!needsSchool || schoolId !== "");
+  // The person's current active grants, as a membership set (assignable only).
+  const current = useMemo(() => {
+    const keys = new Set<string>();
+    if (!selected) return keys;
+    const assignableKeys = new Set(assignable.map((r) => r.key));
+    for (const a of roles.data ?? []) {
+      if (a.ad_object_guid === selected.guid && assignableKeys.has(a.role)) {
+        keys.add(scopeKey(a.role, a.school_id));
+      }
+    }
+    return keys;
+  }, [selected, roles.data, assignable]);
+
+  const shown = draft ?? current;
+  const ready = roles.isSuccess && !!cfg.data;
+  const dirty = draft !== null && !sameSet(draft, current);
+
+  function reset(): void {
+    setSelected(null);
+    setSearch("");
+    setDraft(null);
+  }
+
+  function toggle(role: string, schoolId: number | null, on: boolean): void {
+    setDraft((prev) => {
+      const next = new Set(prev ?? current);
+      const k = scopeKey(role, schoolId);
+      if (on) next.add(k);
+      else next.delete(k);
+      return next;
+    });
+  }
 
   function submit(): void {
     if (!selected) return;
-    grant.mutate(
-      {
-        guid: selected.guid,
-        body: { role, school_id: needsSchool ? Number(schoolId) : null },
-      },
-      {
-        onSuccess: () => {
-          setSelected(null);
-          setSearch("");
-          setSchoolId("");
-        },
-      },
+    const assignments: RoleGrantRequest[] = [];
+    for (const r of assignable) {
+      if (r.is_admin) {
+        if (shown.has(scopeKey(r.key, null))) assignments.push({ role: r.key, school_id: null });
+      } else {
+        for (const s of schoolList) {
+          if (shown.has(scopeKey(r.key, s.id))) assignments.push({ role: r.key, school_id: s.id });
+        }
+      }
+    }
+    setUserRoles.mutate(
+      { guid: selected.guid, body: { assignments } },
+      { onSuccess: () => setDraft(null) },
     );
   }
+
+  const results = useUsers(search.trim().length >= 2 ? { search: search.trim(), limit: 8 } : {});
+  const showResults = search.trim().length >= 2 && !selected;
 
   return (
     <Card>
@@ -380,15 +426,7 @@ function GrantCard(): JSX.Element {
           {selected ? (
             <div className="flex items-center gap-2">
               <span className="rounded-md border bg-muted px-2 py-1 text-sm">{selected.label}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setSelected(null);
-                  setSearch("");
-                }}
-              >
+              <Button type="button" variant="ghost" size="sm" onClick={reset}>
                 {t("admin.roles.change_user")}
               </Button>
             </div>
@@ -428,54 +466,81 @@ function GrantCard(): JSX.Element {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="role-select">{t("admin.roles.col_role")}</Label>
-            <select
-              id="role-select"
-              className={selectClasses}
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-            >
-              {assignable.map((r) => (
-                <option key={r.key} value={r.key}>
-                  {roleLabel(r)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="role-school">{t("admin.roles.col_school", unitVars)}</Label>
-            <select
-              id="role-school"
-              className={selectClasses}
-              disabled={!needsSchool}
-              value={needsSchool ? schoolId : ""}
-              onChange={(e) => setSchoolId(e.target.value === "" ? "" : Number(e.target.value))}
-            >
-              <option value="">
-                {needsSchool
-                  ? t("admin.roles.school_placeholder", unitVars)
-                  : t("admin.roles.school_all", unitVars)}
-              </option>
-              {(schools.data ?? []).map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        {selected ? (
+          !ready ? (
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+          ) : assignable.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("admin.roles.no_roles")}</p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                {t("admin.roles.assign_hint", unitVars)}
+              </p>
+              <div className="overflow-x-auto rounded-md border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="px-3 py-2">{t("admin.roles.col_role")}</th>
+                      <th className="px-3 py-2">{t("admin.roles.col_school", unitVars)}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assignable.map((r) => (
+                      <tr key={r.key} className="border-b last:border-0 align-top">
+                        <td className="px-3 py-2 font-medium">{roleLabel(r)}</td>
+                        <td className="px-3 py-2">
+                          {r.is_admin ? (
+                            <label className="inline-flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                checked={shown.has(scopeKey(r.key, null))}
+                                disabled={setUserRoles.isPending}
+                                onChange={(e) => toggle(r.key, null, e.target.checked)}
+                              />
+                              <span>{t("admin.roles.cross_school", unitVars)}</span>
+                            </label>
+                          ) : schoolList.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">
+                              {t("admin.roles.no_schools", unitVars)}
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-x-4 gap-y-1">
+                              {schoolList.map((s) => (
+                                <label key={s.id} className="inline-flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={shown.has(scopeKey(r.key, s.id))}
+                                    disabled={setUserRoles.isPending}
+                                    onChange={(e) => toggle(r.key, s.id, e.target.checked)}
+                                  />
+                                  <span>{s.name}</span>
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
 
-        {grant.isError ? (
-          <p className="text-sm text-destructive">{t(grantErrorKey(grant.error), unitVars)}</p>
-        ) : grant.isSuccess ? (
-          <p className="text-sm text-emerald-700">{t("admin.roles.grant_ok")}</p>
-        ) : null}
+              {setUserRoles.isError ? (
+                <p className="text-sm text-destructive">
+                  {t(grantErrorKey(setUserRoles.error), unitVars)}
+                </p>
+              ) : setUserRoles.isSuccess && !dirty ? (
+                <p className="text-sm text-emerald-700">{t("admin.roles.grant_ok")}</p>
+              ) : null}
 
-        <Button type="button" disabled={!canGrant || grant.isPending} onClick={submit}>
-          {grant.isPending ? t("common.loading") : t("admin.roles.grant_button")}
-        </Button>
+              <Button type="button" disabled={!dirty || setUserRoles.isPending} onClick={submit}>
+                {setUserRoles.isPending ? t("common.loading") : t("admin.roles.save")}
+              </Button>
+            </div>
+          )
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("admin.roles.select_user_first")}</p>
+        )}
       </CardContent>
     </Card>
   );

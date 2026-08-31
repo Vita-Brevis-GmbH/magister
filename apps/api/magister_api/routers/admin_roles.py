@@ -21,7 +21,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
 from magister_api.repositories.auth import RoleAssignmentRepository
 from magister_api.routers._helpers import _ip_request_id
-from magister_api.schemas.roles import RoleAssignmentOut, RoleGrantRequest
+from magister_api.schemas.roles import RoleAssignmentOut, RoleGrantRequest, RoleSetRequest
 from magister_api.services._user_enrich import fetch_user_labels, user_label_fields
 from magister_api.services.rbac import RbacService
 
@@ -31,6 +31,27 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 async def _school_names(session: AsyncSession) -> dict[int, str]:
     rows = (await session.execute(select(School.id, School.name))).all()
     return {r.id: r.name for r in rows}
+
+
+async def _validate_scope(session: AsyncSession, role: str, school_id: int | None) -> None:
+    """Enforce ADR-0010 grant rules for one (role, org-unit) pair.
+
+    Shared by the single grant and the bulk set-endpoint so both apply the
+    identical rule set: the role must exist and be assignable (not derived),
+    ``admin`` is cross-school (school_id null), every other role is scoped to
+    exactly one existing org unit.
+    """
+    role_def = await RbacService(session).get_role(role)
+    if role_def is None:
+        raise HTTPException(status_code=404, detail="role_not_found")
+    if role_def.is_derived:
+        raise HTTPException(status_code=422, detail="role_not_assignable")
+    if role_def.is_admin and school_id is not None:
+        raise HTTPException(status_code=422, detail="admin_is_cross_school")
+    if not role_def.is_admin and school_id is None:
+        raise HTTPException(status_code=422, detail="role_requires_school")
+    if school_id is not None and await session.get(School, school_id) is None:
+        raise HTTPException(status_code=404, detail="school_not_found")
 
 
 @router.get("/roles", response_model=list[RoleAssignmentOut])
@@ -74,19 +95,8 @@ async def grant_role(
         raise HTTPException(status_code=404, detail="user_not_found")
 
     # ADR-0010: validate the role against the DB role catalog (built-in OR
-    # custom), then apply the flag-dependent scope rule — admin is cross-school
-    # (school_id null), every other assignable role is scoped to one org unit.
-    role_def = await RbacService(session).get_role(payload.role)
-    if role_def is None:
-        raise HTTPException(status_code=404, detail="role_not_found")
-    if role_def.is_derived:
-        raise HTTPException(status_code=422, detail="role_not_assignable")
-    if role_def.is_admin and payload.school_id is not None:
-        raise HTTPException(status_code=422, detail="admin_is_cross_school")
-    if not role_def.is_admin and payload.school_id is None:
-        raise HTTPException(status_code=422, detail="role_requires_school")
-    if payload.school_id is not None and await session.get(School, payload.school_id) is None:
-        raise HTTPException(status_code=404, detail="school_not_found")
+    # custom) and apply the flag-dependent scope rule.
+    await _validate_scope(session, payload.role, payload.school_id)
 
     repo = RoleAssignmentRepository(session)
     assignment = await repo.grant(
@@ -117,6 +127,98 @@ async def grant_role(
         granted_at=assignment.granted_at,
         **user_label_fields(target),
     )
+
+
+@router.put("/users/{ad_object_guid}/roles", response_model=list[RoleAssignmentOut])
+async def set_roles(
+    ad_object_guid: str,
+    payload: RoleSetRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> list[RoleAssignmentOut]:
+    """Set a person's assignable roles to exactly the given set in one action.
+
+    Grants multiple roles across multiple org units at once (multiple-choice per
+    site). The desired set is authoritative for every *assignable* role: pairs
+    that appear are granted, active pairs of an assignable role that no longer
+    appear are revoked. Derived roles (``kl``) are never touched. All-or-nothing:
+    every item is validated before a single change is written, so an invalid
+    item rolls the whole request back.
+    """
+    target = await session.get(AdUserCache, ad_object_guid)
+    if target is None:
+        raise HTTPException(status_code=404, detail="user_not_found")
+
+    # Validate every item up front (fail-fast, transactional), de-duplicating.
+    desired: set[tuple[str, int | None]] = set()
+    for item in payload.assignments:
+        await _validate_scope(session, item.role, item.school_id)
+        desired.add((item.role, item.school_id))
+
+    # This editor only governs assignable (non-derived) roles, so the revoke
+    # diff is scoped to those — an assignment of a role no longer in the catalog
+    # is left untouched rather than silently dropped.
+    assignable = {r.key for r in await RbacService(session).list_roles() if not r.is_derived}
+
+    repo = RoleAssignmentRepository(session)
+    current = {
+        (a.role, a.school_id)
+        for a in await repo.list_active_for(ad_object_guid)
+        if a.role in assignable
+    }
+
+    ip, request_id = _ip_request_id(request)
+    audit = AuditService(session, settings)
+
+    for role, school_id in sorted(desired - current, key=lambda p: (p[0], p[1] or 0)):
+        await repo.grant(
+            ad_object_guid=ad_object_guid,
+            role=role,
+            school_id=school_id,
+            granted_by=user.upn,
+        )
+        await audit.emit(
+            action="role_granted",
+            target_kind="role_assignment",
+            target_id=ad_object_guid,
+            actor_upn=user.upn,
+            actor_object_guid=user.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"role": role, "school_id": school_id, "via": "admin_ui_bulk"},
+        )
+
+    for role, school_id in sorted(current - desired, key=lambda p: (p[0], p[1] or 0)):
+        await repo.revoke(ad_object_guid=ad_object_guid, role=role, school_id=school_id)
+        await audit.emit(
+            action="role_revoked",
+            target_kind="role_assignment",
+            target_id=ad_object_guid,
+            actor_upn=user.upn,
+            actor_object_guid=user.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"role": role, "school_id": school_id, "via": "admin_ui_bulk"},
+        )
+
+    rows = await repo.list_active_for(ad_object_guid)
+    schools = await _school_names(session)
+    return [
+        RoleAssignmentOut(
+            ad_object_guid=ad_object_guid,
+            role=r.role,
+            school_id=r.school_id,
+            school_name=schools.get(r.school_id) if r.school_id is not None else None,
+            granted_by=r.granted_by,
+            granted_at=r.granted_at,
+            **user_label_fields(target),
+        )
+        for r in rows
+    ]
 
 
 @router.delete("/users/{ad_object_guid}/roles", status_code=status.HTTP_204_NO_CONTENT)

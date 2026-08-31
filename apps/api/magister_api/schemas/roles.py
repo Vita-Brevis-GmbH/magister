@@ -38,8 +38,22 @@ class RoleRevokeRequest(RoleGrantRequest):
     """Same shape as a grant — identifies the exact assignment to revoke."""
 
 
+class RoleSetRequest(BaseModel):
+    """The complete desired set of assignable roles for one person.
+
+    Lets an admin grant a person several roles across several org units in one
+    action (multiple-choice per site). The endpoint diffs this against the
+    person's current active grants: newly-listed pairs are granted, no-longer
+    listed pairs (among assignable roles) are revoked — each with its own audit
+    event. Derived roles (``kl``) are never touched. The same scope rules as a
+    single grant apply per item (admin cross-school, every other role scoped)."""
+
+    assignments: list[RoleGrantRequest] = Field(default_factory=list)
+
+
 __all__ = [
     "RoleAssignmentOut",
     "RoleGrantRequest",
     "RoleRevokeRequest",
+    "RoleSetRequest",
 ]

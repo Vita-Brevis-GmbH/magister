@@ -80,6 +80,7 @@ import type {
   RoleAssignmentOut,
   RoleCreateRequest,
   RoleGrantRequest,
+  RoleSetRequest,
   MailDomainsOut,
   SchoolOut,
   SchoolCreate,
@@ -929,6 +930,20 @@ export function useRevokeRole() {
         method: "DELETE",
       });
     },
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
+  });
+}
+
+/** Set a person's assignable roles to exactly the given set (multiple roles
+ *  across multiple org units in one transactional action). */
+export function useSetUserRoles() {
+  const qc = useQueryClient();
+  return useMutation<RoleAssignmentOut[], ApiError, { guid: string; body: RoleSetRequest }>({
+    mutationFn: ({ guid, body }) =>
+      apiFetch<RoleAssignmentOut[]>(`/admin/users/${encodeURIComponent(guid)}/roles`, {
+        method: "PUT",
+        body,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
   });
 }

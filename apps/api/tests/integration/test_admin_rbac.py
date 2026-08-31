@@ -177,3 +177,101 @@ async def test_grant_role_to_company_user(
     )
     assert r.status_code == 201, r.text
     assert r.json()["ad_object_guid"] == guid
+
+
+async def _seed_target(db_session: AsyncSession, guid: str, school_id: int) -> None:
+    from magister_api.models.auth import AdUserCache
+
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=guid,
+            school_id=school_id,
+            upn=f"{guid}@example.ch",
+            kind="teacher",
+            enabled=True,
+            ms_ds_consistency_guid=guid,
+        )
+    )
+    await db_session.commit()
+
+
+async def test_set_roles_grants_multiple_across_sites(
+    as_admin: AsyncClient, db_session: AsyncSession, school_a: int, school_b: int
+) -> None:
+    # Multiple-choice per site: one PUT grants two roles across two org units.
+    guid = "00000000-0000-0000-0000-0000000000d1"
+    await _seed_target(db_session, guid, school_a)
+
+    r = await as_admin.put(
+        f"/admin/users/{guid}/roles",
+        json={
+            "assignments": [
+                {"role": "schulleitung", "school_id": school_a},
+                {"role": "schulleitung", "school_id": school_b},
+                {"role": "smi", "school_id": school_a},
+                {"role": "admin", "school_id": None},
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    got = {(a["role"], a["school_id"]) for a in r.json()}
+    assert got == {
+        ("schulleitung", school_a),
+        ("schulleitung", school_b),
+        ("smi", school_a),
+        ("admin", None),
+    }
+
+
+async def test_set_roles_diffs_against_current(
+    as_admin: AsyncClient, db_session: AsyncSession, school_a: int, school_b: int
+) -> None:
+    # A second PUT is authoritative: it grants what is newly listed and revokes
+    # the assignable pairs that are no longer listed.
+    guid = "00000000-0000-0000-0000-0000000000d2"
+    await _seed_target(db_session, guid, school_a)
+
+    await as_admin.put(
+        f"/admin/users/{guid}/roles",
+        json={"assignments": [{"role": "schulleitung", "school_id": school_a}]},
+    )
+    r = await as_admin.put(
+        f"/admin/users/{guid}/roles",
+        json={"assignments": [{"role": "schulleitung", "school_id": school_b}]},
+    )
+    assert r.status_code == 200, r.text
+    got = {(a["role"], a["school_id"]) for a in r.json()}
+    assert got == {("schulleitung", school_b)}
+
+    # Empty set clears every assignable grant.
+    r = await as_admin.put(f"/admin/users/{guid}/roles", json={"assignments": []})
+    assert r.status_code == 200, r.text
+    assert r.json() == []
+
+
+async def test_set_roles_validates_every_item_atomically(
+    as_admin: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    # One invalid item (derived role) rejects the whole request — nothing is
+    # written, so the person keeps no partial grant.
+    guid = "00000000-0000-0000-0000-0000000000d3"
+    await _seed_target(db_session, guid, school_a)
+
+    r = await as_admin.put(
+        f"/admin/users/{guid}/roles",
+        json={
+            "assignments": [
+                {"role": "schulleitung", "school_id": school_a},
+                {"role": "kl", "school_id": school_a},
+            ]
+        },
+    )
+    assert r.status_code == 422, r.text
+    listing = (await as_admin.get("/admin/roles")).json()
+    assert not any(a["ad_object_guid"] == guid for a in listing)
+
+
+async def test_set_roles_requires_admin(as_schulleitung_a: AsyncClient) -> None:
+    guid = "00000000-0000-0000-0000-0000000000d4"
+    r = await as_schulleitung_a.put(f"/admin/users/{guid}/roles", json={"assignments": []})
+    assert r.status_code == 403
