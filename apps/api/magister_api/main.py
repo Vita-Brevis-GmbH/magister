@@ -23,6 +23,7 @@ from magister_api.logging_config import configure_logging
 from magister_api.modules import catalog
 from magister_api.modules.enforcement import make_module_guard
 from magister_api.modules.registry import enabled_modules
+from magister_api.observability import runtime_snapshot
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
@@ -132,6 +133,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    @app.get("/runtime", tags=["meta"])
+    async def runtime() -> dict[str, object]:
+        # Per-container facts (mounted modules, scheduler ownership, DB-pool,
+        # RSS). Internal only — reachable like /healthz, not routed publicly.
+        return {"version": __version__, **runtime_snapshot(s)}
 
     return app
 

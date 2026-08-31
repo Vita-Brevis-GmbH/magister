@@ -26,6 +26,7 @@ from magister_api.modules.registry import enabled_modules
 PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         ("/healthz", "GET"),
+        ("/runtime", "GET"),  # per-container introspection; internal-only, not routed by Caddy
         ("/auth/login", "GET"),  # OIDC redirect start
         ("/auth/callback", "GET"),  # OIDC redirect return
         ("/auth/capabilities", "GET"),  # login-screen feature probe

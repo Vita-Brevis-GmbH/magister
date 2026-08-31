@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""Generate the reverse-proxy routing + Compose overlay for a container split.
+
+The module→path-prefix map is the single source of truth
+(``magister_api.modules.registry.module_path_prefixes``), so the error-prone
+"specific ``/api/<prefix>*`` before generic ``/api/*``" Caddy routing and the
+per-container Compose services are derived, never hand-maintained.
+
+Usage:
+    python scripts/gen_split.py reports=reports imports=imports,letters
+
+Each token is ``<container-name>=<module,module,...>``. Prints a Caddy snippet
+(insert BEFORE the generic ``/api/*`` block) and a Compose overlay. The main
+``magister-api`` container stays the catch-all target for ``platform`` and any
+module not split out, and remains the single scheduler + migrator.
+"""
+
+# This is a stdout CLI generator, not package code: `print` IS the output, and the
+# embedded env/healthcheck blocks are verbatim YAML that must not be line-wrapped.
+# ruff: noqa: T201, E501
+from __future__ import annotations
+
+import sys
+
+# Allow running from the repo root without installing the package.
+sys.path.insert(0, __file__.rsplit("/scripts/", 1)[0] + "/apps/api")
+
+from magister_api.modules.registry import module_path_prefixes  # noqa: E402
+
+SERVICE_PREFIX = "magister-api-"
+UPSTREAM_PORT = 8000
+
+# Shared env for every split container — mirrors docker-compose.editions.yml so a
+# generated overlay is a drop-in ``-f`` next to docker-compose.yml.
+_SHARED_ENV = """\
+    MAGISTER_ENVIRONMENT: production
+    MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}
+    MAGISTER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-magister}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-magister}
+    MAGISTER_AUDIT_KEY: ${MAGISTER_AUDIT_KEY:?MAGISTER_AUDIT_KEY is required}
+    MAGISTER_SESSION_SECRET: ${MAGISTER_SESSION_SECRET:?MAGISTER_SESSION_SECRET is required}
+    MAGISTER_CSRF_SECRET: ${MAGISTER_CSRF_SECRET:?MAGISTER_CSRF_SECRET is required}
+    MAGISTER_SESSION_COOKIE_SECURE: "true"
+    MAGISTER_OIDC_ISSUER: ${MAGISTER_OIDC_ISSUER}
+    MAGISTER_OIDC_CLIENT_ID: ${MAGISTER_OIDC_CLIENT_ID}
+    MAGISTER_OIDC_CLIENT_SECRET: ${MAGISTER_OIDC_CLIENT_SECRET}
+    MAGISTER_OIDC_REDIRECT_URI: https://${MAGISTER_PUBLIC_HOSTNAME:?MAGISTER_PUBLIC_HOSTNAME is required}/api/auth/callback
+    MAGISTER_AD_DCS: ${MAGISTER_AD_DCS:-}
+    MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
+    MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
+    MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
+    # Exactly one scheduler + one migrator: the main api container owns both.
+    MAGISTER_SKIP_MIGRATIONS: "1"
+    MAGISTER_RUN_SCHEDULER: "0"\
+"""
+
+_HEALTHCHECK = """\
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=3).status == 200 else 1)"
+    interval: 15s
+    timeout: 5s
+    retries: 5
+    start_period: 30s\
+"""
+
+
+def parse_spec(tokens: list[str]) -> dict[str, list[str]]:
+    """Parse ``name=mod,mod`` tokens into ``{container_name: [module_ids]}``."""
+    spec: dict[str, list[str]] = {}
+    for tok in tokens:
+        if "=" not in tok:
+            raise ValueError(f"expected <name>=<modules>, got {tok!r}")
+        name, mods = tok.split("=", 1)
+        name = name.strip()
+        module_ids = [m.strip() for m in mods.split(",") if m.strip()]
+        if not name or not module_ids:
+            raise ValueError(f"empty name or modules in {tok!r}")
+        spec[name] = module_ids
+    return spec
+
+
+def _prefixes_for(module_ids: list[str], prefixes: dict[str, tuple[str, ...]]) -> list[str]:
+    out: list[str] = []
+    for mid in module_ids:
+        if mid == "platform":
+            raise ValueError("platform is the catch-all base; it cannot be split out")
+        if mid not in prefixes:
+            raise ValueError(f"unknown module {mid!r}; known: {sorted(prefixes)}")
+        for p in prefixes[mid]:
+            if p not in out:
+                out.append(p)
+    return out
+
+
+def _matcher_name(container: str) -> str:
+    """A Caddy named-matcher token derived from the container name."""
+    safe = "".join(c if c.isalnum() else "_" for c in container)
+    return f"@api_{safe}"
+
+
+def render_caddy_routes(spec: dict[str, list[str]]) -> str:
+    """Caddy blocks routing a module's ``/api/<prefix>`` paths to its container.
+
+    One ``handle`` block per container, matching every prefix the container's
+    modules serve. Like the monolith's ``handle_path /api/*`` we strip only the
+    ``/api`` segment (``uri strip_prefix /api``) so the backend still sees its
+    router mount, e.g. ``/api/reports/x`` → ``/reports/x`` — *not* ``handle_path
+    /api/reports*``, which would strip ``/api/reports`` and 404 at the backend.
+    Insert BEFORE the generic ``handle_path /api/*`` block so these win.
+    """
+    prefixes = module_path_prefixes()
+    blocks: list[str] = [
+        "# GENERATED by scripts/gen_split.py — insert BEFORE the generic "
+        "`handle_path /api/*` block (specific routes must win).",
+    ]
+    for name, module_ids in spec.items():
+        upstream = f"{SERVICE_PREFIX}{name}:{UPSTREAM_PORT}"
+        matcher = _matcher_name(name)
+        # Exact path + subtree for each prefix, so /api/reports and
+        # /api/reports/... both route but /api/reports-else never matches.
+        paths = " ".join(f"/api{p} /api{p}/*" for p in _prefixes_for(module_ids, prefixes))
+        blocks.append(
+            f"\t{matcher} path {paths}\n"
+            f"\thandle {matcher} {{\n"
+            f"\t\turi strip_prefix /api\n"
+            f"\t\treverse_proxy {upstream} {{\n"
+            f"\t\t\theader_up X-Forwarded-Host {{host}}\n"
+            f"\t\t\theader_up X-Forwarded-Proto {{scheme}}\n"
+            f"\t\t}}\n"
+            f"\t}}"
+        )
+    return "\n".join(blocks) + "\n"
+
+
+def render_compose_overlay(spec: dict[str, list[str]]) -> str:
+    """A docker-compose overlay with one service per split container."""
+    prefixes = module_path_prefixes()
+    for module_ids in spec.values():  # validate all before emitting
+        _prefixes_for(module_ids, prefixes)
+    lines = [
+        "# GENERATED by scripts/gen_split.py — do not edit by hand.",
+        "# Usage: docker compose -f docker-compose.yml -f <this-file> up -d",
+        "",
+        "x-split-api: &split-api",
+        "  image: ${MAGISTER_API_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-api:latest}",
+        "  restart: unless-stopped",
+        "  depends_on:",
+        "    postgres:",
+        "      condition: service_healthy",
+        "  environment: &split-env",
+        _SHARED_ENV,
+        _HEALTHCHECK,
+        "  networks: [internal]",
+        "",
+        "services:",
+    ]
+    for name, module_ids in spec.items():
+        lines.append(f"  {SERVICE_PREFIX}{name}:")
+        lines.append("    <<: *split-api")
+        lines.append("    environment:")
+        lines.append("      <<: *split-env")
+        lines.append(f'      MAGISTER_CONTAINER_MODULES: "{",".join(module_ids)}"')
+    return "\n".join(lines) + "\n"
+
+
+def main(argv: list[str] | None = None) -> int:
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    if not tokens:
+        print(__doc__)
+        return 2
+    spec = parse_spec(tokens)
+    print("# ===== Caddy routing (deploy/caddy/Caddyfile) =====")
+    print(render_caddy_routes(spec))
+    print("# ===== Compose overlay (deploy/compose/docker-compose.split-generated.yml) =====")
+    print(render_compose_overlay(spec))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

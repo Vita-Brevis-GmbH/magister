@@ -67,3 +67,28 @@ def enabled_modules(container_modules: Sequence[str] | None = None) -> tuple[Mod
             f"MAGISTER_CONTAINER_MODULES names unknown module(s): {unknown}; known: {sorted(known)}"
         )
     return tuple(m for m in ALL_MODULES if m.id == _BASE_MODULE_ID or m.id in wanted)
+
+
+def _top_prefix(path: str) -> str:
+    """The first path segment of a router prefix, e.g. ``/a/{b}`` → ``/a``."""
+    seg = (path or "").strip("/").split("/", 1)[0]
+    return f"/{seg}" if seg else ""
+
+
+def module_path_prefixes() -> dict[str, tuple[str, ...]]:
+    """Top-level URL path prefix(es) each module serves, derived from its routers.
+
+    This is the single source of truth for generating reverse-proxy routing to
+    a per-module container (see ``scripts/gen_split.py``) and for asserting the
+    feature modules stay on disjoint prefixes so ``/api/<prefix>*`` can be routed
+    to exactly one container. ``platform`` is the catch-all default target.
+    """
+    out: dict[str, tuple[str, ...]] = {}
+    for module in ALL_MODULES:
+        seen: list[str] = []
+        for router in module.routers:
+            prefix = _top_prefix(getattr(router, "prefix", "") or "")
+            if prefix and prefix not in seen:
+                seen.append(prefix)
+        out[module.id] = tuple(seen)
+    return out
