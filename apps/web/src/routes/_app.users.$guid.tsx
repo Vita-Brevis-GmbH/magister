@@ -35,6 +35,7 @@ import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
 import { UserAvatar } from "@/components/UserAvatar";
 import { RenameModal } from "@/components/RenameModal";
+import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { UserStatusModal } from "@/components/UserStatusModal";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -1161,6 +1162,13 @@ function UserReadView({
   onOpenPrivacy: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const me = useCurrentUser();
+  const canEditUsers = (me.data?.is_admin ?? false) || (me.data?.roles ?? []).includes("smi");
+  const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
+  const canReset =
+    user.enabled &&
+    (user.kind === "student" ||
+      ((user.kind === "teacher" || user.kind === "company") && canEditUsers));
   const refreshGroups = useRefreshUserGroups(user.ad_object_guid);
   const reapplyGroups = useReapplyUserGroups(user.ad_object_guid);
   const address = [
@@ -1173,12 +1181,12 @@ function UserReadView({
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("users.detail.section_classes")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {dashboard && dashboard.classes.length > 0 ? (
+      {dashboard && dashboard.classes.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">{t("users.detail.section_classes")}</CardTitle>
+          </CardHeader>
+          <CardContent>
             <ul className="space-y-3">
               {dashboard.classes.map((c) => (
                 <li key={c.class_id} className="text-sm">
@@ -1205,11 +1213,9 @@ function UserReadView({
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="text-sm text-muted-foreground">{t("users.detail.no_classes")}</p>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <UserDepartmentsCard guid={user.ad_object_guid} />
 
@@ -1263,12 +1269,36 @@ function UserReadView({
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-base">{t("users.detail.section_overview")}</CardTitle>
+          {canReset ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setResetTarget({
+                  ad_object_guid: user.ad_object_guid,
+                  given_name: user.given_name,
+                  surname: user.surname,
+                  upn: user.upn,
+                  kind:
+                    user.kind === "teacher"
+                      ? "teacher"
+                      : user.kind === "company"
+                        ? "company"
+                        : "student",
+                })
+              }
+            >
+              {t("password_reset.button")}
+            </Button>
+          ) : null}
         </CardHeader>
         <CardContent className="space-y-2">
           <InfoRow label={t("users.field.display_name")} value={user.display_name} />
           <InfoRow label={t("users.field.upn")} value={user.upn} />
+          <InfoRow label={t("users.field.sam_account_name")} value={user.sam_account_name} />
           <InfoRow label={t("users.field.mail")} value={user.mail} />
           <InfoRow
             label={t("users.field.mail_aliases")}
@@ -1342,6 +1372,8 @@ function UserReadView({
           </Button>
         </CardContent>
       </Card>
+
+      <ResetPasswordModal student={resetTarget} onClose={() => setResetTarget(null)} />
     </div>
   );
 }
