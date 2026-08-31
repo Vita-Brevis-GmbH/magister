@@ -1271,6 +1271,17 @@ export function useResetTeacherPassword(adObjectGuid: string) {
   });
 }
 
+// Generic reset for company / non-class users (kind !== student|teacher).
+export function useResetUserPassword(adObjectGuid: string) {
+  return useMutation<StudentPasswordResetResponse, ApiError, StudentPasswordResetRequest>({
+    mutationFn: (body) =>
+      apiFetch<StudentPasswordResetResponse>(`/users/${adObjectGuid}/password-reset`, {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
 // --- Audit events (M2 US-7) -----------------------------------------------
 
 export interface UseAuditEventsParams {

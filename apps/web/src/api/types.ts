@@ -438,7 +438,7 @@ export interface AdUserOut {
   surname: string | null;
   display_name: string | null;
   mail: string | null;
-  kind: "teacher" | "student" | "admin";
+  kind: "teacher" | "student" | "admin" | "company";
   enabled: boolean;
   last_sync_at: string | null;
   ad_missing_since: string | null;

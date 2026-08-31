@@ -400,7 +400,8 @@ function UsersPage(): JSX.Element {
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {u.enabled &&
-                          (u.kind === "student" || (u.kind === "teacher" && canEditUsers)) ? (
+                          (u.kind === "student" ||
+                            ((u.kind === "teacher" || u.kind === "company") && canEditUsers)) ? (
                             <Button
                               type="button"
                               variant="outline"
@@ -411,7 +412,12 @@ function UsersPage(): JSX.Element {
                                   given_name: u.given_name,
                                   surname: u.surname,
                                   upn: u.upn,
-                                  kind: u.kind === "teacher" ? "teacher" : "student",
+                                  kind:
+                                    u.kind === "teacher"
+                                      ? "teacher"
+                                      : u.kind === "company"
+                                        ? "company"
+                                        : "student",
                                 })
                               }
                             >

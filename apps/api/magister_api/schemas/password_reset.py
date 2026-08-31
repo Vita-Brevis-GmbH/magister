@@ -60,9 +60,21 @@ class TeacherPasswordResetResponse(StudentPasswordResetResponse):
     pass
 
 
+# Generic (company / non-class) user reset — same shape again; distinct model
+# names keep OpenAPI + the audit flows separate from student/teacher.
+class UserPasswordResetRequest(StudentPasswordResetRequest):
+    pass
+
+
+class UserPasswordResetResponse(StudentPasswordResetResponse):
+    pass
+
+
 __all__ = [
     "StudentPasswordResetRequest",
     "StudentPasswordResetResponse",
     "TeacherPasswordResetRequest",
     "TeacherPasswordResetResponse",
+    "UserPasswordResetRequest",
+    "UserPasswordResetResponse",
 ]
