@@ -65,19 +65,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             )
 
     # Periodic AD sync (interval from app_settings, GUI-editable at runtime).
+    # The recurring AD *read* must run in exactly ONE container: the single
+    # AD-owning process keeps MAGISTER_RUN_SCHEDULER on (default); every other
+    # container in a split deployment sets it to 0 so it never opens a second
+    # sync loop against AD + DB.
     stop_event = asyncio.Event()
-    sync_task = asyncio.create_task(
-        run_ad_sync_loop(settings, sm, stop_event=stop_event),
-        name="ad-sync-scheduler",
-    )
+    sync_task: asyncio.Task[None] | None = None
+    if settings.run_scheduler:
+        sync_task = asyncio.create_task(
+            run_ad_sync_loop(settings, sm, stop_event=stop_event),
+            name="ad-sync-scheduler",
+        )
+        logger.info("AD-sync scheduler started (this container owns the AD read loop)")
+    else:
+        logger.info(
+            "AD-sync scheduler disabled (MAGISTER_RUN_SCHEDULER=0); "
+            "the AD read loop runs in another container"
+        )
 
     try:
         yield
     finally:
         stop_event.set()
-        sync_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await sync_task
+        if sync_task is not None:
+            sync_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await sync_task
         await dispose_engine()
 
 

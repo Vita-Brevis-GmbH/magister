@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+asyncpg://magister:magister@localhost:5432/magister",
     )
+    # SQLAlchemy connection-pool sizing (per process). Every container opens its
+    # own pool against the shared Postgres, so a per-function container split
+    # multiplies connection count — keep these low and plan Postgres
+    # ``max_connections`` (and PgBouncer) for the number of containers.
+    db_pool_size: int = Field(default=5, ge=1)
+    db_max_overflow: int = Field(default=10, ge=0)
 
     audit_key: SecretStr = Field(
         default=SecretStr(""),
@@ -84,6 +90,13 @@ class Settings(BaseSettings):
     # authenticate. Unknown ids are rejected at startup. This is the deployment
     # axis; the per-request enable/disable "Schieber" stays independent.
     container_modules: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
+    # Container-role flag (split plan, Phase 0). The periodic AD sync — the
+    # recurring AD *read* — must run in exactly ONE container, not in every
+    # one. The single AD-owning container keeps this True (default); every other
+    # container in a split deployment sets ``MAGISTER_RUN_SCHEDULER=0`` so it
+    # never opens a second sync loop against AD + DB.
+    run_scheduler: bool = Field(default=True)
 
     # Local-admin (break-glass) — only consulted on first boot when the
     # `local_admins` table is empty. Always pass a pre-computed argon2id

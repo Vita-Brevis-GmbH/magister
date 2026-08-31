@@ -19,13 +19,23 @@ _sessionmaker: async_sessionmaker[AsyncSession] | None = None
 
 
 def init_engine(settings: Settings | None = None, **engine_kwargs: Any) -> AsyncEngine:
-    """Initialise the global async engine. Called once on app startup."""
+    """Initialise the global async engine. Called once on app startup.
+
+    Pool size comes from settings (``db_pool_size``/``db_max_overflow``) so a
+    per-function container split can cap each process's connection footprint
+    against the shared Postgres. A caller that passes its own ``poolclass`` or
+    ``pool_size`` (e.g. tests using ``NullPool``) opts out of the sizing.
+    """
     global _engine, _sessionmaker
     s = settings or get_settings()
+    pool_kwargs: dict[str, Any] = {}
+    if "poolclass" not in engine_kwargs and "pool_size" not in engine_kwargs:
+        pool_kwargs = {"pool_size": s.db_pool_size, "max_overflow": s.db_max_overflow}
     _engine = create_async_engine(
         s.database_url,
         pool_pre_ping=True,
         future=True,
+        **pool_kwargs,
         **engine_kwargs,
     )
     _sessionmaker = async_sessionmaker(_engine, expire_on_commit=False, autoflush=False)

@@ -53,6 +53,9 @@ x-edition-api: &edition-api
     # Only one container needs to run migrations; the edition containers skip
     # them and let the main api container be the single migrator.
     MAGISTER_SKIP_MIGRATIONS: "1"
+    # The recurring AD sync (AD read loop) must run in exactly ONE container.
+    # The main api container owns it; edition containers turn it off.
+    MAGISTER_RUN_SCHEDULER: "0"
   healthcheck:
     test:
       - CMD

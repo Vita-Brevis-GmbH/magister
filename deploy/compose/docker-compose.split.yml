@@ -43,8 +43,10 @@ services:
       MAGISTER_AD_BIND_DN: ${MAGISTER_AD_BIND_DN:-}
       MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
       MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
-      # This container runs migrations at start too; harmless (idempotent) but if
-      # you prefer a single migrator, set MAGISTER_SKIP_MIGRATIONS=1 here.
+      # The main api container is the single migrator and owns the AD sync (read)
+      # loop; this split container skips both so there is exactly one of each.
+      MAGISTER_SKIP_MIGRATIONS: "1"
+      MAGISTER_RUN_SCHEDULER: "0"
     healthcheck:
       test:
         - CMD
