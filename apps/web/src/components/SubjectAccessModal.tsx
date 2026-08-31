@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useFormatters } from "@/lib/useFormatters";
+import { useTerms } from "@/lib/useTerms";
 
 interface Props {
   guid: string | null;
@@ -19,6 +20,7 @@ interface Props {
 
 export function SubjectAccessModal({ guid, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const fmt = useFormatters();
   const q = useSubjectAccess(guid);
 
@@ -48,7 +50,7 @@ export function SubjectAccessModal({ guid, onClose }: Props): JSX.Element {
             </Section>
 
             {q.data.school && (
-              <Section title={t("privacy.section_school")}>
+              <Section title={tt("privacy.section_school")}>
                 <KvList data={q.data.school as Record<string, unknown>} />
               </Section>
             )}
@@ -62,7 +64,7 @@ export function SubjectAccessModal({ guid, onClose }: Props): JSX.Element {
             </Section>
 
             <Section
-              title={t("privacy.section_teacher_roles", {
+              title={tt("privacy.section_teacher_roles", {
                 count: q.data.teacher_roles.length,
               })}
             >

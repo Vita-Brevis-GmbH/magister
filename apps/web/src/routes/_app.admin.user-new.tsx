@@ -279,7 +279,7 @@ function NewUserPage(): JSX.Element {
                   id="upn"
                   required
                   autoComplete="off"
-                  placeholder="vorname.nachname@schule.ch"
+                  placeholder="vorname.nachname@example.ch"
                   {...field("user_principal_name")}
                 />
               )}

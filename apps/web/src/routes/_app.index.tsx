@@ -304,12 +304,13 @@ function SimpleDashboard({
   hasDepartments: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const me = useCurrentUser();
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="font-serif text-2xl font-semibold">{t("app.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("app.tagline")}</p>
+        <p className="text-sm text-muted-foreground">{tt("app.tagline")}</p>
       </header>
       <Card>
         <CardHeader>

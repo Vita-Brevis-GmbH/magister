@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import i18n from "@/i18n";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/me")({
   component: MePage,
@@ -25,6 +26,7 @@ const TIME_FORMATS: PrefTimeFormat[] = ["24h", "12h"];
 
 function MePage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const me = useCurrentUser();
   if (me.isLoading || !me.data) return <p>{t("common.loading")}</p>;
   const u = me.data;
@@ -41,7 +43,7 @@ function MePage(): JSX.Element {
             value={u.roles.length ? u.roles.join(", ") : t("auth.no_roles")}
           />
           <Row
-            label={t("auth.school_scope")}
+            label={tt("auth.school_scope")}
             value={u.school_scope.length ? u.school_scope.join(", ") : "–"}
           />
           <Row label={t("auth.expires_at")} value={u.expires_at} mono />

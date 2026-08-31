@@ -4,10 +4,12 @@ import { useTranslation } from "react-i18next";
 import { usePurgeDemoData, useResetActivityLog } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useTerms } from "@/lib/useTerms";
 
 /** Destructive maintenance actions: purge demo data + reset the activity log. */
 export function DangerZoneCard(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const purge = usePurgeDemoData();
   const resetActivity = useResetActivityLog();
   const [confirmPurge, setConfirmPurge] = useState(false);
@@ -48,7 +50,7 @@ export function DangerZoneCard(): JSX.Element {
           {purge.data ? (
             <span className="text-sm text-emerald-700">
               {purge.data.found
-                ? t("admin.settings.purge_demo_ok", {
+                ? tt("admin.settings.purge_demo_ok", {
                     classes: purge.data.classes,
                     users: purge.data.users,
                   })

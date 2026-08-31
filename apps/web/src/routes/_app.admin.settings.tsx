@@ -182,6 +182,13 @@ function SettingsForm({
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
   const syncAd = useTriggerAdSync();
+  // Term-pack vars from the passed-down profile (no extra query, keeps the
+  // form's unit-test fetch assertions intact) so provisioning copy reads
+  // "Standort" in the company edition instead of a hardcoded school word.
+  const unitVars = {
+    unit: t(`terms.${profile}.unit`),
+    unit_plural: t(`terms.${profile}.unit_plural`),
+  };
   // Zyklus/grade-year settings only make sense for the school profile; the
   // company profile has no school cycles (groups config stays for both).
   const [form, setForm] = useState<FormState>(() => fromOut(data));
@@ -526,7 +533,14 @@ function SettingsForm({
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("admin.settings.provisioning_section")}</CardTitle>
-          <CardDescription>{t("admin.settings.provisioning_section_desc")}</CardDescription>
+          <CardDescription>
+            {t(
+              profile === "company"
+                ? "admin.settings.provisioning_section_desc_company"
+                : "admin.settings.provisioning_section_desc",
+              unitVars,
+            )}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {profile !== "company" ? (
@@ -560,13 +574,13 @@ function SettingsForm({
             <Label htmlFor="groups-base">{t("admin.settings.field.ad_groups_search_base")}</Label>
             <Input
               id="groups-base"
-              placeholder="OU=Groups,DC=schule,DC=local"
+              placeholder="OU=Groups,DC=example,DC=local"
               {...field("ad_groups_search_base")}
             />
             <p className="text-xs text-muted-foreground">{t("admin.settings.groups_base_hint")}</p>
           </div>
           <p className="text-xs text-muted-foreground">
-            {t("admin.settings.provisioning_perschool_hint")}
+            {t("admin.settings.provisioning_perschool_hint", unitVars)}
           </p>
         </CardContent>
       </Card>

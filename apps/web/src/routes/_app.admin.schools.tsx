@@ -238,6 +238,7 @@ export function SchoolForm({
   onDone: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
   const [form, setForm] = useState<FormState>(() => (target ? fromSchool(target) : emptyForm()));
   const create = useCreateSchool();
@@ -295,7 +296,7 @@ export function SchoolForm({
           role="alert"
           className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
-          {schoolErrorKey(mut.error, t)}
+          {schoolErrorKey(mut.error, tt)}
         </div>
       ) : null}
 
@@ -486,11 +487,13 @@ export function SchoolForm({
               id="ou-devices"
               value={form.ad_ou_devices}
               onChange={(e) => set("ad_ou_devices", e.target.value)}
-              placeholder="OU=Geraete,OU=Schule,DC=…"
+              placeholder="OU=Geraete,DC=…"
               maxLength={512}
             />
           </div>
-          <p className="text-xs text-muted-foreground">{t("schools.ad_config.ou_hint")}</p>
+          {!isCompany ? (
+            <p className="text-xs text-muted-foreground">{t("schools.ad_config.ou_hint")}</p>
+          ) : null}
           <p className="text-xs text-muted-foreground">
             {t("schools.ad_config.groups_moved_hint")}
           </p>
@@ -517,6 +520,7 @@ function DeleteSchoolDialog({
   onClose: () => void;
 }): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const del = useDeleteSchool();
 
   function handleDelete(): void {
@@ -533,9 +537,9 @@ function DeleteSchoolDialog({
     <Dialog open={target !== null} onOpenChange={(next) => (!next ? onClose() : undefined)}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("schools.delete_title")}</DialogTitle>
+          <DialogTitle>{tt("schools.delete_title")}</DialogTitle>
           <DialogDescription>
-            {target ? t("schools.delete_confirm", { name: target.name }) : ""}
+            {target ? tt("schools.delete_confirm", { name: target.name }) : ""}
           </DialogDescription>
         </DialogHeader>
         {del.isError ? (
@@ -543,7 +547,7 @@ function DeleteSchoolDialog({
             role="alert"
             className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
           >
-            {schoolErrorKey(del.error, t)}
+            {schoolErrorKey(del.error, tt)}
           </div>
         ) : null}
         <DialogFooter>

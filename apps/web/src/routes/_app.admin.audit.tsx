@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFormatters } from "@/lib/useFormatters";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/audit")({
   component: AuditPage,
@@ -24,6 +25,7 @@ const PAGE_SIZE = 50;
 
 function AuditPage(): JSX.Element {
   const { t } = useTranslation();
+  const { tt } = useTerms();
   const [actorUpn, setActorUpn] = useState("");
   const [action, setAction] = useState("");
   const [targetKind, setTargetKind] = useState("");
@@ -59,7 +61,7 @@ function AuditPage(): JSX.Element {
     <div className="space-y-6">
       <header>
         <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("audit.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("audit.intro")}</p>
+        <p className="text-sm text-muted-foreground">{tt("audit.intro")}</p>
       </header>
 
       <div className="flex flex-wrap items-end gap-3 rounded-md border bg-card px-4 py-3">
