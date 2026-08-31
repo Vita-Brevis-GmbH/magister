@@ -7,6 +7,7 @@ to a fake directory, so no real AD (or Postgres) is needed.
 
 from __future__ import annotations
 
+import inspect
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,9 +15,10 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
-from magister_api.ad.client import AdUserRecord
+from magister_api.ad.client import AdClient, AdUserRecord
 from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.rpc import (
+    ALLOWED_METHODS,
     RPC_PATH,
     SECRET_HEADER,
     ad_user_record_from_jsonable,
@@ -61,6 +63,44 @@ def test_ad_user_record_roundtrip() -> None:
     assert restored == rec
     assert restored.when_changed == rec.when_changed
     assert restored.groups == rec.groups  # tuples preserved, not lists
+
+
+# --- contract: RPC surface stays in lockstep with AdClient -----------------------
+
+
+def _param_shape(fn: Any) -> list[tuple[str, Any]]:
+    # Parameter names + kinds — catches added/removed/renamed/reordered params
+    # without being brittle about annotations or default values.
+    return [(p.name, p.kind) for p in inspect.signature(fn).parameters.values()]
+
+
+def test_allowed_methods_are_async_on_adclient() -> None:
+    for name in ALLOWED_METHODS:
+        fn = getattr(AdClient, name, None)
+        assert fn is not None, f"ALLOWED_METHODS names {name!r} but AdClient has no such method"
+        assert inspect.iscoroutinefunction(fn), f"{name} must be async"
+
+
+def test_rpc_client_overrides_every_allowed_method() -> None:
+    # Each RPC method must be defined ON AdRpcClient (forwarding), not inherited
+    # from AdClient — otherwise a client container would try to hit AD directly.
+    for name in ALLOWED_METHODS:
+        assert name in AdRpcClient.__dict__, f"{name} is not overridden on AdRpcClient"
+
+
+def test_rpc_client_signatures_match_adclient() -> None:
+    # If an AdClient method gains/renames a parameter but the AdRpcClient override
+    # is not updated, the RPC would silently forward the wrong kwargs. Lock it.
+    for name in ALLOWED_METHODS:
+        parent = _param_shape(getattr(AdClient, name))
+        child = _param_shape(getattr(AdRpcClient, name))
+        assert child == parent, f"signature drift on {name}: {child} != {parent}"
+
+
+def test_sync_methods_are_not_on_the_rpc_surface() -> None:
+    # The recurring AD reads run only in the ad container, never over RPC.
+    for name in ("search_users", "search_groups", "search_computers"):
+        assert name not in ALLOWED_METHODS
 
 
 # --- RPC client (httpx MockTransport) --------------------------------------------
