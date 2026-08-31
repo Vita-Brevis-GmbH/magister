@@ -122,7 +122,7 @@ class TestSyncRoundTrip:
 
         app.dependency_overrides[get_ad_client] = lambda: mock_ad_client
         try:
-            r = await as_admin.post("/admin/ad-sync")
+            r = await as_admin.post("/ad/sync")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
 
@@ -170,7 +170,7 @@ class TestListingScope:
 
         app.dependency_overrides[get_ad_client] = lambda: mock_ad_client
         try:
-            r = await as_admin.post("/admin/ad-sync")
+            r = await as_admin.post("/ad/sync")
             assert r.status_code == 200, r.text
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
@@ -195,7 +195,7 @@ class TestListingScope:
     ) -> None:
         app.dependency_overrides[get_ad_client] = lambda: mock_ad_client
         try:
-            await as_admin.post("/admin/ad-sync")
+            await as_admin.post("/ad/sync")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
 
@@ -214,7 +214,7 @@ class TestListingScope:
     ) -> None:
         app.dependency_overrides[get_ad_client] = lambda: mock_ad_client
         try:
-            await as_admin.post("/admin/ad-sync")
+            await as_admin.post("/ad/sync")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
 
@@ -232,7 +232,7 @@ class TestListingScope:
     ) -> None:
         app.dependency_overrides[get_ad_client] = lambda: mock_ad_client
         try:
-            await as_admin.post("/admin/ad-sync")
+            await as_admin.post("/ad/sync")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
 
@@ -270,7 +270,7 @@ class TestAdUnavailable:
         broken_client = AdClient(broken_settings)
         app.dependency_overrides[get_ad_client] = lambda: broken_client
         try:
-            r = await as_admin.post("/admin/ad-sync")
+            r = await as_admin.post("/ad/sync")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
         assert r.status_code == 503
@@ -285,5 +285,5 @@ class TestRbac:
 
     @pytest.mark.asyncio
     async def test_admin_sync_requires_admin(self, as_schulleitung_a: AsyncClient) -> None:
-        r = await as_schulleitung_a.post("/admin/ad-sync")
+        r = await as_schulleitung_a.post("/ad/sync")
         assert r.status_code == 403

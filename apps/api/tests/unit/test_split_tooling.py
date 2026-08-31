@@ -85,7 +85,7 @@ def test_runtime_snapshot_split_container() -> None:
 
 def test_parse_spec_single_and_multi() -> None:
     assert gen_split.parse_spec(["reports=reports"]) == {"reports": ["reports"]}
-    assert gen_split.parse_spec(["docs=imports,letters"]) == {"docs": ["imports", "letters"]}
+    assert gen_split.parse_spec(["docs=imports,templates"]) == {"docs": ["imports", "templates"]}
 
 
 @pytest.mark.parametrize("bad", ["reports", "=reports", "reports=", "reports= , "])
@@ -142,8 +142,8 @@ def test_render_compose_overlay_shape() -> None:
 
 
 def test_render_compose_overlay_joins_multi_module() -> None:
-    out = gen_split.render_compose_overlay({"docs": ["imports", "letters"]})
-    assert 'MAGISTER_CONTAINER_MODULES: "imports,letters"' in out
+    out = gen_split.render_compose_overlay({"docs": ["imports", "templates"]})
+    assert 'MAGISTER_CONTAINER_MODULES: "imports,templates"' in out
 
 
 def test_render_compose_overlay_validates_before_emitting() -> None:

@@ -2,7 +2,7 @@
 
 Drives :func:`run_ad_sync_loop` against ldap3 ``MOCK_SYNC`` + test Postgres and
 asserts it populates ``ad_user_cache`` and emits ``ad_sync_completed`` without
-anyone hitting the manual ``POST /admin/ad-sync`` trigger. A second test proves
+anyone hitting the manual ``POST /ad/sync`` trigger. A second test proves
 that ticks are skipped (no client built, no audit) while AD is unconfigured.
 """
 

@@ -24,7 +24,7 @@ from magister_api.services.ad_sync import AdSyncService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/admin", tags=["admin"])
+router = APIRouter(prefix="/ad", tags=["ad"])
 
 
 def get_ad_client(
@@ -45,7 +45,7 @@ def get_ad_client(
     return client
 
 
-@router.post("/ad-sync", response_model=AdSyncResultOut, status_code=status.HTTP_200_OK)
+@router.post("/sync", response_model=AdSyncResultOut, status_code=status.HTTP_200_OK)
 async def trigger_ad_sync(
     request: Request,
     mode: Literal["full", "incremental"] = Query(default="full"),
@@ -82,7 +82,7 @@ async def trigger_ad_sync(
     )
 
 
-@router.post("/ad-test", response_model=AdConnectionTestOut, status_code=status.HTTP_200_OK)
+@router.post("/test", response_model=AdConnectionTestOut, status_code=status.HTTP_200_OK)
 async def test_ad_connection(
     request: Request,
     user: AuthenticatedUser = Depends(require_admin),

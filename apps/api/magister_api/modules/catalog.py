@@ -40,18 +40,26 @@ class ModuleMeta:
     depends_on: tuple[str, ...] = ()
 
 
-# Granular feature modules (M6 #5). The domain-neutral base is the single
-# non-toggleable ``platform`` module; every fachfunction is an individually
-# switchable module. The soft profile only seeds a sensible default set — the
-# school profile keeps every school feature on, so existing school instances see
-# no change; the company profile turns the school superstructure off and the
-# company one on. ``depends_on`` guards hard data couplings (letters render
-# class letters → need ``classes``).
+# Granular feature modules (M6 #5). The domain-neutral base is now four
+# non-toggleable modules — ``platform`` (auth/session/schools/audit/privacy),
+# ``ad`` (AD I/O), ``users`` (accounts) and ``settings`` (config) — split apart
+# so a code change touches exactly one of them; every fachfunction is an
+# individually switchable module on top. The soft profile only seeds a sensible
+# default set — the school profile keeps every school feature on, so existing
+# school instances see no change; the company profile turns the school
+# superstructure off and the company one on. ``depends_on`` guards hard data
+# couplings.
 MODULE_CATALOG: tuple[ModuleMeta, ...] = (
+    # Always-on base (split from the former single ``platform`` module).
     ModuleMeta(id="platform", toggleable=False),
+    ModuleMeta(id="ad", toggleable=False),
+    ModuleMeta(id="users", toggleable=False),
+    ModuleMeta(id="settings", toggleable=False),
+    # Vorlagen/Texte (document templates + mail-merge letters). Useful for both
+    # editions; no hard data coupling, so it depends only on the base.
+    ModuleMeta(id="templates", default_in_profiles=("school", "company"), depends_on=("platform",)),
     # School superstructure.
     ModuleMeta(id="classes", default_in_profiles=("school",), depends_on=("platform",)),
-    ModuleMeta(id="letters", default_in_profiles=("school",), depends_on=("classes",)),
     # Imports serve both editions (students/teachers for school, company_users
     # for company), so the import module is on by default in both profiles.
     ModuleMeta(id="imports", default_in_profiles=("school", "company"), depends_on=("platform",)),

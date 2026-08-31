@@ -1,4 +1,4 @@
-"""Admin-only ``/admin/document-templates`` — edit letter/mail templates.
+"""Admin-only ``/templates`` — edit letter/mail (Vorlagen) templates.
 
 Operators override the built-in Jinja letter templates with their own HTML +
 subject per ``(key, language, school)``. Rendering is sandboxed; when no active
@@ -36,7 +36,7 @@ from magister_api.services.document_templates import (
     starters_for_profile,
 )
 
-router = APIRouter(prefix="/admin/document-templates", tags=["admin"])
+router = APIRouter(prefix="/templates", tags=["templates"])
 
 _LANGUAGES = ("de", "fr", "it", "en")
 

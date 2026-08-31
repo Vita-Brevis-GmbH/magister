@@ -24,6 +24,6 @@ async def test_enabled_module_routes_pass(as_schulleitung_a: AsyncClient) -> Non
 
 
 async def test_platform_routes_are_never_blocked(as_admin: AsyncClient) -> None:
-    # platform is non-toggleable -> no guard.
+    # /admin/modules lives in the non-toggleable settings base -> no guard.
     r = await as_admin.get("/admin/modules")
     assert r.status_code == 200

@@ -25,7 +25,7 @@ from magister_api.schemas.user_admin import (
 )
 from magister_api.services.user_admin import UserAdminError, UserAdminService
 
-router = APIRouter(prefix="/admin/ad-users", tags=["admin"])
+router = APIRouter(prefix="/ad/users", tags=["ad"])
 
 _ERROR_STATUS = {
     "user_not_found": status.HTTP_404_NOT_FOUND,

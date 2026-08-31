@@ -46,8 +46,13 @@ async def test_switching_profile_to_neutral_turns_classes_off(as_admin: AsyncCli
     assert r.json()["instance_profile"] == "neutral"
     by_id = {m["id"]: m for m in r.json()["modules"]}
     assert by_id["classes"]["enabled"] is False
-    # neutral is platform-only.
-    assert [m["id"] for m in r.json()["modules"] if m["enabled"]] == ["platform"]
+    # neutral is the always-on base only (platform + ad + users + settings).
+    assert {m["id"] for m in r.json()["modules"] if m["enabled"]} == {
+        "platform",
+        "ad",
+        "users",
+        "settings",
+    }
 
 
 async def test_platform_cannot_be_toggled(as_admin: AsyncClient) -> None:

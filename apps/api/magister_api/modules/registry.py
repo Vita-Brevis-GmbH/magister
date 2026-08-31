@@ -11,21 +11,29 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from magister_api.modules.ad import AD_MODULE
 from magister_api.modules.classes import CLASSES_MODULE
 from magister_api.modules.departments import DEPARTMENTS_MODULE
 from magister_api.modules.devices import DEVICES_MODULE
 from magister_api.modules.imports import IMPORTS_MODULE
-from magister_api.modules.letters import LETTERS_MODULE
 from magister_api.modules.manifest import ModuleManifest
 from magister_api.modules.platform import PLATFORM_MODULE
 from magister_api.modules.reports import REPORTS_MODULE
+from magister_api.modules.settings import SETTINGS_MODULE
+from magister_api.modules.templates import TEMPLATES_MODULE
+from magister_api.modules.users import USERS_MODULE
 
 # Registration order. Modules use distinct route prefixes, so the order is
-# cosmetic (OpenAPI listing) and does not affect routing behaviour.
+# cosmetic (OpenAPI listing) and does not affect routing behaviour. The
+# always-on base (platform, ad, users, settings) comes first, then the
+# switchable fachfunctions.
 ALL_MODULES: tuple[ModuleManifest, ...] = (
     PLATFORM_MODULE,
+    AD_MODULE,
+    USERS_MODULE,
+    SETTINGS_MODULE,
+    TEMPLATES_MODULE,
     CLASSES_MODULE,
-    LETTERS_MODULE,
     IMPORTS_MODULE,
     DEPARTMENTS_MODULE,
     REPORTS_MODULE,

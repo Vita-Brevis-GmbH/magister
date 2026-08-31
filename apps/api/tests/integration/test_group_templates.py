@@ -116,7 +116,7 @@ async def test_create_user_with_template(
     ).json()["id"]
 
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Timo",
             "surname": "Zielrolle",
@@ -137,7 +137,7 @@ async def test_create_user_template_not_found(
     await _set_teacher_ou(db_session, school_a, "OU=Lehrer,DC=schule,DC=local")
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Kein",
             "surname": "Template",
@@ -171,7 +171,7 @@ async def test_create_user_template_not_for_school(
         )
     ).json()["id"]
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Falsch",
             "surname": "Standort",

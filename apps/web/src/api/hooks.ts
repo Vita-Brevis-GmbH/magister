@@ -200,7 +200,7 @@ export function useUpdateModules() {
 export function useDocumentTemplates() {
   return useQuery<DocumentTemplateListOut>({
     queryKey: queryKeys.documentTemplates,
-    queryFn: () => apiFetch<DocumentTemplateListOut>("/admin/document-templates"),
+    queryFn: () => apiFetch<DocumentTemplateListOut>("/templates"),
   });
 }
 
@@ -208,7 +208,7 @@ export function useSaveDocumentTemplate() {
   const qc = useQueryClient();
   return useMutation<DocumentTemplateOut, ApiError, DocumentTemplateSave>({
     mutationFn: (body) =>
-      apiFetch<DocumentTemplateOut>("/admin/document-templates", { method: "PUT", body }),
+      apiFetch<DocumentTemplateOut>("/templates", { method: "PUT", body }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
@@ -218,7 +218,7 @@ export function useSaveDocumentTemplate() {
 export function useDeleteDocumentTemplate() {
   const qc = useQueryClient();
   return useMutation<void, ApiError, number>({
-    mutationFn: (id) => apiFetch<void>(`/admin/document-templates/${id}`, { method: "DELETE" }),
+    mutationFn: (id) => apiFetch<void>(`/templates/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
@@ -228,7 +228,7 @@ export function useDeleteDocumentTemplate() {
 export function usePreviewDocumentTemplate() {
   return useMutation<DocumentTemplatePreviewOut, ApiError, DocumentTemplatePreviewRequest>({
     mutationFn: (body) =>
-      apiFetch<DocumentTemplatePreviewOut>("/admin/document-templates/preview", {
+      apiFetch<DocumentTemplatePreviewOut>("/templates/preview", {
         method: "POST",
         body,
       }),
@@ -1039,7 +1039,7 @@ export function useUpdateAppSettings() {
 
 export function useTestAdConnection() {
   return useMutation<AdConnectionTestOut, ApiError, void>({
-    mutationFn: () => apiFetch<AdConnectionTestOut>("/admin/ad-test", { method: "POST" }),
+    mutationFn: () => apiFetch<AdConnectionTestOut>("/ad/test", { method: "POST" }),
   });
 }
 
@@ -1047,7 +1047,7 @@ export function useTestAdConnection() {
 export function useAdGroups() {
   return useQuery<AdGroupOut[]>({
     queryKey: queryKeys.adGroups,
-    queryFn: () => apiFetch<AdGroupOut[]>("/admin/ad-groups"),
+    queryFn: () => apiFetch<AdGroupOut[]>("/ad/groups"),
   });
 }
 
@@ -1101,7 +1101,7 @@ export function useCreateAdUser() {
   const qc = useQueryClient();
   return useMutation<AdUserCreateResponse, ApiError, AdUserCreateRequest>({
     mutationFn: (body) =>
-      apiFetch<AdUserCreateResponse>("/admin/ad-users", { method: "POST", body }),
+      apiFetch<AdUserCreateResponse>("/ad/users", { method: "POST", body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
@@ -1110,7 +1110,7 @@ export function useDeleteAdUser() {
   const qc = useQueryClient();
   return useMutation<AdUserDeleteResponse, ApiError, string>({
     mutationFn: (guid) =>
-      apiFetch<AdUserDeleteResponse>(`/admin/ad-users/${encodeURIComponent(guid)}`, {
+      apiFetch<AdUserDeleteResponse>(`/ad/users/${encodeURIComponent(guid)}`, {
         method: "DELETE",
       }),
     onSuccess: () => {
@@ -1143,7 +1143,7 @@ export function useBulkUserAction() {
         const g = encodeURIComponent(guid);
         try {
           if (action.type === "delete") {
-            await apiFetch(`/admin/ad-users/${g}`, { method: "DELETE" });
+            await apiFetch(`/ad/users/${g}`, { method: "DELETE" });
           } else if (action.type === "attrs") {
             await apiFetch(`/users/${g}`, { method: "PATCH", body: action.payload });
           } else {
@@ -1222,7 +1222,7 @@ export function useResetActivityLog() {
 export function useTriggerAdSync() {
   const qc = useQueryClient();
   return useMutation<AdSyncResultOut, ApiError, void>({
-    mutationFn: () => apiFetch<AdSyncResultOut>("/admin/ad-sync?mode=full", { method: "POST" }),
+    mutationFn: () => apiFetch<AdSyncResultOut>("/ad/sync?mode=full", { method: "POST" }),
     onSuccess: () => {
       // Fresh rows + updated last_sync_at.
       qc.invalidateQueries({ queryKey: ["users"] });

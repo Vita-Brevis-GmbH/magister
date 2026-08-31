@@ -23,7 +23,7 @@ pytestmark = pytest.mark.postgres
 
 async def test_admin_save_list_and_preview(as_admin: AsyncClient) -> None:
     r = await as_admin.put(
-        "/admin/document-templates",
+        "/templates",
         json={
             "key": "enrollment",
             "language": "de",
@@ -36,13 +36,13 @@ async def test_admin_save_list_and_preview(as_admin: AsyncClient) -> None:
     assert r.status_code == 200, r.text
     assert r.json()["key"] == "enrollment"
 
-    listing = (await as_admin.get("/admin/document-templates")).json()
+    listing = (await as_admin.get("/templates")).json()
     assert any(t["key"] == "enrollment" for t in listing["templates"])
     assert "enrollment" in listing["meta"]["keys"]
     assert "student.display_name" in listing["meta"]["placeholders"]
 
     prev = await as_admin.post(
-        "/admin/document-templates/preview",
+        "/templates/preview",
         json={"subject": "S {{ class_.name }}", "body_html": "<p>{{ student.display_name }}</p>"},
     )
     assert prev.status_code == 200, prev.text
@@ -53,7 +53,7 @@ async def test_admin_save_list_and_preview(as_admin: AsyncClient) -> None:
 
 async def test_save_broken_template_rejected(as_admin: AsyncClient) -> None:
     r = await as_admin.put(
-        "/admin/document-templates",
+        "/templates",
         json={"key": "enrollment", "language": "de", "body_html": "<p>{{ oops "},
     )
     assert r.status_code == 422
@@ -62,7 +62,7 @@ async def test_save_broken_template_rejected(as_admin: AsyncClient) -> None:
 
 async def test_save_unknown_key_rejected(as_admin: AsyncClient) -> None:
     r = await as_admin.put(
-        "/admin/document-templates",
+        "/templates",
         json={"key": "not_a_template", "language": "de", "body_html": "<p>x</p>"},
     )
     assert r.status_code == 422
@@ -70,7 +70,7 @@ async def test_save_unknown_key_rejected(as_admin: AsyncClient) -> None:
 
 
 async def test_non_admin_forbidden(as_smi_a: AsyncClient) -> None:
-    assert (await as_smi_a.get("/admin/document-templates")).status_code == 403
+    assert (await as_smi_a.get("/templates")).status_code == 403
 
 
 async def _seed_student(db: AsyncSession, *, school_id: int) -> str:

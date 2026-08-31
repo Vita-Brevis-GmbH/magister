@@ -62,7 +62,7 @@ async def test_create_user_success(
     await _set_teacher_ou(db_session, school_a, "OU=Lehrer,DC=schule,DC=local")
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Hans",
             "surname": "Muster",
@@ -99,7 +99,7 @@ async def test_create_user_company_ou(
     await _set_company_ou(db_session, school_a, "OU=Company,DC=schule,DC=local")
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Mara",
             "surname": "Firma",
@@ -127,7 +127,7 @@ async def test_create_user_ou_not_configured(
     # school_a has no teacher OU configured → provisioning must fail.
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
     r = await as_admin.post(
-        "/admin/ad-users",
+        "/ad/users",
         json={
             "given_name": "Kein",
             "surname": "OU",
@@ -171,7 +171,7 @@ async def test_delete_user_success(
     )
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
 
-    r = await as_admin.request("DELETE", f"/admin/ad-users/{guid}")
+    r = await as_admin.request("DELETE", f"/ad/users/{guid}")
     assert r.status_code == 200, r.text
     assert r.json()["ad_removed"] is True
     gone = (
@@ -201,7 +201,7 @@ async def test_delete_user_requires_disabled(
     await db_session.commit()
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
 
-    r = await as_admin.request("DELETE", f"/admin/ad-users/{guid}")
+    r = await as_admin.request("DELETE", f"/ad/users/{guid}")
     assert r.status_code == 409, r.text
     assert r.json()["detail"] == "user_not_disabled"
     # Row is untouched.
@@ -216,7 +216,7 @@ async def test_delete_user_not_found(
     as_admin: AsyncClient, app: FastAPI, mock_ad: AdClient
 ) -> None:
     app.dependency_overrides[get_ad_client] = lambda: mock_ad
-    r = await as_admin.request("DELETE", "/admin/ad-users/00000000-0000-0000-0000-000000000000")
+    r = await as_admin.request("DELETE", "/ad/users/00000000-0000-0000-0000-000000000000")
     assert r.status_code == 404, r.text
     assert r.json()["detail"] == "user_not_found"
 

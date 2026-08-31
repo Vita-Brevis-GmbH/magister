@@ -1,7 +1,7 @@
 """Periodic AD-sync scheduler — the recurring half of M1's "AD … periodischer
 Sync funktional".
 
-The manual :http:post:`/admin/ad-sync` endpoint is complemented by this
+The manual :http:post:`/ad/sync` endpoint is complemented by this
 in-process background loop. It is started/stopped by the FastAPI lifespan and
 driven by ``app_settings.ad_sync_interval_minutes`` (editable from the admin
 GUI without a restart — every tick re-reads the effective settings, so an

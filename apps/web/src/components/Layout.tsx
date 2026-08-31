@@ -72,6 +72,8 @@ export function Layout() {
   const hasReports = enabledModules.data?.has("reports") ?? true;
   const hasDevices = enabledModules.data?.has("devices") ?? true;
   const hasDepartments = enabledModules.data?.has("departments") ?? false;
+  // templates (Vorlagen/Texte) is toggleable; default visible while loading.
+  const hasTemplates = enabledModules.data?.has("templates") ?? true;
 
   return (
     <div className="min-h-screen bg-background">
@@ -232,7 +234,7 @@ export function Layout() {
                         {t("nav.modules")}
                       </Link>
                     ) : null}
-                    {isAdmin ? (
+                    {isAdmin && hasTemplates ? (
                       <Link
                         to="/admin/document-templates"
                         role="menuitem"
