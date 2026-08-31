@@ -119,6 +119,10 @@ services:
       - "443:443"
     environment:
       MAGISTER_PUBLIC_HOSTNAME: ${MAGISTER_PUBLIC_HOSTNAME}
+      # Primary IP as an extra TLS site address (see Caddyfile). Defaults to the
+      # loopback so an unset value is harmless; set MAGISTER_PUBLIC_IP in .env to
+      # reach the box by address.
+      MAGISTER_PUBLIC_IP: ${MAGISTER_PUBLIC_IP:-127.0.0.1}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - web_certs:/certs:ro
@@ -126,8 +130,12 @@ services:
       - caddy_config:/config
     # Wait for the API to materialize the tls snippet (import /certs/tls.caddy)
     # before starting, so Caddy never boots with a missing import (which would
-    # otherwise fall through to ACME). --watch reloads on Caddyfile changes; a
-    # runtime cert import applies after `docker compose restart caddy`.
+    # otherwise fall through to ACME). NOTE: run WITHOUT `--watch` — that flag is
+    # "intended for use only in local development environments" (Caddy docs) and
+    # on a bind-mounted Caddyfile it re-adapted the config ~1×/s, which kept
+    # resetting the TLS maintenance loop so the internal cert silently expired.
+    # A Caddyfile change or a runtime cert import applies via
+    # `docker compose restart caddy` (already the documented flow).
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -137,7 +145,7 @@ services:
           i=$$((i+1)); [ $$i -gt 120 ] && echo "caddy: timeout waiting for cert snippet" && break
           sleep 1
         done
-        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile --watch
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
     networks: [internal]
 
   pg-backup:

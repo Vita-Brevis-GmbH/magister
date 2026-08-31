@@ -72,7 +72,14 @@ http:// {
 	}
 }
 
-{$MAGISTER_PUBLIC_HOSTNAME} {
+# Reachable under the FQDN, under localhost (on-box curl / healthchecks), and
+# under the primary IP. Listing the IP + localhost as site addresses makes the
+# internal issuer mint certs whose SAN covers them, so a client that sends
+# SNI=<ip> or SNI=localhost gets a matching cert instead of a hard
+# `tlsv1 alert internal error` (which is what an *unlisted* SNI triggers).
+# MAGISTER_PUBLIC_IP defaults to 127.0.0.1 (compose) — set it to the box's
+# primary IP in .env to reach the instance by address.
+{$MAGISTER_PUBLIC_HOSTNAME}, localhost, {$MAGISTER_PUBLIC_IP} {
 	# TLS is driven by a snippet the API materializes into the shared
 	# /certs volume: `tls /certs/tls.pem /certs/tls.key` when an admin has
 	# imported a real certificate (Einstellungen → System), otherwise
