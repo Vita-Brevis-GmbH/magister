@@ -212,3 +212,12 @@ async def test_server_not_mounted_when_rpc_client() -> None:
     )
     paths = {getattr(r, "path", "") for r in app.routes}
     assert not any(str(p).startswith(RPC_PATH) for p in paths)
+
+
+def test_server_mounted_when_url_blank() -> None:
+    # The AD owner blanks MAGISTER_AD_RPC_URL via a compose override; empty must
+    # count as AD-capable (server mounted), same as unset.
+    for blank in (None, ""):
+        app = create_app(Settings(ad_rpc_url=blank, ad_rpc_secret=SecretStr("sec")))
+        paths = {str(getattr(r, "path", "")) for r in app.routes}
+        assert any(p.startswith(RPC_PATH) for p in paths), f"url={blank!r}"

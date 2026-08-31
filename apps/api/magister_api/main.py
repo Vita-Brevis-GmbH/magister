@@ -131,10 +131,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.include_router(router, dependencies=guard)
 
     # Internal AD-RPC server (ADR-0011). Mounted only in an AD-capable process
-    # (no RPC URL configured) — the monolith or the dedicated ``ad`` container;
-    # a client container reaches AD through THIS surface, never re-exposes it.
-    # It sits off the Caddy ``/api/*`` route and is secret-guarded.
-    if s.ad_rpc_url is None:
+    # (no RPC URL configured — None or empty) — the monolith or the dedicated
+    # ``ad`` container; a client container reaches AD through THIS surface,
+    # never re-exposes it. It sits off the Caddy ``/api/*`` route and is
+    # secret-guarded. Truthiness (not ``is None``) so a compose override that
+    # blanks the URL on the AD owner still counts as AD-capable.
+    if not s.ad_rpc_url:
         from magister_api.routers.ad_rpc import router as ad_rpc_router
 
         app.include_router(ad_rpc_router)
