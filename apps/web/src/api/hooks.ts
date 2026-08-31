@@ -207,8 +207,7 @@ export function useDocumentTemplates() {
 export function useSaveDocumentTemplate() {
   const qc = useQueryClient();
   return useMutation<DocumentTemplateOut, ApiError, DocumentTemplateSave>({
-    mutationFn: (body) =>
-      apiFetch<DocumentTemplateOut>("/templates", { method: "PUT", body }),
+    mutationFn: (body) => apiFetch<DocumentTemplateOut>("/templates", { method: "PUT", body }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
@@ -1100,8 +1099,7 @@ export function useReapplyUserGroups(guid: string) {
 export function useCreateAdUser() {
   const qc = useQueryClient();
   return useMutation<AdUserCreateResponse, ApiError, AdUserCreateRequest>({
-    mutationFn: (body) =>
-      apiFetch<AdUserCreateResponse>("/ad/users", { method: "POST", body }),
+    mutationFn: (body) => apiFetch<AdUserCreateResponse>("/ad/users", { method: "POST", body }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
