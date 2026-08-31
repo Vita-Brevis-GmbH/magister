@@ -36,6 +36,9 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
 )
 
 _AUTH_MARKER = "get_current_user"
+# The internal AD-RPC surface (ADR-0011) is session-less by design; it is guarded
+# by the shared-secret dependency instead of the user-session auth.
+_SECRET_AUTH_MARKER = "require_rpc_secret"
 _GUARD_MARKER = "make_module_guard.<locals>._guard"
 
 
@@ -92,7 +95,7 @@ def test_every_own_route_is_authenticated_or_explicitly_public() -> None:
         for key in _route_keys(route):
             if key in PUBLIC_ROUTES:
                 continue
-            if _AUTH_MARKER not in markers:
+            if _AUTH_MARKER not in markers and _SECRET_AUTH_MARKER not in markers:
                 offenders.append(key)
     assert offenders == [], f"unauthenticated routes not on the public allowlist: {offenders}"
 

@@ -98,6 +98,17 @@ class Settings(BaseSettings):
     # never opens a second sync loop against AD + DB.
     run_scheduler: bool = Field(default=True)
 
+    # Strict AD boundary (ADR-0011). When set, this process holds NO AD
+    # credentials and reaches Active Directory only through the AD-owning
+    # container's internal RPC at this base URL (e.g.
+    # ``http://magister-api-ad:8000``); ``get_ad_client`` then returns an
+    # ``AdRpcClient`` instead of a direct ``AdClient``. Unset (default) = this
+    # process talks to AD directly — the single-container monolith and the AD
+    # container itself. ``ad_rpc_secret`` is the shared bearer the client sends
+    # and the server requires (never logged).
+    ad_rpc_url: str | None = Field(default=None)
+    ad_rpc_secret: SecretStr | None = Field(default=None)
+
     # Local-admin (break-glass) — only consulted on first boot when the
     # `local_admins` table is empty. Always pass a pre-computed argon2id
     # hash; plaintext is refused. See `magister-cli hash-password`.

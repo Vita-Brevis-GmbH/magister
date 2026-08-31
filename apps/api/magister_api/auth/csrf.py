@@ -63,7 +63,17 @@ class CsrfMiddleware(BaseHTTPMiddleware):
     there means a stale ``magister_csrf`` cookie silently blocks sign-out.
     """
 
-    EXEMPT_PATH_PREFIXES = ("/auth/login", "/auth/logout", "/auth/callback", "/healthz")
+    # ``/internal/`` is the internal, session-less RPC surface (ADR-0011): it is
+    # never routed by Caddy from outside and carries its own shared-secret auth,
+    # so the double-submit CSRF token — which presupposes a browser session —
+    # does not apply. Inter-container POSTs would otherwise be blocked.
+    EXEMPT_PATH_PREFIXES = (
+        "/auth/login",
+        "/auth/logout",
+        "/auth/callback",
+        "/healthz",
+        "/internal/",
+    )
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]

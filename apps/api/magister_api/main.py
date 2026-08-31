@@ -130,6 +130,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         for router in module.routers:
             app.include_router(router, dependencies=guard)
 
+    # Internal AD-RPC server (ADR-0011). Mounted only in an AD-capable process
+    # (no RPC URL configured) — the monolith or the dedicated ``ad`` container;
+    # a client container reaches AD through THIS surface, never re-exposes it.
+    # It sits off the Caddy ``/api/*`` route and is secret-guarded.
+    if s.ad_rpc_url is None:
+        from magister_api.routers.ad_rpc import router as ad_rpc_router
+
+        app.include_router(ad_rpc_router)
+
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}

@@ -36,11 +36,27 @@ def get_ad_client(
     Cached per-request per app.state, mirroring ``get_oidc_client``: the
     overlay dep returns the same Settings instance until app_settings.version
     bumps, so this small identity-keyed cache is enough.
+
+    Strict AD boundary (ADR-0011): when ``MAGISTER_AD_RPC_URL`` is configured
+    this process holds no directory credentials and gets an ``AdRpcClient`` that
+    forwards to the AD container; otherwise it talks to AD directly. The RPC
+    URL/secret are deploy-time env (not DB-overlaid), so they are read from the
+    base settings on ``app.state``.
     """
     cached: tuple[int, AdClient] | None = getattr(request.app.state, "_ad_client_cache", None)
     if cached is not None and cached[0] == id(eff):
         return cached[1]
-    client = AdClient(eff)
+    base: Settings = request.app.state.settings
+    client: AdClient
+    if base.ad_rpc_url and base.ad_rpc_secret is not None:
+        # Imported lazily so the direct-AD path carries no httpx-client import.
+        from magister_api.ad.rpc_client import AdRpcClient
+
+        client = AdRpcClient(
+            eff, base_url=base.ad_rpc_url, secret=base.ad_rpc_secret.get_secret_value()
+        )
+    else:
+        client = AdClient(eff)
     request.app.state._ad_client_cache = (id(eff), client)
     return client
 
