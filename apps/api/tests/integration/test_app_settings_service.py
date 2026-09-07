@@ -235,6 +235,98 @@ class TestMailDomains:
         assert out.mail_domains == []
 
 
+class TestNinjaConnector:
+    """NinjaOne connector config: encrypted secret + redaction (ADR-0012)."""
+
+    async def test_defaults_to_disabled_and_empty(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        out = await svc.get_redacted_for_api()
+        assert out.ninja_enabled is False
+        assert out.ninja_region is None
+        assert out.ninja_client_id is None
+        assert out.ninja_client_secret_set is False
+        eff = await svc.get_effective()
+        assert eff.ninja_enabled is False
+        assert eff.ninja_client_secret is None
+
+    async def test_roundtrips_and_redacts_secret(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        await svc.update(
+            AppSettingsUpdate(
+                ninja_enabled=True,
+                ninja_region="eu",
+                ninja_client_id="ninja-client",
+                ninja_client_secret="ninja-super-secret-xyz",
+            ),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="rn1",
+        )
+        # Effective (server-side) sees the decrypted secret.
+        eff = await svc.get_effective()
+        assert eff.ninja_enabled is True
+        assert eff.ninja_region == "eu"
+        assert eff.ninja_client_id == "ninja-client"
+        assert eff.ninja_client_secret == "ninja-super-secret-xyz"
+        # Redacted (GUI-facing) never carries the plaintext.
+        out = await svc.get_redacted_for_api()
+        assert out.ninja_enabled is True
+        assert out.ninja_client_secret_set is True
+        dumped = out.model_dump()
+        assert "ninja_client_secret" not in dumped
+        for v in dumped.values():
+            assert "ninja-super-secret-xyz" not in str(v)
+
+    async def test_omitting_secret_leaves_stored_value(self, db_session: AsyncSession) -> None:
+        svc = AppSettingsService(db_session, _settings())
+        await svc.update(
+            AppSettingsUpdate(ninja_enabled=True, ninja_region="eu", ninja_client_secret="keep-me"),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="rn2",
+        )
+        # A later update that toggles the flag but omits the secret keeps it.
+        await svc.update(
+            AppSettingsUpdate(ninja_enabled=False),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="rn3",
+        )
+        eff = await svc.get_effective()
+        assert eff.ninja_enabled is False
+        assert eff.ninja_client_secret == "keep-me"
+
+    async def test_audit_does_not_leak_the_secret(self, db_session: AsyncSession) -> None:
+        from magister_api.audit.service import AuditService
+        from magister_api.models.audit import AuditEvent
+
+        cfg = _settings()
+        svc = AppSettingsService(db_session, cfg)
+        await svc.update(
+            AppSettingsUpdate(ninja_client_secret="must-not-leak-ninja"),
+            actor_upn="admin@example.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="rn4",
+        )
+        rid = (
+            (
+                await db_session.execute(
+                    select(AuditEvent.id).where(AuditEvent.action == "app_settings_updated")
+                )
+            )
+            .scalars()
+            .all()[-1]
+        )
+        rec = await AuditService(db_session, cfg).read(rid)
+        assert rec is not None
+        assert "must-not-leak-ninja" not in str(rec.payload)
+        assert rec.payload.get("rotated_ninja_credential") is True
+
+
 class TestSingletonEnforcement:
     async def test_inserting_id_other_than_one_violates_check(
         self, db_session: AsyncSession

@@ -69,8 +69,45 @@ Ein isolierter Connector im `devices`-Kontext, der genau die AD-Grenze spiegelt:
   neu-matchender `run_script`), DB-frei und client-injizierbar; Router-Endpoints
   `GET /devices/{id}/ninja` + `POST /devices/{id}/ninja/run-script` mit Audit;
   Unit-Tests (Client, Matching, Connector) mit gemocktem HTTP.
-- **Phase C (offen):** Frontend — Ninja-Status-Panel + Aktion „Script ausführen"
-  ausschliesslich auf der Geräte-Detailseite.
+- **Phase C (umgesetzt):** Frontend — Ninja-Status-Panel + Aktion „Script
+  ausführen" ausschliesslich auf der Geräte-Detailseite.
+- **Konfiguration (umgesetzt):** Credentials in der Admin-Settings-UI,
+  verschlüsselt in `app_settings` (wie Entra ID/AD), Alembic 0043.
+
+## Tests
+
+- **Unit** (laufen immer): `test_ninja_client` (Token-Cache/-Refresh, Read, Run,
+  Fehler-Mapping, Region-/Config-Guards), `test_ninja_match` (Hostname-Vorrang,
+  Serial-Fallback, Ambiguität), `test_ninja_connector` (`resolve_ninja_config`,
+  Status-Match, Re-Match-Security beim Run, weicher Ausfall, disabled/unlinked),
+  `test_app_settings_schema` (Region-Validator).
+- **Integration** (Postgres-gated): `test_device_ninja` (Endpoints: require_smi
+  403, 404, disabled→`enabled:false`, Status-Match, Script-Run + Audit ohne
+  Klartext, unmatched→409) und `test_app_settings_service::TestNinjaConnector`
+  (Verschlüsselung/Redaction/Audit der Credentials). Der Ninja-HTTP-Layer wird
+  per `httpx.MockTransport` injiziert — kein echter Tenant nötig.
+
+## Bekannte Punkte / offene Verifikation
+
+Keine Korrektheits-Bugs bekannt; folgende Punkte sind bewusst so und/oder gegen
+den echten Tenant zu verifizieren:
+
+1. **Script-Run-Pfad/-Body + `list_scripts`-Pfad** sind unbestätigt (isoliert in
+   `ninja/client.py`, siehe oben). `list_scripts` ist best-effort: schlägt der
+   Pfad fehl, zeigt das UI ein manuelles Script-ID-Feld statt der Auswahl.
+2. **Feld-Einheiten**: `lastContact` wird als Epoch-**Sekunden** interpretiert;
+   je nach API-Version könnten es Millisekunden sein — beim ersten echten Abruf
+   prüfen.
+3. **Performance grosser Tenants**: `status` und `run_script` holen je die volle
+   Geräteliste (`GET /v2/devices`) und bauen pro Request einen frischen Client
+   (eigener Token-Abruf) — kein Caching über Requests. Für sehr grosse Tenants
+   wäre eine Hostname-gefilterte Abfrage (`df`) bzw. ein versionierter Client-
+   Cache auf `app.state` (wie beim OIDC/AD-Client) die Optimierung. Bewusst
+   zurückgestellt, bis die API-Details bestätigt sind.
+4. **Audit-Reihenfolge**: Der Audit-Event für einen Script-Run wird **nach** dem
+   erfolgreichen externen Aufruf geschrieben. Bei einem sehr seltenen
+   Commit-Fehler danach liefe das Script, ohne dass der Event persistiert wird —
+   für eine externe Seiteneffekt-Operation die pragmatische Wahl.
 
 ## ⚠️ Gegen den Tenant zu bestätigen
 
