@@ -653,6 +653,10 @@ export interface AppSettingsOut {
   ad_groups_student_zyklus2: string[];
   ad_groups_student_zyklus3: string[];
   web_tls_cert_set: boolean;
+  ninja_enabled: boolean;
+  ninja_region: string | null;
+  ninja_client_id: string | null;
+  ninja_client_secret_set: boolean;
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -1113,4 +1117,8 @@ export interface AppSettingsUpdate {
   web_tls_key_pem?: string | null;
   web_tls_pfx_base64?: string | null;
   web_tls_pfx_password?: string | null;
+  ninja_enabled?: boolean | null;
+  ninja_region?: string | null;
+  ninja_client_id?: string | null;
+  ninja_client_secret?: string | null;
 }

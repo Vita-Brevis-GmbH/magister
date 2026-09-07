@@ -2,6 +2,8 @@
 
 No DB and no network — a real NinjaClient over an ``httpx.MockTransport`` is
 injected, so the service's matching + projection logic is exercised directly.
+The connector is built from a resolved ``NinjaConfig`` (as the router does from
+the encrypted app_settings), not from env.
 """
 
 from __future__ import annotations
@@ -10,15 +12,14 @@ from typing import Any
 
 import httpx
 import pytest
-from pydantic import SecretStr
 
-from magister_api.config import Settings
 from magister_api.ninja.client import NinjaClient, NinjaConfig
 from magister_api.schemas.ninja import NinjaDeviceSummary
 from magister_api.services.ninja import (
     NinjaConnectorService,
     NinjaNotConfiguredError,
     NinjaNotLinkedError,
+    resolve_ninja_config,
     summarize_device,
 )
 
@@ -33,14 +34,7 @@ _DETAIL = {
     "organizationId": 3,
 }
 
-
-def _settings(*, enabled: bool = True) -> Settings:
-    return Settings(
-        ninja_enabled=enabled,
-        ninja_region="eu",
-        ninja_client_id="cid",
-        ninja_client_secret=SecretStr("sec"),
-    )
+_CONFIG = NinjaConfig(region="eu", client_id="cid", client_secret="sec")
 
 
 class _Handler:
@@ -74,7 +68,19 @@ def _service(
         NinjaConfig(region="eu", client_id="c", client_secret="s"),
         transport=httpx.MockTransport(handler),
     )
-    return NinjaConnectorService(_settings(enabled=enabled), client=client), client
+    cfg = _CONFIG if enabled else None
+    return NinjaConnectorService(cfg, client=client), client
+
+
+def test_resolve_ninja_config_gates_on_enabled_and_completeness() -> None:
+    def r(**kw: object) -> object:
+        return resolve_ninja_config(**kw)  # type: ignore[arg-type]
+
+    assert r(enabled=False, region="eu", client_id="a", client_secret="b") is None
+    assert r(enabled=True, region="eu", client_id="a", client_secret="") is None
+    assert r(enabled=True, region="", client_id="a", client_secret="b") is None
+    cfg = resolve_ninja_config(enabled=True, region="eu", client_id="a", client_secret="b")
+    assert cfg is not None and cfg.region == "eu" and cfg.client_id == "a"
 
 
 def test_summarize_projects_defensively() -> None:
@@ -128,11 +134,8 @@ async def test_status_survives_ninja_outage() -> None:
             return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
         return httpx.Response(500, json={"error": "boom"})
 
-    client = NinjaClient(
-        NinjaConfig(region="eu", client_id="c", client_secret="s"),
-        transport=httpx.MockTransport(boom),
-    )
-    svc = NinjaConnectorService(_settings(), client=client)
+    client = NinjaClient(_CONFIG, transport=httpx.MockTransport(boom))
+    svc = NinjaConnectorService(_CONFIG, client=client)
     try:
         out = await svc.status(name="pc-1", serial_number=None)
     finally:

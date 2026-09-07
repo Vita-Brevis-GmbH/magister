@@ -178,30 +178,6 @@ class Settings(BaseSettings):
         ),
     )
 
-    # --- NinjaOne RMM connector (ADR-0012) ---
-    # Read-only device status + on-demand library-script runs, shown ONLY in the
-    # device detail view. NinjaOne data is never persisted; the connector matches
-    # a Magister device to a NinjaOne device live on each request. Credentials
-    # live here in env (like the other MAGISTER_* secrets), not in the DB — there
-    # is no admin-editable NinjaOne config surface. Unset/disabled = the whole
-    # connector is inert and the detail view simply shows nothing.
-    ninja_enabled: bool = Field(default=False)
-    ninja_region: str = Field(
-        default="",
-        description="NinjaOne cloud instance: one of us/us2/eu/ca/oc (CH tenants are usually eu).",
-    )
-    ninja_client_id: str = Field(default="")
-    ninja_client_secret: SecretStr = Field(default=SecretStr(""))
-
-    def ninja_is_configured(self) -> bool:
-        """True only when the connector is enabled AND fully credentialed."""
-        return bool(
-            self.ninja_enabled
-            and self.ninja_region
-            and self.ninja_client_id
-            and self.ninja_client_secret.get_secret_value()
-        )
-
     ops_dir: str | None = Field(
         default=None,
         description=(

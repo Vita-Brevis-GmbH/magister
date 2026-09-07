@@ -92,6 +92,11 @@ class EffectiveAppSettings:
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
+    # NinjaOne connector (ADR-0012) — decrypted secret included.
+    ninja_enabled: bool = False
+    ninja_region: str | None = None
+    ninja_client_id: str | None = None
+    ninja_client_secret: str | None = None
 
 
 @dataclass(frozen=True)
@@ -176,6 +181,12 @@ class AppSettingsService:
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
+            AppSettings.ninja_enabled,
+            AppSettings.ninja_region,
+            AppSettings.ninja_client_id,
+            func.pgp_sym_decrypt(AppSettings.ninja_client_secret_enc, self._key).label(
+                "ninja_client_secret"
+            ),
         ).where(AppSettings.id == 1)
         result = await self.session.execute(stmt)
         row = result.one_or_none()
@@ -201,6 +212,10 @@ class AppSettingsService:
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
+            ninja_enabled=bool(row.ninja_enabled),
+            ninja_region=row.ninja_region,
+            ninja_client_id=row.ninja_client_id,
+            ninja_client_secret=row.ninja_client_secret,
         )
 
     async def get_redacted_for_api(self) -> AppSettingsOut:
@@ -237,6 +252,10 @@ class AppSettingsService:
             AppSettings.ad_groups_student_zyklus2,
             AppSettings.ad_groups_student_zyklus3,
             (AppSettings.web_tls_cert_pem.is_not(None)).label("web_tls_cert_set"),
+            AppSettings.ninja_enabled,
+            AppSettings.ninja_region,
+            AppSettings.ninja_client_id,
+            (AppSettings.ninja_client_secret_enc.is_not(None)).label("ninja_client_secret_set"),
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -274,6 +293,10 @@ class AppSettingsService:
             ad_groups_student_zyklus2=list(row.ad_groups_student_zyklus2 or []),
             ad_groups_student_zyklus3=list(row.ad_groups_student_zyklus3 or []),
             web_tls_cert_set=bool(row.web_tls_cert_set),
+            ninja_enabled=bool(row.ninja_enabled),
+            ninja_region=row.ninja_region,
+            ninja_client_id=row.ninja_client_id,
+            ninja_client_secret_set=bool(row.ninja_client_secret_set),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -324,6 +347,9 @@ class AppSettingsService:
             "ad_groups_student_zyklus1": payload.ad_groups_student_zyklus1,
             "ad_groups_student_zyklus2": payload.ad_groups_student_zyklus2,
             "ad_groups_student_zyklus3": payload.ad_groups_student_zyklus3,
+            "ninja_enabled": payload.ninja_enabled,
+            "ninja_region": payload.ninja_region,
+            "ninja_client_id": payload.ninja_client_id,
         }
         for col, val in plain_fields.items():
             if val is not None:
@@ -352,6 +378,11 @@ class AppSettingsService:
                 payload.ad_bind_password, self._key
             )
             diff["rotated_ad_credential"] = True
+        if payload.ninja_client_secret:
+            values["ninja_client_secret_enc"] = func.pgp_sym_encrypt(
+                payload.ninja_client_secret, self._key
+            )
+            diff["rotated_ninja_credential"] = True
 
         # CA PEM is not a secret, but it is bulky — record only whether a cert
         # is now present in the audit diff, never the PEM body. None = leave

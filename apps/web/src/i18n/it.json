@@ -486,7 +486,14 @@
         "ad_groups_search_base": "Base di ricerca dei gruppi (facoltativo)",
         "ad_login_enabled": "Abilita accesso AD",
         "ad_login_group": "Gruppo di autorizzazione",
-        "ad_login_group_hint": "Gruppo AD (DN o CN) i cui membri possono accedere tramite AD. Solo appartenenza diretta."
+        "ad_login_group_hint": "Gruppo AD (DN o CN) i cui membri possono accedere tramite AD. Solo appartenenza diretta.",
+        "ninja_enabled": "Attiva NinjaOne",
+        "ninja_enabled_hint": "Disattivato = il connettore è inattivo e nella vista di dettaglio non appare nulla.",
+        "ninja_region": "Regione (istanza)",
+        "ninja_region_placeholder": "Scegli una regione …",
+        "ninja_client_id": "Client ID",
+        "ninja_client_secret": "Client secret",
+        "ninja_client_secret_hint": "Tipo app “API Services (machine-to-machine)”; scope Monitoring + Management (Management per eseguire script). Lascia vuoto per mantenere il secret salvato."
       },
       "ad_bind_gssapi_hint": "Se attivo, Magister si autentica ad AD tramite un keytab Kerberos — nessuna password di bind necessaria (Bind DN/password ignorati). Richiede un keytab configurato (vedi runbook ad-gssapi-bind). Disattivato = bind classico con DN + password.",
       "tls_title": "Certificato LDAPS",
@@ -538,7 +545,9 @@
         "saved": "Salvato.",
         "error": "Certificato non valido ({{code}})."
       },
-      "provisioning_section_desc_company": "Base di ricerca per il catalogo dei gruppi — comune a tutte le {{unit_plural}}."
+      "provisioning_section_desc_company": "Base di ricerca per il catalogo dei gruppi — comune a tutte le {{unit_plural}}.",
+      "ninja_section": "NinjaOne (RMM)",
+      "ninja_section_desc": "Mostra lo stato dei dispositivi in tempo reale ed esegui script — solo nella vista di dettaglio. I dati NinjaOne non vengono memorizzati."
     },
     "local_admin": {
       "title": "Account amministratore locale",

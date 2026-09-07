@@ -64,6 +64,10 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     ad_groups_student_zyklus2: [],
     ad_groups_student_zyklus3: [],
     web_tls_cert_set: false,
+    ninja_enabled: false,
+    ninja_region: null,
+    ninja_client_id: null,
+    ninja_client_secret_set: false,
     updated_at: "2026-05-08T12:00:00+00:00",
     updated_by_upn: "ops@example.ch",
     ...overrides,
@@ -83,11 +87,13 @@ describe("SettingsForm", () => {
   it("prefills the form from props and shows the secret-set placeholder", () => {
     renderForm(makeData());
     expect(screen.getByLabelText(/issuer-url/i)).toHaveValue("https://login.example.test/v2.0");
-    expect(screen.getByLabelText(/client-id/i)).toHaveValue("client-x");
+    // Two cards now carry a "Client-ID"/"Client-Secret" (OIDC + NinjaOne), so
+    // target the OIDC inputs by id to stay unambiguous.
+    expect(document.getElementById("oidc-client-id")).toHaveValue("client-x");
     // Client secret has placeholder "(gesetzt)" because the row already
     // carries one server-side; field itself stays empty so unchanged
     // submits don't overwrite.
-    const secret = screen.getByLabelText(/^client-secret$/i);
+    const secret = document.getElementById("oidc-client-secret") as HTMLInputElement;
     expect(secret).toHaveValue("");
     expect(secret).toHaveAttribute("placeholder", expect.stringMatching(/gesetzt/i));
     // Bind password isn't set yet → the "(nicht gesetzt)" placeholder.
@@ -124,7 +130,10 @@ describe("SettingsForm", () => {
     renderForm(makeData());
     const user = userEvent.setup();
 
-    await user.type(screen.getByLabelText(/^client-secret$/i), "fresh-secret-value");
+    await user.type(
+      document.getElementById("oidc-client-secret") as HTMLInputElement,
+      "fresh-secret-value",
+    );
     await user.click(screen.getByRole("button", { name: /speichern/i }));
 
     await waitFor(() => {

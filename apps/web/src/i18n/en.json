@@ -483,7 +483,14 @@
         "ad_groups_search_base": "Group search base (optional)",
         "ad_login_enabled": "Enable AD login",
         "ad_login_group": "Authorizing group",
-        "ad_login_group_hint": "AD group (DN or CN) whose members may sign in via AD. Direct membership only."
+        "ad_login_group_hint": "AD group (DN or CN) whose members may sign in via AD. Direct membership only.",
+        "ninja_enabled": "Enable NinjaOne",
+        "ninja_enabled_hint": "Off = the connector is inactive and nothing shows in the detail view.",
+        "ninja_region": "Region (instance)",
+        "ninja_region_placeholder": "Choose a region …",
+        "ninja_client_id": "Client ID",
+        "ninja_client_secret": "Client secret",
+        "ninja_client_secret_hint": "App type “API Services (machine-to-machine)”; scopes Monitoring + Management (Management to run scripts). Leave empty to keep the stored secret."
       },
       "ad_bind_gssapi_hint": "When enabled, Magister authenticates to AD via a Kerberos keytab — no bind password needed (Bind DN/password are ignored). Requires a configured keytab (see runbook ad-gssapi-bind). Disabled = classic bind with DN + password.",
       "tls_title": "LDAPS certificate",
@@ -535,7 +542,9 @@
         "saved": "Saved.",
         "error": "Invalid certificate ({{code}})."
       },
-      "provisioning_section_desc_company": "Search base for the group catalog — shared across all {{unit_plural}}."
+      "provisioning_section_desc_company": "Search base for the group catalog — shared across all {{unit_plural}}.",
+      "ninja_section": "NinjaOne (RMM)",
+      "ninja_section_desc": "Show live device status and run scripts — only in the device detail view. NinjaOne data is not stored."
     },
     "local_admin": {
       "title": "Local admin account",

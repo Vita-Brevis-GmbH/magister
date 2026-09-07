@@ -42,6 +42,10 @@ interface FormState {
   zyklus1_max_grade: string;
   zyklus2_max_grade: string;
   ad_groups_search_base: string;
+  ninja_enabled: boolean;
+  ninja_region: string;
+  ninja_client_id: string;
+  ninja_client_secret: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -67,6 +71,10 @@ function fromOut(data: AppSettingsOut): FormState {
     zyklus1_max_grade: String(data.zyklus1_max_grade),
     zyklus2_max_grade: String(data.zyklus2_max_grade),
     ad_groups_search_base: data.ad_groups_search_base ?? "",
+    ninja_enabled: data.ninja_enabled,
+    ninja_region: data.ninja_region ?? "",
+    ninja_client_id: data.ninja_client_id ?? "",
+    ninja_client_secret: "", // never prefilled — placeholder communicates "set"
   };
 }
 
@@ -143,6 +151,16 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   if (form.ad_groups_search_base !== (current.ad_groups_search_base ?? "")) {
     payload.ad_groups_search_base = form.ad_groups_search_base;
   }
+  // NinjaOne connector.
+  if (form.ninja_enabled !== current.ninja_enabled) payload.ninja_enabled = form.ninja_enabled;
+  if (form.ninja_region !== (current.ninja_region ?? "")) {
+    payload.ninja_region = form.ninja_region || null;
+  }
+  if (form.ninja_client_id !== (current.ninja_client_id ?? "")) {
+    payload.ninja_client_id = form.ninja_client_id || null;
+  }
+  // Only send the secret when the operator actually typed one.
+  if (form.ninja_client_secret) payload.ninja_client_secret = form.ninja_client_secret;
   return payload;
 }
 
@@ -285,6 +303,74 @@ function SettingsForm({
             <Label htmlFor="bootstrap-admins">{t("admin.settings.field.bootstrap_admins")}</Label>
             <Input id="bootstrap-admins" {...field("bootstrap_admins")} />
             <p className="text-xs text-muted-foreground">{t("admin.settings.csv_hint")}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("admin.settings.ninja_section")}</CardTitle>
+          <CardDescription>{t("admin.settings.ninja_section_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.ninja_enabled}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, ninja_enabled: e.target.checked }));
+                setSuccess(false);
+              }}
+            />
+            <span>
+              <span className="font-medium">{t("admin.settings.field.ninja_enabled")}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t("admin.settings.field.ninja_enabled_hint")}
+              </span>
+            </span>
+          </label>
+          <div className="space-y-1">
+            <Label htmlFor="ninja-region">{t("admin.settings.field.ninja_region")}</Label>
+            <select
+              id="ninja-region"
+              className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              value={form.ninja_region}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, ninja_region: e.target.value }));
+                setSuccess(false);
+              }}
+            >
+              <option value="">{t("admin.settings.field.ninja_region_placeholder")}</option>
+              <option value="eu">EU (eu.ninjarmm.com)</option>
+              <option value="us">US (app.ninjarmm.com)</option>
+              <option value="us2">US2 (us2.ninjarmm.com)</option>
+              <option value="ca">CA (ca.ninjarmm.com)</option>
+              <option value="oc">Oceania (oc.ninjarmm.com)</option>
+            </select>
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="ninja-client-id">{t("admin.settings.field.ninja_client_id")}</Label>
+            <Input id="ninja-client-id" {...field("ninja_client_id")} />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="ninja-client-secret">
+              {t("admin.settings.field.ninja_client_secret")}
+            </Label>
+            <Input
+              id="ninja-client-secret"
+              type="password"
+              autoComplete="new-password"
+              placeholder={
+                data.ninja_client_secret_set
+                  ? t("admin.settings.placeholder_secret_set")
+                  : t("admin.settings.placeholder_secret_unset")
+              }
+              {...field("ninja_client_secret")}
+            />
+            <p className="text-xs text-muted-foreground">
+              {t("admin.settings.field.ninja_client_secret_hint")}
+            </p>
           </div>
         </CardContent>
       </Card>

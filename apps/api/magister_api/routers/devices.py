@@ -31,6 +31,7 @@ from magister_api.schemas.ninja import (
     NinjaRunScriptRequest,
     NinjaStatusOut,
 )
+from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.devices import (
     DeviceAssignmentError,
     DeviceNotFoundError,
@@ -43,6 +44,7 @@ from magister_api.services.ninja import (
     NinjaError,
     NinjaNotConfiguredError,
     NinjaNotLinkedError,
+    resolve_ninja_config,
 )
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -211,6 +213,21 @@ async def _device_in_scope(
         raise HTTPException(status_code=404, detail="device_not_found") from exc
 
 
+async def _ninja_connector(settings: Settings, session: AsyncSession) -> NinjaConnectorService:
+    """Resolve the connector from the encrypted NinjaOne config in app_settings.
+
+    The credentials live in the admin Settings (like OIDC/AD), never in env.
+    """
+    eff = await AppSettingsService(session, settings).get_effective()
+    cfg = resolve_ninja_config(
+        enabled=eff.ninja_enabled,
+        region=eff.ninja_region,
+        client_id=eff.ninja_client_id,
+        client_secret=eff.ninja_client_secret,
+    )
+    return NinjaConnectorService(cfg)
+
+
 @router.get("/{device_id}/ninja", response_model=NinjaStatusOut)
 async def ninja_status(
     device_id: int,
@@ -221,7 +238,7 @@ async def ninja_status(
     """Live NinjaOne status + script library for one device. Read-only; nothing
     is stored — the match is recomputed here on every request."""
     device = await _device_in_scope(device_id, user, settings, session)
-    conn = NinjaConnectorService(settings)
+    conn = await _ninja_connector(settings, session)
     return await conn.status(
         name=getattr(device, "name", None),
         serial_number=getattr(device, "serial_number", None),
@@ -243,7 +260,7 @@ async def ninja_run_script(
     client can never point a script at an arbitrary machine. A successful run
     writes an audit event (the script content/parameters are not logged)."""
     device = await _device_in_scope(device_id, user, settings, session)
-    conn = NinjaConnectorService(settings)
+    conn = await _ninja_connector(settings, session)
     ip, request_id = _ip_request_id(request)
     try:
         ninja_id = await conn.run_script(

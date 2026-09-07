@@ -17,7 +17,6 @@ import contextlib
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from magister_api.config import Settings
 from magister_api.ninja.client import (
     NinjaApiError,
     NinjaClient,
@@ -35,6 +34,25 @@ from magister_api.schemas.ninja import (
 
 class NinjaNotLinkedError(NinjaError):
     """A script run was requested but the Magister device matches no NinjaOne one."""
+
+
+def resolve_ninja_config(
+    *,
+    enabled: bool,
+    region: str | None,
+    client_id: str | None,
+    client_secret: str | None,
+) -> NinjaConfig | None:
+    """Build a ``NinjaConfig`` from the decrypted app_settings, or ``None`` when
+    the connector is disabled or incompletely configured."""
+    if not enabled:
+        return None
+    cfg = NinjaConfig(
+        region=region or "",
+        client_id=client_id or "",
+        client_secret=client_secret or "",
+    )
+    return cfg if cfg.is_complete() else None
 
 
 def summarize_device(dev: dict[str, Any]) -> NinjaDeviceSummary:
@@ -65,25 +83,20 @@ def _as_float(value: Any) -> float | None:
 
 
 class NinjaConnectorService:
-    def __init__(self, settings: Settings, *, client: NinjaClient | None = None) -> None:
-        self._settings = settings
+    def __init__(self, config: NinjaConfig | None, *, client: NinjaClient | None = None) -> None:
+        self._config = config
         self._override = client
 
     @property
     def enabled(self) -> bool:
-        return self._settings.ninja_is_configured()
+        return self._config is not None
 
     def _build_client(self) -> NinjaClient:
         if self._override is not None:
             return self._override
-        s = self._settings
-        return NinjaClient(
-            NinjaConfig(
-                region=s.ninja_region,
-                client_id=s.ninja_client_id,
-                client_secret=s.ninja_client_secret.get_secret_value(),
-            )
-        )
+        if self._config is None:
+            raise NinjaNotConfiguredError("ninja_not_configured")
+        return NinjaClient(self._config)
 
     @contextlib.asynccontextmanager
     async def _client(self) -> AsyncGenerator[NinjaClient]:
@@ -189,5 +202,6 @@ __all__ = [
     "NinjaError",
     "NinjaNotConfiguredError",
     "NinjaNotLinkedError",
+    "resolve_ninja_config",
     "summarize_device",
 ]

@@ -145,6 +145,20 @@ class AppSettings(Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
+    # --- NinjaOne RMM connector (ADR-0012) ---
+    # Read-only device status + on-demand library-script runs, shown only in the
+    # device detail view. NinjaOne *data* is never persisted; only these
+    # credentials are, encrypted like the other secrets. GUI-editable under
+    # Settings, exactly like the OIDC/AD blocks. Disabled or incomplete = the
+    # connector is inert.
+    ninja_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    # NinjaOne cloud instance: us / us2 / eu / ca / oc.
+    ninja_region: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    ninja_client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    ninja_client_secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
     # --- Web-server (Caddy) TLS certificate ---
     # An imported certificate for the public HTTPS endpoint. When both are set,
     # Caddy serves this cert+key instead of its self-signed internal CA. The

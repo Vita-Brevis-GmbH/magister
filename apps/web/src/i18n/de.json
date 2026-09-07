@@ -483,7 +483,14 @@
         "ad_groups_search_base": "Such-Basis für Gruppen (optional)",
         "ad_login_enabled": "AD-Login aktivieren",
         "ad_login_group": "Berechtigungs-Gruppe",
-        "ad_login_group_hint": "AD-Gruppe (DN oder CN), deren Mitglieder sich per AD anmelden dürfen. Nur direkte Mitgliedschaft."
+        "ad_login_group_hint": "AD-Gruppe (DN oder CN), deren Mitglieder sich per AD anmelden dürfen. Nur direkte Mitgliedschaft.",
+        "ninja_enabled": "NinjaOne aktivieren",
+        "ninja_enabled_hint": "Aus = der Connector ist inaktiv und in der Detailansicht erscheint nichts.",
+        "ninja_region": "Region (Instanz)",
+        "ninja_region_placeholder": "Region wählen …",
+        "ninja_client_id": "Client-ID",
+        "ninja_client_secret": "Client-Secret",
+        "ninja_client_secret_hint": "App-Typ „API Services (machine-to-machine)“; Scopes Monitoring + Management (Management für Script-Start). Leer lassen = gespeichertes Secret unverändert."
       },
       "ad_bind_gssapi_hint": "Aktiviert: Anmeldung am AD per Kerberos-Keytab, kein Bind-Passwort nötig (Bind-DN/Passwort werden ignoriert). Setzt einen eingerichteten Keytab voraus — siehe Runbook ad-gssapi-bind. Deaktiviert = klassischer Bind mit DN + Passwort.",
       "tls_title": "LDAPS-Zertifikat",
@@ -535,7 +542,9 @@
         "saved": "Gespeichert.",
         "error": "Zertifikat ungültig ({{code}})."
       },
-      "provisioning_section_desc_company": "Such-Basis für den Gruppen-Katalog — für alle {{unit_plural}} gemeinsam."
+      "provisioning_section_desc_company": "Such-Basis für den Gruppen-Katalog — für alle {{unit_plural}} gemeinsam.",
+      "ninja_section": "NinjaOne (RMM)",
+      "ninja_section_desc": "Geräte-Status live anzeigen und Scripts starten — nur in der Geräte-Detailansicht. NinjaOne-Daten werden nicht gespeichert."
     },
     "local_admin": {
       "title": "Lokales Admin-Konto",

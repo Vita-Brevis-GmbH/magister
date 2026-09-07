@@ -69,6 +69,13 @@ class AppSettingsOut(BaseModel):
     # cert/key bodies are never returned — only this presence flag.
     web_tls_cert_set: bool = False
 
+    # NinjaOne connector (ADR-0012). The client secret is never returned — only
+    # the presence flag, like the OIDC/AD secrets.
+    ninja_enabled: bool = False
+    ninja_region: str | None = None
+    ninja_client_id: str | None = None
+    ninja_client_secret_set: bool = False
+
     # Audit fingerprint
     updated_at: datetime
     updated_by_upn: str | None
@@ -167,6 +174,28 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Password for the PFX blob, if any.",
     )
+
+    # --- NinjaOne connector (ADR-0012) ---
+    ninja_enabled: bool | None = None
+    ninja_region: str | None = Field(
+        default=None,
+        description="NinjaOne cloud instance: us / us2 / eu / ca / oc. Empty string clears.",
+    )
+    ninja_client_id: str | None = None
+    ninja_client_secret: str | None = Field(
+        default=None,
+        description=(
+            "Send a non-empty string to update; omit or send null to leave the "
+            "current encrypted value untouched."
+        ),
+    )
+
+    @field_validator("ninja_region")
+    @classmethod
+    def _check_ninja_region(cls, v: str | None) -> str | None:
+        if v is not None and v.strip() and v not in {"us", "us2", "eu", "ca", "oc"}:
+            raise ValueError("ninja_region must be one of us/us2/eu/ca/oc")
+        return v
 
     @field_validator("ad_bind_mode")
     @classmethod

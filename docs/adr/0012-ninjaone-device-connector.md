@@ -4,14 +4,18 @@
 - **Datum:** 2026-09-07
 - **Kontext-Modul:** `devices`
 
-> **Nachtrag (Vorgabe des Auftraggebers):** NinjaOne-Daten werden **nie
+> **Nachtrag (Vorgaben des Auftraggebers):** NinjaOne-**Daten** werden **nie
 > persistiert** — sie erscheinen **nur live in der Geräte-Detailansicht**, und
 > **nur dort** lassen sich Scripts starten. Deshalb: **keine**
-> `ninja_device_id`-Spalte, **keine** DB-Migration, **kein** gespeichertes
-> Matching. Das Matching läuft pro Detailaufruf; das Ergebnis geht nur in die
-> Antwort. Die Connector-**Credentials** liegen in **Env-Vars** (`config.py`,
-> wie die übrigen `MAGISTER_*`-Secrets) — es gibt keine admin-editierbare
-> NinjaOne-Config-Fläche.
+> `ninja_device_id`-Spalte, **kein** gespeichertes Matching. Das Matching läuft
+> pro Detailaufruf; das Ergebnis geht nur in die Antwort.
+>
+> Die Connector-**Credentials** hingegen werden — wie **Entra ID (OIDC)** und
+> die AD-Bind-Daten — in der **Admin-Settings-Oberfläche** gepflegt und
+> **verschlüsselt in `app_settings`** abgelegt (pgcrypto, wie
+> `oidc_client_secret`/`ad_bind_password`); nicht mehr in Env-Vars. Der
+> Client-Secret verlässt den Server nie und wird nie zurückgegeben (nur ein
+> `…_set`-Flag).
 
 ## Kontext
 
