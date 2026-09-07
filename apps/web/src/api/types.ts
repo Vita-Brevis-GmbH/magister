@@ -867,6 +867,40 @@ export interface DeviceAssignmentOut {
   valid_to: string | null;
 }
 
+// --- NinjaOne connector (detail-view only; nothing persisted) --------------
+export interface NinjaDeviceSummary {
+  ninja_device_id: number;
+  system_name: string | null;
+  dns_name: string | null;
+  offline: boolean | null;
+  last_contact: number | null;
+  os_name: string | null;
+  serial_number: string | null;
+  node_class: string | null;
+  organization_id: number | null;
+}
+
+export interface NinjaScriptOut {
+  id: number;
+  name: string;
+}
+
+export interface NinjaStatusOut {
+  enabled: boolean;
+  matched: boolean;
+  ambiguous: boolean;
+  via: string | null;
+  status: NinjaDeviceSummary | null;
+  scripts: NinjaScriptOut[];
+  error: string | null;
+}
+
+export interface NinjaRunResult {
+  ok: boolean;
+  ninja_device_id: number;
+  detail: string | null;
+}
+
 export interface AuditEventOut {
   id: number;
   ts: string;

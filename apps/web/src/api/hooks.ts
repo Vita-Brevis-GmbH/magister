@@ -38,6 +38,8 @@ import type {
   DeviceUpdate,
   DeviceAssign,
   DeviceAssignmentOut,
+  NinjaStatusOut,
+  NinjaRunResult,
   ClassTeacherCreate,
   ClassTeacherOut,
   ClassUpdate,
@@ -523,6 +525,28 @@ export function useDevice(deviceId: number | null) {
     queryKey: deviceId === null ? ["device", "none"] : queryKeys.device(deviceId),
     queryFn: () => apiFetch<DeviceOut>(`/devices/${deviceId}`),
     enabled: deviceId !== null,
+  });
+}
+
+// NinjaOne connector — live, read-only status + on-demand script run. Both are
+// scoped to the device detail view; nothing is cached beyond React Query's
+// in-memory query and nothing is persisted server-side.
+export function useNinjaStatus(deviceId: number | null) {
+  return useQuery<NinjaStatusOut>({
+    queryKey: deviceId === null ? ["ninja", "none"] : ["ninja", "status", deviceId],
+    queryFn: () => apiFetch<NinjaStatusOut>(`/devices/${deviceId}/ninja`),
+    enabled: deviceId !== null,
+    staleTime: 15_000,
+  });
+}
+
+export function useRunNinjaScript(deviceId: number) {
+  return useMutation<NinjaRunResult, ApiError, { script_id: number; parameters?: string | null }>({
+    mutationFn: (body) =>
+      apiFetch<NinjaRunResult>(`/devices/${deviceId}/ninja/run-script`, {
+        method: "POST",
+        body,
+      }),
   });
 }
 

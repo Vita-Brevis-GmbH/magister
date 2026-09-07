@@ -993,6 +993,29 @@
       "ad_guid": "AD objectGUID",
       "created_at": "Created",
       "updated_at": "Updated"
+    },
+    "ninja": {
+      "section_title": "NinjaOne",
+      "error": "NinjaOne is currently unreachable.",
+      "ambiguous": "Several NinjaOne devices match — please resolve in NinjaOne.",
+      "not_matched": "No NinjaOne device linked.",
+      "field_status": "Status",
+      "field_hostname": "Hostname",
+      "field_os": "Operating system",
+      "field_last_contact": "Last contact",
+      "online": "Online",
+      "offline": "Offline",
+      "run_title": "Run script",
+      "run_script_label": "Script",
+      "run_script_placeholder": "Choose a script …",
+      "run_script_id_label": "Script ID",
+      "run_params_label": "Parameters (optional)",
+      "no_scripts_hint": "No script list available — enter a script ID manually.",
+      "run_button": "Run",
+      "run_confirm": "Really run a script on {{device}}?",
+      "run_confirm_yes": "Run",
+      "run_ok": "Script started (NinjaOne device {{id}}).",
+      "run_error": "Could not start the script."
     }
   },
   "schools": {

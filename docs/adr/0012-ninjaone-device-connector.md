@@ -1,8 +1,17 @@
 # ADR-0012 — NinjaOne-Geräte-Connector (Daten lesen + Scripts starten)
 
-- **Status:** Accepted (Phase A umgesetzt; Phase B/C offen)
+- **Status:** Accepted (Phase A + B umgesetzt; Phase C — Frontend — offen)
 - **Datum:** 2026-09-07
 - **Kontext-Modul:** `devices`
+
+> **Nachtrag (Vorgabe des Auftraggebers):** NinjaOne-Daten werden **nie
+> persistiert** — sie erscheinen **nur live in der Geräte-Detailansicht**, und
+> **nur dort** lassen sich Scripts starten. Deshalb: **keine**
+> `ninja_device_id`-Spalte, **keine** DB-Migration, **kein** gespeichertes
+> Matching. Das Matching läuft pro Detailaufruf; das Ergebnis geht nur in die
+> Antwort. Die Connector-**Credentials** liegen in **Env-Vars** (`config.py`,
+> wie die übrigen `MAGISTER_*`-Secrets) — es gibt keine admin-editierbare
+> NinjaOne-Config-Fläche.
 
 ## Kontext
 
@@ -27,31 +36,37 @@ NinjaOne bietet dafür eine ausgereifte **Public API v2**:
 Ein isolierter Connector im `devices`-Kontext, der genau die AD-Grenze spiegelt:
 
 1. **Nur ein Modul spricht mit NinjaOne** (`magister_api/ninja/`). Credentials
-   (`client_id`/`client_secret`) liegen **verschlüsselt in `app_settings`**
-   (pgcrypto, wie `ad_bind_password`) und verlassen den Server nie; nichts davon
-   wird geloggt. HTTP über `httpx.AsyncClient` mit `transport`-Injektionsnaht
-   für Tests (gleiches Muster wie `AdRpcClient`).
-2. **Verknüpfung** über eine neue, nullable, unique Spalte `devices.ninja_device_id`
-   (die numerische Ninja-ID als dauerhafter Anker).
+   (`client_id`/`client_secret`) liegen in **Env-Vars** (`config.py`) und
+   verlassen den Server nie; nichts davon wird geloggt. HTTP über
+   `httpx.AsyncClient` mit `transport`-Injektionsnaht für Tests (gleiches Muster
+   wie `AdRpcClient`).
+2. **Kein persistentes Matching.** Pro Detailaufruf matcht der
+   `NinjaConnectorService` das Magister-Gerät live gegen die NinjaOne-Geräte; das
+   Ergebnis (Status + Script-Bibliothek) geht **nur** in die Antwort.
 3. **Matching:** Hostname zuerst (`Device.name` ↔ `systemName`/`dnsName`,
    Domain-Suffix entfernt, case-insensitiv), dann Seriennummer. Ein Treffer auf
-   **mehrere** Ninja-Geräte gilt als **ambig** → kein Auto-Link, manuell zuweisen.
-4. **Read-only bleibt read-only**, Script-Start ist eine schreibende Operation →
-   **Audit-Event Pflicht**, RBAC am Endpoint (`require_smi`), `school_id`-Scope.
+   **mehrere** Ninja-Geräte gilt als **ambig** → kein Link.
+4. **Read-only bleibt read-only** (`GET /devices/{id}/ninja`). Script-Start
+   (`POST /devices/{id}/ninja/run-script`) ist eine schreibende Operation →
+   **Audit-Event Pflicht** (Script-Inhalt/Parameter werden nicht geloggt), RBAC
+   am Endpoint (`require_smi`), `school_id`-Scope. Der NinjaOne-Zielrechner wird
+   **serverseitig neu gematcht** — der Client gibt nie eine Ninja-ID vor, ein
+   Script kann also nur das tatsächlich zugeordnete Gerät treffen.
 5. Ausgeführt werden **Bibliotheks-Scripts** aus dem NinjaOne-Katalog, kein
    Ad-hoc-Code-Upload (NinjaOne-Sicherheitsmodell).
 
 ## Phasen
 
 - **Phase A (umgesetzt):** `ninja/client.py` (OAuth-Token-Cache, `list_devices`,
-  `get_device`, `run_script`) + `ninja/match.py` (Hostname→Serial), voll
-  unit-getestet mit `httpx.MockTransport` — keine echte Instanz nötig.
-- **Phase B (offen):** `devices.ninja_device_id` + Migration; `app_settings`
-  NinjaOne-Credentials (Modell/Service/Schema/Settings-UI); `NinjaConnectorService`
-  (link/unlink/auto-match/status/run-script mit Audit); Router-Endpoints im
-  `devices`-Modul; Integrationstests (Postgres-gated, Connector gemockt).
-- **Phase C (offen):** Frontend — Ninja-Status + Aktion „Script ausführen" auf
-  der Geräte-Detailseite; Admin-Settings-Felder für die Credentials.
+  `get_device`, `list_scripts`, `run_script`) + `ninja/match.py` (Hostname→Serial),
+  voll unit-getestet mit `httpx.MockTransport` — keine echte Instanz nötig.
+- **Phase B (umgesetzt):** Env-Config (`config.py` `ninja_*` + `ninja_is_configured`);
+  `NinjaConnectorService` (live `status` inkl. Script-Bibliothek + serverseitig
+  neu-matchender `run_script`), DB-frei und client-injizierbar; Router-Endpoints
+  `GET /devices/{id}/ninja` + `POST /devices/{id}/ninja/run-script` mit Audit;
+  Unit-Tests (Client, Matching, Connector) mit gemocktem HTTP.
+- **Phase C (offen):** Frontend — Ninja-Status-Panel + Aktion „Script ausführen"
+  ausschliesslich auf der Geräte-Detailseite.
 
 ## ⚠️ Gegen den Tenant zu bestätigen
 

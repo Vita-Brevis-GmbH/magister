@@ -13,6 +13,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_smi
 from magister_api.config import Settings, get_settings
@@ -25,11 +26,23 @@ from magister_api.schemas.devices import (
     DeviceOut,
     DeviceUpdate,
 )
+from magister_api.schemas.ninja import (
+    NinjaRunResultOut,
+    NinjaRunScriptRequest,
+    NinjaStatusOut,
+)
 from magister_api.services.devices import (
     DeviceAssignmentError,
     DeviceNotFoundError,
     DevicePermissionError,
     DeviceService,
+)
+from magister_api.services.ninja import (
+    NinjaApiError,
+    NinjaConnectorService,
+    NinjaError,
+    NinjaNotConfiguredError,
+    NinjaNotLinkedError,
 )
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -184,6 +197,85 @@ async def delete_device(
     except DeviceNotFoundError as exc:
         raise HTTPException(status_code=404, detail="device_not_found") from exc
     return None
+
+
+# --- NinjaOne connector (ADR-0012) — detail-view only, nothing persisted ------
+
+
+async def _device_in_scope(
+    device_id: int, user: AuthenticatedUser, settings: Settings, session: AsyncSession
+) -> object:
+    try:
+        return await DeviceService(session, settings, user.to_scope()).get(device_id)
+    except DeviceNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="device_not_found") from exc
+
+
+@router.get("/{device_id}/ninja", response_model=NinjaStatusOut)
+async def ninja_status(
+    device_id: int,
+    user: AuthenticatedUser = Depends(require_smi),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> NinjaStatusOut:
+    """Live NinjaOne status + script library for one device. Read-only; nothing
+    is stored — the match is recomputed here on every request."""
+    device = await _device_in_scope(device_id, user, settings, session)
+    conn = NinjaConnectorService(settings)
+    return await conn.status(
+        name=getattr(device, "name", None),
+        serial_number=getattr(device, "serial_number", None),
+    )
+
+
+@router.post("/{device_id}/ninja/run-script", response_model=NinjaRunResultOut)
+async def ninja_run_script(
+    device_id: int,
+    payload: NinjaRunScriptRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_smi),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> NinjaRunResultOut:
+    """Run a NinjaOne library script on the device this Magister device maps to.
+
+    The NinjaOne target is re-matched server-side from the Magister device, so a
+    client can never point a script at an arbitrary machine. A successful run
+    writes an audit event (the script content/parameters are not logged)."""
+    device = await _device_in_scope(device_id, user, settings, session)
+    conn = NinjaConnectorService(settings)
+    ip, request_id = _ip_request_id(request)
+    try:
+        ninja_id = await conn.run_script(
+            name=getattr(device, "name", None),
+            serial_number=getattr(device, "serial_number", None),
+            script_id=payload.script_id,
+            parameters=payload.parameters,
+        )
+    except NinjaNotConfiguredError as exc:
+        raise HTTPException(status_code=409, detail="ninja_disabled") from exc
+    except NinjaNotLinkedError as exc:
+        raise HTTPException(status_code=409, detail="ninja_device_not_linked") from exc
+    except NinjaApiError as exc:
+        raise HTTPException(status_code=502, detail="ninja_api_error") from exc
+    except NinjaError as exc:
+        raise HTTPException(status_code=502, detail="ninja_unreachable") from exc
+    await AuditService(session, settings).emit(
+        action="ninja_script_run",
+        target_kind="device",
+        target_id=str(device_id),
+        actor_upn=user.upn,
+        actor_object_guid=user.ad_object_guid,
+        school_id=getattr(device, "school_id", None),
+        ip=ip,
+        request_id=request_id,
+        payload={
+            "script_id": payload.script_id,
+            "ninja_device_id": ninja_id,
+            "params_set": payload.parameters is not None,
+        },
+    )
+    return NinjaRunResultOut(ok=True, ninja_device_id=ninja_id)
 
 
 __all__ = ["router"]

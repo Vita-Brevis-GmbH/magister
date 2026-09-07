@@ -996,6 +996,29 @@
       "ad_guid": "objectGUID AD",
       "created_at": "Créé",
       "updated_at": "Mis à jour"
+    },
+    "ninja": {
+      "section_title": "NinjaOne",
+      "error": "NinjaOne est actuellement injoignable.",
+      "ambiguous": "Plusieurs appareils NinjaOne correspondent — à résoudre dans NinjaOne.",
+      "not_matched": "Aucun appareil NinjaOne associé.",
+      "field_status": "Statut",
+      "field_hostname": "Nom d’hôte",
+      "field_os": "Système d’exploitation",
+      "field_last_contact": "Dernier contact",
+      "online": "En ligne",
+      "offline": "Hors ligne",
+      "run_title": "Exécuter un script",
+      "run_script_label": "Script",
+      "run_script_placeholder": "Choisir un script …",
+      "run_script_id_label": "ID du script",
+      "run_params_label": "Paramètres (optionnel)",
+      "no_scripts_hint": "Aucune liste de scripts disponible — saisir un ID manuellement.",
+      "run_button": "Exécuter",
+      "run_confirm": "Vraiment exécuter un script sur {{device}} ?",
+      "run_confirm_yes": "Exécuter",
+      "run_ok": "Script démarré (appareil NinjaOne {{id}}).",
+      "run_error": "Impossible de démarrer le script."
     }
   },
   "schools": {

@@ -41,6 +41,7 @@ _DEVICES_PATH = "/v2/devices"
 _DEVICE_PATH = "/v2/device/{id}"
 # ⚠️ VERIFY-AGAINST-TENANT (see module docstring).
 _RUN_SCRIPT_PATH = "/v2/device/{id}/script/run"
+_SCRIPTS_PATH = "/v2/automation/scripts"
 
 # Refresh the token this many seconds before its stated expiry to avoid racing
 # the boundary on a slow request.
@@ -215,7 +216,16 @@ class NinjaClient:
             raise NinjaApiError("ninja_bad_device_payload", status_code=resp.status_code)
         return body
 
-    # ---------- scripts (write) ----------
+    # ---------- scripts ----------
+
+    async def list_scripts(self) -> list[dict[str, Any]]:
+        """The tenant's automation/script library (id + name) for the picker.
+
+        ⚠️ VERIFY-AGAINST-TENANT: ``_SCRIPTS_PATH`` may be ``/v2/scripting/...``
+        depending on API version. Callers should treat a failure here as "no
+        picker" and fall back to a manual script-id input, never as fatal.
+        """
+        return self._as_list(await self._request("GET", _SCRIPTS_PATH))
 
     async def run_script(
         self,
