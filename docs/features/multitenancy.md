@@ -1,6 +1,9 @@
 # Mandantenfähigkeit — Planung
 
-> Umsetzungsplan zu [ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md).
+> Umsetzungsplan zu [ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md)
+> (Mandantenfähigkeit), [ADR-0014](../adr/0014-ad-connector-agent.md)
+> (AD-Connector-Agent) und [ADR-0015](../adr/0015-authentisierungs-haertung.md)
+> (Authentisierungs-Härtung).
 > Status: **Planung, nichts implementiert.** Mockup der Oberfläche:
 > `docs/mockups/multitenancy-console/`.
 
@@ -25,6 +28,7 @@ Betriebsart „ein Mandant" unverändert unterstützt (ADR-0013 D8).
 | Global Admin | Vita-Brevis-Rolle: Kunden, Systemeinstellungen, Rechte, Vorlagen. |
 | Global Operator | Vita-Brevis-Rolle: alle Kunden sehen und bedienen, keine Plattformkonfiguration. |
 | Kunden-Admin | Bisherige Rolle `admin`. Verliert Systemeinstellungen und die Rechte-Matrix. |
+| Connector-Agent | Kleiner Dienst im Kundennetz, der ausgehend zur Plattform telefoniert und dort die AD-Aufträge abholt. Einziger Prozess mit AD-Zugang. |
 
 ## 3 · Zielbild
 
@@ -49,9 +53,15 @@ flowchart TB
   Console -.->|Reconciler: Konfig, Rechte,<br/>Vorlagen materialisieren| PG
   Console -.->|befristete, begründete<br/>Assertion| API
 
-  API -->|ausgehender Connector| ADA[AD Kunde A<br/>vor Ort]
-  API -->|ausgehender Connector| ADB[AD Kunde B<br/>vor Ort]
+  AgentA[Agent Kunde A<br/>vor Ort] -->|TCP 443 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentB[Agent Kunde B<br/>vor Ort] -->|TCP 443 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentA -->|LDAPS 636<br/>bleibt im Kundennetz| ADA[AD Kunde A]
+  AgentB -->|LDAPS 636<br/>bleibt im Kundennetz| ADB[AD Kunde B]
 ```
+
+Die Agenten bauen ihre Verbindung selbst auf; die Plattform öffnet nie eine
+Verbindung ins Kundennetz. Die Konsole hängt an einem eigenen Listener
+(TCP 4444, nur auf der Management-Adresse, mit Client-Zertifikat).
 
 Die gestrichelten Pfeile laufen **nie** im Anfrage-Pfad eines Kunden: die
 Konsole schreibt in die Kundenschemas, aber kein Kunden-Request liest die
@@ -74,6 +84,10 @@ Konsolen-DB.
 | `platform_operators` / `platform_role_assignments` | Global Admin / Global Operator. |
 | `operator_access_grants` | Jeder Zugriff im Kundenkontext: Operator, Kunde, Grund/Ticket, Beginn, Ende. |
 | `platform_audit_events` | Plattform-Audit, getrennt vom Kunden-Audit. |
+| `connector_agents` | Pro Kunde ein bis mehrere Agenten: Name, Status, Version, letzter Kontakt, SPKI-Fingerprint des Client-Zertifikats, Ablaufdatum, argon2id-Hash des API-Keys, Widerruf-Flag. |
+| `connector_enrollments` | Einmal-Token für die Anmeldung eines Agenten: Kunde, Hash, Ablauf, eingelöst-am, ausgestellt-von. |
+| `connector_jobs` | Auftragswarteschlange: Kunde, Methode (aus der Allowlist), Nutzlast, Status, TTL, Ergebnis, HMAC. Nutzlasten mit Passwörtern werden nach Abschluss sofort gelöscht. |
+| `platform_ca` | CA-Zustand: Intermediate pro Kunde, Seriennummern, Widerrufsliste (intern, kein CRL-Vertrieb). |
 
 ### 4.2 Kundenschema (Änderungen)
 
@@ -91,6 +105,10 @@ Konsolen-DB.
   `rights_pushed`, `operator_access_started`, `operator_access_ended` sind für
   den Kunden lesbar — Transparenz ist Teil der Zusage.
 - `role_assignments` bleibt unverändert beim Kunden (siehe offener Entscheid E2).
+- `local_admins`: neue Spalten `totp_secret_enc`, `totp_confirmed_at`,
+  `totp_last_step`, `recovery_codes` (ADR-0015 D2). Gehostet ist dieser
+  Anmeldeweg ganz abgeschaltet; on-prem ist er der Notzugang.
+- `app_settings`: `ad_login_enabled` und `ad_login_group` fallen weg (ADR-0015 D3).
 
 ## 5 · Anfrage-Pfad
 
@@ -119,9 +137,32 @@ Einstellungen enden mit der Transaktion, ein Pool kann nichts weitertragen.
 | `admin_document_templates.py`, `group_templates.py` | Autorenstelle **Konsole**; Kunde liest, und überschreibt nur wo erlaubt. |
 | `admin_roles.py` (Rollen*zuweisung* an Personen) | **Bleibt beim Kunden** — siehe E2. |
 | `admin_sync.py` (Sync auslösen) | Bleibt beim Kunden; Intervall und Ziele kommen global. |
+| `POST /auth/login/ad` | **Entfällt** (ADR-0015 D3) — der Code wird entfernt, nicht abgeschaltet. |
+| `POST /auth/login/local` | Bleibt on-prem, zweistufig mit TOTP; gehostet abgeschaltet. |
+| `routers/ad_rpc.py` (eingehendes AD-RPC) | Bleibt für den Monolith und den Container-Split; gehostet tritt der Connector-Rücken daneben (ADR-0014). |
+| — neu — | `/connector/*` (Anmeldung, Auftragsabruf, Ergebnis, Zertifikatserneuerung): eigener Listener mit Client-Zertifikat, nicht Teil der Kunden-API. |
 | Alles Fachliche (Benutzer, Klassen, Abteilungen, Geräte, Importe, Briefe, Auswertungen, Audit) | Bleibt beim Kunden. |
 
 ## 7 · Phasen
+
+### Phase 0 — Authentisierungs-Härtung (unabhängig, kann sofort)
+
+Braucht keine Mandantenfähigkeit und verkleinert die Angriffsfläche, bevor
+irgendetwas gehostet wird. Referenz: ADR-0015.
+
+- **AD-Login entfernen.** Ausbau in zwei Releases nach der Datei-Liste in
+  ADR-0015 D3; Start bricht laut ab, wenn `MAGISTER_AD_LOGIN_*` noch gesetzt
+  ist; im zweiten Release entfernt Alembic die beiden Spalten.
+- **TOTP für lokale Konten**, verpflichtend, mit Wiederherstellungscodes und
+  erzwungener Einrichtung.
+- **Konsolen-Listener** vorbereiten: eigener Site-Block, Schnittstellen-Bindung,
+  Client-Zertifikat gegen die private CA, Marker-Header-Riegel in der Anwendung.
+  (Die Konsole selbst kommt in Phase 2 — der Listener und die CA sind die
+  Vorarbeit, die der Connector in Phase 2a ebenfalls braucht.)
+- **Abnahme:** Kein Anmeldeweg ohne zweiten Faktor; ein Contract-Test verweigert
+  jede Route unter `/auth/login/ad`; ein lokales Konto ohne bestätigtes TOTP
+  erreicht ausschliesslich die Einrichtungsseite; der Konsolen-Port lehnt ohne
+  Client-Zertifikat den Handshake ab.
 
 ### Phase 1 — Mandanten-Abstraktion mit genau einem Kunden
 
@@ -145,6 +186,31 @@ Verhaltensänderung.
 - **Abnahme:** Zwei Kunden auf einer Installation, gegenseitiger DB-Zugriff
   scheitert an Postgres; ein abgebrochener Auftrag lässt den Kunden auf
   `provisioning` und unerreichbar.
+
+### Phase 2a — AD-Connector-Agent
+
+Blockiert den ersten gehosteten Kunden: ohne Agenten gibt es keinen
+Passwort-Reset. Referenz: ADR-0014.
+
+- **Plattform-CA**: Offline-Root, Intermediate pro Kunde, Ausstellung über
+  CSR-Anmeldung, Widerruf als Datenbank-Flag.
+- **Connector-Endpunkt** auf eigenem Listener mit `require_and_verify`, plus
+  Abgleich von SPKI-Fingerprint und API-Key gegen dieselbe Agent-Zeile.
+- **Auftragswarteschlange** hinter der bestehenden `AdClient`-Schnittstelle als
+  dritter Rücken (nach *direkt* und *eingehendem RPC*) — kein Aufrufer im
+  Fachcode ändert sich. Methodenmenge ist die Allowlist aus `ad/rpc.py`.
+- **Agent** für Windows (MSI, Dienst), Linux (`.deb`, systemd) und als
+  OCI-Image: Schlüsselerzeugung lokal, Long-Poll-Abruf, Ergebnis mit HMAC,
+  Sync-Seiten als Push, lokale OU-Allowlist und Gruppen-Denylist, lokales
+  Protokoll, automatische Zertifikatserneuerung.
+- **Konsole**: Paket-Download mit Einmal-Token, Fingerprint-Anzeige nach der
+  Anmeldung, API-Key- und Zertifikatsrotation, Agent-Status, Ereignisliste.
+- **Abnahme:** Passwort-Reset über den Agenten funktioniert; ein Kunde, dessen
+  Agent steht, bekommt `503` mit dem bestehenden Banner statt eines Fehlers; ein
+  Client-Zertifikat von Kunde A wird auf dem Kanal von Kunde B abgewiesen; ein
+  Auftrag mit einer Methode ausserhalb der Allowlist wird schon plattformseitig
+  verweigert; das Download-Paket enthält kein Geheimnis; Agent stoppen beendet
+  jeden Plattformzugriff auf das AD.
 
 ### Phase 3 — Systemeinstellungen und Rechte umziehen
 
@@ -181,7 +247,8 @@ Verhaltensänderung.
 - AD-Sync-Fan-out pro Kunde, versetzt, mit isoliertem Fehlerverhalten.
 - Sicherung, Wiederherstellung, Export und Löschung **pro Kunde**; Umzug auf
   eigene Datenbank oder eigenen Cluster.
-- Ausgehender On-Prem-AD-Connector (ADR-0013 D10).
+- Connector-Flotte betreiben: Agent-Versionen, Zertifikatsablauf,
+  Erneuerungsfehler und stehende Agenten überwachen und alarmieren.
 
 ## 8 · Neue harte Regeln (Ergänzung zu CLAUDE.md)
 
@@ -197,6 +264,20 @@ Verhaltensänderung.
   bleibt frei davon.
 - **Immer** ein kundensichtbares Audit-Ereignis bei Operator-Zugriff und bei
   jedem Rollout in ein Kundenschema.
+- **Niemals** einen Connector-Auftrag annehmen, dessen Methode nicht in der
+  Allowlist steht — und niemals eine Auftragsart einführen, die beliebiges
+  LDAP, PowerShell oder Skripte im Kundennetz ausführt.
+- **Niemals** ein Geheimnis in ein herunterladbares Agent-Paket legen; der
+  private Schlüssel entsteht auf dem Agenten.
+- **Niemals** einen Connector-Kanal ohne *beide* Faktoren akzeptieren
+  (Client-Zertifikat mit passendem Fingerprint **und** API-Key derselben Zeile).
+- **Niemals** das Klartext-Passwort eines Verzeichnisbenutzers gegen AD binden.
+  Einzige Ausnahme bleibt der Probe-Bind eines gerade selbst gesetzten
+  Passworts (`probe_bind_as_user`).
+- **Niemals** einen Anmeldeweg ohne zweiten Faktor einführen oder
+  wiederherstellen.
+- **Immer** die Konsole nur über den Management-Listener bedienen; eine Anfrage
+  ohne dessen Marker wird abgewiesen.
 
 ## 9 · Risiken
 
@@ -210,6 +291,11 @@ Verhaltensänderung.
 | Alle Kunden auf einer Origin: XSS- und Storage-Radius. | Siehe E1 — Subdomain pro Kunde als Zielbild. |
 | Rechtlich: Auftragsverarbeitung für Daten Minderjähriger. | AVV pro Kunde, dokumentierte Trennung, Datenhaltung in der Schweiz, Lösch- und Exportpfad pro Kunde, Revision der Zero-Phone-Home-Politik. |
 | Reconciler-Drift (Kopie ≠ Autorenstelle). | Idempotent, versioniert, Abweichungsanzeige in der Konsole, regelmässiger Abgleich. |
+| Der Agent wird zum Ausfallpunkt für Passwort-Resets. | Mehrere Agenten pro Kunde zulässig, Überwachung mit Alarm, `503` mit dem bestehenden Banner statt eines stillen Fehlers, Auftrags-TTL statt verspäteter Ausführung. |
+| Kompromittierte Plattform greift über den Agenten ins Kundennetz. | Nur Aufträge aus der Methoden-Allowlist, dazu die lokal erzwungene Politik des Agenten (OU-Allowlist, Gruppen-Denylist, abschaltbare Operationen) und der Not-Aus beim Kunden. |
+| Verlust des Agent-Schlüssels oder des Kundengeräts. | Schlüssel nicht exportierbar erzeugt, Widerruf als Datenbank-Flag mit sofortiger Wirkung, 90-Tage-Zertifikate mit automatischer Erneuerung. |
+| Notzugang verloren (kein Telefon, keine Wiederherstellungscodes). | Zehn Codes bei der Einrichtung, Reset über die Konsole (gehostet) beziehungsweise ein dokumentiertes und geübtes Offline-Verfahren (on-prem). |
+| Konsolen-Port aus Versehen öffentlich veröffentlicht. | Bindung an die Management-Adresse in Compose, Firewall-Allowlist, Client-Zertifikat, dazu der Marker-Riegel in der Anwendung — vier Schichten, nicht die Portnummer. |
 
 ## 10 · Offene Entscheide
 
@@ -232,11 +318,29 @@ Verhaltensänderung.
 - **E6 · Konsole erweitern oder trennen?** Der Plan lässt `cockpit/` zur Konsole
   wachsen. ADR-0003 sieht ohnehin die Auslagerung in ein eigenes Repo vor — die
   Frage ist nur, ob das *vor* oder *nach* diesem Ausbau passiert.
+- **E7 · Nutzt heute jemand den AD-Login?** Wenn ja, muss dieser Kunde vor dem
+  Ausbau auf OIDC — Release-Notes und Runbook müssen es benennen.
+- **E8 · Wie viele Agenten pro Kunde?** Einer ist einfacher, zwei geben
+  Ausfallsicherheit und verlangen eine Auftragszuteilung („wer zuerst greift").
+  *Vorschlag:* Datenmodell erlaubt mehrere von Anfang an, Auslieferung startet
+  mit einem.
+- **E9 · Wo liegt der CA-Schlüssel?** HSM, Cloud-KMS oder Offline-Root auf
+  Papier plus verschlüsseltem Datenträger. Betrifft Kosten und Betriebsablauf
+  und sollte vor Phase 2a entschieden sein.
+- **E10 · Agent-Updates automatisch oder freigegeben?** Automatisch ist
+  betrieblich einfacher; manche Kunden werden eine Freigabe verlangen.
 
 ## 11 · Mockup
 
-`docs/mockups/multitenancy-console/` — neun Bildschirme: Anmeldung, Kundenwahl,
-Kundenliste, Kunde mit Systemeinstellungen, Kunde erfassen, Rechte-Matrix,
-globale Vorlagen mit Rollout, Datenbank und Migrationen, Kundenkontext aus
-beiden Perspektiven. Farben, Schrift und Bausteine sind aus `apps/web`
-übernommen; alle Kundennamen und Zahlen sind Platzhalter.
+`docs/mockups/multitenancy-console/` — dreizehn Bildschirme auf drei Seiten:
+
+- *Konsole:* Anmeldung, Kundenwahl, Kundenliste, Kunde mit Systemeinstellungen,
+  Kunde erfassen.
+- *Global anwenden und Betrieb:* Rechte-Matrix, globale Vorlagen mit Rollout,
+  Datenbank und Migrationen, Kundenkontext aus beiden Perspektiven.
+- *Zugang und Connector:* AD-Connector eines Kunden, Agent-Bezug mit
+  Einmal-Token, Übersicht der Anmeldewege nach der Härtung, TOTP-Einrichtung
+  für ein lokales Konto.
+
+Farben, Schrift und Bausteine sind aus `apps/web` übernommen; alle Kundennamen,
+Zahlen, Fingerprints und Tokens sind Platzhalter.

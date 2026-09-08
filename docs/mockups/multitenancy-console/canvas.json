@@ -7,6 +7,10 @@
     {
       "id": "page-2",
       "name": "Global anwenden + Betrieb"
+    },
+    {
+      "id": "page-3",
+      "name": "Zugang + Connector"
     }
   ],
   "artboards": [
@@ -90,6 +94,42 @@
       "y": 1100,
       "w": 1280,
       "h": 720
+    },
+    {
+      "file": "Connector.dc.html",
+      "page": "page-3",
+      "title": "10 · Kunde · AD-Connector",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 1440
+    },
+    {
+      "file": "AgentSetup.dc.html",
+      "page": "page-3",
+      "title": "11 · Agent-Paket beziehen",
+      "x": 1560,
+      "y": 0,
+      "w": 820,
+      "h": 960
+    },
+    {
+      "file": "MfaSetup.dc.html",
+      "page": "page-3",
+      "title": "13 · TOTP für ein lokales Konto",
+      "x": 2480,
+      "y": 0,
+      "w": 560,
+      "h": 980
+    },
+    {
+      "file": "Zugangswege.dc.html",
+      "page": "page-3",
+      "title": "12 · Zugangswege nach der Härtung",
+      "x": 1560,
+      "y": 1240,
+      "w": 1440,
+      "h": 1100
     }
   ],
   "annotations": [
@@ -132,10 +172,26 @@
       "y": -240,
       "w": 700,
       "text": "Global anwenden, ohne die Trennung aufzuweichen\n\nDie Konsole ist die Autorenstelle; ausgerollt wird eine schreibgeschuetzte Kopie in jedes Kundenschema. Kein Kunden-Request liest je die Konsolen-Datenbank - faellt die Konsole aus, laufen alle Kunden weiter."
+    },
+    {
+      "id": "note-agent",
+      "page": "page-3",
+      "x": 0,
+      "y": -300,
+      "w": 700,
+      "text": "AD-Connector-Agent (ADR-0014)\n\nDer Agent telefoniert ausgehend nach Hause: TCP 443 zur Plattform, LDAPS bleibt im Kundennetz, beim Kunden ist keine eingehende Freigabe noetig. Zwei unabhaengige Faktoren, beide an dieselbe Agent-Zeile gebunden - Client-Zertifikat einer privaten, nicht publizierten CA plus API-Key. Das Download-Paket enthaelt kein Geheimnis: der Agent erzeugt sein Schluesselpaar selbst und laesst es per CSR mit einem Einmal-Token signieren."
+    },
+    {
+      "id": "note-haertung",
+      "page": "page-3",
+      "x": 820,
+      "y": -300,
+      "w": 700,
+      "text": "Authentisierungs-Haertung (ADR-0015)\n\nKonsole auf eigenem Listener (4444), nur auf der Management-Adresse und nur mit Client-Zertifikat. TOTP fuer lokale Konten, Einrichtung erzwungen. Der direkte AD-Login wird entfernt, nicht abgeschaltet.\n\nDiese drei Punkte brauchen keine Mandantenfaehigkeit - sie sind Phase 0 und koennen sofort in die bestehenden Installationen."
     }
   ],
   "launch": {
     "view": "canvas",
-    "page": "page-1"
+    "page": "page-3"
   }
 }

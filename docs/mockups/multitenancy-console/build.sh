@@ -826,7 +826,8 @@ emit Login.dc.html <<'EOF'
         </div>
       </div>
       <p class="muted" style="margin: 0; font-size: 13px; text-align: center;">
-        <span class="mono">console.magister.ch</span> &mdash; eigene Origin, getrennt von allen Kunden
+        <span class="mono">console.magister.ch:4444</span> &mdash; eigener Listener auf der
+        Management-Adresse, Client-Zertifikat erforderlich
       </p>
     </div>
   </div>
@@ -1572,6 +1573,578 @@ emit Kundenkontext.dc.html <<'EOF'
           </tr>
         </tbody>
       </table>
+    </div>
+  </div>
+</div>
+EOF
+
+# ------------------------------------------------ Kunde -> AD-Connector
+emit Connector.dc.html <<'EOF'
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink active">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 24px; padding-bottom: 32px;">
+  <div class="muted" style="font-size: 13px;">Kunden &nbsp;&rsaquo;&nbsp; Gemeinde Wattwil</div>
+
+  <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-top: 12px;">
+    <div>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <h1 class="serif h1">Gemeinde Wattwil</h1>
+        <span class="pill pill-ok">Aktiv</span>
+      </div>
+      <p class="muted" style="margin: 6px 0 0;">
+        <span class="mono">/k/wattwil</span> &middot; Profil Schule &middot; Kundennummer K-0041
+      </p>
+    </div>
+    <button class="btn btn-primary" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+      Agent-Paket beziehen
+    </button>
+  </header>
+
+  <div style="display: flex; align-items: flex-end; border-bottom: 1px solid #e2e8f0; margin-top: 20px;">
+    <span class="tab">&Uuml;bersicht</span>
+    <span class="tab">Systemeinstellungen</span>
+    <span class="tab active">AD-Connector</span>
+    <span class="tab">Rechte</span>
+    <span class="tab">Vorlagen</span>
+    <span class="tab">Datenbank</span>
+    <span class="tab">Audit</span>
+  </div>
+
+  <div class="note" style="margin-top: 24px; display: flex; gap: 12px; align-items: flex-start;">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0f172a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+    <div>
+      <div style="font-weight: 500;">Der Agent telefoniert nach Hause &mdash; die Plattform ruft nie an</div>
+      <p class="muted" style="margin: 4px 0 0;">
+        Der Agent baut ausgehend TCP 443 zu <span class="mono">connect.magister.ch</span> auf und holt dort die
+        AD-Auftr&auml;ge ab. LDAPS bleibt vollst&auml;ndig im Kundennetz; beim Kunden ist keine eingehende
+        Freigabe n&ouml;tig. Anmeldung mit Client-Zertifikat einer privaten CA <em>und</em> API-Key.
+      </p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 24px; margin-top: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+
+      <div class="card" style="padding: 24px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div>
+            <h2 class="serif h2">Agent <span class="mono" style="font-size: 15px; font-weight: 400;">wattwil-dc-01</span></h2>
+            <p class="muted" style="margin: 8px 0 0;">Windows-Dienst auf <span class="mono">SRV-MGMT01.wattwil.local</span></p>
+          </div>
+          <span class="pill pill-ok">verbunden</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin-top: 20px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Letzter Kontakt</span><span>vor 3 Sekunden</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Agent-Version</span><span class="mono">1.4.2</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Angemeldet am</span><span>14.08.2026, 10:22</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Auftr&auml;ge (24 h)</span><span>412, keine Fehler</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Domänencontroller</span><span class="mono" style="font-size: 12px;">dc01, dc02</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Mittlere Antwortzeit</span><span>41 ms</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Anmeldedaten des Agenten</h2>
+        <p class="muted" style="margin: 8px 0 20px;">Zwei unabh&auml;ngige Faktoren, beide an diesen Agenten gebunden. Einer allein wird abgewiesen.</p>
+        <div style="border-top: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e2e8f0;">
+            <div style="min-width: 0;">
+              <div style="font-weight: 500;">Client-Zertifikat <span class="pill pill-muted" style="margin-left: 6px;">private CA</span></div>
+              <div class="muted mono" style="font-size: 12px; margin-top: 4px;">SPKI SHA-256 &nbsp;9f:2a:c1:44:8b:0d:e7:31:5a:6c:be:90:12:4f:a8:d3</div>
+              <div class="muted" style="font-size: 13px; margin-top: 4px;">L&auml;uft am 12.11.2026 ab &middot; erneuert sich selbst am 12.10.2026</div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+              <button class="btn btn-outline btn-sm" type="button">Neu ausstellen</button>
+              <button class="btn btn-outline btn-sm" type="button" style="color: #be123c; border-color: #fecdd3;">Widerrufen</button>
+            </div>
+          </div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0;">
+            <div>
+              <div style="font-weight: 500;">API-Key</div>
+              <div class="muted" style="font-size: 13px; margin-top: 4px;">Nur als Hash gespeichert &middot; gesetzt am 14.08.2026 &middot; unabh&auml;ngig vom Zertifikat rotierbar</div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" style="flex-shrink: 0;">Rotieren</button>
+          </div>
+        </div>
+        <p class="muted" style="margin: 16px 0 0; font-size: 13px;">
+          Der private Schl&uuml;ssel entsteht auf dem Agenten und verl&auml;sst ihn nie. Das Download-Paket
+          enth&auml;lt kein Geheimnis, nur den Installer, das CA-Bundle und ein Einmal-Token.
+        </p>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Was der Agent ausf&uuml;hren darf</h2>
+        <p class="muted" style="margin: 8px 0 20px;">Feste Methodenliste. Es gibt keine Auftragsart f&uuml;r beliebiges LDAP, PowerShell oder Skripte.</p>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+          <span class="pill pill-muted mono">find_user_dn</span>
+          <span class="pill pill-muted mono">fetch_user_groups</span>
+          <span class="pill pill-muted mono">modify_password</span>
+          <span class="pill pill-muted mono">modify_user_attributes</span>
+          <span class="pill pill-muted mono">rename_user</span>
+          <span class="pill pill-muted mono">set_proxy_addresses</span>
+          <span class="pill pill-muted mono">set_account_enabled</span>
+          <span class="pill pill-muted mono">create_user</span>
+          <span class="pill pill-muted mono">add_user_to_groups</span>
+          <span class="pill pill-muted mono">remove_user_from_groups</span>
+          <span class="pill pill-muted mono">delete_user_object</span>
+          <span class="pill pill-muted mono">probe_bind_as_user</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px;">
+          <div>
+            <label class="label">Grenzen, die der Agent selbst erzwingt</label>
+            <div class="input" style="height: auto; display: block; padding: 12px;">
+              <div class="mono" style="font-size: 12px;">OU=Schulen,DC=wattwil,DC=local</div>
+              <div class="mono" style="font-size: 12px; margin-top: 4px;">OU=Geraete,DC=wattwil,DC=local</div>
+            </div>
+          </div>
+          <div>
+            <label class="label">Gesperrte Gruppen</label>
+            <div class="input" style="height: auto; display: block; padding: 12px;">
+              <div class="mono" style="font-size: 12px;">Domain Admins, Enterprise Admins,</div>
+              <div class="mono" style="font-size: 12px; margin-top: 4px;">Schema Admins, Backup Operators</div>
+            </div>
+          </div>
+        </div>
+        <p class="muted" style="margin: 14px 0 0; font-size: 13px;">
+          Diese Politik steht in der Konfiguration des Agenten beim Kunden. Auch eine kompromittierte
+          Plattform kommt nicht dar&uuml;ber hinaus.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Der Kunde beh&auml;lt die Kontrolle</h2>
+        <ul style="margin: 14px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px;">
+          <li>Agent stoppen beendet jeden Plattformzugriff auf das AD &mdash; sofort, ohne Vita Brevis.</li>
+          <li>Lokales Protokoll auf dem Server, nur anf&uuml;gbar, vom Kunden lesbar.</li>
+          <li>Einzelne Operationen lokal abschaltbar.</li>
+          <li>Firewall-Anforderung: ausgehend TCP 443 zu einem Hostnamen. Nichts eingehend.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Letzte Ereignisse</h2>
+        <div style="display: grid; gap: 14px; margin-top: 16px; font-size: 13px;">
+          <div>
+            <div style="font-weight: 500;">Zertifikat erneuert</div>
+            <div class="muted">12.08.2026, 03:14 &middot; automatisch</div>
+          </div>
+          <div>
+            <div style="font-weight: 500;">Agent auf 1.4.2 aktualisiert</div>
+            <div class="muted">28.07.2026, 22:05 &middot; freigegeben von matthias.hadorn</div>
+          </div>
+          <div>
+            <div style="font-weight: 500;">Verbindung 6 Min unterbrochen</div>
+            <div class="muted">19.07.2026, 14:31 &middot; Auftr&auml;ge liefen in <span class="mono">503</span></div>
+          </div>
+          <div>
+            <div style="font-weight: 500;">Agent angemeldet</div>
+            <div class="muted">14.08.2026, 10:22 &middot; Token eingel&ouml;st</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+EOF
+
+# ----------------------------------------------------- Agent-Paket beziehen
+emit AgentSetup.dc.html <<'EOF'
+<div style="display: flex; min-height: 100vh; align-items: center; justify-content: center; background: rgba(2, 8, 23, 0.45); padding: 24px;">
+  <div class="card" style="width: 100%; max-width: 720px;">
+    <div style="padding: 24px; border-bottom: 1px solid #e2e8f0;">
+      <h1 class="serif h2">Agent-Paket beziehen</h1>
+      <p class="muted" style="margin: 8px 0 0;">Gemeinde Wattwil &middot; das Paket enth&auml;lt kein Geheimnis.</p>
+    </div>
+
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+      <div>
+        <label class="label">Plattform</label>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+          <label style="display: flex; gap: 10px; padding: 14px; border: 1px solid #0f172a; border-radius: 8px; background: #f8fafc;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #0f172a; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #0f172a;"></span></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Windows</span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">MSI, als Dienst</span>
+            </span>
+          </label>
+          <label style="display: flex; gap: 10px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Linux</span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">.deb, systemd</span>
+            </span>
+          </label>
+          <label style="display: flex; gap: 10px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Container</span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">OCI-Image</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Einmal-Token f&uuml;r die Anmeldung</label>
+        <div class="input" style="justify-content: space-between; background: #f8fafc;">
+          <span class="mono">wtw-4KQ7-9RJP-2M6X-D8LA</span>
+          <span style="display: inline-flex; align-items: center; gap: 12px;">
+            <span class="pill pill-warn">g&uuml;ltig 23 h 58 min</span>
+            <span style="font-size: 13px; font-weight: 500;">Kopieren</span>
+          </span>
+        </div>
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px;">
+          Einmal einl&ouml;sbar und an diesen Kunden gebunden. Der Agent erzeugt beim ersten Start sein
+          Schl&uuml;sselpaar selbst, schickt einen CSR mit dem Token und erh&auml;lt Zertifikat und API-Key
+          zur&uuml;ck. Ein privater Schl&uuml;ssel wird nie ausgeliefert.
+        </p>
+      </div>
+
+      <div>
+        <label class="label">Paket</label>
+        <div class="input" style="height: auto; display: block; padding: 14px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span class="mono" style="font-size: 13px;">magister-connector-1.4.2-x64.msi</span>
+            <span class="muted" style="font-size: 13px;">18.4 MB</span>
+          </div>
+          <div class="muted mono" style="font-size: 12px; margin-top: 8px;">SHA-256 &nbsp;3c:1f:88:d0:5b:a7:44:2e:91:6c:0b:fd:37:82:ae:19</div>
+          <div class="muted" style="font-size: 13px; margin-top: 6px;">Signiert von Vita Brevis GmbH &middot; enthält das CA-Bundle f&uuml;r das Pinning</div>
+        </div>
+      </div>
+
+      <div class="note">
+        <div style="font-weight: 500; font-size: 13px;">Was die Kunden-IT vorbereiten muss</div>
+        <ul style="margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px;" class="muted">
+          <li>Ausgehend <span class="mono">TCP 443</span> zu <span class="mono">connect.magister.ch</span> erlauben. Nichts eingehend.</li>
+          <li>Dienstkonto mit den delegierten AD-Rechten (Kennwort zur&uuml;cksetzen, Attribute schreiben) auf den freigegebenen OUs.</li>
+          <li>Netzsicht auf die eigenen Domänencontroller &uuml;ber <span class="mono">LDAPS 636</span>.</li>
+        </ul>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px;">
+        <span class="muted" style="font-size: 13px;">Download und Anmeldung werden auditiert.</span>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-outline" type="button">Abbrechen</button>
+          <button class="btn btn-primary" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            Paket herunterladen
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+EOF
+
+# --------------------------------------------------- TOTP für lokales Konto
+emit MfaSetup.dc.html <<'EOF'
+<div style="display: flex; min-height: 100vh; align-items: center; justify-content: center; background: #ffffff; padding: 24px;">
+  <div class="card" style="width: 100%; max-width: 448px;">
+    <div style="padding: 24px 24px 0;">
+      <h1 class="serif" style="font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0;">Zweiten Faktor einrichten</h1>
+      <p class="muted" style="margin: 10px 0 0;">
+        Das lokale Konto <span class="mono">admin</span> ist der Notzugang, wenn Entra ID nicht erreichbar
+        ist. Er verlangt einen zweiten Faktor &mdash; ohne Einrichtung geht es nicht weiter.
+      </p>
+    </div>
+
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: flex; justify-content: center;">
+        <div style="width: 168px; height: 168px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #ffffff;">
+          <svg viewBox="0 0 21 21" width="144" height="144" shape-rendering="crispEdges" aria-label="QR-Code Platzhalter">
+            <rect width="21" height="21" fill="#ffffff"/>
+            <g fill="#020817">
+              <path d="M0 0h7v1H0zM8 0h1v1H8zM10 0h2v1h-2zM14 0h7v1h-7z"/>
+              <path d="M0 1h1v1H0zM6 1h1v1H6zM9 1h3v1H9zM14 1h1v1h-1zM20 1h1v1h-1z"/>
+              <path d="M0 2h1v1H0zM2 2h3v1H2zM6 2h1v1H6zM8 2h1v1H8zM11 2h1v1h-1zM14 2h1v1h-1zM16 2h3v1h-3zM20 2h1v1h-1z"/>
+              <path d="M0 3h1v1H0zM2 3h3v1H2zM6 3h1v1H6zM9 3h1v1H9zM12 3h1v1h-1zM14 3h1v1h-1zM16 3h3v1h-3zM20 3h1v1h-1z"/>
+              <path d="M0 4h1v1H0zM2 4h3v1H2zM6 4h1v1H6zM8 4h2v1H8zM11 4h1v1h-1zM14 4h1v1h-1zM16 4h3v1h-3zM20 4h1v1h-1z"/>
+              <path d="M0 5h1v1H0zM6 5h1v1H6zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM20 5h1v1h-1z"/>
+              <path d="M0 6h7v1H0zM8 6h1v1H8zM10 6h2v1h-2zM14 6h7v1h-7z"/>
+              <path d="M9 7h1v1H9zM11 7h2v1h-2z"/>
+              <path d="M0 8h2v1H0zM3 8h2v1H3zM6 8h4v1H6zM12 8h2v1h-2zM15 8h1v1h-1zM17 8h4v1h-4z"/>
+              <path d="M1 9h1v1H1zM4 9h1v1H4zM8 9h1v1H8zM10 9h1v1h-1zM13 9h3v1h-3zM18 9h1v1h-1zM20 9h1v1h-1z"/>
+              <path d="M0 10h3v1H0zM5 10h2v1H5zM9 10h2v1H9zM12 10h1v1h-1zM14 10h2v1h-2zM17 10h2v1h-2zM20 10h1v1h-1z"/>
+              <path d="M2 11h1v1H2zM4 11h1v1H4zM7 11h1v1H7zM10 11h3v1h-3zM15 11h1v1h-1zM17 11h1v1h-1zM19 11h2v1h-2z"/>
+              <path d="M0 12h2v1H0zM3 12h3v1H3zM8 12h1v1H8zM11 12h1v1h-1zM13 12h2v1h-2zM16 12h2v1h-2zM20 12h1v1h-1z"/>
+              <path d="M8 13h2v1H8zM11 13h2v1h-2zM14 13h1v1h-1zM16 13h1v1h-1zM18 13h1v1h-1z"/>
+              <path d="M0 14h7v1H0zM9 14h1v1H9zM12 14h2v1h-2zM16 14h2v1h-2zM19 14h1v1h-1z"/>
+              <path d="M0 15h1v1H0zM6 15h1v1H6zM8 15h2v1H8zM11 15h1v1h-1zM14 15h1v1h-1zM17 15h1v1h-1zM20 15h1v1h-1z"/>
+              <path d="M0 16h1v1H0zM2 16h3v1H2zM6 16h1v1H6zM9 16h1v1H9zM12 16h3v1h-3zM16 16h2v1h-2zM19 16h2v1h-2z"/>
+              <path d="M0 17h1v1H0zM2 17h3v1H2zM6 17h1v1H6zM8 17h1v1H8zM10 17h1v1h-1zM13 17h1v1h-1zM15 17h1v1h-1zM18 17h1v1h-1z"/>
+              <path d="M0 18h1v1H0zM2 18h3v1H2zM6 18h1v1H6zM9 18h3v1H9zM14 18h2v1h-2zM17 18h2v1h-2zM20 18h1v1h-1z"/>
+              <path d="M0 19h1v1H0zM6 19h1v1H6zM8 19h1v1H8zM11 19h1v1h-1zM13 19h1v1h-1zM16 19h1v1h-1zM19 19h1v1h-1z"/>
+              <path d="M0 20h7v1H0zM8 20h2v1H8zM12 20h3v1h-3zM17 20h2v1h-2zM20 20h1v1h-1z"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Falls die Kamera nicht geht</label>
+        <div class="input" style="justify-content: space-between; background: #f8fafc;">
+          <span class="mono" style="font-size: 12px;">JBSW Y3DP EHPK 3PXP GQ7A</span>
+          <span style="font-size: 13px; font-weight: 500;">Kopieren</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Code aus der App</label>
+        <div class="input"><span class="ph mono" style="letter-spacing: 0.3em;">000000</span></div>
+      </div>
+
+      <div class="note">
+        <div style="font-weight: 500; font-size: 13px;">Wiederherstellungscodes</div>
+        <p class="muted" style="margin: 6px 0 10px; font-size: 13px;">
+          Zehn Codes, jeder einmal verwendbar. Sie werden nur jetzt angezeigt.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px;">
+          <span class="mono" style="font-size: 12px;">4KQ7-9RJP</span>
+          <span class="mono" style="font-size: 12px;">2M6X-D8LA</span>
+          <span class="mono" style="font-size: 12px;">7TVB-1NZC</span>
+          <span class="mono" style="font-size: 12px;">9HDK-3WQE</span>
+          <span class="mono" style="font-size: 12px;">6PYF-8SLM</span>
+          <span class="mono" style="font-size: 12px;">1RKG-5XJT</span>
+          <span class="muted" style="font-size: 12px;">und 4 weitere</span>
+        </div>
+        <button class="btn btn-outline btn-sm" type="button" style="margin-top: 12px;">Als Datei speichern</button>
+      </div>
+
+      <button class="btn btn-primary" type="button" style="width: 100%;">Einrichtung abschliessen</button>
+      <p class="muted" style="margin: 0; font-size: 13px; text-align: center;">
+        Der direkte AD-Login ist entfernt. Es bleiben Entra ID und dieses Konto.
+      </p>
+    </div>
+  </div>
+</div>
+EOF
+
+# ------------------------------------------------------------- Zugangswege
+emit Zugangswege.dc.html <<'EOF'
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink active">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 32px; padding-bottom: 32px;">
+  <header>
+    <h1 class="serif h1">Zugangswege</h1>
+    <p class="muted" style="margin: 6px 0 0;">Nach der H&auml;rtung hat jeder verbleibende Weg einen zweiten Faktor.</p>
+  </header>
+
+  <div style="display: flex; align-items: flex-end; border-bottom: 1px solid #e2e8f0; margin-top: 20px;">
+    <span class="tab">Datenbank</span>
+    <span class="tab">Migrationen</span>
+    <span class="tab">Sicherungen</span>
+    <span class="tab">AD-Connectoren</span>
+    <span class="tab active">Zugangswege</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px;">
+    <div class="card" style="padding: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Kunde</h2>
+        <span class="pill pill-ok">aktiv</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Entra ID (OIDC)</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. MFA kommt aus der
+        Conditional-Access-Politik des Kunden, nicht aus Magister.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">443 &ouml;ffentlich</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>Conditional Access</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Passwort in Magister</span><span>nie</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Notzugang</h2>
+        <span class="pill pill-warn">nur on-prem</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Lokales Konto mit TOTP</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung des zweiten Faktors ist
+        erzwungen, Wiederherstellungscodes einmalig. Gehostet ist dieser Weg ganz abgeschaltet.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">443 &ouml;ffentlich</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>TOTP, RFC 6238</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Kontosperre</span><span>5 Fehlversuche</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px; border-color: #cbd5e1;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Konsole</h2>
+        <span class="pill pill-ok">aktiv</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Eigener Listener plus Client-Zertifikat</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        Vier Schichten: Bindung an die Management-Adresse, Firewall-Allowlist, Client-Zertifikat der
+        privaten CA, Marker-Riegel in der Anwendung. Die Identit&auml;t bleibt Entra mit
+        Hardware-Schl&uuml;ssel.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">4444 intern</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>WebAuthn / FIDO2</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Aus dem Internet</span><span>nicht geroutet</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px; padding: 20px 24px; background: #f8fafc;">
+    <div style="display: flex; align-items: flex-start; gap: 14px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 500; text-decoration: line-through; text-decoration-color: #94a3b8;">Direkter AD-Login</span>
+          <span class="pill pill-muted">entfernt, nicht abgeschaltet</span>
+        </div>
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px; max-width: 980px;">
+          Nahm das Klartext-Passwort eines Verzeichnisbenutzers an und band es per LDAPS gegen das AD &mdash;
+          ohne zweiten Faktor, also als Umgehung der MFA auf dem OIDC-Pfad, und &uuml;ber einen &ouml;ffentlich
+          erreichbaren Endpunkt, der echte AD-Konten durchprobieren und reihenweise sperren liess. Ein
+          Schalter gen&uuml;gt nicht: der Code verschwindet, und der Start bricht ab, wenn
+          <span class="mono">MAGISTER_AD_LOGIN_*</span> noch gesetzt ist.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px; overflow: hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 250px;">Listener</th>
+          <th style="width: 240px;">Adresse</th>
+          <th style="width: 250px;">Wer</th>
+          <th style="width: 190px;">Client-Zertifikat</th>
+          <th>Zweiter Faktor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Kundenoberfl&auml;che</div>
+            <div class="muted mono" style="font-size: 12.5px;">magister.ch/k/&lt;kunde&gt;</div>
+          </td>
+          <td class="mono">0.0.0.0:443</td>
+          <td>Lehr- und Leitungspersonen</td>
+          <td class="muted">nein</td>
+          <td>MFA &uuml;ber Entra</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Konsole</div>
+            <div class="muted mono" style="font-size: 12.5px;">console.magister.ch</div>
+          </td>
+          <td class="mono">10.0.0.5:4444</td>
+          <td>Global Admin, Global Operator</td>
+          <td><span class="pill pill-ok">erforderlich</span></td>
+          <td>WebAuthn &uuml;ber Entra</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Connector</div>
+            <div class="muted mono" style="font-size: 12.5px;">connect.magister.ch</div>
+          </td>
+          <td class="mono">0.0.0.0:443</td>
+          <td>Connector-Agenten der Kunden</td>
+          <td><span class="pill pill-ok">erforderlich</span></td>
+          <td>API-Key derselben Zeile</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">AD-RPC intern</div>
+            <div class="muted mono" style="font-size: 12.5px;">/internal/ad-rpc</div>
+          </td>
+          <td class="mono">nur Container-Netz</td>
+          <td>Geschwister-Container</td>
+          <td class="muted">nein</td>
+          <td>gemeinsames Geheimnis</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="border-top: 1px solid #e2e8f0; padding: 14px 16px;">
+      <p class="muted" style="margin: 0; font-size: 13px;">
+        Die Portnummer 4444 allein ist Verschleierung &mdash; ein Scan findet sie in Minuten. Der Schutz
+        kommt aus der Schnittstellen-Bindung, der Firewall und dem Client-Zertifikat; der eigene Port macht
+        die Regel trivial und h&auml;lt Kunden- und Konsolen-Verkehr auseinander.
+      </p>
     </div>
   </div>
 </div>

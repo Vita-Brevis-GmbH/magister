@@ -17,8 +17,12 @@ und [docs/features/multitenancy.md](../../features/multitenancy.md).
 | `Vorlagen.dc.html` | Globale Vorlagen und Rollout auf Kunden |
 | `Isolation.dc.html` | Datenbank-Trennung und Migrations-Wellen |
 | `Kundenkontext.dc.html` | Hinweisbalken im Kunden-System — Operator- und Kundensicht |
+| `Connector.dc.html` | Kunde → AD-Connector: Agent-Status, Anmeldedaten, erlaubte Operationen |
+| `AgentSetup.dc.html` | Agent-Paket beziehen — Einmal-Token, Prüfsumme, Firewall-Anforderung |
+| `Zugangswege.dc.html` | Anmeldewege nach der Härtung, inklusive Listener-Matrix |
+| `MfaSetup.dc.html` | TOTP-Einrichtung für ein lokales Konto (Kunden-UI) |
 
-`canvas.json` legt die Anordnung auf zwei Seiten fest.
+`canvas.json` legt die Anordnung auf drei Seiten fest (Konsole · Global anwenden und Betrieb · Zugang und Connector).
 
 ## Gestaltung
 
@@ -29,7 +33,7 @@ Farben, Schrift, Abstände, Radien und Bausteine sind aus `apps/web` übernommen
 dunkle Kopfzeile (`#0f172a`, der bestehende `primary`-Token) von der
 Kundenoberfläche ab.
 
-Alle Kundennamen, Zahlen, Tickets und Zeitstempel sind Platzhalter.
+Alle Kundennamen, Zahlen, Tickets, Zeitstempel, Fingerprints und Tokens sind Platzhalter.
 
 ## Bearbeiten
 

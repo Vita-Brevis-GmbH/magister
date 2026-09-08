@@ -62,7 +62,10 @@ in jeden Kunden ausstellen und ist damit das höchstwertige Ziel im System.
 
 ### D3 · Origins und Pfade
 
-- Konsole: **eigene Origin** (`console.magister.ch`).
+- Konsole: **eigene Origin** (`console.magister.ch`) auf einem **eigenen
+  Listener** (TCP 4444), nur auf der Management-Adresse veröffentlicht und mit
+  Client-Zertifikat — siehe [ADR-0015](0015-authentisierungs-haertung.md) D1.
+  Der Kunden-vhost auf 443 routet nie zur Konsole.
 - Kunden: `magister.ch/k/<slug>/…`, Session-Cookie mit `Path=/k/<slug>`;
   optional später eine eigene Domain pro Kunde.
 
@@ -97,6 +100,10 @@ Neue Plattform-Capabilities (`platform.tenant.manage`, `platform.settings.write`
 `platform.rights.write`, `platform.templates.publish`,
 `platform.tenant.impersonate`) existieren ausschliesslich in der Konsole; keine
 Kundenrolle kann sie halten.
+
+Der Anmeldeweg des Kunden reduziert sich damit auf OIDC gegen Entra; der lokale
+Notzugang entfällt gehostet ganz und der direkte AD-Login verschwindet aus dem
+Code (ADR-0015 D2, D3).
 
 ### D6 · Operator-Zugriff ist befristet, begründet und für den Kunden sichtbar
 
@@ -133,10 +140,15 @@ gilt für AD-Bind-Passwort und OIDC-Client-Secret.
 ### D10 · AD-Erreichbarkeit über einen ausgehenden On-Prem-Connector
 
 Eine gehostete Installation erreicht die Domänencontroller im Kundennetz nicht.
-Die AD-Grenze aus ADR-0011 löst das: der `ad`-Container bleibt beim Kunden vor
+Die AD-Grenze aus ADR-0011 löst das: ein Connector-Agent bleibt beim Kunden vor
 Ort und baut die Verbindung **ausgehend** zur Plattform auf (heute ist AD-RPC
 eingehend im Docker-Netz — das ist die eigentliche Änderung). Nur er hat
-AD-Credentials und Netzzugang zu den DCs.
+AD-Credentials und Netzzugang zu den DCs; LDAP verlässt das Kundennetz nie.
+
+Absicherung, Anmeldeverfahren und Auslieferung des Agenten sind in
+[ADR-0014](0014-ad-connector-agent.md) ausgeführt: zwei unabhängige Faktoren
+(mTLS gegen eine private CA plus API-Key), Schlüsselerzeugung auf dem Agenten,
+Bezug des Pakets beim Erfassen des Kunden.
 
 ## Konsequenzen
 

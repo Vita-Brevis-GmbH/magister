@@ -1,0 +1,246 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink active">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 32px; padding-bottom: 32px;">
+  <header>
+    <h1 class="serif h1">Zugangswege</h1>
+    <p class="muted" style="margin: 6px 0 0;">Nach der H&auml;rtung hat jeder verbleibende Weg einen zweiten Faktor.</p>
+  </header>
+
+  <div style="display: flex; align-items: flex-end; border-bottom: 1px solid #e2e8f0; margin-top: 20px;">
+    <span class="tab">Datenbank</span>
+    <span class="tab">Migrationen</span>
+    <span class="tab">Sicherungen</span>
+    <span class="tab">AD-Connectoren</span>
+    <span class="tab active">Zugangswege</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px;">
+    <div class="card" style="padding: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Kunde</h2>
+        <span class="pill pill-ok">aktiv</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Entra ID (OIDC)</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. MFA kommt aus der
+        Conditional-Access-Politik des Kunden, nicht aus Magister.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">443 &ouml;ffentlich</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>Conditional Access</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Passwort in Magister</span><span>nie</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Notzugang</h2>
+        <span class="pill pill-warn">nur on-prem</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Lokales Konto mit TOTP</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung des zweiten Faktors ist
+        erzwungen, Wiederherstellungscodes einmalig. Gehostet ist dieser Weg ganz abgeschaltet.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">443 &ouml;ffentlich</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>TOTP, RFC 6238</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Kontosperre</span><span>5 Fehlversuche</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px; border-color: #cbd5e1;">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+        <h2 class="serif h2" style="font-size: 16px;">Konsole</h2>
+        <span class="pill pill-ok">aktiv</span>
+      </div>
+      <p style="margin: 12px 0 0; font-weight: 500;">Eigener Listener plus Client-Zertifikat</p>
+      <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
+        Vier Schichten: Bindung an die Management-Adresse, Firewall-Allowlist, Client-Zertifikat der
+        privaten CA, Marker-Riegel in der Anwendung. Die Identit&auml;t bleibt Entra mit
+        Hardware-Schl&uuml;ssel.
+      </p>
+      <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Listener</span><span class="mono">4444 intern</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Zweiter Faktor</span><span>WebAuthn / FIDO2</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; gap: 12px;">
+          <span class="muted">Aus dem Internet</span><span>nicht geroutet</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px; padding: 20px 24px; background: #f8fafc;">
+    <div style="display: flex; align-items: flex-start; gap: 14px;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+      <div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-weight: 500; text-decoration: line-through; text-decoration-color: #94a3b8;">Direkter AD-Login</span>
+          <span class="pill pill-muted">entfernt, nicht abgeschaltet</span>
+        </div>
+        <p class="muted" style="margin: 8px 0 0; font-size: 13px; max-width: 980px;">
+          Nahm das Klartext-Passwort eines Verzeichnisbenutzers an und band es per LDAPS gegen das AD &mdash;
+          ohne zweiten Faktor, also als Umgehung der MFA auf dem OIDC-Pfad, und &uuml;ber einen &ouml;ffentlich
+          erreichbaren Endpunkt, der echte AD-Konten durchprobieren und reihenweise sperren liess. Ein
+          Schalter gen&uuml;gt nicht: der Code verschwindet, und der Start bricht ab, wenn
+          <span class="mono">MAGISTER_AD_LOGIN_*</span> noch gesetzt ist.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px; overflow: hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 250px;">Listener</th>
+          <th style="width: 240px;">Adresse</th>
+          <th style="width: 250px;">Wer</th>
+          <th style="width: 190px;">Client-Zertifikat</th>
+          <th>Zweiter Faktor</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Kundenoberfl&auml;che</div>
+            <div class="muted mono" style="font-size: 12.5px;">magister.ch/k/&lt;kunde&gt;</div>
+          </td>
+          <td class="mono">0.0.0.0:443</td>
+          <td>Lehr- und Leitungspersonen</td>
+          <td class="muted">nein</td>
+          <td>MFA &uuml;ber Entra</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Konsole</div>
+            <div class="muted mono" style="font-size: 12.5px;">console.magister.ch</div>
+          </td>
+          <td class="mono">10.0.0.5:4444</td>
+          <td>Global Admin, Global Operator</td>
+          <td><span class="pill pill-ok">erforderlich</span></td>
+          <td>WebAuthn &uuml;ber Entra</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Connector</div>
+            <div class="muted mono" style="font-size: 12.5px;">connect.magister.ch</div>
+          </td>
+          <td class="mono">0.0.0.0:443</td>
+          <td>Connector-Agenten der Kunden</td>
+          <td><span class="pill pill-ok">erforderlich</span></td>
+          <td>API-Key derselben Zeile</td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">AD-RPC intern</div>
+            <div class="muted mono" style="font-size: 12.5px;">/internal/ad-rpc</div>
+          </td>
+          <td class="mono">nur Container-Netz</td>
+          <td>Geschwister-Container</td>
+          <td class="muted">nein</td>
+          <td>gemeinsames Geheimnis</td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="border-top: 1px solid #e2e8f0; padding: 14px 16px;">
+      <p class="muted" style="margin: 0; font-size: 13px;">
+        Die Portnummer 4444 allein ist Verschleierung &mdash; ein Scan findet sie in Minuten. Der Schutz
+        kommt aus der Schnittstellen-Bindung, der Firewall und dem Client-Zertifikat; der eigene Port macht
+        die Regel trivial und h&auml;lt Kunden- und Konsolen-Verkehr auseinander.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
