@@ -7,6 +7,10 @@
 #                                 Must not be 0.0.0.0; the api refuses to start.
 #   COCKPIT_MANAGEMENT_MARKER   — shared marker between caddy and api.
 #                                 Generate with: openssl rand -hex 32
+#   COCKPIT_CONNECTOR_MARKER    — the same for the connector listener, and it
+#                                 MUST be a different value. Same value on both
+#                                 would mean either marker opens either
+#                                 listener; the api refuses to start then.
 #   COCKPIT_HOSTNAME            — the name on the console certificate.
 #   COCKPIT_BOOTSTRAP_TOKEN     — break-glass API token.
 services:
@@ -31,6 +35,11 @@ services:
       COCKPIT_REQUIRE_MANAGEMENT_LISTENER: "1"
       COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required — openssl rand -hex 32}
       COCKPIT_PUBLISHED_ADDRESS: ${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required — the management address, not 0.0.0.0}:4444
+      # ADR-0014: der Connector-Kanal auf 46200. Eigener Marker, zwingend
+      # anders als der Management-Marker.
+      COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required and must differ from COCKPIT_MANAGEMENT_MARKER}
+      COCKPIT_CONNECTOR_CA_CERT: /certs/connector-int.pem
+      COCKPIT_CONNECTOR_CA_KEY: /certs/connector-int-key.pem
     depends_on: [postgres]
     # Deliberately no `ports:` — everything goes through caddy below.
     healthcheck:
@@ -46,9 +55,16 @@ services:
     # the api would still refuse to start, but do not rely on that.
     ports:
       - "${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required}:4444:4444"
+      # Der Connector-Kanal ist ABSICHTLICH öffentlich: der Agent ruft aus dem
+      # Kundennetz an, damit LDAP das Kundennetz nicht verlässt (ADR-0014).
+      # Geschützt wird er durch Client-Zertifikat und API-Key, nicht durch die
+      # Bindung. Kein Rückfall auf 443 (E11).
+      - "0.0.0.0:46200:46200"
     environment:
       COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.magister.ch}
+      COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-connect.magister.ch}
       COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required}
+      COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
@@ -56,7 +72,8 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        for f in /certs/platform-ca.pem /certs/console.pem /certs/console-key.pem; do
+        for f in /certs/platform-ca.pem /certs/console.pem /certs/console-key.pem \
+                 /certs/connector.pem /certs/connector-key.pem; do
           if [ ! -f "$$f" ]; then
             echo "caddy: $$f is missing — the console listener needs the platform CA and"
             echo "       a server certificate. See cockpit/deploy/caddy/README.md and"

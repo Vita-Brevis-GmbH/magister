@@ -24,10 +24,11 @@ from sqlalchemy.pool import NullPool
 from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.main import app
-from cockpit_api.management_guard import MARKER_HEADER
+from cockpit_api.management_guard import CONNECTOR_MARKER_HEADER, MARKER_HEADER
 from cockpit_api.models import Base
 
 TEST_MARKER = "test-management-marker"
+TEST_CONNECTOR_MARKER = "test-connector-marker"
 
 
 @pytest.fixture(autouse=True)
@@ -41,7 +42,10 @@ def _management_config() -> Iterator[None]:
     settings.require_management_listener = True
     settings.management_marker = TEST_MARKER
     settings.published_address = "10.0.0.5:4444"
+    previous_connector = settings.connector_marker
+    settings.connector_marker = TEST_CONNECTOR_MARKER
     yield
+    settings.connector_marker = previous_connector
     (
         settings.require_management_listener,
         settings.management_marker,
@@ -166,3 +170,13 @@ def db_client(cockpit_schema: str, magister_admin_dsn: str) -> Iterator[TestClie
             settings.magister_api_dir,
             settings.expected_schema_version,
         ) = previous
+
+
+@pytest.fixture
+def agent_headers() -> dict[str, str]:
+    """Header, die der Connector-Listener setzt (TCP 46200, ADR-0014).
+
+    Bewusst NICHT der Management-Marker: die beiden Listener sind getrennt,
+    und ein Test, der das verwischt, würde die Trennung nicht mehr prüfen.
+    """
+    return {CONNECTOR_MARKER_HEADER: TEST_CONNECTOR_MARKER}

@@ -160,3 +160,88 @@ Gegenprobe von aussen.
 - [console-listener.md](console-listener.md) — der Zugang zur Konsole
 - [mandanten-schema-umzug.md](mandanten-schema-umzug.md) — Migrationen im laufenden Betrieb
 - [kunden-onboarding.md](kunden-onboarding.md) — der ganze Ablauf mit dem Kunden
+
+## 8 · Connector-Agent anmelden (ADR-0014)
+
+### 8.1 Voraussetzungen der Plattform
+
+```bash
+# cockpit/deploy/.env
+# Das Intermediate Connector. Der Root bleibt offline (platform-ca.md).
+COCKPIT_CONNECTOR_CA_CERT=/certs/connector-int.pem
+COCKPIT_CONNECTOR_CA_KEY=/certs/connector-int-key.pem
+# Eigener Marker für den Connector-Listener. MUSS sich vom Management-Marker
+# unterscheiden — sonst gilt jeder Marker auf beiden Kanälen und die API
+# verweigert den Start.
+COCKPIT_CONNECTOR_MARKER=$(openssl rand -hex 32)
+COCKPIT_CONNECTOR_HOSTNAME=connect.magister.ch
+```
+
+Dazu `connector.pem` und `connector-key.pem` in `cockpit/deploy/certs/` — das
+Serverzertifikat für `connect.magister.ch`. Der Caddy-Container verweigert
+sonst den Start.
+
+Firewall: **TCP 46200 eingehend offen**, kein Rückfall auf 443 (E11). Der
+Agent prüft das beim ersten Start und meldet klar, wenn der Port zu ist.
+
+### 8.2 Token ausstellen und Agent anmelden
+
+```bash
+# Konsole: Einmal-Token (24 h, genau einmal einlösbar)
+curl ... -X POST .../api/tenants/$ID/enrollments -d '{"agent_name":"dc01"}'
+```
+
+Das Token geht mit dem Paket an die Kunden-IT. Im Paket liegt **kein weiteres
+Geheimnis** — nur Installer, CA-Bundle und dieses Token. Der Agent erzeugt sein
+Schlüsselpaar lokal und schickt nur einen CSR:
+
+```bash
+# Auf dem Agenten (macht der Installer):
+POST https://connect.magister.ch:46200/connector/enroll
+     {"token":"…","csr_pem":"…","agent_version":"…"}
+```
+
+Zurück kommen **genau einmal** Zertifikat, API-Key und HMAC-Schlüssel. Die
+Konsole speichert den API-Key nur als argon2id-Hash; verloren heisst neu
+anmelden.
+
+### 8.3 Danach prüfen
+
+```bash
+# Der Fingerprint in der Konsole muss dem des Agenten entsprechen. Weicht er
+# ab, hat sich jemand anders mit dem Token angemeldet.
+curl ... .../api/tenants/$ID/agents
+```
+
+```bash
+# Ohne Client-Zertifikat MUSS der Handshake scheitern (Exit 56, keine
+# HTTP-Antwort):
+curl -sv --cacert certs/platform-ca.pem https://connect.magister.ch:46200/connector/jobs
+# Der Management-Marker darf den Connector-Kanal NICHT öffnen — erwartet 404:
+curl -s -o /dev/null -w '%{http_code}\n' -H "X-Magister-Management: $COCKPIT_MANAGEMENT_MARKER" \
+     --cert agent.pem --key agent.key --cacert certs/platform-ca.pem \
+     https://connect.magister.ch:46200/connector/jobs
+```
+
+### 8.4 Widerruf
+
+```bash
+curl ... -X POST .../api/tenants/$ID/agents/$AGENT/revoke -d '{"reason":"Server ausgemustert"}'
+```
+
+Wirkt bei der **nächsten** Anfrage. Es gibt keine CRL und kein OCSP: der
+Widerruf ist dieses Flag, und es wird bei jeder Anfrage geprüft — schneller und
+weniger fehleranfällig als eine Liste, die einmal am Tag aktualisiert wird.
+
+### 8.5 Was am Connector noch fehlt
+
+- **Der Agent selbst**: Windows-MSI, `.deb` mit systemd, OCI-Image; lokale
+  OU-Allowlist und Gruppen-Denylist, automatische Zertifikatserneuerung,
+  automatische Updates. Bis dahin gibt es keinen Passwort-Reset über den
+  Connector.
+- **Der dritte Rücken hinter `AdClient`** in der Datenebene: heute erreicht
+  Magister das AD direkt oder über den internen RPC (ADR-0011). Die
+  Warteschlange als dritter Weg fehlt noch, deshalb liest bisher niemand die
+  eingestellten Aufträge.
+- **Paket-Download in der Konsole** samt Fingerprint-Anzeige nach der
+  Anmeldung.

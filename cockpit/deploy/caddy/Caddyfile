@@ -65,3 +65,65 @@ https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
 		respond "not found" 404
 	}
 }
+
+# ---------------------------------------------------------------------------
+# Connector listener for the AD agents (ADR-0014, ADR-0013 D3).
+#
+# Deliberately PUBLIC on 0.0.0.0:46200 — the opposite of the block above, and
+# for a reason: the agent calls in from the customer's network, so the platform
+# never opens a connection inward and LDAP never leaves the customer's network.
+#
+# What protects it is not the binding but two factors the application checks
+# against the SAME agent row:
+#
+#   1. This block requires a client certificate from the platform CA
+#      (`require_and_verify`), so the handshake fails without one. It then
+#      forwards the verified certificate, and the application matches its SPKI
+#      fingerprint against the agent row — the chain alone would let any
+#      customer's agent onto any customer's channel.
+#   2. The agent's API key, stored only as an argon2id hash.
+#
+# The connector marker is a DIFFERENT value from the management one. Same value
+# on both would mean either marker opens either listener, and the console's
+# separation would be decoration (see cockpit_api/management_guard.py).
+#
+# No port 443 fallback (decision E11): the firewall opening is a hard
+# onboarding requirement, and a fallback would quietly hide a closed port until
+# the day it matters.
+https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.magister.ch}:46200 {
+	tls /certs/connector.pem /certs/connector-key.pem {
+		client_auth {
+			mode require_and_verify
+			trust_pool file /certs/platform-ca.pem
+		}
+		protocols tls1.3 tls1.3
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Only the connector paths. Everything else on this listener is a 404 —
+	# the console's own /api/* must not be reachable from the internet, and the
+	# application's guard refuses it a second time even if this changed.
+	handle /connector/* {
+		reverse_proxy api:8000 {
+			header_up X-Magister-Connector {$COCKPIT_CONNECTOR_MARKER}
+			# The verified client certificate as base64-encoded DER, so the
+			# application can match the SPKI fingerprint. NOT
+			# `certificate_pem`: a PEM contains newlines and Go's net/http
+			# rejects such a header value, which turns every agent request
+			# into a 502 — measured against a running Caddy, not assumed.
+			# `header_up` REPLACES any value a client sent under this name, so
+			# an agent cannot present someone else's certificate by putting it
+			# in a header (also verified).
+			header_up X-Connector-Client-Cert {http.request.tls.client.certificate_der_base64}
+		}
+	}
+
+	handle {
+		respond "not found" 404
+	}
+}

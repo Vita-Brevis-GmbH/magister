@@ -8,7 +8,13 @@ from starlette.responses import Response
 
 from cockpit_api.config import settings
 from cockpit_api.management_guard import check_configuration, make_management_guard
-from cockpit_api.routers import instances, service_tokens, tenants, update_requests
+from cockpit_api.routers import (
+    connector,
+    instances,
+    service_tokens,
+    tenants,
+    update_requests,
+)
 from cockpit_api.services.health_poller import health_poller_loop
 from cockpit_api.services.release_poller import release_poller_loop
 
@@ -22,6 +28,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         required=settings.require_management_listener,
         marker=settings.management_marker,
         published_address=settings.published_address,
+        connector_marker=settings.connector_marker,
     )
     tasks = [
         asyncio.create_task(health_poller_loop()),
@@ -55,7 +62,8 @@ _SECURITY_HEADERS = {
 # headers so a refused request still carries them.
 app.middleware("http")(
     make_management_guard(
-        lambda: (settings.require_management_listener, settings.management_marker)
+        lambda: (settings.require_management_listener, settings.management_marker),
+        lambda: settings.connector_marker,
     )
 )
 
@@ -79,3 +87,7 @@ app.include_router(instances.router, prefix="/api")
 app.include_router(service_tokens.router, prefix="/api")
 app.include_router(update_requests.router, prefix="/api")
 app.include_router(tenants.router, prefix="/api")
+app.include_router(connector.console, prefix="/api")
+# Der Agentenpfad liegt NICHT unter /api: er kommt über den
+# Connector-Listener (TCP 46200) und nicht über den Management-Listener.
+app.include_router(connector.agent_api)

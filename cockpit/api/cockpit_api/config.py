@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     # refuses anything without it.
     require_management_listener: bool = Field(default=True)
     management_marker: str = Field(default="")
+    #: Marker des Connector-Listeners (TCP 46200, ADR-0014). Muss sich vom
+    #: Management-Marker unterscheiden, sonst gilt jeder auf beiden Kanälen.
+    connector_marker: str = Field(default="")
     published_address: str = Field(default="127.0.0.1:4444")
     # --- Mandanten-Bereitstellung (ADR-0013 D2) ---------------------------
     # Verwaltungszugang in den Magister-Cluster: eine Rolle mit CREATEROLE und
@@ -30,6 +33,18 @@ class Settings(BaseSettings):
     # Muss zu magister_api.tenancy.version.HEAD_REVISION passen; ein Test in
     # der Datenebene hält die Konstante am echten Alembic-Kopf.
     expected_schema_version: str = Field(default="")
+    # --- Connector-Agenten (ADR-0014) -------------------------------------
+    # Das Intermediate Connector auf dem Plattform-Server. Der Root bleibt
+    # offline (docs/runbooks/platform-ca.md). Ohne diese zwei Werte kann kein
+    # Agent angemeldet werden.
+    connector_ca_cert: str = Field(default="")
+    connector_ca_key: str = Field(default="")
+    # Header, unter dem der Reverse Proxy das verifizierte Client-Zertifikat
+    # weitergibt. Caddy: {http.request.tls.client.certificate_pem}.
+    connector_client_cert_header: str = Field(default="x-connector-client-cert")
+    # Wie lange ein Long-Poll offen bleibt, bevor er leer zurückkommt.
+    connector_poll_seconds: int = Field(default=25, ge=1, le=110)
+
     # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
     # NUR diesen Verweis, nie den DSN mit Passwort.
     dsn_ref_template: str = Field(default="tenant_{slug}")

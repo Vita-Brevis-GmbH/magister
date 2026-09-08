@@ -13,6 +13,11 @@ dependencies = [
   "pydantic-settings>=2.6",
   "httpx>=0.27",
   "python-multipart>=0.0.12",
+  # Connector-Agenten (ADR-0014): CSR prüfen, Zertifikat ausstellen,
+  # SPKI-Fingerprint berechnen.
+  "cryptography>=42",
+  # API-Key des Agenten wird als argon2id-Hash abgelegt, nie im Klartext.
+  "argon2-cffi>=23.1",
 ]
 
 [project.optional-dependencies]

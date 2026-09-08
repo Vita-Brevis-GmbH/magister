@@ -191,6 +191,39 @@ oder OCI-Image. Installer signiert, SHA-256 angezeigt. Jeder Download und jede
 Anmeldung eines Agenten wird auditiert; nach der Anmeldung zeigt die Konsole den
 Fingerprint, damit der Kunde ihn vor Ort vergleichen kann.
 
+## Nachträge aus der Umsetzung
+
+Zwei Dinge kamen beim Bauen anders heraus als im Entwurf. Beide sind gegen
+einen laufenden Caddy gemessen, nicht überlegt.
+
+**Das Client-Zertifikat reist als base64-DER, nicht als PEM.** Der naheliegende
+Platzhalter `{http.request.tls.client.certificate_pem}` liefert ein PEM mit
+Zeilenumbrüchen — und Gos `net/http` weist einen Header-Wert mit Zeilenumbruch
+ab. Der Reverse Proxy hätte damit **jede** Agent-Anfrage mit 502 beantwortet,
+zuverlässig und von der ersten Minute an. Richtig ist
+`{http.request.tls.client.certificate_der_base64}`; die Anwendung dekodiert
+base64 und liest das DER. Nachgeprüft: ohne Client-Zertifikat scheitert der
+Handshake (`tlsv13 alert certificate required`, keine HTTP-Antwort), mit
+Zertifikat erreicht ein 420 Zeichen langer einzeiliger Header den Upstream, und
+ein vom Client mitgeschickter `X-Connector-Client-Cert` wird von Caddy
+**überschrieben**.
+
+**Der Connector-Listener braucht seinen eigenen Marker.** Die Konsole verwirft
+seit [ADR-0015](0015-authentisierungs-haertung.md) D1 jede Anfrage ohne
+Management-Marker. Der Connector-Kanal liegt in derselben Anwendung, ist aber
+absichtlich öffentlich — er müsste also vom Riegel ausgenommen werden. „Ohne
+Marker erreichbar" wäre der falsche Weg: dann läge nach einer falsch geführten
+Site-Block-Änderung auch `/api/*` der Konsole offen. Stattdessen hat jeder
+Listener seinen Marker, und die beiden sind **nicht** austauschbar:
+
+| Marker | auf `/api/*` | auf `/connector/*` |
+|---|---|---|
+| Management (4444) | durch | 404 |
+| Connector (46200) | 404 | durch |
+
+Gleiche Werte für beide heben die Trennung auf, deshalb bricht die Anwendung
+beim Start ab, wenn sie gleich sind.
+
 ## Konsequenzen
 
 **Positiv**

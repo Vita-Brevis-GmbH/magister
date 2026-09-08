@@ -20,6 +20,19 @@ plainly rather than dressed up as verification.
 
 A request without the marker gets **404**, not 403: someone probing the public
 origin should not learn that a console lives behind it.
+
+Since ADR-0014 there is a **second** listener on the same application: the
+connector channel on TCP 46200, which is deliberately public because the
+agent calls in from the customer's network. It gets its own marker, and the
+two are not interchangeable:
+
+- management marker on ``/connector/*``  -> 404
+- connector marker on ``/api/*``         -> 404
+
+That is not paranoia about a stolen marker; it is what keeps the console's
+property intact. Without the split, exempting the connector paths would mean
+"reachable without any marker", and then a single mis-routed site block would
+put the console's own paths one guess away.
 """
 
 from __future__ import annotations
@@ -37,6 +50,13 @@ logger = logging.getLogger(__name__)
 #: ordinary proxy header on purpose — it carries no meaning without the value.
 MARKER_HEADER = "x-magister-management"
 
+#: Header the connector site block sets (TCP 46200, ADR-0014).
+CONNECTOR_MARKER_HEADER = "x-magister-connector"
+
+#: Paths that belong to the connector channel. Everything below this prefix
+#: needs the connector marker and refuses the management one.
+CONNECTOR_PREFIX = "/connector/"
+
 #: Paths reachable without the marker. Only the container health probe, which
 #: returns ``{"status": "ok"}`` and nothing else — same reasoning as Magister's
 #: public ``/healthz``.
@@ -47,7 +67,9 @@ class ManagementListenerRequiredError(RuntimeError):
     """Raised at startup when the guard is on but cannot possibly work."""
 
 
-def check_configuration(*, required: bool, marker: str, published_address: str) -> None:
+def check_configuration(
+    *, required: bool, marker: str, published_address: str, connector_marker: str = ""
+) -> None:
     """Refuse to start on a configuration that would silently expose the console.
 
     Two failure modes, both fatal:
@@ -68,6 +90,15 @@ def check_configuration(*, required: bool, marker: str, published_address: str) 
             "unreachable for everyone. Set the same value here and in the "
             "management site block of the reverse proxy."
         )
+    if required and connector_marker and marker.strip() == connector_marker.strip():
+        # Gleiche Werte hebt die Trennung der beiden Listener auf: dann wäre
+        # der Management-Marker auf dem Connector-Kanal gültig und umgekehrt.
+        raise ManagementListenerRequiredError(
+            "COCKPIT_MANAGEMENT_MARKER und COCKPIT_CONNECTOR_MARKER sind gleich. "
+            "Damit gilt jeder Marker auf beiden Listenern und die Trennung "
+            "zwischen Konsole (4444) und Connector (46200) existiert nicht mehr. "
+            "Zwei verschiedene Werte setzen: openssl rand -hex 32."
+        )
     host = published_address.strip().rsplit(":", 1)[0].strip("[]")
     if host in {"0.0.0.0", "::", "*", ""}:  # noqa: S104 — comparing against, not binding to
         raise ManagementListenerRequiredError(
@@ -86,20 +117,40 @@ def _matches(provided: str, marker: str) -> bool:
 
 def make_management_guard(
     read_config: Callable[[], tuple[bool, str]],
+    read_connector_marker: Callable[[], str] = lambda: "",
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Build the middleware.
 
     ``read_config`` is called per request and returns ``(required, marker)``, so
     the guard follows a settings change without rebuilding the app — and so a
-    test can flip it without re-importing the module.
+    test can flip it without re-importing the module. ``read_connector_marker``
+    does the same for the connector channel.
     """
 
     async def guard(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         required, marker = read_config()
-        if not required or request.url.path in EXEMPT_PATHS:
+        path = request.url.path
+        if not required or path in EXEMPT_PATHS:
             return await call_next(request)
+
+        if path.startswith(CONNECTOR_PREFIX):
+            # Der Connector-Kanal, nicht die Konsole: eigener Marker, und der
+            # Management-Marker gilt hier ausdrücklich NICHT. Der Kanal ist
+            # absichtlich öffentlich — geschützt wird er durch Client-Zertifikat
+            # und API-Key, nicht durch die Bindung des Listeners.
+            connector_marker = read_connector_marker()
+            offered = request.headers.get(CONNECTOR_MARKER_HEADER)
+            if offered is not None and connector_marker and _matches(offered, connector_marker):
+                return await call_next(request)
+            logger.warning(
+                "Refused a request to %s: it did not arrive through the connector "
+                "listener (marker %s missing or wrong).",
+                path,
+                CONNECTOR_MARKER_HEADER,
+            )
+            return JSONResponse(status_code=404, content={"detail": "not_found"})
 
         # Compared as bytes, not as str: Starlette decodes header values as
         # latin-1, so a raw high byte arrives as a non-ASCII character — and
@@ -116,7 +167,7 @@ def make_management_guard(
             "listener (marker %s missing or wrong). If this was a legitimate "
             "operator, the reverse proxy is not routing through the management "
             "site block.",
-            request.url.path,
+            path,
             MARKER_HEADER,
         )
         return JSONResponse(status_code=404, content={"detail": "not_found"})
@@ -125,6 +176,8 @@ def make_management_guard(
 
 
 __all__ = [
+    "CONNECTOR_MARKER_HEADER",
+    "CONNECTOR_PREFIX",
     "EXEMPT_PATHS",
     "MARKER_HEADER",
     "ManagementListenerRequiredError",

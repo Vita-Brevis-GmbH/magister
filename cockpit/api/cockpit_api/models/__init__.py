@@ -1,4 +1,11 @@
 from cockpit_api.models.base import Base
+from cockpit_api.models.connector import (
+    AgentStatus,
+    ConnectorAgent,
+    ConnectorEnrollment,
+    ConnectorJob,
+    JobState,
+)
 from cockpit_api.models.instance import Instance, InstanceChannel
 from cockpit_api.models.provisioning_job import (
     STEP_ORDER,
@@ -19,10 +26,15 @@ from cockpit_api.models.update_request import UpdateRequest, UpdateRequestStatus
 __all__ = [
     "SLUG_PATTERN",
     "STEP_ORDER",
+    "AgentStatus",
     "Base",
+    "ConnectorAgent",
+    "ConnectorEnrollment",
+    "ConnectorJob",
     "Instance",
     "InstanceChannel",
     "IsolationMode",
+    "JobState",
     "JobStatus",
     "ProvisioningJob",
     "ProvisioningStep",

@@ -339,36 +339,55 @@ gemessen, nicht überlegt:
    enthält `4096:` — SQLAlchemy machte daraus einen Parameter und brach ab.
    Die Rollen-Anweisungen laufen deshalb über `exec_driver_sql`.
 
-### Phase 2a — AD-Connector-Agent
+### Phase 2a — AD-Connector-Agent (Plattformseite steht, Agent folgt)
 
 Blockiert den ersten gehosteten Kunden: ohne Agenten gibt es keinen
 Passwort-Reset. Referenz: ADR-0014.
 
-- **Plattform-CA**: Offline-Root, Intermediate pro Kunde, Ausstellung über
-  CSR-Anmeldung, Widerruf als Datenbank-Flag.
-- **Connector-Endpunkt** auf eigenem Listener `0.0.0.0:46200` mit
-  `require_and_verify`, plus Abgleich von SPKI-Fingerprint und API-Key gegen
-  dieselbe Agent-Zeile. Keine Rückfallebene auf 443 (E11) — der Agent prüft die
-  Erreichbarkeit beim ersten Start und meldet klar, wenn der Port zu ist.
-- **Auftragswarteschlange** hinter der bestehenden `AdClient`-Schnittstelle als
+- ⏳ **Plattform-CA**: Verfahren und Skript stehen
+  ([platform-ca.md](../runbooks/platform-ca.md)), die Zeremonie ist Handarbeit
+  bei Vita Brevis. Der Code-Pfad der Ausstellung ist fertig und gegen eine
+  eigens gebaute Test-CA geprüft: der Agent schickt nur einen **CSR**, der
+  Subject kommt aus der Agent-Zeile und nicht aus dem CSR, ein RSA-Schlüssel
+  unter 3072 Bit wird abgelehnt, das Zertifikat trägt ausschliesslich
+  `clientAuth`.
+- ✅ **Connector-Endpunkt** auf eigenem Listener `0.0.0.0:46200` mit
+  `require_and_verify`, plus Abgleich von **SPKI-Fingerprint** und API-Key
+  gegen dieselbe Agent-Zeile. Der Fingerprint geht über den öffentlichen
+  Schlüssel, nicht über das Zertifikat — eine Erneuerung mit demselben
+  Schlüssel löst die Bindung dann nicht. Kein Rückfall auf 443 (E11).
+- ✅ **Zwei getrennte Marker** für die zwei Listener derselben Anwendung: der
+  Management-Marker öffnet den Connector-Kanal nicht und umgekehrt. Gleiche
+  Werte brechen den Start ab.
+- ✅ **Anmeldung mit Einmal-Token**: 24 Stunden, genau einmal einlösbar, im
+  Paket liegt kein weiteres Geheimnis. API-Key und HMAC-Schlüssel kommen genau
+  einmal zurück; die Konsole speichert den API-Key nur als argon2id-Hash.
+- ✅ **Auftragswarteschlange** mit der Allowlist aus `ad/rpc.py` — wörtlich,
+  und ein Test hält die beiden Mengen zusammen. Auch ein Global Admin bekommt
+  kein freies LDAP, kein PowerShell, kein Skript. Aufträge verfallen (ein Agent,
+  der zehn Minuten weg war, soll kein Passwort mehr setzen), Nutzlasten mit
+  Passwörtern werden nach Abschluss sofort gelöscht, und `payload_purged_at`
+  zeigt, dass ein leeres Feld absichtlich leer ist.
+- ✅ **Ergebnis-HMAC** über Auftrags-Id **und** Körper. Die Id gehört hinein,
+  sonst liesse sich ein gültig signiertes Ergebnis auf einen anderen Auftrag
+  umhängen.
+- ✅ **Widerruf als Datenbank-Flag**, bei jeder Anfrage geprüft — keine CRL,
+  kein OCSP. Ein gesperrter Kunde stoppt seinen Agenten mit.
+- ⏳ **Offen: der Agent selbst** (Windows-MSI, `.deb`, OCI-Image),
+  Paket-Download in der Konsole, automatische Zertifikatserneuerung,
+  automatische Updates (E10), lokale OU-Allowlist und Gruppen-Denylist.
+- ⏳ **Offen: die Warteschlange hinter `AdClient`** in der Datenebene als
   dritter Rücken (nach *direkt* und *eingehendem RPC*) — kein Aufrufer im
-  Fachcode ändert sich. Methodenmenge ist die Allowlist aus `ad/rpc.py`.
-- **Agent** für Windows (MSI, Dienst), Linux (`.deb`, systemd) und als
-  OCI-Image: Schlüsselerzeugung lokal, Long-Poll-Abruf, Ergebnis mit HMAC,
-  Sync-Seiten als Push, lokale OU-Allowlist und Gruppen-Denylist, lokales
-  Protokoll, automatische Zertifikatserneuerung, automatische Updates (E10).
-  Derselbe Agent läuft auch bei einer Einzelinstallation gegen denselben
-  Endpunkt im eigenen Netz — es gibt keinen direkten AD-Pfad daneben.
-- **Konsole**: Paket-Download mit Einmal-Token, Fingerprint-Anzeige nach der
-  Anmeldung, API-Key- und Zertifikatsrotation, Agent-Status, Ereignisliste.
-- **Konsole**: die vier Reset-Eingriffe für den Notzugang des Kunden
-  (Phase 0 hat sie im CLI, hier kommen sie in die Oberfläche).
-- **Abnahme:** Passwort-Reset über den Agenten funktioniert; ein Kunde, dessen
-  Agent steht, bekommt `503` mit dem bestehenden Banner statt eines Fehlers; ein
-  Client-Zertifikat von Kunde A wird auf dem Kanal von Kunde B abgewiesen; ein
-  Auftrag mit einer Methode ausserhalb der Allowlist wird schon plattformseitig
-  verweigert; das Download-Paket enthält kein Geheimnis; Agent stoppen beendet
-  jeden Plattformzugriff auf das AD.
+  Fachcode ändert sich.
+- ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
+  CLI).
+- **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem
+  Kanal von Kunde B abgewiesen; ein Auftrag mit einer Methode ausserhalb der
+  Allowlist wird plattformseitig verweigert; das Download-Paket enthält kein
+  Geheimnis ausser dem Einmal-Token; ein widerrufener Agent kommt bei der
+  nächsten Anfrage nicht mehr durch. **Noch offen** (braucht den Agenten): der
+  Passwort-Reset über den Agenten, das 503-Banner bei stehendem Agenten, und
+  „Agent stoppen beendet jeden Plattformzugriff auf das AD".
 
 ### Phase 2b — Sicherung, Wiederherstellung, Export
 
