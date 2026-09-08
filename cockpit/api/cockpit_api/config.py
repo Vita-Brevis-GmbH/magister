@@ -17,6 +17,23 @@ class Settings(BaseSettings):
     require_management_listener: bool = Field(default=True)
     management_marker: str = Field(default="")
     published_address: str = Field(default="127.0.0.1:4444")
+    # --- Mandanten-Bereitstellung (ADR-0013 D2) ---------------------------
+    # Verwaltungszugang in den Magister-Cluster: eine Rolle mit CREATEROLE und
+    # CREATE auf der Datenbank. NICHT eine Mandantenrolle. Ohne diesen Wert
+    # kann die Konsole Kunden verwalten, aber keinen bereitstellen.
+    tenant_admin_dsn: str = Field(default="")
+    # Verzeichnis der Datenebene (apps/api) für ``alembic upgrade head``.
+    magister_api_dir: str = Field(default="")
+    # Schema mit den Erweiterungen (pgcrypto) im Magister-Cluster.
+    tenant_extension_schema: str = Field(default="public")
+    # Kopf-Revision, auf die ein neu bereitgestellter Kunde gesetzt wird.
+    # Muss zu magister_api.tenancy.version.HEAD_REVISION passen; ein Test in
+    # der Datenebene hält die Konstante am echten Alembic-Kopf.
+    expected_schema_version: str = Field(default="")
+    # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
+    # NUR diesen Verweis, nie den DSN mit Passwort.
+    dsn_ref_template: str = Field(default="tenant_{slug}")
+
     health_poll_interval_s: int = 60
     release_poll_interval_s: int = 300
     http_timeout_s: float = 5.0

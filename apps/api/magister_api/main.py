@@ -29,7 +29,13 @@ from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 from magister_api.services.rbac import RbacService
-from magister_api.tenancy.context import dispose_tenancy, init_tenancy
+from magister_api.tenancy.context import (
+    console_refresh_loop,
+    dispose_tenancy,
+    get_registry,
+    init_tenancy,
+    refresh_from_console,
+)
 from magister_api.tenancy.middleware import make_tenant_middleware
 
 logger = logging.getLogger(__name__)
@@ -46,10 +52,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Anfrage — ein Prozess, der niemanden bedienen kann, soll auch nicht
     # gesund melden.
     registry, _ = init_tenancy(settings)
+    # Ein erster Abruf beim Start, damit ein gerade in der Konsole angelegter
+    # Kunde nicht bis zum nächsten Intervall wartet. Scheitert er, bleibt der
+    # Stand aus der Umgebung — der Prozess startet trotzdem (ADR-0013 D4).
+    if settings.console_registry_url:
+        await refresh_from_console(settings)
+        registry = get_registry()
     logger.info(
-        "Mandantenfähigkeit aktiv: %d Mandant(en), Erweiterungsschema %r",
+        "Mandantenfähigkeit aktiv: %d Mandant(en), Erweiterungsschema %r, Registry aus %s",
         len(registry.tenants),
         settings.extension_schema,
+        "Konsole" if settings.console_registry_url else "Umgebung",
     )
 
     # First-run seeds. Both are idempotent and short-circuit when the
@@ -85,6 +98,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # sync loop against AD + DB.
     stop_event = asyncio.Event()
     sync_task: asyncio.Task[None] | None = None
+    # Registry-Abruf läuft in JEDEM Container: jeder hat seinen eigenen
+    # Zwischenspeicher, weil jeder selbst auflöst. Anders als der AD-Sync ist
+    # das kein exklusiver Vorgang — es ist ein Lesevorgang ohne Nebenwirkung.
+    registry_task: asyncio.Task[None] | None = None
+    if settings.console_registry_url:
+        registry_task = asyncio.create_task(
+            console_refresh_loop(settings, stop=stop_event), name="console-registry-refresh"
+        )
     if settings.run_scheduler:
         sync_task = asyncio.create_task(
             run_ad_sync_loop(settings, sm, stop_event=stop_event),
@@ -101,6 +122,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         yield
     finally:
         stop_event.set()
+        if registry_task is not None:
+            registry_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await registry_task
         if sync_task is not None:
             sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

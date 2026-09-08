@@ -68,6 +68,18 @@ class Settings(BaseSettings):
     # eigenen Pool. Bei vielen Mandanten gehört ein PgBouncer davor.
     tenant_pool_size: int = Field(default=2, ge=1)
     tenant_max_overflow: int = Field(default=3, ge=0)
+    # Registry von der Konsole (ADR-0013 D2/D4). Leer heisst: Registry aus
+    # MAGISTER_TENANTS bzw. aus database_url. Die Konsole liefert absichtlich
+    # keine DSNs, nur Verweise — der DSN je Kunde steht in
+    # MAGISTER_TENANT_DSN_<REF>.
+    console_registry_url: str = Field(default="")
+    console_registry_token: SecretStr = Field(default=SecretStr(""))
+    # Marker der Konsole (ADR-0015 D1): ohne ihn verwirft sie jede Anfrage.
+    console_management_marker: SecretStr = Field(default=SecretStr(""))
+    # Wie oft im Hintergrund nachgeladen wird. Ein Ausfall der Konsole ändert
+    # nichts am Betrieb — der letzte gute Stand bleibt gültig.
+    console_registry_interval_s: int = Field(default=300, ge=30)
+
     # Schema, in dem die Erweiterungen liegen (pgcrypto für den Audit-Dienst).
     # Steht als ZWEITER Eintrag auf dem search_path und darf keine
     # Anwendungstabellen enthalten — sonst könnte eine im Mandantenschema

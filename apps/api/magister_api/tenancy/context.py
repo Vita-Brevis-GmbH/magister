@@ -9,15 +9,21 @@ Anfragepfad, dieselbe Auflösung, dieselbe Sitzungs-Einrichtung — nur n=1.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from starlette.requests import Request
 
 from magister_api.config import Settings, get_settings
+from magister_api.tenancy.console_registry import (
+    ConsoleUnavailableError,
+    fetch_registry,
+)
 from magister_api.tenancy.engines import TenantEngineRegistry
 from magister_api.tenancy.registry import (
     Tenant,
+    TenantConfigError,
     TenantRegistry,
     registry_from_json,
     single_tenant_registry,
@@ -44,6 +50,13 @@ class TenantNotResolvedError(RuntimeError):
 
 
 def build_registry(settings: Settings | None = None) -> TenantRegistry:
+    """Registry aus der Umgebung. Der Konsolen-Abruf läuft getrennt (asynchron).
+
+    Diese Funktion ist die **Grundlage**: sie liefert den Stand, mit dem der
+    Prozess startet, auch wenn die Konsole nicht antwortet. Ist eine Konsole
+    konfiguriert, überschreibt ``refresh_from_console()`` das Ergebnis, sobald
+    ein Abruf geglückt ist.
+    """
     s = settings or get_settings()
     raw = (s.tenants or "").strip()
     if not raw:
@@ -97,6 +110,60 @@ def get_engines() -> TenantEngineRegistry:
         init_tenancy()
     assert _engines is not None
     return _engines
+
+
+async def refresh_from_console(settings: Settings | None = None) -> bool:
+    """Registry von der Konsole nachladen. ``True``, wenn sie ersetzt wurde.
+
+    Scheitert der Abruf, bleibt der bisherige Stand **unverändert** in Kraft.
+    Das ist die Zusage aus ADR-0013 D4: eine Störung in der Verwaltung ist
+    kein Ausfall des Betriebs.
+    """
+    global _registry
+    s = settings or get_settings()
+    if not s.console_registry_url:
+        return False
+    try:
+        fresh = await fetch_registry(
+            s.console_registry_url,
+            token=s.console_registry_token.get_secret_value(),
+            management_marker=s.console_management_marker.get_secret_value(),
+        )
+    except (ConsoleUnavailableError, TenantConfigError) as exc:
+        # WARNING, nicht ERROR: der Betrieb läuft weiter. Aber sichtbar, denn
+        # ein neu angelegter Kunde kommt bis zur Behebung nicht durch.
+        logger.warning("Konsolen-Registry nicht übernommen, letzter guter Stand bleibt: %s", exc)
+        return False
+    previous = {t.slug for t in _registry.tenants} if _registry is not None else set()
+    _registry = fresh
+    current = {t.slug for t in fresh.tenants}
+    if previous != current:
+        logger.info(
+            "Mandanten-Registry von der Konsole aktualisiert: %d Mandant(en) [%s]",
+            len(fresh.tenants),
+            ", ".join(sorted(current)),
+        )
+    return True
+
+
+async def console_refresh_loop(
+    settings: Settings | None = None, *, stop: asyncio.Event | None = None
+) -> None:
+    """Hintergrundschleife für den Konsolen-Abruf.
+
+    Bewusst im Hintergrund und nicht im Anfragepfad: ein Kunden-Request darf
+    nie von der Erreichbarkeit der Konsole abhängen.
+    """
+    s = settings or get_settings()
+    if not s.console_registry_url:
+        return
+    stop = stop or asyncio.Event()
+    while not stop.is_set():
+        await refresh_from_console(s)
+        try:
+            await asyncio.wait_for(stop.wait(), timeout=s.console_registry_interval_s)
+        except TimeoutError:
+            continue
 
 
 async def dispose_tenancy() -> None:

@@ -8,7 +8,7 @@ from starlette.responses import Response
 
 from cockpit_api.config import settings
 from cockpit_api.management_guard import check_configuration, make_management_guard
-from cockpit_api.routers import instances, service_tokens, update_requests
+from cockpit_api.routers import instances, service_tokens, tenants, update_requests
 from cockpit_api.services.health_poller import health_poller_loop
 from cockpit_api.services.release_poller import release_poller_loop
 
@@ -78,3 +78,4 @@ async def health() -> dict[str, str]:
 app.include_router(instances.router, prefix="/api")
 app.include_router(service_tokens.router, prefix="/api")
 app.include_router(update_requests.router, prefix="/api")
+app.include_router(tenants.router, prefix="/api")

@@ -288,15 +288,56 @@ gemessen, nicht überlegt:
    in einem Schema ohne Anwendungstabellen, sonst könnte eine fehlende Tabelle
    still darauf zurückfallen. Der Umzug prüft das nach.
 
-### Phase 2 — Konsole und Bereitstellung
+### Phase 2 — Konsole und Bereitstellung (API fertig, Oberfläche und OIDC offen)
 
-- Konsolen-DB, `tenants`, Anmeldung via OIDC mit Hardware-Schlüssel.
-- Kunden erfassen mit Bereitstellungs-Auftrag (Schema, Rolle, Grants, Alembic,
-  Datenschlüssel) — wiederaufnehmbar, nie halb angelegt.
-- Kundenliste, Kunden-Detail, Sperren und Entsperren.
-- **Abnahme:** Zwei Kunden auf einer Installation, gegenseitiger DB-Zugriff
-  scheitert an Postgres; ein abgebrochener Auftrag lässt den Kunden auf
-  `provisioning` und unerreichbar.
+- ✅ **Konsolen-DB** mit `tenants` und `provisioning_jobs`
+  (`cockpit/api/alembic/versions/0004_tenants.py`). Kein DSN und kein Passwort
+  in der Konsole: `dsn_ref` ist ein **Verweis**, den die Datenebene aus ihrem
+  eigenen Geheimnisspeicher auflöst. Die Konsole kann Sitzungen in jeden Kunden
+  ausstellen — ein Geheimnis, das dort nicht liegt, kann dort nicht gestohlen
+  werden.
+- ✅ **Bereitstellungs-Auftrag** in fünf Schritten (`create_role`,
+  `create_schema`, `migrate`, `data_key`, `activate`), jeder idempotent, mit
+  Protokoll je Schritt. `POST /api/tenants` legt an und fährt den Auftrag;
+  `POST /api/tenants/{id}/provisioning/resume` macht **ab der Abbruchstelle**
+  weiter, nicht von vorn.
+- ✅ **Kundenliste und -Detail** (`GET /api/tenants`, `GET /api/tenants/{id}`),
+  **Sperren und Entsperren** (`suspend` mit Pflicht-Begründung, `unsuspend`).
+  Sperren ist eine Aussage über die Bedienung, nicht über den Bestand: Rolle,
+  Schema und Daten bleiben stehen, sonst wäre Entsperren eine Wiederherstellung.
+- ✅ **Registry-Auslieferung an die Datenebene** (`GET /api/tenants/registry`)
+  plus Abholer in `magister_api/tenancy/console_registry.py`: Abruf beim Start
+  und danach im Hintergrund, im heissen Pfad nur der Zwischenspeicher. Ist die
+  Konsole nicht erreichbar oder liefert sie Unbrauchbares, **bleibt der letzte
+  gute Stand in Kraft** — eine Störung in der Verwaltung ist kein Ausfall des
+  Betriebs. Ein leeres Ergebnis ersetzt nichts, sonst setzte ein Fehler in der
+  Konsole alle Kunden auf 404.
+- ✅ **Abnahme:** zwei Kunden auf einer Installation, der Griff ins
+  Nachbarschema scheitert an Postgres und nicht an einem Filter; ein
+  abgebrochener Auftrag lässt den Kunden auf `provisioning`, das Protokoll
+  nennt den Schritt und `next_step` zeigt, wo es weitergeht. 56 Tests im
+  Cockpit, davon der komplette Auftrag samt Alembic gegen echtes Postgres.
+- ⏳ **Offen: Anmeldung via OIDC mit Hardware-Schlüssel** (ADR-0013 D2). Braucht
+  eine App-Registrierung im Entra-Tenant von Vita Brevis (Client-ID, Secret,
+  Redirect-URI) — deshalb nicht mitgebaut, sondern als eigener Schritt. Bis
+  dahin gilt die bestehende Anmeldung (Bootstrap-Token bzw. Service-Token)
+  hinter dem Konsolen-Listener mit Client-Zertifikat.
+- ⏳ **Offen: die Oberfläche.** Die Endpunkte stehen, das Mockup steht; die
+  React-Seiten fehlen.
+
+**Zwei Fallstricke, die beim Bauen aufgefallen sind** — beide gemessen:
+
+1. **`CREATE ROLE ... PASSWORD` nimmt keine Bind-Parameter.** Das Passwort
+   müsste als Literal ins SQL — und stünde damit im Postgres-Log, sobald
+   `log_statement = ddl` gesetzt ist, sowie in `pg_stat_activity`, solange die
+   Anweisung läuft. Die Konsole schickt deshalb einen **vorberechneten
+   SCRAM-SHA-256-Verifier**, wie `psql \password` es tut: was über die Leitung
+   geht, lässt sich nicht in ein Passwort zurückrechnen. Dass die Ableitung
+   stimmt, belegt ein Test, der sich mit dem Klartextpasswort tatsächlich
+   anmeldet.
+2. **`text()` liest `:` im Verifier als Bind-Parameter.** Der SCRAM-String
+   enthält `4096:` — SQLAlchemy machte daraus einen Parameter und brach ab.
+   Die Rollen-Anweisungen laufen deshalb über `exec_driver_sql`.
 
 ### Phase 2a — AD-Connector-Agent
 
