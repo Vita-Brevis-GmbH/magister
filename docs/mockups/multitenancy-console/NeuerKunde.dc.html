@@ -1,0 +1,253 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink active">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 24px; padding-bottom: 32px;">
+  <div class="muted" style="font-size: 13px;">Kunden &nbsp;&rsaquo;&nbsp; Neu</div>
+  <h1 class="serif h1" style="margin-top: 12px;">Kunde erfassen</h1>
+  <p class="muted" style="margin: 6px 0 0;">Legt Mandant, Datenbank-Trennung, Zugangspfad und Startkonfiguration in einem Vorgang an.</p>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 24px; margin-top: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Kunde</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px;">
+          <div>
+            <label class="label">Name</label>
+            <div class="input"><span>Schulgemeinde Nesslau</span></div>
+          </div>
+          <div>
+            <label class="label">Kundennummer</label>
+            <div class="input" style="background: #f8fafc;"><span class="muted mono">K-0049 (automatisch)</span></div>
+          </div>
+        </div>
+        <div style="margin-top: 16px;">
+          <label class="label">Profil</label>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;">
+            <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #0f172a; border-radius: 8px; background: #f8fafc;">
+              <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #0f172a; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #0f172a;"></span></span>
+              <span>
+                <span style="display: block; font-weight: 500;">Schule</span>
+                <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">Klassen, Zyklen, Briefe</span>
+              </span>
+            </label>
+            <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+              <span>
+                <span style="display: block; font-weight: 500;">Firma</span>
+                <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">Abteilungen, Vorgesetzte</span>
+              </span>
+            </label>
+            <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+              <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+              <span>
+                <span style="display: block; font-weight: 500;">Neutral</span>
+                <span class="muted" style="display: block; font-size: 13px; margin-top: 2px;">Nur Basis-Module</span>
+              </span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Zugang</h2>
+        <p class="muted" style="margin: 8px 0 20px;">Jeder Kunde meldet sich unter seinem eigenen Pfad an. Eine eigene Domain kann sp&auml;ter erg&auml;nzt werden.</p>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+          <div>
+            <label class="label">Pfad</label>
+            <div style="display: flex;">
+              <span style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 1px solid #e2e8f0; border-right: 0; border-radius: 6px 0 0 6px; background: #f8fafc; color: #64748b;" class="mono">magister.ch/k/</span>
+              <div class="input" style="border-radius: 0 6px 6px 0;"><span class="mono">nesslau</span></div>
+            </div>
+          </div>
+          <div>
+            <label class="label">Eigene Domain <span class="muted" style="font-weight: 400;">(optional)</span></label>
+            <div class="input"><span class="ph mono">magister.nesslau.ch</span></div>
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="label">Kunden-Admins beim ersten Login</label>
+            <div class="input" style="gap: 6px;">
+              <span class="pill pill-muted mono">it@nesslau.ch</span>
+              <span class="pill pill-muted mono">schulleitung@nesslau.ch</span>
+              <span class="ph">weitere UPN erfassen &hellip;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Datenbank-Trennung</h2>
+        <p class="muted" style="margin: 8px 0 20px;">Bestimmt, wie hart die Daten dieses Kunden von allen anderen getrennt sind. Sp&auml;ter umziehbar.</p>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #0f172a; border-radius: 8px; background: #f8fafc;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #0f172a; display: inline-flex; align-items: center; justify-content: center;"><span style="width: 8px; height: 8px; border-radius: 9999px; background: #0f172a;"></span></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Eigenes Schema <span class="pill pill-muted" style="margin-left: 6px;">Standard</span></span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 3px;">Eigenes Postgres-Schema <span class="mono">t_nesslau</span> mit eigener DB-Rolle. Kein Zugriff auf andere Schemas &mdash; von Postgres erzwungen, nicht von der Anwendung.</span>
+            </span>
+          </label>
+          <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Eigene Datenbank</span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 3px;">Zus&auml;tzlich getrennte Sicherung, getrennte Wiederherstellung und getrennte Verbindungsgrenzen. F&uuml;r grosse oder besonders regulierte Kunden.</span>
+            </span>
+          </label>
+          <label style="display: flex; gap: 12px; padding: 14px; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <span style="flex-shrink: 0; margin-top: 2px; width: 16px; height: 16px; border-radius: 9999px; border: 1px solid #cbd5e1;"></span>
+            <span>
+              <span style="display: block; font-weight: 500;">Eigener Cluster</span>
+              <span class="muted" style="display: block; font-size: 13px; margin-top: 3px;">Eigener Datenbankserver &mdash; auch Rechenlast ist getrennt. Teuerste Variante, gleicher Code-Pfad.</span>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Startkonfiguration</h2>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px;">
+          <div>
+            <label class="label">Vorlagen-Set</label>
+            <div class="input" style="justify-content: space-between;">
+              <span>Global &middot; Schule (de)</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div>
+            <label class="label">Rechte-Matrix</label>
+            <div class="input" style="justify-content: space-between;">
+              <span>Global &middot; Standard Schule</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+          </div>
+          <div style="grid-column: span 2;">
+            <label class="label">Module</label>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+              <span class="pill pill-muted">platform</span>
+              <span class="pill pill-muted">ad</span>
+              <span class="pill pill-muted">users</span>
+              <span class="pill pill-muted">settings</span>
+              <span class="pill pill-ok">classes</span>
+              <span class="pill pill-ok">templates</span>
+              <span class="pill pill-ok">imports</span>
+              <span class="pill pill-ok">reports</span>
+              <span class="pill pill-ok">devices</span>
+              <span class="pill pill-muted">departments</span>
+            </div>
+            <p class="muted" style="margin: 10px 0 0; font-size: 13px;">Aus dem Profil vorbelegt. Vier Basis-Module sind nicht abschaltbar.</p>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+        <button class="btn btn-outline" type="button">Abbrechen</button>
+        <button class="btn btn-primary" type="button">Kunde anlegen</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 20px; align-self: flex-start;">
+      <h2 class="serif h2" style="font-size: 16px;">Beim Anlegen passiert</h2>
+      <ol style="margin: 16px 0 0; padding-left: 0; list-style: none; display: grid; gap: 14px;">
+        <li style="display: flex; gap: 12px;">
+          <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">1</span>
+          <span style="font-size: 13px;">Eintrag in der Mandanten-Registry der Konsole</span>
+        </li>
+        <li style="display: flex; gap: 12px;">
+          <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">2</span>
+          <span style="font-size: 13px;">Schema plus DB-Rolle anlegen, <span class="mono">USAGE</span> auf alle anderen Schemas entzogen</span>
+        </li>
+        <li style="display: flex; gap: 12px;">
+          <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">3</span>
+          <span style="font-size: 13px;">Alembic auf Kopf-Version <span class="mono">0043</span></span>
+        </li>
+        <li style="display: flex; gap: 12px;">
+          <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">4</span>
+          <span style="font-size: 13px;">Eigener Audit-Schl&uuml;ssel, im Plattform-Schl&uuml;ssel verpackt</span>
+        </li>
+        <li style="display: flex; gap: 12px;">
+          <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">5</span>
+          <span style="font-size: 13px;">Rechte-Matrix und Vorlagen-Set in das Kunden-Schema materialisieren</span>
+        </li>
+      </ol>
+      <p class="muted" style="margin: 18px 0 0; font-size: 13px;">
+        L&auml;uft als Auftrag mit Fortschritt und Wiederaufnahme. Bricht ein Schritt ab, bleibt der Kunde
+        auf <span class="mono">Bereitstellung</span> und ist nicht erreichbar &mdash; nie halb angelegt.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

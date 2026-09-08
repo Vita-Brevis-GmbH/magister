@@ -1,0 +1,141 @@
+{
+  "pages": [
+    {
+      "id": "page-1",
+      "name": "Konsole"
+    },
+    {
+      "id": "page-2",
+      "name": "Global anwenden + Betrieb"
+    }
+  ],
+  "artboards": [
+    {
+      "file": "Login.dc.html",
+      "page": "page-1",
+      "title": "1 · Anmeldung Konsole",
+      "x": 0,
+      "y": 0,
+      "w": 560,
+      "h": 600
+    },
+    {
+      "file": "Kundenwahl.dc.html",
+      "page": "page-1",
+      "title": "2 · Kundenwahl nach Anmeldung",
+      "x": 680,
+      "y": 0,
+      "w": 680,
+      "h": 900
+    },
+    {
+      "file": "Main.dc.html",
+      "page": "page-1",
+      "title": "3 · Kunden (Startseite)",
+      "x": 0,
+      "y": 1020,
+      "w": 1440,
+      "h": 1200
+    },
+    {
+      "file": "KundeDetail.dc.html",
+      "page": "page-1",
+      "title": "4 · Kunde · Systemeinstellungen",
+      "x": 1560,
+      "y": 1020,
+      "w": 1440,
+      "h": 1400
+    },
+    {
+      "file": "NeuerKunde.dc.html",
+      "page": "page-1",
+      "title": "5 · Kunde erfassen",
+      "x": 3120,
+      "y": 1020,
+      "w": 1440,
+      "h": 1560
+    },
+    {
+      "file": "Rechte.dc.html",
+      "page": "page-2",
+      "title": "6 · Rollen und Rechte (global)",
+      "x": 0,
+      "y": 0,
+      "w": 1440,
+      "h": 920
+    },
+    {
+      "file": "Vorlagen.dc.html",
+      "page": "page-2",
+      "title": "7 · Globale Vorlagen + Rollout",
+      "x": 1560,
+      "y": 0,
+      "w": 1440,
+      "h": 980
+    },
+    {
+      "file": "Isolation.dc.html",
+      "page": "page-2",
+      "title": "8 · Datenbank und Migrationen",
+      "x": 0,
+      "y": 1100,
+      "w": 1440,
+      "h": 1340
+    },
+    {
+      "file": "Kundenkontext.dc.html",
+      "page": "page-2",
+      "title": "9 · Kundenkontext (beide Seiten)",
+      "x": 1560,
+      "y": 1100,
+      "w": 1280,
+      "h": 720
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-flow",
+      "page": "page-1",
+      "x": 0,
+      "y": -240,
+      "w": 640,
+      "text": "Anmeldeweg\n\nKonsole auf eigener Origin (console.magister.ch), Kunden unter magister.ch/k/<slug>. Ein Operator waehlt nach dem Login den Kunden und nennt einen Grund; erst dann wird eine befristete Sitzung im Kundenkontext ausgestellt."
+    },
+    {
+      "id": "note-scope",
+      "page": "page-1",
+      "x": 760,
+      "y": -240,
+      "w": 660,
+      "text": "Die drei Punkte aus dem Auftrag\n\n1. Kunden erfassen und Systemsettings pro Kunde: Artboard 3-5.\n2. Rechte nur als Global Admin: Artboard 6 - die Matrix ist in der Kunden-API gar nicht vorhanden.\n3. Systemeinstellungen nur global sichtbar: Artboard 4, Hinweisbalken."
+    },
+    {
+      "id": "note-sample",
+      "page": "page-1",
+      "x": 1560,
+      "y": -240,
+      "w": 560,
+      "text": "Alle Kundennamen, Zahlen, Tickets und Zeitstempel sind Platzhalter.\n\nFarben, Schrift, Abstaende und Bausteine sind aus apps/web uebernommen (Fraunces, Slate-Palette, 8px Radius, 40px Bedienelemente)."
+    },
+    {
+      "id": "note-db",
+      "page": "page-2",
+      "x": 0,
+      "y": -240,
+      "w": 700,
+      "text": "Kernentscheid der Trennung\n\nJeder Kunde bekommt ein eigenes Schema plus eine eigene Datenbankrolle. Postgres entzieht der Rolle USAGE auf alle anderen Schemas - ein vergessener Filter liefert keine fremden Zeilen, sondern einen Fehler. Eigene Datenbank und eigener Cluster sind derselbe Code-Pfad, nur ein anderer Registry-Eintrag."
+    },
+    {
+      "id": "note-templates",
+      "page": "page-2",
+      "x": 820,
+      "y": -240,
+      "w": 700,
+      "text": "Global anwenden, ohne die Trennung aufzuweichen\n\nDie Konsole ist die Autorenstelle; ausgerollt wird eine schreibgeschuetzte Kopie in jedes Kundenschema. Kein Kunden-Request liest je die Konsolen-Datenbank - faellt die Konsole aus, laufen alle Kunden weiter."
+    }
+  ],
+  "launch": {
+    "view": "canvas",
+    "page": "page-1"
+  }
+}

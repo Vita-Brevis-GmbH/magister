@@ -1,0 +1,327 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink active">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 32px; padding-bottom: 32px;">
+  <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;">
+    <div>
+      <h1 class="serif h1">Kunden</h1>
+      <p class="muted" style="margin: 6px 0 0;">8 Mandanten &middot; jede Trennung auf Datenbankebene &middot; Beispieldaten</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-outline" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+        Status neu laden
+      </button>
+      <button class="btn btn-primary" type="button">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+        Kunde erfassen
+      </button>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px;">
+    <div class="card" style="padding: 16px 18px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span class="muted" style="font-size: 13px; font-weight: 500;">Migration ausstehend</span>
+        <span class="pill pill-warn">1</span>
+      </div>
+      <p style="margin: 8px 0 0; font-weight: 500;">Gemeinde Degersheim</p>
+      <p class="muted mono" style="margin: 2px 0 0;">0042 &rarr; 0043</p>
+    </div>
+    <div class="card" style="padding: 16px 18px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span class="muted" style="font-size: 13px; font-weight: 500;">AD-Sync-Fehler</span>
+        <span class="pill pill-danger">1</span>
+      </div>
+      <p style="margin: 8px 0 0; font-weight: 500;">Toggenburg Energie AG</p>
+      <p class="muted" style="margin: 2px 0 0;">Kein DC erreichbar, seit 38 Min</p>
+    </div>
+    <div class="card" style="padding: 16px 18px;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <span class="muted" style="font-size: 13px; font-weight: 500;">In Bereitstellung</span>
+        <span class="pill pill-muted">1</span>
+      </div>
+      <p style="margin: 8px 0 0; font-weight: 500;">Schulgemeinde Nesslau</p>
+      <p class="muted" style="margin: 2px 0 0;">Schema anlegen &middot; Schritt 2 von 5</p>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; gap: 8px; margin-top: 24px;">
+    <div class="input" style="flex-grow: 1;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <span class="ph">Kunde, Pfad oder Schema suchen</span>
+    </div>
+    <div class="input" style="width: 176px; justify-content: space-between;">
+      <span>Alle Status</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+    <div class="input" style="width: 176px; justify-content: space-between;">
+      <span>Alle Profile</span>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px; overflow: hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 300px;">Kunde</th>
+          <th style="width: 140px;">Zugang</th>
+          <th style="width: 86px;">Profil</th>
+          <th style="width: 210px;">Datenbank-Trennung</th>
+          <th style="width: 96px;">Schema</th>
+          <th style="width: 130px;">AD-Sync</th>
+          <th style="width: 120px;">Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Gemeinde Wattwil</div>
+            <div class="muted" style="font-size: 13px;">4 Standorte &middot; 1 284 Benutzer</div>
+          </td>
+          <td class="mono">/k/wattwil</td>
+          <td>Schule</td>
+          <td>
+            <div>Eigenes Schema</div>
+            <div class="muted mono">t_wattwil</div>
+          </td>
+          <td class="mono">0043</td>
+          <td class="muted">vor 4 Min</td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Stadt Uzwil</div>
+            <div class="muted" style="font-size: 13px;">7 Standorte &middot; 2 010 Benutzer</div>
+          </td>
+          <td class="mono">/k/uzwil</td>
+          <td>Schule</td>
+          <td>
+            <div>Eigenes Schema</div>
+            <div class="muted mono">t_uzwil</div>
+          </td>
+          <td class="mono">0043</td>
+          <td class="muted">vor 7 Min</td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Schulgemeinde Flawil</div>
+            <div class="muted" style="font-size: 13px;">5 Standorte &middot; 1 640 Benutzer</div>
+          </td>
+          <td class="mono">/k/flawil</td>
+          <td>Schule</td>
+          <td>
+            <div>Eigene Datenbank</div>
+            <div class="muted mono">magister_flawil</div>
+          </td>
+          <td class="mono">0043</td>
+          <td class="muted">vor 2 Min</td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Gemeinde Degersheim</div>
+            <div class="muted" style="font-size: 13px;">2 Standorte &middot; 430 Benutzer</div>
+          </td>
+          <td class="mono">/k/degersheim</td>
+          <td>Schule</td>
+          <td>
+            <div>Eigenes Schema</div>
+            <div class="muted mono">t_degersheim</div>
+          </td>
+          <td><span class="pill pill-warn mono">0042</span></td>
+          <td class="muted">vor 11 Min</td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Alpstein Treuhand AG</div>
+            <div class="muted" style="font-size: 13px;">3 Abteilungen &middot; 96 Benutzer</div>
+          </td>
+          <td class="mono">/k/alpstein</td>
+          <td>Firma</td>
+          <td>
+            <div>Eigenes Schema</div>
+            <div class="muted mono">t_alpstein</div>
+          </td>
+          <td class="mono">0043</td>
+          <td class="muted">vor 5 Min</td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Toggenburg Energie AG</div>
+            <div class="muted" style="font-size: 13px;">6 Abteilungen &middot; 212 Benutzer</div>
+          </td>
+          <td class="mono">/k/tbenergie</td>
+          <td>Firma</td>
+          <td>
+            <div>Eigenes Schema</div>
+            <div class="muted mono">t_tbenergie</div>
+          </td>
+          <td class="mono">0043</td>
+          <td><span class="pill pill-danger">Kein DC</span></td>
+          <td><span class="pill pill-ok">Aktiv</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button" title="Im Kundenkontext &ouml;ffnen" style="padding: 0 10px;"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg></button>
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Schulgemeinde Nesslau</div>
+            <div class="muted" style="font-size: 13px;">Erfasst am 04.09.2026</div>
+          </td>
+          <td class="mono">/k/nesslau</td>
+          <td>Schule</td>
+          <td>
+            <div class="muted">Eigenes Schema</div>
+            <div class="muted mono">wird angelegt &hellip;</div>
+          </td>
+          <td class="muted">&mdash;</td>
+          <td class="muted">&mdash;</td>
+          <td><span class="pill pill-muted">Bereitstellung</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div style="font-weight: 500;">Gemeinde Ebnat-Kappel</div>
+            <div class="muted" style="font-size: 13px;">3 Standorte &middot; 780 Benutzer</div>
+          </td>
+          <td class="mono">/k/ebnat</td>
+          <td>Schule</td>
+          <td>
+            <div>Eigene Datenbank</div>
+            <div class="muted mono">magister_ebnat</div>
+          </td>
+          <td class="mono">0043</td>
+          <td class="muted">pausiert</td>
+          <td><span class="pill pill-warn">Gesperrt</span></td>
+          <td>
+            <div style="display: flex; justify-content: flex-end; gap: 8px;">
+              <button class="btn btn-outline btn-sm" type="button">Verwalten</button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+    <div style="display: flex; align-items: center; justify-content: space-between; border-top: 1px solid #e2e8f0; padding: 12px 16px;">
+      <span class="muted" style="font-size: 13px;">8 von 8 Kunden</span>
+      <span class="muted" style="font-size: 13px;">Kein Kunde sieht diese Seite &mdash; die Konsole l&auml;uft auf einer eigenen Origin.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,12 @@
+background        #ffffff
+foreground        #020817   hsl(222.2 84% 4.9%)
+primary           #0f172a   hsl(222.2 47.4% 11.2%)
+primary-fg        #f8fafc   hsl(210 40% 98%)
+muted/secondary   #f1f5f9   hsl(210 40% 96.1%)
+muted-foreground  #64748b   hsl(215.4 16.3% 46.9%)
+border/input      #e2e8f0   hsl(214.3 31.8% 91.4%)
+destructive       #ef4444   hsl(0 84.2% 60.2%)
+radius            lg 8px · md 6px · sm 4px
+control heights   btn/input 40px · btn-sm 36px · header 56px
+table             th 48px · td padding 16px
+content column    max-width 1280px, padding 0 16px

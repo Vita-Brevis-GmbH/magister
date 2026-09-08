@@ -1,0 +1,137 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div style="padding: 32px; background: #f8fafc; min-height: 100vh;">
+  <p class="muted" style="margin: 0 0 10px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;">Was der Operator sieht</p>
+  <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 20px; background: #0f172a; color: #f8fafc;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f8fafc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>
+        <span style="font-size: 13px;">Sie arbeiten als Vita Brevis im Kundenkontext <strong>Gemeinde Wattwil</strong> &middot; Ticket VB-2291 &middot; endet 15:08</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="btn btn-sm" type="button" style="background: rgba(248, 250, 252, 0.12); color: #f8fafc;">Kunde wechseln</button>
+        <button class="btn btn-sm" type="button" style="background: #f8fafc; color: #0f172a;">Zur&uuml;ck zur Konsole</button>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; border-bottom: 1px solid #e2e8f0; background: rgba(255, 255, 255, 0.6);">
+      <div style="display: flex; align-items: center; gap: 24px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister</span>
+        <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 500;">
+          <span style="padding: 6px 12px; border-radius: 6px; background: #f1f5f9; color: #020817;">Klassen</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Benutzer</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Ger&auml;te</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Einstellungen</span>
+        </nav>
+      </div>
+      <span class="muted" style="font-size: 13px;">Gemeinde Wattwil &middot; <span class="mono">/k/wattwil</span></span>
+    </div>
+    <div style="padding: 20px;">
+      <div style="height: 12px; width: 200px; border-radius: 4px; background: #f1f5f9;"></div>
+      <div style="height: 12px; width: 420px; border-radius: 4px; background: #f1f5f9; margin-top: 12px;"></div>
+      <div style="height: 12px; width: 330px; border-radius: 4px; background: #f1f5f9; margin-top: 12px;"></div>
+    </div>
+  </div>
+
+  <p class="muted" style="margin: 28px 0 10px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase;">Was der Kunde sieht &mdash; w&auml;hrend und nach dem Zugriff</p>
+  <div style="border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; background: #ffffff;">
+    <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 20px; background: #fffbeb; border-bottom: 1px solid #fde68a;">
+      <div style="display: flex; align-items: center; gap: 10px; color: #b45309;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b45309" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <span style="font-size: 13px;">Vita Brevis greift derzeit auf Ihre Instanz zu &middot; matthias.hadorn &middot; Ticket VB-2291 &middot; seit 14:56</span>
+      </div>
+      <button class="btn btn-sm btn-outline" type="button" style="border-color: #fde68a; color: #b45309;">Zugriff beenden</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; height: 56px; padding: 0 20px; border-bottom: 1px solid #e2e8f0; background: rgba(255, 255, 255, 0.6);">
+      <div style="display: flex; align-items: center; gap: 24px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister</span>
+        <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px; font-weight: 500;">
+          <span style="padding: 6px 12px; border-radius: 6px; background: #f1f5f9; color: #020817;">Klassen</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Benutzer</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Ger&auml;te</span>
+          <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Einstellungen</span>
+        </nav>
+      </div>
+      <span class="muted" style="font-size: 13px;">angemeldet als schulleitung@wattwil.ch</span>
+    </div>
+    <div style="padding: 20px;">
+      <p style="margin: 0; font-size: 13px; font-weight: 500;">Einstellungen &rsaquo; Zugriffe von Vita Brevis</p>
+      <table style="margin-top: 12px;">
+        <thead>
+          <tr>
+            <th style="height: 40px; width: 150px;">Zeitpunkt</th>
+            <th style="height: 40px; width: 190px;">Person</th>
+            <th style="height: 40px; width: 130px;">Ticket</th>
+            <th style="height: 40px;">Dauer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 10px 16px;">05.09. 14:56</td>
+            <td style="padding: 10px 16px;" class="mono">matthias.hadorn</td>
+            <td style="padding: 10px 16px;" class="mono">VB-2291</td>
+            <td style="padding: 10px 16px;" class="muted">l&auml;uft</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 16px;">28.08. 09:41</td>
+            <td style="padding: 10px 16px;" class="mono">support-team</td>
+            <td style="padding: 10px 16px;" class="mono">VB-2244</td>
+            <td style="padding: 10px 16px;" class="muted">4 Min</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
