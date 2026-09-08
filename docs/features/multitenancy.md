@@ -213,8 +213,13 @@ fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
   Passwort hat, unbegrenzte Versuche am zweiten Faktor gelassen. Zwei Budgets,
   eine gemeinsame 15-Minuten-Sperre.
 - **Plattform-CA anlegen** (E9): Offline-Root auf zwei verschlüsselten
-  Datenträgern, Intermediate im Betrieb, dazu das dokumentierte Verfahren für
-  Ausstellung, Erneuerung und Verlust.
+  USB-Sticks im Tresor, Passphrase getrennt bei zwei Verwahrern, zwei
+  Intermediates im Betrieb, dazu das dokumentierte Verfahren für Ausstellung,
+  Erneuerung und Verlust. Verwahrer und Ablage sind entschieden; die Zeremonie
+  selbst ist Handarbeit an einem Rechner ohne Netz —
+  [`scripts/platform-ca-ceremony.sh`](../../scripts/platform-ca-ceremony.sh)
+  führt sie schrittweise durch und schreibt das Protokoll mit.
+  Runbook: [`docs/runbooks/platform-ca.md`](../runbooks/platform-ca.md).
 - **Konsolen-Listener** vorbereiten: eigener Site-Block, Bindung an die interne
   Adresse, Client-Zertifikat gegen die private CA, Marker-Riegel in der
   Anwendung. (Die Konsole selbst kommt in Phase 2 — Listener und CA sind die
@@ -434,7 +439,7 @@ der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selb
 | E6 | Konsole erweitern oder trennen? | Im **Monorepo** wachsen lassen; `git subtree split` bleibt später möglich (ADR-0003). Solange Konsole und Kunden-API zusammen entwickelt werden, ist Cross-Repo-Koordination reiner Verlust. |
 | E7 | Nutzt jemand den AD-Login? | **Nein.** Der Ausbau läuft direkt, ohne Übergangsfrist — nur Release-Notes. |
 | E8 | Agenten pro Kunde? | Datenmodell erlaubt mehrere, Auslieferung startet mit einem. |
-| E9 | Wo liegt der CA-Schlüssel? | **Offline-Root auf zwei verschlüsselten Datenträgern** an getrennten Orten; Intermediate pro Kunde im Betrieb. Der Root wird nur zum Ausstellen eines Intermediate gebraucht. Verlangt ein dokumentiertes und geübtes Handverfahren. |
+| E9 | Wo liegt der CA-Schlüssel? | **Offline-Root auf zwei verschlüsselten USB-Sticks im Tresor**; die Passphrase liegt getrennt davon in zwei versiegelten Umschlägen bei **Matthias Hadorn** und **Rolf Straubhaar**. Zwei Intermediates im Betrieb (Connector, Operator) — **nicht** pro Kunde, die Kundenbindung macht der Fingerprint-Abgleich. Der Root wird nur zum Ausstellen eines Intermediate gebraucht. Ein zweiter Standort ist bewusst zurückgestellt: ein verlorener Root ist kein Ausfall, sondern ein planbarer Neuaufbau mit bis zu fünf Jahren Vorlauf ([Runbook](../runbooks/platform-ca.md) §3). |
 | E10 | Agent-Updates? | **Automatisch, Sicherheits-Updates sofort.** Version und Fingerprint der Flotte in der Konsole, Alarm bei nicht anlaufenden Updates. |
 | E11 | Rückfallebene für den Connector-Port? | **Nein, nur 46200.** Die Firewall-Freigabe ist harte Onboarding-Voraussetzung; der Agent prüft sie beim ersten Start und meldet klar, wenn der Port zu ist. |
 | E12 | Mehrere lokale Notkonten? | **Nein**, der Singleton bleibt (`CHECK id = 1`). Jedes weitere Notkonto wäre ein weiterer Weg ohne Entra. |

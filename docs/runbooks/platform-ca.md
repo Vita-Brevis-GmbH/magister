@@ -3,8 +3,10 @@
 > Die private CA signiert die Client-Zertifikate der Connector-Agenten
 > ([ADR-0014](../adr/0014-ad-connector-agent.md)) und der Konsolen-Operatoren
 > ([ADR-0015](../adr/0015-authentisierungs-haertung.md) D1).
-> Entscheid E9: **Offline-Root auf zwei verschlüsselten Datenträgern.**
-> Status: **Verfahren entworfen, noch nicht ausgeführt.**
+> Entscheid E9: **Offline-Root auf verschlüsselten USB-Sticks im Tresor**,
+> Passphrase getrennt davon bei zwei Schlüsselverwahrern.
+> Verwahrer: **Matthias Hadorn** und **Rolf Straubhaar**.
+> Status: **Verfahren festgelegt, Zeremonie noch nicht ausgeführt.**
 
 ## 1 · Warum es dieses Verfahren braucht
 
@@ -42,7 +44,22 @@ nicht, weil der Fingerprint-Abgleich ohnehin die scharfe Prüfung ist.)
 
 **Vorbereitung.** Ein Rechner ohne Netzverbindung (Notebook, Netzwerkkabel
 gezogen, WLAN aus), ein Linux-Live-System vom USB-Stick, zwei neue
-USB-Datenträger. Zwei Personen anwesend, beide zeichnen das Protokoll.
+USB-Sticks. Anwesend: **Matthias Hadorn** und **Rolf Straubhaar**, beide
+zeichnen das Protokoll.
+
+[`scripts/platform-ca-ceremony.sh`](../../scripts/platform-ca-ceremony.sh)
+führt die Zeremonie schrittweise durch, prüft die Voraussetzungen und schreibt
+die Fingerprints ins Protokoll, statt sie abschreiben zu lassen:
+
+```bash
+./scripts/platform-ca-ceremony.sh preflight
+./scripts/platform-ca-ceremony.sh root  --workdir /mnt/ceremony
+./scripts/platform-ca-ceremony.sh stick --workdir /mnt/ceremony --device /dev/sdX   # zweimal
+```
+
+Die Passphrase berührt das Skript nie — `cryptsetup` fragt sie selbst, sie
+landet in keiner Variable und in keiner Datei. Was das Skript im Einzelnen tut,
+steht unten; wer es von Hand machen will, kann das:
 
 ```bash
 # 1. Root-Schlüssel und -Zertifikat, ECDSA P-384, 20 Jahre
@@ -57,7 +74,8 @@ openssl req -new -x509 -sha384 -days 7300 -key root.key -out root.crt \
 openssl x509 -in root.crt -noout -fingerprint -sha256
 ```
 
-**Datenträger schreiben.** Beide Datenträger identisch, LUKS-verschlüsselt:
+**Sticks schreiben.** Beide Sticks identisch, LUKS-verschlüsselt — der
+zweite ist die Kopie gegen Datenträgerdefekt, nicht eine zweite Berechtigung:
 
 ```bash
 cryptsetup luksFormat /dev/sdX          # Passphrase: siehe unten
@@ -73,19 +91,55 @@ Live-System einfach neu starten, es hält nichts persistent.
 
 **Passphrase.** Nicht eine Person, nicht ein Passwortmanager auf einem Server:
 die Passphrase wird auf Papier in **zwei versiegelten Umschlägen** hinterlegt,
-je einer bei einem der beiden Schlüsselverwahrer. Eine Person mit Datenträger
+je einer bei Matthias Hadorn und bei Rolf Straubhaar. Eine Person mit Stick
 **und** Umschlag kann den Root benutzen — das ist gewollt, damit ein Ausfall
 einer Person die Plattform nicht blockiert, und akzeptabel, weil eine Zeremonie
 ohnehin protokolliert wird.
 
-**Ablage.** Die zwei Datenträger an **getrennten Standorten**, jeweils in einem
-verschlossenen Behälter. Nicht beide im gleichen Gebäude, sonst schützt die
-Zweitkopie nur gegen Datenträgerdefekt, nicht gegen Feuer.
+**Ablage (Entscheid E9).** Die Sticks liegen im **Tresor von Vita Brevis**.
+Zwei identische Sticks, beide im selben Tresor.
+
+Eine Trennung muss dabei halten, sonst ist der ganze Aufwand umsonst:
+**die Umschläge gehören nicht in den Tresor.** Liegen Stick und Passphrase am
+gleichen Ort, ist der Tresorzugang der einzige Faktor und die Zwei-Personen-Regel
+existiert nur auf dem Papier. Die Umschläge bleiben persönlich bei den beiden
+Verwahrern.
+
+**Was ein einziger Standort kostet — und was nicht.** Ein verlorener Root ist
+kein Ausfall. Bestehende Intermediates und alle davon ausgestellten Zertifikate
+laufen weiter, bis das erste Intermediate erneuert werden muss — also bis zu
+fünf Jahre. Wer den Root verliert, baut in dieser Zeit einen neuen auf: planbar,
+ohne Unterbruch für Kunden. Der einzige Standort kostet Verfügbarkeit in einem
+Fall, der ohnehin Jahre Vorlauf hat.
+
+Für die **Vertraulichkeit** ist ein Standort eher besser als zwei: ein Ort,
+dessen Zugang kontrolliert wird, statt zweier. Und die Vertraulichkeit ist hier
+die Seite, die weh tut — wer Stick und Passphrase hat, stellt sich ein
+Agent-Zertifikat für jeden Kunden und ein Operator-Zertifikat für die Konsole
+aus. Deshalb bleibt es beim Tresor.
+
+Die zweite Kopie im selben Tresor deckt den mit Abstand häufigsten Verlustfall
+ab, den defekten Stick, und kostet zwanzig Franken. Gegen Feuer oder Einbruch im
+Tresorraum hilft sie nicht: dieser Fall bleibt **bewusst offen** und ist nach
+obiger Rechnung tragbar. Kommt später ein zweiter Standort dazu
+(Bankschliessfach, zweiter Bürostandort), gehört ein Stick dorthin — das ist
+eine Verbesserung, keine Voraussetzung für den Start.
 
 ## 4 · Ausstellen eines Intermediate (Zeremonie)
 
 Nur bei Erstinbetriebnahme und alle 5 Jahre. Immer zu zweit, immer offline,
 immer mit Protokoll.
+
+```bash
+# Mit dem Skript, auf dem Offline-Rechner mit entsperrtem Stick:
+./scripts/platform-ca-ceremony.sh intermediate \
+    --workdir /mnt/ca --csr connector-int.csr --purpose connector
+```
+
+Es prüft die Selbstsignatur der CSR, lässt den Subject bestätigen, setzt
+`pathlen:0` (das Intermediate darf keine weiteren CAs ausstellen), verifiziert
+die Kette gegen den Root und protokolliert Seriennummer und Fingerprint. Von
+Hand:
 
 ```bash
 # Auf dem Plattform-Server: Schlüssel und CSR erzeugen, Schlüssel bleibt dort
@@ -124,10 +178,11 @@ eine Zeile in der Registry.
 
 | Fall | Was zu tun ist |
 |---|---|
-| **Ein Datenträger defekt oder verloren** | Kein Notfall, aber kein Aufschub: mit dem zweiten Datenträger einen neuen erzeugen (Abschnitt 3, nur der Datenträger-Teil), Protokoll ergänzen. Bei *Verlust* (nicht Defekt) den Root vorsorglich austauschen (Abschnitt 7) — man weiss nicht, wer den Datenträger hat. |
-| **Beide Datenträger verloren oder unlesbar** | Der Root ist weg. Bestehende Zertifikate laufen weiter, bis das erste Intermediate erneuert werden muss (bis zu 5 Jahre). In dieser Zeit einen neuen Root aufsetzen und beide Intermediates neu ausstellen — planbar, kein Ausfall. |
-| **Passphrase-Umschläge beide weg** | Wie „beide Datenträger verloren": der Root ist unbenutzbar. |
-| **Ein Schlüsselverwahrer fällt dauerhaft aus** | Der andere hat Datenträger und Umschlag und kann handeln. Danach sofort einen neuen zweiten Verwahrer bestimmen und Datenträger plus Umschlag übergeben. |
+| **Ein Stick defekt** | Kein Notfall, aber kein Aufschub: mit dem zweiten Stick eine neue Kopie erzeugen (Abschnitt 3, nur der Stick-Teil), Protokoll ergänzen. Der defekte Stick wird physisch zerstört, nicht weggeworfen. |
+| **Ein Stick fehlt im Tresor** | Anders als ein Defekt: jemand hat ihn. Root vorsorglich austauschen (Abschnitt 7) und den Vorfall behandeln, auch wenn die Passphrase nicht mit im Tresor lag — Zeit arbeitet für den, der den Stick hat. |
+| **Beide Sticks unlesbar, Tresor zerstört oder ausgeräumt** | Der Root ist weg. Bestehende Zertifikate laufen weiter, bis das erste Intermediate erneuert werden muss (bis zu 5 Jahre). In dieser Zeit einen neuen Root aufsetzen und beide Intermediates neu ausstellen — planbar, kein Ausfall für Kunden. Das ist der Fall, den der einzige Standort bewusst offen lässt (Abschnitt 3). |
+| **Passphrase-Umschläge beide weg** | Wie „beide Sticks unlesbar": der Root ist unbenutzbar. Deshalb prüft die Jahreskontrolle beide Umschläge mit. |
+| **Ein Schlüsselverwahrer fällt dauerhaft aus** | Der andere hat Tresorzugang und seinen Umschlag und kann handeln. Danach sofort einen neuen zweiten Verwahrer bestimmen, Umschlag neu versiegeln und übergeben. |
 | **Intermediate-Schlüssel kompromittiert** (Server übernommen) | Der schwerwiegendste Fall. Alle davon ausgestellten Zertifikate in der Registry widerrufen, neues Intermediate ausstellen (Zeremonie), alle Agenten neu anmelden. Die Agenten kommen mit Einmal-Token wieder herein — der Ablauf existiert also schon, er ist nur mühsam. |
 | **Root-Schlüssel kompromittiert** | Vollständiger Neuaufbau: neuer Root, neue Intermediates, alle Agenten und Operatoren neu. Deshalb liegt er offline. |
 
@@ -143,25 +198,33 @@ den Anschluss verliert.
 
 | Wann | Was |
 |---|---|
-| Jährlich | Beide Datenträger lesen (Bitrot), `SHA256SUMS` prüfen, Protokoll ergänzen. Gleichzeitig prüfen, ob die Verwahrer noch die richtigen Personen sind. |
-| Jährlich | Verlustfall einmal trocken durchspielen: Datenträger holen, entschlüsseln, Fingerprint vergleichen, zurücklegen. Ein Verfahren, das nie geübt wurde, funktioniert im Ernstfall nicht. |
+| Jährlich | Beide Sticks lesen (Bitrot), `SHA256SUMS` prüfen, Protokoll ergänzen. Gleichzeitig prüfen, ob Matthias Hadorn und Rolf Straubhaar noch die richtigen Verwahrer sind und ob **beide Umschläge** noch vorhanden und versiegelt sind. |
+| Jährlich | Verlustfall einmal trocken durchspielen: Stick holen, mit dem Umschlag entschlüsseln, `platform-ca-ceremony.sh verify --workdir /mnt/ca` laufen lassen, zurücklegen. Ein Verfahren, das nie geübt wurde, funktioniert im Ernstfall nicht. Diese Übung ist gleichzeitig die einzige regelmässige Prüfung, dass die Passphrase noch stimmt. |
 | 6 Monate vor Ablauf | Intermediate erneuern (Abschnitt 4). |
 | Bei Personalwechsel | Verwahrer wechseln, Umschlag neu versiegeln. |
 
-## 9 · Was noch festzulegen ist
+## 9 · Festgelegt und noch offen
 
-Diese Angaben kann nur Vita Brevis liefern; ohne sie ist das Verfahren
-unvollständig:
+**Festgelegt (2026-09-08, Entscheid E9):**
 
-1. **Die zwei Schlüsselverwahrer** — namentlich. Vorschlag: Geschäftsführung
-   plus technische Leitung, damit nicht beide Rollen dieselbe Person sind.
-2. **Die zwei Standorte** für die Datenträger — konkret (Safe im Büro,
-   Bankschliessfach, Privatadresse?). Bedingung: nicht dasselbe Gebäude.
-3. **Wo das Protokoll liegt** — Papierordner mit den Datenträgern, oder ein
-   getrennter Ordner. Es darf keine Passphrase enthalten.
-4. **Ob ein dritter Datenträger** gewünscht ist. Drei Kopien erhöhen die
-   Verfügbarkeit und die Angriffsfläche gleichermassen; bei zwei getrennten
-   Standorten ist zwei aus meiner Sicht ausreichend.
-5. **Ob der Offline-Rechner** ein dediziertes Gerät sein soll (bleibt im Safe)
-   oder ein Live-System auf beliebiger Hardware. Live-System ist billiger und
-   hinterlässt nichts; ein dediziertes Gerät ist bequemer.
+| Punkt | Entscheid |
+|---|---|
+| Schlüsselverwahrer | **Matthias Hadorn** und **Rolf Straubhaar** |
+| Ablage der Sticks | **Tresor von Vita Brevis**, zwei identische Sticks |
+| Ablage der Passphrase | zwei versiegelte Umschläge, **persönlich bei den Verwahrern**, nicht im Tresor |
+| Dritter Datenträger | **nein** — zwei Kopien am kontrollierten Ort, dafür die Jahreskontrolle |
+| Zweiter Standort | **vorerst nicht**; die Begründung und der offen gelassene Fall stehen in Abschnitt 3 |
+
+**Noch offen — blockiert die Zeremonie nicht, sollte aber vor der ersten
+Ausstellung entschieden sein:**
+
+1. **Wo das Protokoll liegt.** Vorschlag: Papierordner im gleichen Tresor wie
+   die Sticks. Das Protokoll enthält **keine** Passphrase, nur Datum,
+   Anwesende, Zweck, Seriennummern und Fingerprints — es ist damit nicht
+   geheim, sondern beweisend, und gehört dorthin, wo man es beim nächsten Mal
+   sucht.
+2. **Ob der Offline-Rechner ein dediziertes Gerät** ist (bleibt im Tresor) oder
+   ein Live-System auf beliebiger Hardware. Vorschlag: Live-System — es ist
+   billiger, hinterlässt nichts und kann nicht veralten, während ein Gerät im
+   Tresor nach fünf Jahren mit ungepatchtem System aufwacht. Nachteil: bei jeder
+   Zeremonie eine halbe Stunde Aufsetzen.
