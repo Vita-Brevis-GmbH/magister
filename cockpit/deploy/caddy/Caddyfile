@@ -1,0 +1,67 @@
+# Management listener for the console (ADR-0015 D1).
+#
+# The console can mint sessions into every customer, so it must not be
+# reachable from the internet. Three layers, in the order they take effect:
+#
+#   1. The port is published only on the management address — see the
+#      `ports:` mapping in ../docker-compose.yml. What is not routed cannot be
+#      reached; this is the actual boundary.
+#   2. This site block requires a client certificate from the platform CA. Even
+#      a reachable port yields no TLS handshake without an operator certificate.
+#   3. It sets a marker header the application insists on
+#      (cockpit_api/management_guard.py), so a proxy misconfiguration cannot
+#      expose the console by accident.
+#
+# Source-IP filtering is deliberately NOT here: that belongs on the Fortigate
+# and the WAF, where it is maintained. Two places for one rule means one of
+# them is wrong.
+{
+	# No ACME: the management address is internal and has no public name to
+	# validate. The certificate is issued from the platform CA (see below).
+	auto_https off
+	admin off
+}
+
+https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
+	tls /certs/console.pem /certs/console-key.pem {
+		# Operator certificates only. `require_and_verify` means the handshake
+		# fails without one — a browser or a scanner gets nothing to talk to.
+		client_auth {
+			mode require_and_verify
+			trust_pool file /certs/platform-ca.pem
+		}
+		protocols tls1.3 tls1.3
+	}
+
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+
+	# `handle`, not `handle_path`: the console API mounts its routers AT /api
+	# (see cockpit_api/main.py), so the prefix must survive the hop.
+	#
+	# The marker is what the application insists on. It is not a credential —
+	# it proves the request came through this block, nothing more. `header_up`
+	# REPLACES any value a client sent under that name, so a header smuggled in
+	# from outside cannot pass the guard.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Magister-Management {$COCKPIT_MANAGEMENT_MARKER}
+		}
+	}
+
+	# The console SPA comes with the console UI (ADR-0013, Phase 2). Until then
+	# this listener answers nothing but the API — deliberately no route to a
+	# service that does not exist yet.
+	handle {
+		respond "not found" 404
+	}
+}

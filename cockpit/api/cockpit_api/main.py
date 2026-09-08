@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from starlette.requests import Request
 from starlette.responses import Response
 
+from cockpit_api.config import settings
+from cockpit_api.management_guard import check_configuration, make_management_guard
 from cockpit_api.routers import instances, service_tokens, update_requests
 from cockpit_api.services.health_poller import health_poller_loop
 from cockpit_api.services.release_poller import release_poller_loop
@@ -13,6 +15,14 @@ from cockpit_api.services.release_poller import release_poller_loop
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    # Refuse to start on a configuration that would expose the console
+    # (ADR-0015 D1). Deliberately before the pollers: a console that must not
+    # be reachable should not come up half-way.
+    check_configuration(
+        required=settings.require_management_listener,
+        marker=settings.management_marker,
+        published_address=settings.published_address,
+    )
     tasks = [
         asyncio.create_task(health_poller_loop()),
         asyncio.create_task(release_poller_loop()),
@@ -39,6 +49,15 @@ _SECURITY_HEADERS = {
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
     "Cross-Origin-Resource-Policy": "same-origin",
 }
+
+
+# Management-listener guard (ADR-0015 D1). Registered before the security
+# headers so a refused request still carries them.
+app.middleware("http")(
+    make_management_guard(
+        lambda: (settings.require_management_listener, settings.management_marker)
+    )
+)
 
 
 @app.middleware("http")

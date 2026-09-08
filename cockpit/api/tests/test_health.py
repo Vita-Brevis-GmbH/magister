@@ -10,10 +10,11 @@ def test_health() -> None:
         assert r.json() == {"status": "ok"}
 
 
-def test_instances_requires_auth() -> None:
-    with TestClient(app) as client:
-        r = client.get("/api/instances")
-        assert r.status_code == 401
+def test_instances_requires_auth(client: TestClient) -> None:
+    # Through the management listener (the ``client`` fixture) the request
+    # reaches the auth layer — 401, not the guard's 404.
+    r = client.get("/api/instances")
+    assert r.status_code == 401
 
 
 def test_security_headers_present() -> None:

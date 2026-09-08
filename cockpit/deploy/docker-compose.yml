@@ -1,3 +1,14 @@
+# Console stack. The api and web services are NOT published to the host: the
+# only way in is the caddy service's management listener (ADR-0015 D1), and
+# that is bound to the management address, never 0.0.0.0.
+#
+# Required env (put them in a .env next to this file):
+#   COCKPIT_BIND_ADDRESS        — the management address, e.g. 10.0.0.5.
+#                                 Must not be 0.0.0.0; the api refuses to start.
+#   COCKPIT_MANAGEMENT_MARKER   — shared marker between caddy and api.
+#                                 Generate with: openssl rand -hex 32
+#   COCKPIT_HOSTNAME            — the name on the console certificate.
+#   COCKPIT_BOOTSTRAP_TOKEN     — break-glass API token.
 services:
   postgres:
     image: postgres:16
@@ -15,7 +26,45 @@ services:
     environment:
       COCKPIT_DATABASE_URL: postgresql+asyncpg://cockpit:cockpit@postgres:5432/cockpit
       COCKPIT_BOOTSTRAP_TOKEN: ${COCKPIT_BOOTSTRAP_TOKEN:-change-me-in-prod}
+      # ADR-0015 D1: refuse anything that did not come through the management
+      # listener, and refuse to start if that listener looks public.
+      COCKPIT_REQUIRE_MANAGEMENT_LISTENER: "1"
+      COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required — openssl rand -hex 32}
+      COCKPIT_PUBLISHED_ADDRESS: ${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required — the management address, not 0.0.0.0}:4444
     depends_on: [postgres]
-    ports: ["8001:8000"]
+    # Deliberately no `ports:` — everything goes through caddy below.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on: [api]
+    # THE line that keeps the console off the internet: published on the
+    # management address only. Never change the left-hand side to 0.0.0.0 —
+    # the api would still refuse to start, but do not rely on that.
+    ports:
+      - "${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required}:4444:4444"
+    environment:
+      COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.magister.ch}
+      COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for f in /certs/platform-ca.pem /certs/console.pem /certs/console-key.pem; do
+          if [ ! -f "$$f" ]; then
+            echo "caddy: $$f is missing — the console listener needs the platform CA and"
+            echo "       a server certificate. See cockpit/deploy/caddy/README.md and"
+            echo "       docs/runbooks/platform-ca.md. Refusing to start."
+            exit 1
+          fi
+        done
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 volumes:
   cockpit-pg:
+  caddy-data:
