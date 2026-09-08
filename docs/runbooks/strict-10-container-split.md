@@ -56,6 +56,30 @@ docker compose -f docker-compose.yml -f docker-compose.split10.yml up -d
 docker compose -f docker-compose.yml restart caddy   # reload the new routes
 ```
 
+### Migrations (schema)
+
+Migrations run **automatically**: the `magister-api` container (the migrator)
+runs `alembic upgrade head` on startup via its image entrypoint; the module
+containers set `MAGISTER_SKIP_MIGRATIONS=1` and wait for it to be healthy. So
+once `magister-api` is **healthy**, the schema is already up to date — no manual
+step is needed.
+
+There is **no `uv`** in the production image (the venv is on `PATH`, so `alembic`
+is a direct command). To verify or run a migration by hand:
+
+```bash
+# Verify the DB is at the newest revision:
+docker compose -f docker-compose.yml -f docker-compose.split10.yml \
+  exec magister-api alembic current            # expect: <latest revision> (head)
+
+# Only if you ever need to run it manually (normally automatic):
+docker compose -f docker-compose.yml -f docker-compose.split10.yml \
+  exec magister-api alembic upgrade head
+```
+
+`docker compose ... exec magister-api uv run alembic ...` fails with
+`exec: "uv": executable file not found` — drop the `uv run` prefix.
+
 ## 4. Verify
 
 ```bash
