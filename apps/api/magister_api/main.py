@@ -29,6 +29,8 @@ from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 from magister_api.services.rbac import RbacService
+from magister_api.tenancy.context import dispose_tenancy, init_tenancy
+from magister_api.tenancy.middleware import make_tenant_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings.require_runtime_secrets()
     settings.reject_removed_env()
     init_engine(settings)
+    # Mandanten-Registry und Engines (ADR-0013 D1). Bewusst vor den Seeds: eine
+    # unbrauchbare Registry soll den Start abbrechen, nicht erst die erste
+    # Anfrage — ein Prozess, der niemanden bedienen kann, soll auch nicht
+    # gesund melden.
+    registry, _ = init_tenancy(settings)
+    logger.info(
+        "Mandantenfähigkeit aktiv: %d Mandant(en), Erweiterungsschema %r",
+        len(registry.tenants),
+        settings.extension_schema,
+    )
 
     # First-run seeds. Both are idempotent and short-circuit when the
     # respective rows are already populated.
@@ -93,6 +105,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await sync_task
+        await dispose_tenancy()
         await dispose_engine()
 
 
@@ -115,9 +128,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # Order matters: CSRF needs to see request.state.* set by AuditContextMiddleware,
     # so AuditContext is added LAST (Starlette executes middleware in reverse order).
+    # The tenant resolution has to run BEFORE all of them — added last of all, so
+    # it executes first: an unknown host must be a 404 before anything opens a
+    # session, and everything downstream may rely on request.state.tenant.
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(CsrfMiddleware)
     app.add_middleware(AuditContextMiddleware)
+    app.middleware("http")(make_tenant_middleware())
 
     # Feature modules own their routers (M6 — magister_api/modules). Toggleable
     # modules get a mount-time guard dependency so a disabled module's routes

@@ -104,6 +104,7 @@ In dieser Reihenfolge; jeder Schritt ist auditiert.
    dieses Schema, Alembic auf Kopf-Version, eigener Datenschlüssel, Materialisierung
    von Rechten und Vorlagen. Bricht ein Schritt ab, bleibt der Kunde auf
    `Bereitstellung` und ist nicht erreichbar — nie halb angelegt.
+   Bis die Konsole das übernimmt (Phase 2), ist es der Block in §2.1.
 4. **Systemeinstellungen** eintragen: OIDC (aus 1.6), AD (DCs, Bind-Modus,
    Such-Basis, LDAPS-Vertrauen aus 1.5), Sync-Intervall.
 5. **Agent-Paket** beziehen und mit dem Einmal-Token (24 h) an die Kunden-IT
@@ -112,6 +113,48 @@ In dieser Reihenfolge; jeder Schritt ist auditiert.
    pro Standort setzen.
 7. **Sicherung** prüfen: erster Dump auf dem Share, Aufbewahrung 10 Tage,
    Prüf-Wiederherstellung eingeplant.
+
+### 2.1 Schema und Rolle von Hand (bis Phase 2)
+
+```sql
+-- Eine EIGENE ANMELDEROLLE, mit der sich die Anwendung für diesen Kunden
+-- verbindet. Nicht eine gemeinsame Rolle, die per SET ROLE wechselt: Postgres
+-- prüft SET ROLE gegen den Sitzungsbenutzer, eine gemeinsame Anmelderolle mit
+-- Mitgliedschaft in allen Kundenrollen kann daher aus jedem Kunden in jeden
+-- anderen wechseln (ADR-0013 D1, Korrektur).
+CREATE ROLE r_<slug> LOGIN PASSWORD '<aus dem Passwort-Safe>';
+
+CREATE SCHEMA t_<slug> AUTHORIZATION r_<slug>;
+-- Ohne dieses REVOKE darf in Postgres jede Rolle über PUBLIC hineinsehen.
+REVOKE ALL ON SCHEMA t_<slug> FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA t_<slug> TO r_<slug>;
+```
+
+Dann Registry-Zeile in `MAGISTER_TENANTS` ergänzen (Felder: `slug`, `name`,
+`hostname`, `dsn` mit **dieser** Anmelderolle, `db_role`, `schema_name`) und
+migrieren:
+
+```bash
+cd apps/api
+uv run ../../scripts/magister-cli tenants migrate \
+    --dump-dir /srv/backup/magister/pre-migration --only <slug>
+```
+
+Der Runner migriert mit der Anmelderolle des Kunden — dadurch gehören die
+Tabellen ihm. Migriert man stattdessen als Superuser, bekommt die Kundenrolle
+beim ersten Query `permission denied for table`.
+
+Gegenprobe, bevor der Kunde freigegeben wird:
+
+```sql
+-- Erwartet: r_<slug>
+SELECT DISTINCT tableowner FROM pg_tables WHERE schemaname = 't_<slug>';
+-- Als r_<slug> verbunden, erwartet: permission denied
+SELECT 1 FROM t_<andererkunde>.schools LIMIT 1;
+```
+
+Einzelheiten und der laufende Betrieb:
+[mandanten-schema-umzug.md](mandanten-schema-umzug.md).
 
 ## 3 · Installation beim Kunden (gemeinsamer Termin, ~1 Stunde)
 

@@ -45,7 +45,8 @@ async def _seed(session: AsyncSession) -> None:
 
 
 def _code(secret: str, *, step_offset: int = 0) -> str:
-    return pyotp.TOTP(secret, digits=6, interval=30).at(time.time() + step_offset * 30)
+    # int(): pyotp.at() nimmt int oder datetime, time.time() liefert float.
+    return pyotp.TOTP(secret, digits=6, interval=30).at(int(time.time()) + step_offset * 30)
 
 
 async def _enroll(client: AsyncClient) -> tuple[str, list[str]]:

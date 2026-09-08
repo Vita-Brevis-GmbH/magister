@@ -8,6 +8,11 @@ Subcommands:
                        empty deployment can show the full UI without
                        waiting for an AD-sync. Wraps
                        ``python -m magister_api.cli.seed_demo``.
+    tenants          — the tenant registry (ADR-0013): ``list`` shows it,
+                       ``migrate`` runs ``alembic upgrade head`` per tenant —
+                       a pre-migration dump first, the canary before the rest,
+                       and each schema migrated with the tenant's own login
+                       role so the tables end up owned by it.
     local-admin      — the local break-glass account. Currently one action:
                        ``totp-reset`` clears the second factor (ADR-0015 D2),
                        ``--new-recovery-codes`` only reissues the codes, and
@@ -149,6 +154,16 @@ def main() -> int:
     )
     tr.add_argument("--reason", default="", help="Reason or ticket number for the audit trail.")
     tr.set_defaults(func=cmd_local_admin_totp_reset)
+
+    # Mandanten-Werkzeug (ADR-0013). Der Import liegt hier drin, damit die
+    # anderen Subcommands weiter funktionieren, wenn magister_api nicht
+    # importierbar ist — der Fall, den cmd_hash_password oben abfängt.
+    try:
+        from magister_api.cli.tenants import add_parser as add_tenants_parser
+    except ImportError:
+        pass
+    else:
+        add_tenants_parser(sub)
 
     args = parser.parse_args()
     return args.func(args)

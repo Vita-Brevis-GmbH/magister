@@ -55,7 +55,8 @@ def _code(secret: str, *, step_offset: int = 0) -> str:
     after enrolment needs the *next* step's code rather than the one just
     consumed — which is within the accepted ±1 drift, so no waiting is needed.
     """
-    return pyotp.TOTP(secret, digits=6, interval=30).at(time.time() + step_offset * 30)
+    # int(): pyotp.at() nimmt int oder datetime, time.time() liefert float.
+    return pyotp.TOTP(secret, digits=6, interval=30).at(int(time.time()) + step_offset * 30)
 
 
 async def _enroll(client: AsyncClient, *, password: str) -> tuple[str, list[str]]:

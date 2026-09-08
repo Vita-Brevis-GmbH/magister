@@ -32,13 +32,38 @@ Der Product Owner will:
 
 Jeder Kunde erhält ein eigenes Postgres-Schema (`t_<slug>`) **und eine eigene
 Datenbankrolle** (`r_<slug>`), der `USAGE` auf alle anderen Kundenschemas
-entzogen ist. Pro Transaktion setzt die Anwendung `SET LOCAL ROLE` und
-`SET LOCAL search_path`; beides endet mit der Transaktion, ein
-Verbindungs-Pool kann also nichts weitertragen. Vor dem ersten Query prüft eine
-Zusicherung, dass `current_user` zum Kunden der Anfrage passt.
+entzogen ist. Die Anwendung **meldet sich mit dieser Rolle an** — der DSN des
+Kunden trägt sie als Anmeldenamen — und setzt pro Transaktion
+`SET LOCAL search_path`. Vor dem ersten Query prüft eine Zusicherung gegen die
+Datenbank, dass `session_user`, `current_user` und der `search_path` zum Kunden
+der Anfrage passen.
 
 Damit ist die Trennung **von Postgres erzwungen, nicht von der Anwendung**: ein
 vergessener Filter liefert keine fremden Zeilen, sondern einen Fehler.
+
+**Korrektur gegenüber dem ersten Entwurf dieses ADR.** Ursprünglich stand hier
+eine gemeinsame Anmelderolle, die pro Transaktion per `SET LOCAL ROLE` in die
+Kundenrolle wechselt — mit einem einzigen Verbindungs-Pool für alle Kunden. Die
+Messung in Phase 1 hat das widerlegt: **Postgres prüft `SET ROLE` gegen den
+Sitzungsbenutzer, nicht gegen die aktuell gesetzte Rolle.** Eine Anmelderolle
+mit Mitgliedschaft in allen Kundenrollen kann daher aus `r_alpha` heraus
+`SET ROLE r_beta` ausführen und das Nachbarschema lesen. Der Rollenwechsel ist
+keine Einbahnstrasse.
+
+`SET LOCAL ROLE` allein wäre also eine Grenze gegen **Anwendungsfehler**
+(vergessener Filter, falsches Schema), aber keine gegen einen Angreifer mit
+SQL-Ausführung. Mit einer eigenen Anmelderolle pro Kunde existiert auf dieser
+Verbindung überhaupt keine fremde Rolle, in die man wechseln könnte; selbst die
+Metadaten des Nachbarschemas sind unsichtbar (`information_schema` filtert nach
+Rechten). Nachgeprüft in
+`apps/api/tests/integration/test_tenant_isolation.py`.
+
+Der Preis: **ein Verbindungs-Pool pro Kunde** statt eines gemeinsamen.
+Verbindungen = Kunden × Prozesse × (`pool_size` + `max_overflow`), deshalb sind
+die Mandanten-Pools klein voreingestellt (`MAGISTER_TENANT_POOL_SIZE`, Vorgabe
+2 + 3) und ab einer zweistelligen Kundenzahl gehört ein PgBouncer davor. Das
+ist der Aufpreis dafür, dass die Zusage „Trennung in der Datenbank" auch gegen
+den Fall gilt, in dem die Anwendung kompromittiert ist.
 
 Die Mandanten-Registry speichert pro Kunde **DSN + Schema**. Dadurch sind
 „eigenes Schema", „eigene Datenbank" und „eigener Cluster" derselbe Code-Pfad

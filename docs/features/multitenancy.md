@@ -232,21 +232,61 @@ fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
   von selbst wieder; der Konsolen-Listener ist auf der öffentlichen Adresse
   nicht gebunden und lehnt ohne Client-Zertifikat den Handshake ab.
 
-### Phase 1 — Mandanten-Abstraktion mit genau einem Kunden
+### Phase 1 — Mandanten-Abstraktion mit genau einem Kunden ✅
 
 Der wichtigste De-Risking-Schritt: die ganze Mechanik einbauen, **ohne**
 Verhaltensänderung.
 
-- Registry (zunächst aus Env, noch ohne Konsole), Auflösungs-Middleware,
-  Engine-Registry, `SET LOCAL ROLE`/`search_path`, Zusicherung.
-- Schema-Umzug `public` → `t_default`; Alembic mit `version_table_schema`;
-  Migrations-Runner über die Registry — der zieht pro Kunde einen Dump, **bevor**
-  er migriert (ADR-0016 D6, die Rückfahrkarte).
-- Kein `MAGISTER_MULTITENANT`-Schalter: eine Installation mit einem Mandanten
+- ✅ **Registry** (`magister_api/tenancy/registry.py`) aus `MAGISTER_TENANTS`,
+  noch ohne Konsole. Die Validierung ist die Sicherheitsgrenze für Bezeichner,
+  weil `SET` keine Bind-Parameter nimmt; ab zwei Mandanten erzwingt sie
+  ausserdem eigene Anmelderolle, eigenen Hostnamen und eigenes Schema pro Kunde.
+- ✅ **Auflösungs-Middleware** (`tenancy/middleware.py`): unbekannter Hostname →
+  404 (nicht 400 — eine unterscheidende Antwort verrät die Kundenliste), nicht
+  aktiv → 503, Schema-Stand ≠ Kopf-Version → 503 Wartung.
+- ✅ **Engine-Registry** (`tenancy/engines.py`) je DSN, **ein Pool pro Kunde**.
+- ✅ **Zusicherung** (`tenancy/scope.py`): `search_path` setzen, dann `session_user`,
+  `current_user` und `search_path` gegen die Datenbank prüfen, bevor der erste
+  Query läuft.
+- ✅ **Ein einziger Eingriff im Anwendungscode:** `db.get_session` nimmt jetzt
+  den Request und liefert eine mandantengebundene Transaktion. Kein Router,
+  kein Service, kein Repository wurde angefasst — alle 40 Aufrufstellen hängen
+  an `Depends(get_session)`.
+- ✅ **Alembic pro Schema** (`version_table_schema` + `search_path`), die 44
+  bestehenden Migrationen unverändert. Kopf-Version als Konstante in
+  `tenancy/version.py`, gegen den echten Alembic-Kopf getestet.
+- ✅ **Migrations-Runner** `magister-cli tenants migrate`: Dump pro Kunde
+  **vor** der Migration (ADR-0016 D6), Kanarienvogel zuerst, Abbruch bei
+  Fehler, `--keep-going` nur für die Nicht-Kanarienvögel.
+- ✅ **Schema-Umzug** `public` → `t_default`:
+  `scripts/schema-move-to-tenant.sql`, mit Vorprüfungen, Eigentumsübergabe und
+  Nachprüfung, dass in `public` keine Anwendungstabelle zurückbleibt.
+- ✅ Kein `MAGISTER_MULTITENANT`-Schalter: eine Installation mit einem Mandanten
   löst über den konfigurierten Hostnamen seiner Registry-Zeile auf — dieselbe
-  Middleware, dieselben Abfragen (E4, ADR-0013 D8).
-- **Abnahme:** Alle bestehenden Tests grün, keine sichtbare Änderung, ein
-  Contract-Test beweist, dass `r_default` ein zweites Schema nicht lesen kann.
+  Middleware, dieselben Abfragen (E4, ADR-0013 D8). Ohne `MAGISTER_TENANTS`
+  entsteht die Zeile aus `MAGISTER_DATABASE_URL`.
+- ✅ **Abnahme:** alle 856 bestehenden Tests grün und unverändert; ein
+  Contract-Test gegen echtes Postgres beweist, dass eine Mandantenrolle das
+  Nachbarschema nicht lesen, nicht in dessen Rolle wechseln und es nicht einmal
+  im Katalog sehen kann (`tests/integration/test_tenant_isolation.py`); ein
+  zweiter Test führt eine echte HTTP-Anfrage ohne jede Überschreibung durch die
+  ganze Kette (`tests/integration/test_tenant_request_path.py`).
+
+**Drei Dinge, die beim Bauen anders herauskamen als geplant** — alle drei sind
+gemessen, nicht überlegt:
+
+1. **`SET LOCAL ROLE` ist keine Grenze gegen SQL-Injection.** Postgres prüft
+   `SET ROLE` gegen den Sitzungsbenutzer; eine gemeinsame Anmelderolle kann
+   aus jedem Mandanten in jeden anderen wechseln. Folge: eigene Anmelderolle
+   pro Kunde, ein Pool pro Kunde. Siehe die Korrektur in ADR-0013 D1.
+2. **Migrieren als Superuser macht das Schema für den Kunden unbenutzbar.**
+   Die Tabellen gehören dann dem Superuser, und die Mandantenrolle bekommt
+   beim ersten Query „permission denied for table". Der Runner migriert
+   deshalb mit der Anmelderolle des Kunden.
+3. **Das Erweiterungsschema muss auf dem `search_path` stehen**, sonst findet
+   der Audit-Dienst `pgp_sym_encrypt` nicht — aber als *zweiter* Eintrag und
+   in einem Schema ohne Anwendungstabellen, sonst könnte eine fehlende Tabelle
+   still darauf zurückfallen. Der Umzug prüft das nach.
 
 ### Phase 2 — Konsole und Bereitstellung
 

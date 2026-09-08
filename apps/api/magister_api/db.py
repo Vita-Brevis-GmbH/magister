@@ -1,4 +1,16 @@
-"""Async SQLAlchemy engine + session factory."""
+"""Async SQLAlchemy engine + session factory.
+
+The request-scoped session is **tenant-scoped** (ADR-0013 D1): which engine it
+comes from and which schema it sees is decided by the tenant the resolution
+middleware put on the request. That is why ``get_session`` takes a ``Request``
+— and why every router could stay untouched: they all depend on
+``Depends(get_session)`` and never on the engine.
+
+``init_engine``/``get_sessionmaker`` remain for the processes that have no
+request to resolve from: the startup seeds, the AD-sync scheduler and the CLI.
+Those run against ``database_url`` and are single-tenant by nature; the
+per-tenant fan-out for them comes with the console in Phase 2.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +23,11 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker,
     create_async_engine,
 )
+from starlette.requests import Request
 
 from magister_api.config import Settings, get_settings
+from magister_api.tenancy.context import get_engines, tenant_from_request
+from magister_api.tenancy.scope import apply_tenant_scope
 
 _engine: AsyncEngine | None = None
 _sessionmaker: async_sessionmaker[AsyncSession] | None = None
@@ -56,17 +71,25 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return _sessionmaker
 
 
-async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency: one auto-committed transaction per request.
+async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency: one auto-committed, tenant-scoped transaction.
 
     The session relies on SQLAlchemy 2.x autobegin: the first DB op opens a
     transaction; the wrapper commits on success and rolls back on exception.
     Service code therefore should NOT call ``session.commit()`` or
     ``session.begin()`` — that's the request handler's contract.
+
+    The first DB op is ours: ``apply_tenant_scope`` sets the search_path and
+    verifies against the database that this transaction really is the tenant's,
+    before any handler code runs. A failure there aborts the request rather
+    than serving a query whose scope nobody checked.
     """
-    sm = get_sessionmaker()
+    tenant = tenant_from_request(request)
+    settings: Settings = request.app.state.settings
+    sm = get_engines().sessionmaker_for(tenant)
     async with sm() as session:
         try:
+            await apply_tenant_scope(session, tenant, extension_schema=settings.extension_schema)
             yield session
         except Exception:
             await session.rollback()

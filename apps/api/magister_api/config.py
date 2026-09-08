@@ -56,6 +56,24 @@ class Settings(BaseSettings):
     db_pool_size: int = Field(default=5, ge=1)
     db_max_overflow: int = Field(default=10, ge=0)
 
+    # --- Mandantenfähigkeit (ADR-0013) ------------------------------------
+    # JSON-Liste von Mandanten. Leer heisst: ein Mandant aus database_url,
+    # Schema 'public' — der noch nicht umgezogene Bestand. Kein Schalter,
+    # der das Verhalten umstellt: es ist dieselbe Registry mit einer Zeile
+    # (ADR-0013 D8). Ab Phase 2 liefert die Konsole diesen Inhalt.
+    tenants: str = Field(default="")
+    # Pool PRO MANDANT, nicht pro Prozess. Verbindungen = Mandanten ×
+    # Prozesse × (pool_size + max_overflow), deshalb klein: die harte
+    # Trennung verlangt eine eigene Anmelderolle je Mandant und damit einen
+    # eigenen Pool. Bei vielen Mandanten gehört ein PgBouncer davor.
+    tenant_pool_size: int = Field(default=2, ge=1)
+    tenant_max_overflow: int = Field(default=3, ge=0)
+    # Schema, in dem die Erweiterungen liegen (pgcrypto für den Audit-Dienst).
+    # Steht als ZWEITER Eintrag auf dem search_path und darf keine
+    # Anwendungstabellen enthalten — sonst könnte eine im Mandantenschema
+    # fehlende Tabelle still darauf zurückfallen.
+    extension_schema: str = Field(default="public")
+
     audit_key: SecretStr = Field(
         default=SecretStr(""),
         description="Symmetric key for pgcrypto pgp_sym_encrypt of audit_events.payload.",
