@@ -129,7 +129,16 @@
       "x": 1560,
       "y": 1240,
       "w": 1440,
-      "h": 1100
+      "h": 1160
+    },
+    {
+      "file": "Notzugang.dc.html",
+      "page": "page-3",
+      "title": "14 · Kunde · Notzugang (OTP zurücksetzen)",
+      "x": 0,
+      "y": 1620,
+      "w": 1440,
+      "h": 1380
     }
   ],
   "annotations": [
@@ -187,7 +196,7 @@
       "x": 820,
       "y": -300,
       "w": 700,
-      "text": "Authentisierungs-Haertung (ADR-0015)\n\nKonsole auf eigenem Listener (4444), nur auf der Management-Adresse und nur mit Client-Zertifikat. TOTP fuer lokale Konten, Einrichtung erzwungen. Der direkte AD-Login wird entfernt, nicht abgeschaltet.\n\nDiese drei Punkte brauchen keine Mandantenfaehigkeit - sie sind Phase 0 und koennen sofort in die bestehenden Installationen."
+      "text": "Authentisierungs-Haertung (ADR-0015)\n\nZwei Oberflaechen, zwei Erreichbarkeiten: das Usermanagement des Kunden ist im Internet und mit MFA geschuetzt, die Konsole bleibt intern (10.0.0.5:4444) und ist von aussen nicht geroutet. Quell-IP-Regeln macht die Fortigate mit der WAF, nicht Magister.\n\nTOTP fuer lokale Konten mit vier klar getrennten Reset-Eingriffen - Global Admin in der Konsole, on-prem per CLI. Der direkte AD-Login wird entfernt, nicht abgeschaltet.\n\nDiese Punkte brauchen keine Mandantenfaehigkeit: Phase 0, sofort umsetzbar."
     }
   ],
   "launch": {

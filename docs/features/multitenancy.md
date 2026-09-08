@@ -53,15 +53,25 @@ flowchart TB
   Console -.->|Reconciler: Konfig, Rechte,<br/>Vorlagen materialisieren| PG
   Console -.->|befristete, begründete<br/>Assertion| API
 
-  AgentA[Agent Kunde A<br/>vor Ort] -->|TCP 443 ausgehend<br/>mTLS + API-Key| Caddy
-  AgentB[Agent Kunde B<br/>vor Ort] -->|TCP 443 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentA[Agent Kunde A<br/>vor Ort] -->|TCP 46200 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentB[Agent Kunde B<br/>vor Ort] -->|TCP 46200 ausgehend<br/>mTLS + API-Key| Caddy
   AgentA -->|LDAPS 636<br/>bleibt im Kundennetz| ADA[AD Kunde A]
   AgentB -->|LDAPS 636<br/>bleibt im Kundennetz| ADB[AD Kunde B]
 ```
 
 Die Agenten bauen ihre Verbindung selbst auf; die Plattform öffnet nie eine
-Verbindung ins Kundennetz. Die Konsole hängt an einem eigenen Listener
-(TCP 4444, nur auf der Management-Adresse, mit Client-Zertifikat).
+Verbindung ins Kundennetz.
+
+Drei Listener mit drei Erreichbarkeiten:
+
+| Listener | Adresse | Wer | Aus dem Internet |
+|---|---|---|---|
+| Kundenoberfläche | `0.0.0.0:443` | Lehr- und Leitungspersonen, MFA über Entra | erreichbar, WAF davor |
+| Konsole | `10.0.0.5:4444` | Global Admin, Global Operator | **nicht geroutet** |
+| Connector | `0.0.0.0:46200` | Connector-Agenten, nur mit Client-Zertifikat | erreichbar |
+
+Das Usermanagement des Kunden gehört ins Internet, das Global Management nicht.
+Quell-IP-Regeln macht die Fortigate mit der WAF, nicht Magister.
 
 Die gestrichelten Pfeile laufen **nie** im Anfrage-Pfad eines Kunden: die
 Konsole schreibt in die Kundenschemas, aber kein Kunden-Request liest die
@@ -106,8 +116,9 @@ Konsolen-DB.
   den Kunden lesbar — Transparenz ist Teil der Zusage.
 - `role_assignments` bleibt unverändert beim Kunden (siehe offener Entscheid E2).
 - `local_admins`: neue Spalten `totp_secret_enc`, `totp_confirmed_at`,
-  `totp_last_step`, `recovery_codes` (ADR-0015 D2). Gehostet ist dieser
-  Anmeldeweg ganz abgeschaltet; on-prem ist er der Notzugang.
+  `totp_last_step`, `recovery_codes`, dazu `totp_reset_at` / `totp_reset_by` und
+  `mfa_suspended_until` für die befristete Aufhebung (ADR-0015 D2). Gehostet ist
+  dieser Anmeldeweg ganz abgeschaltet; on-prem ist er der Notzugang.
 - `app_settings`: `ad_login_enabled` und `ad_login_group` fallen weg (ADR-0015 D3).
 
 ## 5 · Anfrage-Pfad
@@ -140,7 +151,9 @@ Einstellungen enden mit der Transaktion, ein Pool kann nichts weitertragen.
 | `POST /auth/login/ad` | **Entfällt** (ADR-0015 D3) — der Code wird entfernt, nicht abgeschaltet. |
 | `POST /auth/login/local` | Bleibt on-prem, zweistufig mit TOTP; gehostet abgeschaltet. |
 | `routers/ad_rpc.py` (eingehendes AD-RPC) | Bleibt für den Monolith und den Container-Split; gehostet tritt der Connector-Rücken daneben (ADR-0014). |
-| — neu — | `/connector/*` (Anmeldung, Auftragsabruf, Ergebnis, Zertifikatserneuerung): eigener Listener mit Client-Zertifikat, nicht Teil der Kunden-API. |
+| — neu — | `/connector/*` (Anmeldung, Auftragsabruf, Ergebnis, Zertifikatserneuerung): eigener Listener auf `0.0.0.0:46200`, nur mit Client-Zertifikat, nicht Teil der Kunden-API. |
+| — neu — | `/auth/local/totp/*` (Einrichtung, Prüfung) beim Kunden; die vier Reset-Eingriffe liegen in der Konsole beziehungsweise im CLI. |
+| — neu — | `magister-cli local-admin totp-reset` (`--new-recovery-codes`, `--disable`) für On-prem-Installationen ohne Konsole. |
 | Alles Fachliche (Benutzer, Klassen, Abteilungen, Geräte, Importe, Briefe, Auswertungen, Audit) | Bleibt beim Kunden. |
 
 ## 7 · Phasen
@@ -155,14 +168,21 @@ irgendetwas gehostet wird. Referenz: ADR-0015.
   ist; im zweiten Release entfernt Alembic die beiden Spalten.
 - **TOTP für lokale Konten**, verpflichtend, mit Wiederherstellungscodes und
   erzwungener Einrichtung.
-- **Konsolen-Listener** vorbereiten: eigener Site-Block, Schnittstellen-Bindung,
-  Client-Zertifikat gegen die private CA, Marker-Header-Riegel in der Anwendung.
-  (Die Konsole selbst kommt in Phase 2 — der Listener und die CA sind die
+- **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue
+  Wiederherstellungscodes, Konto deaktivieren, MFA-Pflicht befristet aufheben —
+  on-prem über `magister-cli local-admin totp-reset`, gehostet später über die
+  Konsole. Jeder Eingriff mit eigenem, kundensichtbarem Audit-Ereignis.
+- **Konsolen-Listener** vorbereiten: eigener Site-Block, Bindung an die interne
+  Adresse, Client-Zertifikat gegen die private CA, Marker-Riegel in der
+  Anwendung. (Die Konsole selbst kommt in Phase 2 — Listener und CA sind die
   Vorarbeit, die der Connector in Phase 2a ebenfalls braucht.)
 - **Abnahme:** Kein Anmeldeweg ohne zweiten Faktor; ein Contract-Test verweigert
   jede Route unter `/auth/login/ad`; ein lokales Konto ohne bestätigtes TOTP
-  erreicht ausschliesslich die Einrichtungsseite; der Konsolen-Port lehnt ohne
-  Client-Zertifikat den Handshake ab.
+  erreicht ausschliesslich die Einrichtungsseite; ein zurückgesetztes Konto
+  landet beim nächsten Anmelden zwingend in der Einrichtung und bekommt dabei
+  kein Geheimnis angezeigt; eine aufgehobene MFA-Pflicht greift nach 24 Stunden
+  von selbst wieder; der Konsolen-Listener ist auf der öffentlichen Adresse
+  nicht gebunden und lehnt ohne Client-Zertifikat den Handshake ab.
 
 ### Phase 1 — Mandanten-Abstraktion mit genau einem Kunden
 
@@ -194,8 +214,10 @@ Passwort-Reset. Referenz: ADR-0014.
 
 - **Plattform-CA**: Offline-Root, Intermediate pro Kunde, Ausstellung über
   CSR-Anmeldung, Widerruf als Datenbank-Flag.
-- **Connector-Endpunkt** auf eigenem Listener mit `require_and_verify`, plus
-  Abgleich von SPKI-Fingerprint und API-Key gegen dieselbe Agent-Zeile.
+- **Connector-Endpunkt** auf eigenem Listener `0.0.0.0:46200` mit
+  `require_and_verify`, plus Abgleich von SPKI-Fingerprint und API-Key gegen
+  dieselbe Agent-Zeile. Optionale Rückfallebene auf 443 für Kundennetze, die
+  hohe Ports ausgehend sperren (Entscheid E11).
 - **Auftragswarteschlange** hinter der bestehenden `AdClient`-Schnittstelle als
   dritter Rücken (nach *direkt* und *eingehendem RPC*) — kein Aufrufer im
   Fachcode ändert sich. Methodenmenge ist die Allowlist aus `ad/rpc.py`.
@@ -205,6 +227,8 @@ Passwort-Reset. Referenz: ADR-0014.
   Protokoll, automatische Zertifikatserneuerung.
 - **Konsole**: Paket-Download mit Einmal-Token, Fingerprint-Anzeige nach der
   Anmeldung, API-Key- und Zertifikatsrotation, Agent-Status, Ereignisliste.
+- **Konsole**: die vier Reset-Eingriffe für den Notzugang des Kunden
+  (Phase 0 hat sie im CLI, hier kommen sie in die Oberfläche).
 - **Abnahme:** Passwort-Reset über den Agenten funktioniert; ein Kunde, dessen
   Agent steht, bekommt `503` mit dem bestehenden Banner statt eines Fehlers; ein
   Client-Zertifikat von Kunde A wird auf dem Kanal von Kunde B abgewiesen; ein
@@ -278,6 +302,13 @@ Passwort-Reset. Referenz: ADR-0014.
   wiederherstellen.
 - **Immer** die Konsole nur über den Management-Listener bedienen; eine Anfrage
   ohne dessen Marker wird abgewiesen.
+- **Niemals** den Konsolen-Listener auf `0.0.0.0` binden.
+- **Niemals** die MFA-Pflicht unbefristet aufheben; die Aufhebung läuft nach
+  24 Stunden von selbst ab.
+- **Niemals** bei einem TOTP-Reset ein Geheimnis anzeigen oder zurückgeben — der
+  Reset löscht nur, das neue Geheimnis entsteht bei der Einrichtung.
+- **Niemals** Quell-IP-Regeln in Magister nachbauen; Netzfilter gehören auf die
+  Firewall und die WAF.
 
 ## 9 · Risiken
 
@@ -295,7 +326,10 @@ Passwort-Reset. Referenz: ADR-0014.
 | Kompromittierte Plattform greift über den Agenten ins Kundennetz. | Nur Aufträge aus der Methoden-Allowlist, dazu die lokal erzwungene Politik des Agenten (OU-Allowlist, Gruppen-Denylist, abschaltbare Operationen) und der Not-Aus beim Kunden. |
 | Verlust des Agent-Schlüssels oder des Kundengeräts. | Schlüssel nicht exportierbar erzeugt, Widerruf als Datenbank-Flag mit sofortiger Wirkung, 90-Tage-Zertifikate mit automatischer Erneuerung. |
 | Notzugang verloren (kein Telefon, keine Wiederherstellungscodes). | Zehn Codes bei der Einrichtung, Reset über die Konsole (gehostet) beziehungsweise ein dokumentiertes und geübtes Offline-Verfahren (on-prem). |
-| Konsolen-Port aus Versehen öffentlich veröffentlicht. | Bindung an die Management-Adresse in Compose, Firewall-Allowlist, Client-Zertifikat, dazu der Marker-Riegel in der Anwendung — vier Schichten, nicht die Portnummer. |
+| Konsolen-Listener aus Versehen auf `0.0.0.0` gebunden. | Bindung an die interne Adresse ist die Massnahme; dazu Client-Zertifikat und Marker-Riegel als zweite und dritte Schicht, plus ein Start-Check, der eine Bindung auf `0.0.0.0` ablehnt. |
+| Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Firewall-Anforderung im Onboarding-Runbook benennen; Rückfallebene auf 443 mit demselben mTLS-Zwang (Entscheid E11). |
+| Befristete MFA-Aufhebung wird zur Gewohnheit. | 24-Stunden-Automatik ohne Verlängerungsknopf, Grund/Ticket verpflichtend, Warnbalken in der Oberfläche, Ereignis im Kunden-Audit. |
+| Operator setzt TOTP und Passwort zurück und übernimmt den Notzugang. | Liegt in der Natur eines Break-Glass-Kontos. Abgesichert durch: Reset zeigt nie ein Geheimnis, Passwort-Reset ist eine getrennte Handlung, beide Ereignisse stehen im Audit des Kunden und in dessen Zugriffsliste. |
 
 ## 10 · Offene Entscheide
 
@@ -329,6 +363,15 @@ Passwort-Reset. Referenz: ADR-0014.
   und sollte vor Phase 2a entschieden sein.
 - **E10 · Agent-Updates automatisch oder freigegeben?** Automatisch ist
   betrieblich einfacher; manche Kunden werden eine Freigabe verlangen.
+- **E11 · Rückfallebene für den Connector-Port?** 46200 ist gesetzt. Offen ist,
+  ob es zusätzlich einen Zugang über 443 gibt, für Kundennetze, die ausgehend
+  nur 80 und 443 erlauben. *Vorschlag:* ja, mit identischem mTLS-Zwang — sonst
+  ist ein restriktives Netz ein Ausschlusskriterium.
+- **E12 · Mehrere lokale Konten?** `local_admins` ist heute ein Singleton
+  (`CHECK id = 1`). Mit mehreren Konten könnte ein Kunden-Admin den TOTP eines
+  Kollegen zurücksetzen, statt auf Vita Brevis oder das CLI zu warten. *Vorschlag:*
+  erst später, und dann bewusst — jedes weitere Notkonto ist ein weiterer Weg
+  ohne Entra.
 
 ## 11 · Mockup
 

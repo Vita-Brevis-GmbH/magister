@@ -826,8 +826,8 @@ emit Login.dc.html <<'EOF'
         </div>
       </div>
       <p class="muted" style="margin: 0; font-size: 13px; text-align: center;">
-        <span class="mono">console.magister.ch:4444</span> &mdash; eigener Listener auf der
-        Management-Adresse, Client-Zertifikat erforderlich
+        <span class="mono">console.magister.ch:4444</span> &mdash; nur im internen Netz,
+        aus dem Internet nicht geroutet
       </p>
     </div>
   </div>
@@ -1637,7 +1637,7 @@ emit Connector.dc.html <<'EOF'
     <div>
       <div style="font-weight: 500;">Der Agent telefoniert nach Hause &mdash; die Plattform ruft nie an</div>
       <p class="muted" style="margin: 4px 0 0;">
-        Der Agent baut ausgehend TCP 443 zu <span class="mono">connect.magister.ch</span> auf und holt dort die
+        Der Agent baut ausgehend TCP 46200 zu <span class="mono">connect.magister.ch</span> auf und holt dort die
         AD-Auftr&auml;ge ab. LDAPS bleibt vollst&auml;ndig im Kundennetz; beim Kunden ist keine eingehende
         Freigabe n&ouml;tig. Anmeldung mit Client-Zertifikat einer privaten CA <em>und</em> API-Key.
       </p>
@@ -1753,7 +1753,7 @@ emit Connector.dc.html <<'EOF'
           <li>Agent stoppen beendet jeden Plattformzugriff auf das AD &mdash; sofort, ohne Vita Brevis.</li>
           <li>Lokales Protokoll auf dem Server, nur anf&uuml;gbar, vom Kunden lesbar.</li>
           <li>Einzelne Operationen lokal abschaltbar.</li>
-          <li>Firewall-Anforderung: ausgehend TCP 443 zu einem Hostnamen. Nichts eingehend.</li>
+          <li>Firewall-Anforderung: ausgehend TCP 46200 zu einem Hostnamen. Nichts eingehend.</li>
         </ul>
       </div>
 
@@ -1851,7 +1851,7 @@ emit AgentSetup.dc.html <<'EOF'
       <div class="note">
         <div style="font-weight: 500; font-size: 13px;">Was die Kunden-IT vorbereiten muss</div>
         <ul style="margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px;" class="muted">
-          <li>Ausgehend <span class="mono">TCP 443</span> zu <span class="mono">connect.magister.ch</span> erlauben. Nichts eingehend.</li>
+          <li>Ausgehend <span class="mono">TCP 46200</span> zu <span class="mono">connect.magister.ch</span> erlauben. Nichts eingehend.</li>
           <li>Dienstkonto mit den delegierten AD-Rechten (Kennwort zur&uuml;cksetzen, Attribute schreiben) auf den freigegebenen OUs.</li>
           <li>Netzsicht auf die eigenen Domänencontroller &uuml;ber <span class="mono">LDAPS 636</span>.</li>
         </ul>
@@ -2002,8 +2002,9 @@ emit Zugangswege.dc.html <<'EOF'
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Entra ID (OIDC)</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. MFA kommt aus der
-        Conditional-Access-Politik des Kunden, nicht aus Magister.
+        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. Aus dem Internet erreichbar und mit MFA
+        gesch&uuml;tzt &mdash; die MFA kommt aus der Conditional-Access-Politik des Kunden, nicht aus
+        Magister.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
@@ -2025,8 +2026,9 @@ emit Zugangswege.dc.html <<'EOF'
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Lokales Konto mit TOTP</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung des zweiten Faktors ist
-        erzwungen, Wiederherstellungscodes einmalig. Gehostet ist dieser Weg ganz abgeschaltet.
+        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung erzwungen,
+        Wiederherstellungscodes einmalig, Zur&uuml;cksetzen &uuml;ber Konsole oder CLI. Gehostet ist
+        dieser Weg ganz abgeschaltet.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
@@ -2048,13 +2050,13 @@ emit Zugangswege.dc.html <<'EOF'
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Eigener Listener plus Client-Zertifikat</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        Vier Schichten: Bindung an die Management-Adresse, Firewall-Allowlist, Client-Zertifikat der
-        privaten CA, Marker-Riegel in der Anwendung. Die Identit&auml;t bleibt Entra mit
-        Hardware-Schl&uuml;ssel.
+        Nur im internen Netz &mdash; der Listener wird nie auf der &ouml;ffentlichen Adresse gebunden.
+        Dazu Client-Zertifikat der privaten CA und ein Marker-Riegel in der Anwendung. Die
+        Identit&auml;t bleibt Entra mit Hardware-Schl&uuml;ssel.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
-          <span class="muted">Listener</span><span class="mono">4444 intern</span>
+          <span class="muted">Listener</span><span class="mono">10.0.0.5:4444</span>
         </div>
         <div style="display: flex; justify-content: space-between; gap: 12px;">
           <span class="muted">Zweiter Faktor</span><span>WebAuthn / FIDO2</span>
@@ -2122,7 +2124,7 @@ emit Zugangswege.dc.html <<'EOF'
             <div style="font-weight: 500;">Connector</div>
             <div class="muted mono" style="font-size: 12.5px;">connect.magister.ch</div>
           </td>
-          <td class="mono">0.0.0.0:443</td>
+          <td class="mono">0.0.0.0:46200</td>
           <td>Connector-Agenten der Kunden</td>
           <td><span class="pill pill-ok">erforderlich</span></td>
           <td>API-Key derselben Zeile</td>
@@ -2141,10 +2143,202 @@ emit Zugangswege.dc.html <<'EOF'
     </table>
     <div style="border-top: 1px solid #e2e8f0; padding: 14px 16px;">
       <p class="muted" style="margin: 0; font-size: 13px;">
-        Die Portnummer 4444 allein ist Verschleierung &mdash; ein Scan findet sie in Minuten. Der Schutz
-        kommt aus der Schnittstellen-Bindung, der Firewall und dem Client-Zertifikat; der eigene Port macht
-        die Regel trivial und h&auml;lt Kunden- und Konsolen-Verkehr auseinander.
+        Das Usermanagement des Kunden geh&ouml;rt ins Internet, das Global Management nicht. Getrennte
+        Listener sind die Voraussetzung daf&uuml;r: nur so l&auml;sst sich die Konsole an die interne
+        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Quell-IP-Regeln macht die Fortigate mit
+        der WAF &mdash; nicht Magister.
       </p>
+    </div>
+  </div>
+</div>
+EOF
+
+# --------------------------------------- Kunde -> Notzugang (TOTP-Verwaltung)
+emit Notzugang.dc.html <<'EOF'
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink active">Kunden</span>
+        <span class="navlink">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 24px; padding-bottom: 32px;">
+  <div class="muted" style="font-size: 13px;">Kunden &nbsp;&rsaquo;&nbsp; Schulgemeinde Flawil</div>
+
+  <header style="margin-top: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <h1 class="serif h1">Schulgemeinde Flawil</h1>
+      <span class="pill pill-ok">Aktiv</span>
+    </div>
+    <p class="muted" style="margin: 6px 0 0;">
+      <span class="mono">/k/flawil</span> &middot; Profil Schule &middot; Kundennummer K-0043
+    </p>
+  </header>
+
+  <div style="display: flex; align-items: flex-end; border-bottom: 1px solid #e2e8f0; margin-top: 20px;">
+    <span class="tab">&Uuml;bersicht</span>
+    <span class="tab">Systemeinstellungen</span>
+    <span class="tab">AD-Connector</span>
+    <span class="tab active">Notzugang</span>
+    <span class="tab">Rechte</span>
+    <span class="tab">Vorlagen</span>
+    <span class="tab">Audit</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 2.1fr) minmax(0, 1fr); gap: 24px; margin-top: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+
+      <div class="card" style="padding: 24px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <div>
+            <h2 class="serif h2">Lokales Konto <span class="mono" style="font-size: 15px; font-weight: 400;">admin</span></h2>
+            <p class="muted" style="margin: 8px 0 0;">Notzugang, wenn Entra ID nicht erreichbar ist.</p>
+          </div>
+          <span class="pill pill-ok">zweiter Faktor aktiv</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 24px; margin-top: 20px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">TOTP best&auml;tigt am</span><span>02.07.2026</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Letzte Anmeldung</span><span>28.08.2026, 09:41</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Wiederherstellungscodes</span><span>7 von 10 offen</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+            <span class="muted">Fehlversuche</span><span>0 &middot; nicht gesperrt</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Passwort ge&auml;ndert</span><span>14.05.2026</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">MFA-Pflicht</span><span>aktiv</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">Eingriffe</h2>
+        <p class="muted" style="margin: 8px 0 20px;">Vier Aktionen. Nur die letzte schw&auml;cht etwas ab &mdash; und nur befristet.</p>
+        <div style="border-top: 1px solid #e2e8f0;">
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e2e8f0;">
+            <div>
+              <div style="font-weight: 500;">TOTP zur&uuml;cksetzen</div>
+              <div class="muted" style="font-size: 13px; margin-top: 3px;">
+                L&ouml;scht Geheimnis, Best&auml;tigung und alle Wiederherstellungscodes. Beim n&auml;chsten
+                Anmelden landet das Konto zwingend in der Einrichtung. Die MFA-Pflicht bleibt.
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" style="flex-shrink: 0;">Zur&uuml;cksetzen</button>
+          </div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e2e8f0;">
+            <div>
+              <div style="font-weight: 500;">Neue Wiederherstellungscodes</div>
+              <div class="muted" style="font-size: 13px; margin-top: 3px;">
+                Frischer Satz, Geheimnis unber&uuml;hrt. F&uuml;r &bdquo;Codes verbraucht&ldquo;, nicht f&uuml;r
+                &bdquo;Telefon weg&ldquo;.
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" style="flex-shrink: 0;">Neu erzeugen</button>
+          </div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid #e2e8f0;">
+            <div>
+              <div style="font-weight: 500;">Konto deaktivieren</div>
+              <div class="muted" style="font-size: 13px; margin-top: 3px;">
+                Der Notzugang ist zu. Das ist das &bdquo;L&ouml;schen&ldquo;, das keine L&uuml;cke aufmacht.
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" style="flex-shrink: 0;">Deaktivieren</button>
+          </div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 0;">
+            <div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-weight: 500;">MFA-Pflicht befristet aufheben</span>
+                <span class="pill pill-danger">24 Stunden</span>
+              </div>
+              <div class="muted" style="font-size: 13px; margin-top: 3px;">
+                Passwort allein gen&uuml;gt wieder. Greift nach 24 Stunden von selbst wieder, ohne
+                Verl&auml;ngerungsknopf. Verlangt Grund oder Ticket und zeigt dem Kunden einen Warnbalken.
+              </div>
+            </div>
+            <button class="btn btn-outline btn-sm" type="button" style="flex-shrink: 0; color: #be123c; border-color: #fecdd3;">Aufheben</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 24px;">
+        <h2 class="serif h2">On-prem: derselbe Eingriff auf dem Server</h2>
+        <p class="muted" style="margin: 8px 0 16px;">
+          Eine Installation beim Kunden hat keine Konsole. Dort macht es das CLI &mdash; wer Shell-Zugang
+          auf die Box hat, hat ohnehin Datenbank-Zugang; das Verfahren gibt keine neuen Rechte, es macht
+          den Eingriff nur auditierbar statt zu einem <span class="mono">UPDATE</span> von Hand.
+        </p>
+        <div style="border: 1px solid #e2e8f0; border-radius: 6px; background: #0f172a; padding: 14px 16px;">
+          <div class="mono" style="font-size: 12.5px; color: #94a3b8;">$ magister-cli local-admin totp-reset</div>
+          <div class="mono" style="font-size: 12.5px; color: #f8fafc; margin-top: 6px;">Konto &bdquo;admin&ldquo; zur&uuml;ckgesetzt. Einrichtung beim n&auml;chsten Anmelden erforderlich.</div>
+          <div class="mono" style="font-size: 12.5px; color: #94a3b8; margin-top: 10px;">$ magister-cli local-admin totp-reset --new-recovery-codes</div>
+          <div class="mono" style="font-size: 12.5px; color: #94a3b8; margin-top: 6px;">$ magister-cli local-admin totp-reset --disable</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Was ein Reset nicht kann</h2>
+        <ul style="margin: 14px 0 0; padding-left: 18px; display: grid; gap: 8px; font-size: 13px;">
+          <li>Ein Reset <strong>zeigt nie ein Geheimnis</strong>. Er l&ouml;scht nur; das neue Geheimnis
+            entsteht bei der Einrichtung durch den Kunden.</li>
+          <li>Ein Operator kann sich damit also keinen funktionierenden zweiten Faktor ausstellen.</li>
+          <li>Das Passwort zur&uuml;cksetzen ist eine <strong>getrennte, getrennt auditierte</strong>
+            Handlung.</li>
+        </ul>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Der Kunde sieht jeden Eingriff</h2>
+        <p class="muted" style="margin: 8px 0 16px; font-size: 13px;">
+          Dieselben Ereignisse stehen im Audit des Kunden und in dessen Liste
+          &bdquo;Zugriffe von Vita Brevis&ldquo;.
+        </p>
+        <div style="display: grid; gap: 8px; font-size: 13px;">
+          <span class="pill pill-muted mono" style="justify-self: start;">local_totp_reset</span>
+          <span class="pill pill-muted mono" style="justify-self: start;">local_recovery_codes_regenerated</span>
+          <span class="pill pill-muted mono" style="justify-self: start;">local_account_disabled</span>
+          <span class="pill pill-warn mono" style="justify-self: start;">local_mfa_requirement_suspended</span>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Letzte Eingriffe</h2>
+        <div style="display: grid; gap: 14px; margin-top: 16px; font-size: 13px;">
+          <div>
+            <div style="font-weight: 500;">TOTP zur&uuml;ckgesetzt</div>
+            <div class="muted">02.07.2026, 08:12 &middot; Ticket VB-2118 &middot; matthias.hadorn</div>
+            <div class="muted">Grund: Telefonwechsel Schulleitung</div>
+          </div>
+          <div>
+            <div style="font-weight: 500;">Wiederherstellungscodes erneuert</div>
+            <div class="muted">14.05.2026, 16:40 &middot; Ticket VB-1994 &middot; support-team</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

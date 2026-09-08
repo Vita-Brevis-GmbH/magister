@@ -95,8 +95,9 @@
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Entra ID (OIDC)</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. MFA kommt aus der
-        Conditional-Access-Politik des Kunden, nicht aus Magister.
+        Der einzige Weg f&uuml;r Lehr- und Leitungspersonen. Aus dem Internet erreichbar und mit MFA
+        gesch&uuml;tzt &mdash; die MFA kommt aus der Conditional-Access-Politik des Kunden, nicht aus
+        Magister.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
@@ -118,8 +119,9 @@
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Lokales Konto mit TOTP</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung des zweiten Faktors ist
-        erzwungen, Wiederherstellungscodes einmalig. Gehostet ist dieser Weg ganz abgeschaltet.
+        F&uuml;r den Fall, dass Entra ID nicht erreichbar ist. Einrichtung erzwungen,
+        Wiederherstellungscodes einmalig, Zur&uuml;cksetzen &uuml;ber Konsole oder CLI. Gehostet ist
+        dieser Weg ganz abgeschaltet.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
@@ -141,13 +143,13 @@
       </div>
       <p style="margin: 12px 0 0; font-weight: 500;">Eigener Listener plus Client-Zertifikat</p>
       <p class="muted" style="margin: 6px 0 0; font-size: 13px;">
-        Vier Schichten: Bindung an die Management-Adresse, Firewall-Allowlist, Client-Zertifikat der
-        privaten CA, Marker-Riegel in der Anwendung. Die Identit&auml;t bleibt Entra mit
-        Hardware-Schl&uuml;ssel.
+        Nur im internen Netz &mdash; der Listener wird nie auf der &ouml;ffentlichen Adresse gebunden.
+        Dazu Client-Zertifikat der privaten CA und ein Marker-Riegel in der Anwendung. Die
+        Identit&auml;t bleibt Entra mit Hardware-Schl&uuml;ssel.
       </p>
       <div style="display: grid; gap: 8px; margin-top: 16px; font-size: 13px;">
         <div style="display: flex; justify-content: space-between; gap: 12px;">
-          <span class="muted">Listener</span><span class="mono">4444 intern</span>
+          <span class="muted">Listener</span><span class="mono">10.0.0.5:4444</span>
         </div>
         <div style="display: flex; justify-content: space-between; gap: 12px;">
           <span class="muted">Zweiter Faktor</span><span>WebAuthn / FIDO2</span>
@@ -215,7 +217,7 @@
             <div style="font-weight: 500;">Connector</div>
             <div class="muted mono" style="font-size: 12.5px;">connect.magister.ch</div>
           </td>
-          <td class="mono">0.0.0.0:443</td>
+          <td class="mono">0.0.0.0:46200</td>
           <td>Connector-Agenten der Kunden</td>
           <td><span class="pill pill-ok">erforderlich</span></td>
           <td>API-Key derselben Zeile</td>
@@ -234,9 +236,10 @@
     </table>
     <div style="border-top: 1px solid #e2e8f0; padding: 14px 16px;">
       <p class="muted" style="margin: 0; font-size: 13px;">
-        Die Portnummer 4444 allein ist Verschleierung &mdash; ein Scan findet sie in Minuten. Der Schutz
-        kommt aus der Schnittstellen-Bindung, der Firewall und dem Client-Zertifikat; der eigene Port macht
-        die Regel trivial und h&auml;lt Kunden- und Konsolen-Verkehr auseinander.
+        Das Usermanagement des Kunden geh&ouml;rt ins Internet, das Global Management nicht. Getrennte
+        Listener sind die Voraussetzung daf&uuml;r: nur so l&auml;sst sich die Konsole an die interne
+        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Quell-IP-Regeln macht die Fortigate mit
+        der WAF &mdash; nicht Magister.
       </p>
     </div>
   </div>

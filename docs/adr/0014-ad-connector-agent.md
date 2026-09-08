@@ -32,16 +32,40 @@ LDAPS bleibt vollständig im Kundennetz.
 Der Agent baut die Verbindung auf, in genau eine Richtung:
 
 ```
-Kundennetz                                  Vita-Brevis-Plattform
-┌───────────────────────────┐               ┌──────────────────────────┐
-│ Agent ──LDAPS 636──▶ DCs  │               │ magister-api             │
-│   │                       │               │   │ Auftragswarteschlange│
-│   └── TCP 443 ausgehend ──┼──────────────▶│ connect.magister.ch      │
-└───────────────────────────┘               └──────────────────────────┘
+Kundennetz                                    Vita-Brevis-Plattform
+┌───────────────────────────┐                 ┌──────────────────────────┐
+│ Agent ──LDAPS 636──▶ DCs  │                 │ magister-api             │
+│   │                       │                 │   │ Auftragswarteschlange│
+│   └── TCP 46200 ausgehend ┼────────────────▶│ connect.magister.ch:46200│
+└───────────────────────────┘                 └──────────────────────────┘
 ```
 
-Die einzige Firewall-Anforderung beim Kunden: **ausgehend TCP 443 zu einem
+Die einzige Firewall-Anforderung beim Kunden: **ausgehend TCP 46200 zu einem
 Hostnamen**. Nichts eingehend.
+
+**Eigener Port, getrennt von der Kundenoberfläche.** Der Connector hört auf
+`0.0.0.0:46200`, nicht auf 443. Damit hat er eine eigene TLS- und
+Client-Auth-Politik, eine eigene WAF- und Fortigate-Regel und eine eigene
+Log-Spur; ein Fehler in der Kundenoberfläche kann den Connector-Kanal nicht
+treffen und umgekehrt. Auf 46200 wird **ausschliesslich** mit Client-Zertifikat
+gesprochen — ein Browser oder Scanner bekommt dort keinen Handshake zustande.
+
+Die Portbelegung der Plattform damit vollständig:
+
+| Listener | Adresse | Wer | Client-Zertifikat |
+|---|---|---|---|
+| Kundenoberfläche | `0.0.0.0:443` | Lehr- und Leitungspersonen | nein, MFA über Entra |
+| Konsole | `10.0.0.5:4444` | Global Admin, Operator | ja (ADR-0015 D1) |
+| Connector | `0.0.0.0:46200` | Connector-Agenten | ja, erforderlich |
+
+**Ein Vorbehalt, der vor dem ersten Kunden geklärt sein muss:** viele
+Firmen- und Gemeindenetze erlauben ausgehend nur 80 und 443, teils nur über
+einen HTTP-Proxy. Ein hoher Port wie 46200 wird dort blockiert, und der Agent
+kommt nicht heraus. Der Agent muss deshalb entweder eine dokumentierte
+Freigabe verlangen (Regel auf der Kunden-Firewall) oder auf 443 ausweichen
+können. Siehe Entscheid E11 im Umsetzungsplan; die Empfehlung ist 46200 als
+Standard plus 443 als Rückfallebene mit demselben mTLS-Zwang, damit ein
+restriktives Kundennetz kein Ausschlusskriterium ist.
 
 ### 2 · Transport: Auftragsabruf plus Ergebnis-Rückgabe
 
@@ -166,6 +190,8 @@ Fingerprint, damit der Kunde ihn vor Ort vergleichen kann.
   öffentlich beschaffbar, Widerruf sofort wirksam.
 - Der Kunde behält einen echten Not-Aus und kann die Plattform-Rechte lokal
   weiter einschränken.
+- Eigener Port heisst eigene Politik und eigene Log-Spur: Kundenverkehr,
+  Konsolenverkehr und Agentenverkehr sind auf der Edge sauber getrennt.
 - Methoden-Allowlist und AD-Grenze aus ADR-0011 bleiben unverändert — der
   Agent ist ein neuer Transport, kein neues Rechtemodell.
 
@@ -176,8 +202,9 @@ Fingerprint, damit der Kunde ihn vor Ort vergleichen kann.
 - Vita Brevis muss eine CA betreiben (Offline-Root, Schlüsselverwahrung).
 - Der Agent wird zur Voraussetzung für Passwort-Resets; sein Ausfall ist ein
   Betriebsereignis, das überwacht werden muss.
-- Der Kunde muss ausgehendes 443 erlauben (in der Praxis unkritisch, aber es
-  ist eine Anforderung).
+- Der Kunde muss ausgehendes 46200 erlauben. Anders als 443 ist das in
+  restriktiven Netzen keine Selbstverständlichkeit und braucht eine
+  Firewall-Regel beim Kunden (dafür die Rückfallebene oben).
 - Interaktive Operationen bekommen einen zusätzlichen Zustellschritt.
 
 ## Alternativen verworfen

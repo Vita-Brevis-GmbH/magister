@@ -21,6 +21,7 @@ und [docs/features/multitenancy.md](../../features/multitenancy.md).
 | `AgentSetup.dc.html` | Agent-Paket beziehen — Einmal-Token, Prüfsumme, Firewall-Anforderung |
 | `Zugangswege.dc.html` | Anmeldewege nach der Härtung, inklusive Listener-Matrix |
 | `MfaSetup.dc.html` | TOTP-Einrichtung für ein lokales Konto (Kunden-UI) |
+| `Notzugang.dc.html` | Kunde → Notzugang: die vier OTP-Eingriffe, plus der CLI-Weg für On-prem |
 
 `canvas.json` legt die Anordnung auf drei Seiten fest (Konsole · Global anwenden und Betrieb · Zugang und Connector).
 

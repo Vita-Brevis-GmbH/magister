@@ -107,7 +107,7 @@
     <div>
       <div style="font-weight: 500;">Der Agent telefoniert nach Hause &mdash; die Plattform ruft nie an</div>
       <p class="muted" style="margin: 4px 0 0;">
-        Der Agent baut ausgehend TCP 443 zu <span class="mono">connect.magister.ch</span> auf und holt dort die
+        Der Agent baut ausgehend TCP 46200 zu <span class="mono">connect.magister.ch</span> auf und holt dort die
         AD-Auftr&auml;ge ab. LDAPS bleibt vollst&auml;ndig im Kundennetz; beim Kunden ist keine eingehende
         Freigabe n&ouml;tig. Anmeldung mit Client-Zertifikat einer privaten CA <em>und</em> API-Key.
       </p>
@@ -223,7 +223,7 @@
           <li>Agent stoppen beendet jeden Plattformzugriff auf das AD &mdash; sofort, ohne Vita Brevis.</li>
           <li>Lokales Protokoll auf dem Server, nur anf&uuml;gbar, vom Kunden lesbar.</li>
           <li>Einzelne Operationen lokal abschaltbar.</li>
-          <li>Firewall-Anforderung: ausgehend TCP 443 zu einem Hostnamen. Nichts eingehend.</li>
+          <li>Firewall-Anforderung: ausgehend TCP 46200 zu einem Hostnamen. Nichts eingehend.</li>
         </ul>
       </div>
 
