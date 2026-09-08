@@ -51,13 +51,18 @@ davor, wo es hingehört — Firewall-Regeln in der Anwendung zu pflegen wäre ei
 zweite, schlechter gewartete Wahrheit. Magister kennt nur die
 Schnittstellen-Bindung.
 
-**Client-Zertifikat** auf dem Konsolen-Listener bleibt vorgesehen: Caddy verlangt
+**Client-Zertifikat** auf dem Konsolen-Listener ist verpflichtend: Caddy verlangt
 `client_auth { mode require_and_verify }` gegen dieselbe private CA wie der
 Connector (ADR-0014). Ohne Operator-Zertifikat kommt der TLS-Handshake nicht
-zustande. Begründung, obwohl der Port intern ist: ein internes Netz ist keine
-Vertrauensgrenze — ein übernommener Arbeitsplatz-PC steht darin. Wer diese
-Schicht zunächst weglassen will, kann das; dann trägt die Bindung an die interne
-Adresse allein, und das sollte eine bewusste Entscheidung sein, keine Lücke.
+zustande.
+
+Zwei Gründe, obwohl der Port ohnehin intern ist. Erstens ist ein internes Netz
+keine Vertrauensgrenze — ein übernommener Arbeitsplatz-PC steht darin.
+Zweitens, und praktisch wichtiger: die Regel gilt nur für einen
+Management-Server im Netz, und den Port dorthin durchzuschalten geht immer über
+die Security. Genau das ist der erwünschte Effekt — die Schnellschuss-Variante
+(„ich mach das mal kurz von meinem Laptop auf") ist damit ausgeschlossen, ohne
+dass es eine Ausnahmeregel braucht.
 
 Dazu ein Riegel in der Anwendung: die Konsole weist jede Anfrage ab, die nicht
 über den Management-Listener kam (Marker-Header, den ausschliesslich dieser

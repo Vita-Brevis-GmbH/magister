@@ -16,6 +16,7 @@ und [docs/features/multitenancy.md](../../features/multitenancy.md).
 | `Rechte.dc.html` | Globale Rollen- und Rechte-Matrix |
 | `Vorlagen.dc.html` | Globale Vorlagen und Rollout auf Kunden |
 | `Isolation.dc.html` | Datenbank-Trennung und Migrations-Wellen |
+| `Sicherungen.dc.html` | Sicherung pro Kunde, Prüf-Wiederherstellung, Restore und Export |
 | `Kundenkontext.dc.html` | Hinweisbalken im Kunden-System — Operator- und Kundensicht |
 | `Connector.dc.html` | Kunde → AD-Connector: Agent-Status, Anmeldedaten, erlaubte Operationen |
 | `AgentSetup.dc.html` | Agent-Paket beziehen — Einmal-Token, Prüfsumme, Firewall-Anforderung |

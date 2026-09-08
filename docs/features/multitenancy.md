@@ -2,8 +2,10 @@
 
 > Umsetzungsplan zu [ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md)
 > (Mandantenfähigkeit), [ADR-0014](../adr/0014-ad-connector-agent.md)
-> (AD-Connector-Agent) und [ADR-0015](../adr/0015-authentisierungs-haertung.md)
-> (Authentisierungs-Härtung).
+> (AD-Connector-Agent), [ADR-0015](../adr/0015-authentisierungs-haertung.md)
+> (Authentisierungs-Härtung) und
+> [ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md) (Sicherung,
+> Wiederherstellung, Export).
 > Status: **Planung, nichts implementiert.** Mockup der Oberfläche:
 > `docs/mockups/multitenancy-console/`.
 
@@ -98,6 +100,9 @@ Konsolen-DB.
 | `connector_enrollments` | Einmal-Token für die Anmeldung eines Agenten: Kunde, Hash, Ablauf, eingelöst-am, ausgestellt-von. |
 | `connector_jobs` | Auftragswarteschlange: Kunde, Methode (aus der Allowlist), Nutzlast, Status, TTL, Ergebnis, HMAC. Nutzlasten mit Passwörtern werden nach Abschluss sofort gelöscht. |
 | `platform_ca` | CA-Zustand: Intermediate pro Kunde, Seriennummern, Widerrufsliste (intern, kein CRL-Vertrieb). |
+| `tenant_backups` | Eine Zeile pro Sicherung: Kunde, Zeitpunkt, Art (`daily`/`monthly`/`pre_migration`/`manual`), Ablage, Grösse, Prüfsumme, Schlüssel-Id, `verified_at`. |
+| `tenant_backup_policy` | Aufbewahrung, Zeitfenster, Ziel-Ablagen, RPO/RTO pro Kunde — Vertragswerte. |
+| `restore_jobs` / `export_jobs` | Wiederherstellungen (Quelle, Ziel-Schema, Freigaben) und Exporte (Umfang, Prüfsumme, Ablauf des Download-Links). |
 
 ### 4.2 Kundenschema (Änderungen)
 
@@ -192,7 +197,8 @@ Verhaltensänderung.
 - Registry (zunächst aus Env, noch ohne Konsole), Auflösungs-Middleware,
   Engine-Registry, `SET LOCAL ROLE`/`search_path`, Zusicherung.
 - Schema-Umzug `public` → `t_default`; Alembic mit `version_table_schema`;
-  Migrations-Runner über die Registry.
+  Migrations-Runner über die Registry — der zieht pro Kunde einen Dump, **bevor**
+  er migriert (ADR-0016 D6, die Rückfahrkarte).
 - `MAGISTER_MULTITENANT=0` löst ohne Pfad-Präfix auf.
 - **Abnahme:** Alle bestehenden Tests grün, keine sichtbare Änderung, ein
   Contract-Test beweist, dass `r_default` ein zweites Schema nicht lesen kann.
@@ -236,6 +242,32 @@ Passwort-Reset. Referenz: ADR-0014.
   verweigert; das Download-Paket enthält kein Geheimnis; Agent stoppen beendet
   jeden Plattformzugriff auf das AD.
 
+### Phase 2b — Sicherung, Wiederherstellung, Export
+
+Ebenfalls Voraussetzung für den ersten gehosteten Kunden: ohne Restore-Weg pro
+Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
+
+- **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt".
+- **Logische Sicherung pro Kunde** (`pg_dump --schema=t_<slug>`), mit `age`
+  verschlüsselt, lokal und in einem unveränderlichen Objektspeicher in der
+  Schweiz.
+- **Wöchentliche Prüf-Wiederherstellung** in ein Wegwerf-Schema mit
+  Prüfabfragen; Ergebnis pro Kunde in der Konsole.
+- **Restore daneben, nie darüber**: neues Schema, Umschalten erst nach Freigabe
+  durch eine zweite Person, altes Schema bleibt stehen.
+- **Export** in offenen Formaten (CSV plus Manifest), zeitlich begrenzter
+  Download, auditiert.
+- **Offboarding-Ablauf** mit Karenzzeit, Crypto-Shredding des Kundenschlüssels
+  und Löschung mit Fristablauf.
+- **Aufbewahrung pro Kunde** als Vertragswert, in der Konsole sichtbar.
+- **On-prem**: bestehende Sidecar plus Verschlüsselung, Prüf-Wiederherstellung
+  und `magister-cli backup verify`.
+- **Abnahme:** Ein Kunde wird aus einem Dump in ein Nebenschema
+  wiederhergestellt, ohne dass ein anderer Kunde etwas merkt; ein absichtlich
+  beschädigter Dump fällt in der wöchentlichen Prüfung auf; ein Export ist ohne
+  Magister lesbar; nach dem Vernichten des Kundenschlüssels ist kein
+  Audit-Payload mehr entschlüsselbar.
+
 ### Phase 3 — Systemeinstellungen und Rechte umziehen
 
 - `tenant_settings` und globale Rechte-Matrix in der Konsole; Reconciler
@@ -269,8 +301,8 @@ Passwort-Reset. Referenz: ADR-0014.
 - Lastgrenzen pro Kunde (Verbindungen, `statement_timeout`, gleichzeitige
   Aufträge, Anfragen pro Minute).
 - AD-Sync-Fan-out pro Kunde, versetzt, mit isoliertem Fehlerverhalten.
-- Sicherung, Wiederherstellung, Export und Löschung **pro Kunde**; Umzug auf
-  eigene Datenbank oder eigenen Cluster.
+- Umzug eines Kunden auf eine eigene Datenbank oder einen eigenen Cluster
+  (nutzt den Restore-Weg aus Phase 2b).
 - Connector-Flotte betreiben: Agent-Versionen, Zertifikatsablauf,
   Erneuerungsfehler und stehende Agenten überwachen und alarmieren.
 
@@ -309,6 +341,12 @@ Passwort-Reset. Referenz: ADR-0014.
   Reset löscht nur, das neue Geheimnis entsteht bei der Einrichtung.
 - **Niemals** Quell-IP-Regeln in Magister nachbauen; Netzfilter gehören auf die
   Firewall und die WAF.
+- **Niemals** eine Wiederherstellung über ein Produktivschema laufen lassen —
+  immer in ein neues Schema, Umschalten ist ein getrennter, freigegebener
+  Schritt. Kein `DROP SCHEMA … CASCADE` auf ein Produktivschema.
+- **Niemals** einen Kunden-Dump unverschlüsselt schreiben oder ablegen.
+- **Niemals** Kundenschlüssel und Dump in derselben Ablage sichern.
+- **Immer** vor einer Migration pro Kunde einen Dump ziehen.
 
 ## 9 · Risiken
 
@@ -329,6 +367,10 @@ Passwort-Reset. Referenz: ADR-0014.
 | Konsolen-Listener aus Versehen auf `0.0.0.0` gebunden. | Bindung an die interne Adresse ist die Massnahme; dazu Client-Zertifikat und Marker-Riegel als zweite und dritte Schicht, plus ein Start-Check, der eine Bindung auf `0.0.0.0` ablehnt. |
 | Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Firewall-Anforderung im Onboarding-Runbook benennen; Rückfallebene auf 443 mit demselben mTLS-Zwang (Entscheid E11). |
 | Befristete MFA-Aufhebung wird zur Gewohnheit. | 24-Stunden-Automatik ohne Verlängerungsknopf, Grund/Ticket verpflichtend, Warnbalken in der Oberfläche, Ereignis im Kunden-Audit. |
+| Sicherung vorhanden, aber nicht wiederherstellbar. | Wöchentliche Prüf-Wiederherstellung mit Prüfabfragen; „zuletzt geprüft" pro Kunde in der Konsole; ein nie geprüfter Dump gilt als nicht vorhanden. |
+| Dump wiederhergestellt, aber Kundenschlüssel fehlt — Audit-Payloads unlesbar. | Schlüssel in getrenntem Tresor mit eigener Sicherung, Schlüssel-Id im Dump vermerkt, Entschlüsselbarkeit ist Teil der wöchentlichen Prüfung. |
+| Angreifer mit Serverzugang löscht die Sicherungen mit. | Kopie in einem Objektspeicher mit Object Lock; der Anwendungsserver kennt nur den öffentlichen Backup-Schlüssel. |
+| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Fristablauf — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg". |
 | Operator setzt TOTP und Passwort zurück und übernimmt den Notzugang. | Liegt in der Natur eines Break-Glass-Kontos. Abgesichert durch: Reset zeigt nie ein Geheimnis, Passwort-Reset ist eine getrennte Handlung, beide Ereignisse stehen im Audit des Kunden und in dessen Zugriffsliste. |
 
 ## 10 · Offene Entscheide
@@ -375,15 +417,16 @@ Passwort-Reset. Referenz: ADR-0014.
 
 ## 11 · Mockup
 
-`docs/mockups/multitenancy-console/` — dreizehn Bildschirme auf drei Seiten:
+`docs/mockups/multitenancy-console/` — fünfzehn Bildschirme auf drei Seiten:
 
 - *Konsole:* Anmeldung, Kundenwahl, Kundenliste, Kunde mit Systemeinstellungen,
   Kunde erfassen.
 - *Global anwenden und Betrieb:* Rechte-Matrix, globale Vorlagen mit Rollout,
-  Datenbank und Migrationen, Kundenkontext aus beiden Perspektiven.
+  Datenbank und Migrationen, Sicherungen pro Kunde, Kundenkontext aus beiden
+  Perspektiven.
 - *Zugang und Connector:* AD-Connector eines Kunden, Agent-Bezug mit
   Einmal-Token, Übersicht der Anmeldewege nach der Härtung, TOTP-Einrichtung
-  für ein lokales Konto.
+  für ein lokales Konto, Notzugang mit den vier OTP-Eingriffen.
 
 Farben, Schrift und Bausteine sind aus `apps/web` übernommen; alle Kundennamen,
 Zahlen, Fingerprints und Tokens sind Platzhalter.
