@@ -84,29 +84,49 @@ mitdenken, sonst hat man ein Backup, das genau im Ernstfall nicht hilft:
    bewusst so entschieden und dokumentiert sein.
 2. **Schreiben ja, löschen nein.** Das Dienstkonto, mit dem Magister auf den
    Share schreibt, bekommt `Erstellen`/`Schreiben`, aber **kein** `Löschen`.
-   Das Aufräumen alter Dumps läuft als getrennter Job mit einem eigenen Konto.
+   Das Aufräumen alter Dumps läuft als **eigener Cron-Job mit eigenem Konto**,
+   und zwar **nicht auf dem Anwendungsserver** — sonst liegen die Löschrechte
+   genau auf der Maschine, die man vor einem Angreifer schützen will. Der Job
+   gehört auf den Fileserver oder den Backup-Host.
    Damit kann ein übernommener Anwendungsserver die Sicherungen nicht
    mitnehmen, auch ohne Object Lock.
 
 Verschlüsselung bleibt trotzdem Pflicht — auf einem Share sind die Dumps für
 mehr Personen und Systeme erreichbar als in der Datenbank.
 
-### D3 · Aufbewahrung: zwei Fristen, zwei Zuständigkeiten
+### D3 · Aufbewahrung: 10 Tage, eine Zahl für alles
 
-- **Auf dem Share:** 30 Tage täglich, dazu die `pre_migration`-Dumps für
-  30 Tage. Magister räumt selbst auf (getrennter Job, siehe D2), damit der
-  Share nicht unbegrenzt wächst. Pro Kunde in `tenant_backup_policy`
-  überschreibbar und in der Konsole sichtbar.
-- **Langfristig:** was darüber hinaus existiert, bestimmt die Aufbewahrung des
-  Unternehmens-Backups. Diese Frist ist **nicht** von Magister gesteuert.
+Der Entscheid (E14): **10 Tage**, auf dem Share und im Tages-Backup gleich.
+Ein Cron-Job auf dem Fileserver löscht Dumps, die älter als 10 Tage sind.
 
-Daraus folgt eine Aufgabe, die vor der ersten Kundenzusage erledigt sein muss:
-die Aufbewahrung des Tages-Backups muss bekannt und schriftlich sein, denn sie
-ist die Zahl, die im Vertrag und in der Auftragsverarbeitungsvereinbarung
-steht — sowohl als Wiederherstellungszusage als auch als Löschfrist.
+Diese eine Zahl ist damit gleichzeitig:
 
-Fristen sind hier keine Kostenfrage, sondern Datenschutz: Schülerdaten
-unbegrenzt aufzubewahren ist ein Problem und kein Feature.
+- die **Wiederherstellungszusage** an den Kunden („wir können auf jeden Stand
+  der letzten 10 Tage zurück"),
+- die **Löschfrist** beim Offboarding („10 Tage nach dem Crypto-Shredding ist
+  auch der Rest weg"),
+- der Wert in Vertrag und Auftragsverarbeitungsvereinbarung.
+
+Kurze Fristen sind datenschutzrechtlich die richtige Richtung — Schülerdaten
+unbegrenzt aufzubewahren ist ein Problem und kein Feature. Und beim Offboarding
+ist eine 10-Tage-Zusage ein Verkaufsargument.
+
+**Was 10 Tage nicht abdecken — bitte bewusst tragen:**
+
+- Ein Fehler, der erst nach zwei Wochen auffällt (eine falsche
+  Klassen-Promotion, ein verunglückter Import, ein gelöschter Standort), ist
+  nicht mehr rückholbar. Bei Schulen ist genau das ein realistisches Muster:
+  etwas fällt am Quartalsende auf, nicht am nächsten Tag.
+- Verschlüsselungstrojaner sitzen typischerweise **Wochen** im Netz, bevor sie
+  zuschlagen. Sind alle Sicherungen aus dieser Zeit, ist auch die letzte saubere
+  Kopie weg.
+
+Deshalb die Empfehlung, ohne die Entscheidung umzustossen: **zusätzlich eine
+monatliche Kopie mit längerer Frist** (12 Monate) — das sind pro Kunde zwölf
+Dateien und kaum Platz, deckt aber genau die beiden Fälle oben ab. Der
+tägliche Zyklus bleibt bei 10 Tagen. Das Datenmodell (`tenant_backup_policy`)
+hält die zwei Fristen ohnehin getrennt; sie einzuschalten ist ein Konfigwert,
+kein Umbau. Offen als E15.
 
 ### D4 · Ein Backup gilt erst als Backup, wenn es eingespielt wurde
 
@@ -172,8 +192,8 @@ Was danach gilt, muss dem Kunden **so** zugesagt werden, wie es technisch ist:
   geschriebenen Sicherungen — auf dem Share und in den Bändern oder Snapshots
   des Unternehmens-Backups. Aus einem abgeschlossenen Backup-Satz kann man
   einzelne Zeilen nicht herausschneiden. Vollständige Löschung tritt deshalb
-  mit **Ablauf der Aufbewahrungsfrist des Tages-Backups** ein — dieselbe Zahl
-  wie in D3.
+  **10 Tage** nach dem Crypto-Shredding ein (D3). Das ist eine Zusage, die man
+  einem Kunden gut hinschreiben kann.
 - Diese Frist gehört in den Vertrag und in die Auftragsverarbeitungs­vereinbarung.
   Ein „wir löschen sofort alles" wäre eine Zusage, die die Technik nicht hält.
 
@@ -211,9 +231,9 @@ Gemeinde mit einem Server bekommt keinen pgBackRest-Zwang.
   an zwei Orten.
 - Speicherbedarf pro Kunde auf dem Share und im Tages-Backup, der in die
   Preisgestaltung muss.
-- Die Wiederherstellungsgarantie hängt jetzt am Unternehmens-Backup. Dessen
-  Aufbewahrung, Unveränderlichkeit und Wiederherstellungszeit sind damit Teil
-  der Zusage an die Kunden und müssen dokumentiert sein.
+- Die Wiederherstellungsgarantie hängt jetzt am Unternehmens-Backup und ist auf
+  **10 Tage** begrenzt. Alles, was später auffällt, ist verloren — siehe die
+  Empfehlung zur monatlichen Kopie in D3.
 - Die Prüf-Wiederherstellung kostet jede Woche Rechenzeit und Platz.
 - Die Löschzusage ist erklärungsbedürftig („mit Ablauf der Frist", nicht
   „sofort") — das muss im Vertrieb sauber kommuniziert werden.

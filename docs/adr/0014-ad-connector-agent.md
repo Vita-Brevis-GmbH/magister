@@ -103,12 +103,18 @@ Beide sind an **dieselbe** Kunden-plus-Agent-Zeile gebunden; einer allein wird
 abgewiesen.
 
 **a) mTLS gegen eine private, nicht publizierte CA.** Die Plattform betreibt
-eine eigene CA (Offline-Root, pro Kunde ein Intermediate). Der
-Connector-Endpunkt verlangt `client_auth mode require_and_verify`; zusätzlich
-vergleicht die Anwendung den SPKI-Fingerprint des Leaf-Zertifikats mit der
-Agent-Zeile — ein gültiges Zertifikat eines *anderen* Kunden wird damit
-ebenfalls abgewiesen. Der Agent pinnt umgekehrt den SPKI des Plattform-Servers.
-TLS 1.3 only.
+eine eigene CA: Offline-Root plus **zwei** Intermediates, eines für Connector-
+und eines für Operator-Zertifikate (Aufbau und Zeremonien in
+[`docs/runbooks/platform-ca.md`](../runbooks/platform-ca.md)). Kein
+Intermediate pro Kunde — die Bindung an den Kunden macht die Anwendung, nicht
+die Zertifikatskette.
+
+Der Connector-Endpunkt verlangt `client_auth mode require_and_verify`;
+zusätzlich vergleicht die Anwendung den SPKI-Fingerprint des Leaf-Zertifikats
+mit der Agent-Zeile — ein gültiges Zertifikat eines *anderen* Kunden wird damit
+abgewiesen, obwohl es aus derselben Kette stammt. Diese Prüfung ist die scharfe;
+die Kette sortiert nur Fremdes aus. Der Agent pinnt umgekehrt den SPKI des
+Plattform-Servers. TLS 1.3 only.
 
 Weil die CA nicht öffentlich ist und nirgends publiziert wird, kann sich niemand
 ein passendes Zertifikat bei einer öffentlichen CA besorgen. Ohne Client-Zertifikat

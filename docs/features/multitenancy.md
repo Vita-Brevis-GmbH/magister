@@ -101,7 +101,7 @@ Konsolen-DB.
 | `connector_agents` | Pro Kunde ein bis mehrere Agenten: Name, Status, Version, letzter Kontakt, SPKI-Fingerprint des Client-Zertifikats, Ablaufdatum, argon2id-Hash des API-Keys, Widerruf-Flag. |
 | `connector_enrollments` | Einmal-Token für die Anmeldung eines Agenten: Kunde, Hash, Ablauf, eingelöst-am, ausgestellt-von. |
 | `connector_jobs` | Auftragswarteschlange: Kunde, Methode (aus der Allowlist), Nutzlast, Status, TTL, Ergebnis, HMAC. Nutzlasten mit Passwörtern werden nach Abschluss sofort gelöscht. |
-| `platform_ca` | CA-Zustand: Intermediate pro Kunde, Seriennummern, Widerrufsliste (intern, kein CRL-Vertrieb). |
+| `platform_ca` | CA-Zustand: die zwei Intermediates (Connector, Operator), Seriennummern, Widerrufs-Flags (intern, kein CRL-Vertrieb). |
 | `tenant_backups` | Eine Zeile pro Sicherung: Kunde, Zeitpunkt, Art (`daily`/`monthly`/`pre_migration`/`manual`), Ablage, Grösse, Prüfsumme, Schlüssel-Id, `verified_at`. |
 | `tenant_backup_policy` | Aufbewahrung, Zeitfenster, Ziel-Ablagen, RPO/RTO pro Kunde — Vertragswerte. |
 | `restore_jobs` / `export_jobs` | Wiederherstellungen (Quelle, Ziel-Schema, Freigaben) und Exporte (Umfang, Prüfsumme, Ablauf des Download-Links). |
@@ -271,8 +271,9 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 - **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt".
 - **Logische Sicherung pro Kunde** (`pg_dump --schema=t_<slug>`), mit `age`
   verschlüsselt, auf einen Share geschrieben, den das tägliche
-  Unternehmens-Backup mitnimmt (E13). Magister schreibt, löscht aber nicht — das
-  Aufräumen läuft als getrennter Job unter eigenem Konto.
+  Unternehmens-Backup mitnimmt (E13). Magister schreibt, löscht aber nicht — ein
+  Cron-Job auf dem Fileserver mit eigenem Konto entfernt Dumps, die älter als
+  **10 Tage** sind (E14).
 - **Wöchentliche Prüf-Wiederherstellung** in ein Wegwerf-Schema mit
   Prüfabfragen; Ergebnis pro Kunde in der Konsole.
 - **Restore daneben, nie darüber**: neues Schema, Umschalten erst nach Freigabe
@@ -281,7 +282,7 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
   Download, auditiert.
 - **Offboarding-Ablauf** mit Karenzzeit, Crypto-Shredding des Kundenschlüssels
   und Löschung mit Fristablauf.
-- **Aufbewahrung pro Kunde** als Vertragswert, in der Konsole sichtbar.
+- **Aufbewahrung** 10 Tage, in der Konsole sichtbar, pro Kunde überschreibbar.
 - **Einzelinstallationen**: derselbe Weg mit `n=1`; die bestehende Sidecar wird
   um Verschlüsselung, Prüf-Wiederherstellung und `magister-cli backup verify`
   erweitert, statt daneben etwas Eigenes zu bekommen.
@@ -416,24 +417,26 @@ der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selb
 | E10 | Agent-Updates? | **Automatisch, Sicherheits-Updates sofort.** Version und Fingerprint der Flotte in der Konsole, Alarm bei nicht anlaufenden Updates. |
 | E11 | Rückfallebene für den Connector-Port? | **Nein, nur 46200.** Die Firewall-Freigabe ist harte Onboarding-Voraussetzung; der Agent prüft sie beim ersten Start und meldet klar, wenn der Port zu ist. |
 | E12 | Mehrere lokale Notkonten? | **Nein**, der Singleton bleibt (`CHECK id = 1`). Jedes weitere Notkonto wäre ein weiterer Weg ohne Entra. |
-| E13 | Wohin die Sicherungen? | **Lokaler Share**, den das tägliche Unternehmens-Backup mitnimmt. Kein Objektspeicher. Dafür: Schreibrecht ohne Löschrecht für Magister, Aufräumen als getrennter Job (ADR-0016 D2). |
+| E13 | Wohin die Sicherungen? | **Lokaler Share**, den das tägliche Unternehmens-Backup mitnimmt. Kein Objektspeicher. Magister hat **nur Schreibrechte**; ein Cron-Job auf dem Fileserver (eigenes Konto, nicht der Anwendungsserver) löscht nach Frist (ADR-0016 D2). |
+| E14 | Aufbewahrungsfrist? | **10 Tage** — auf dem Share und im Tages-Backup gleich. Dieselbe Zahl ist Wiederherstellungszusage, Löschfrist beim Offboarding und der Wert in Vertrag und AVV. |
 
-### Was daraus noch zu beschaffen ist
+### Ein Punkt bleibt offen
 
-Keine Entscheidungen mehr, aber Angaben, die vor der ersten Kundenzusage
-vorliegen müssen:
+- **E15 · Monatliche Kopie mit längerer Frist?** Die 10 Tage aus E14 decken
+  keinen Fehler ab, der erst nach zwei Wochen auffällt — bei Schulen ein
+  realistisches Muster (etwas fällt am Quartalsende auf) — und keinen
+  Verschlüsselungstrojaner, der wochenlang im Netz sass, bevor er zuschlug.
+  *Vorschlag:* zusätzlich zwölf monatliche Kopien. Das sind pro Kunde zwölf
+  Dateien, kostet kaum Platz, und `tenant_backup_policy` hält die zwei Fristen
+  ohnehin getrennt. Der tägliche Zyklus bleibt bei 10 Tagen.
 
-1. **Aufbewahrung und Wiederherstellungszeit des Tages-Backups.** Diese Zahlen
-   sind ab E13 die tatsächliche Wiederherstellungsgarantie *und* die Löschfrist
-   beim Offboarding — sie gehören in Vertrag und AVV. Magister kann sie nicht
-   liefern, nur benennen.
-2. **Bestätigung der Share-Rechte:** Dienstkonto von Magister mit
-   `Erstellen`/`Schreiben`, ohne `Löschen`; Aufräum-Job unter eigenem Konto.
-3. **Verfahren für den CA-Root:** wer hat die Datenträger, wo liegen sie, wie
-   wird ein Intermediate ausgestellt, wie sieht der Ablauf bei Verlust aus.
-4. **Onboarding-Checkliste für Kunden:** ausgehend `TCP 46200` freigegeben,
-   Dienstkonto mit delegierten AD-Rechten, Sicht auf die eigenen DCs über
-   LDAPS.
+Die beiden Verfahren, die vorher hier offen standen, sind jetzt ausgeschrieben:
+
+- **CA-Betrieb:** [`docs/runbooks/platform-ca.md`](../runbooks/platform-ca.md)
+- **Kunden-Onboarding:** [`docs/runbooks/kunden-onboarding.md`](../runbooks/kunden-onboarding.md)
+
+Beide enthalten am Ende die konkreten Angaben, die noch von dir kommen müssen
+(Schlüsselverwahrer, Standorte, Kontaktwege) — jeweils als Liste zum Ausfüllen.
 
 ## 11 · Mockup
 
