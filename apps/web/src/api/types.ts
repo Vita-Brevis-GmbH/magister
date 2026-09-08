@@ -74,6 +74,35 @@ export interface LocalLoginRequest {
   password: string;
 }
 
+/** Step 1 of the local login: the password checked out, this says what's next. */
+export interface LocalLoginStageOut {
+  /** "totp" — ask for a code. "enroll" — set up the second factor first. */
+  stage: "totp" | "enroll";
+  challenge: string;
+  /** Enrolment stage only. */
+  provisioning_uri: string | null;
+  qr_data_uri: string | null;
+  secret: string | null;
+}
+
+export interface LocalTotpRequest {
+  challenge: string;
+  code: string;
+}
+
+/** Returned once, at the end of enrolment. Cannot be shown again. */
+export interface LocalRecoveryCodesOut {
+  recovery_codes: string[];
+}
+
+export interface LocalAdminMfaOut {
+  enrolled: boolean;
+  recovery_codes_left: number;
+  reset_at: string | null;
+  reset_by: string | null;
+  suspended_until: string | null;
+}
+
 export interface LocalAdminOut {
   username: string;
   enabled: boolean;

@@ -193,13 +193,25 @@ fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
   Schemaänderung zurückrollbar ist.
 - **AD-Login, Release N+1:** Alembic entfernt die beiden Spalten (Rückbau von
   `0019_ad_login`).
-- **TOTP für lokale Konten**, verpflichtend, mit Wiederherstellungscodes und
-  erzwungener Einrichtung.
-- **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue
-  Wiederherstellungscodes, Konto deaktivieren, MFA-Pflicht befristet aufheben —
-  zunächst über `magister-cli local-admin totp-reset`, in Phase 2a auch in der
-  Konsole. Jeder Eingriff mit eigenem, kundensichtbarem Audit-Ereignis. Das
-  Notkonto bleibt ein Singleton (E12).
+- ✅ **TOTP für lokale Konten**, verpflichtend. Der Login ist zweistufig:
+  das Passwort ergibt nur einen signierten, fünf Minuten gültigen Nachweis plus
+  die nächste Stufe (`totp` oder erzwungene Einrichtung) — **keine Sitzung**.
+  Damit gibt es keinen halb privilegierten Zustand, den jeder andere Endpunkt
+  gegen prüfen müsste. Zehn Wiederherstellungscodes, argon2id-gehasht,
+  einmalig, einmal angezeigt. QR als serverseitiges Inline-SVG (`segno`), CSP
+  unverändert. Migration `0044_local_admin_totp`.
+- ✅ **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue
+  Wiederherstellungscodes, Konto deaktivieren, MFA-Pflicht befristet (24 h,
+  selbst ablaufend) aufheben — als Konsolen-API unter
+  `/admin/local-admin/mfa*` **und** als `magister-cli local-admin totp-reset`
+  für Installationen ohne Konsole. Jeder Eingriff mit eigenem,
+  kundensichtbarem Audit-Ereignis. Das Notkonto bleibt ein Singleton (E12).
+  Runbook: [`docs/runbooks/local-admin-mfa.md`](../runbooks/local-admin-mfa.md).
+- ✅ **Eigener Fehlversuchszähler für den zweiten Faktor**
+  (`local_admins.mfa_failed_count`). Nötig, weil ein korrektes Passwort
+  `failed_login_count` zurücksetzt — dort mitzuzählen hätte jedem, der das
+  Passwort hat, unbegrenzte Versuche am zweiten Faktor gelassen. Zwei Budgets,
+  eine gemeinsame 15-Minuten-Sperre.
 - **Plattform-CA anlegen** (E9): Offline-Root auf zwei verschlüsselten
   Datenträgern, Intermediate im Betrieb, dazu das dokumentierte Verfahren für
   Ausstellung, Erneuerung und Verlust.

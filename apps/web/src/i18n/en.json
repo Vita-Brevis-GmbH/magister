@@ -44,8 +44,23 @@
     "errors": {
       "invalid_credentials": "Wrong username or password.",
       "account_locked": "Account temporarily locked after too many failed attempts. Try again later.",
-      "local_login_disabled": "Local sign-in is disabled."
-    }
+      "local_login_disabled": "Local sign-in is disabled.",
+      "invalid_code": "That code is not right. Enter the current code from your app.",
+      "challenge_expired": "The sign-in has expired. Please start again."
+    },
+    "totp_intro": "Enter the six-digit code from your authenticator app.",
+    "totp_code": "One-time code",
+    "totp_submit": "Sign in",
+    "totp_restart": "Start again",
+    "totp_recovery_hint": "You can enter a recovery code instead of a one-time code.",
+    "enroll_title": "Set up your second factor",
+    "enroll_intro": "This account is the break-glass access and requires a second factor. Scan the code with an authenticator app and confirm with the code it shows.",
+    "enroll_qr_alt": "QR code for the authenticator app",
+    "enroll_secret_label": "If the camera does not work",
+    "enroll_submit": "Finish setup",
+    "recovery_title": "Recovery codes",
+    "recovery_intro": "Keep these codes somewhere safe. Each works once and stands in for the one-time code when you do not have your phone. They are shown only now.",
+    "recovery_continue": "Codes saved, continue"
   },
   "me": {
     "title": "My profile",

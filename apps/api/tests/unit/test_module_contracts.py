@@ -31,6 +31,8 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("/auth/callback", "GET"),  # OIDC redirect return
         ("/auth/capabilities", "GET"),  # login-screen feature probe
         ("/auth/login/local", "POST"),  # local-admin fallback login
+        ("/auth/login/local/totp", "POST"),  # local-admin second factor (ADR-0015 D2)
+        ("/auth/login/local/enroll", "POST"),  # local-admin forced TOTP enrolment
     }
 )
 

@@ -72,7 +72,13 @@ export async function apiFetch<T>(path: string, init: ApiFetchInit = {}): Promis
     credentials: "include",
   });
 
-  if (res.status === 401) {
+  // A 401 normally means "the session is gone" — clear the cache and bounce to
+  // the login screen. The login endpoints are the exception: they pre-date any
+  // session, so there is nothing to clear and nowhere to bounce to, and their
+  // ``detail`` carries what actually went wrong (wrong password, wrong
+  // one-time code, expired challenge). Swallowing it here would make those
+  // cases indistinguishable.
+  if (res.status === 401 && !path.startsWith("/auth/login")) {
     queryClient?.clear();
     if (window.location.pathname !== "/login") {
       window.location.assign("/login");

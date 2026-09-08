@@ -133,6 +133,10 @@ class Settings(BaseSettings):
     # Local-admin (break-glass) — only consulted on first boot when the
     # `local_admins` table is empty. Always pass a pre-computed argon2id
     # hash; plaintext is refused. See `magister-cli hash-password`.
+    # Second factor for the local break-glass account (ADR-0015 D2). On by
+    # default: the local path was the last one without one. Turning it off is a
+    # deliberate, documented downgrade — not a convenience.
+    local_mfa_required: bool = Field(default=True)
     local_admin_username: str = Field(default="admin")
     local_admin_password_hash: SecretStr | None = Field(default=None)
 

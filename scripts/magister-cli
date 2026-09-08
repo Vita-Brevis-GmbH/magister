@@ -8,6 +8,11 @@ Subcommands:
                        empty deployment can show the full UI without
                        waiting for an AD-sync. Wraps
                        ``python -m magister_api.cli.seed_demo``.
+    local-admin      — the local break-glass account. Currently one action:
+                       ``totp-reset`` clears the second factor (ADR-0015 D2),
+                       ``--new-recovery-codes`` only reissues the codes, and
+                       ``--disable`` closes the account. On-prem equivalent of
+                       the console's four interventions.
 
 The CLI needs the API venv so SQLAlchemy + argon2-cffi + magister_api
 are importable. From a repo checkout:
@@ -75,6 +80,26 @@ def cmd_seed_demo(args: argparse.Namespace) -> int:
     return seed_main(forwarded)
 
 
+def cmd_local_admin_totp_reset(args: argparse.Namespace) -> int:
+    try:
+        from magister_api.cli.local_admin_totp import main as totp_main
+    except ImportError:
+        sys.stderr.write(
+            "magister_api is not importable — run inside apps/api's venv:\n"
+            "  cd apps/api && uv run ../../scripts/magister-cli local-admin totp-reset\n"
+        )
+        return 2
+
+    forwarded: list[str] = []
+    if args.new_recovery_codes:
+        forwarded.append("--new-recovery-codes")
+    if args.disable:
+        forwarded.append("--disable")
+    if args.reason:
+        forwarded += ["--reason", args.reason]
+    return totp_main(forwarded)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="magister-cli", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -103,6 +128,27 @@ def main() -> int:
         help="Seed even if the DB already contains classes. Use with care.",
     )
     sd.set_defaults(func=cmd_seed_demo)
+
+    la = sub.add_parser("local-admin", help="Local break-glass account actions.")
+    la_sub = la.add_subparsers(dest="local_admin_cmd", required=True)
+    tr = la_sub.add_parser(
+        "totp-reset",
+        help="Reset the second factor of the local account (ADR-0015 D2). Without "
+        "options the factor is cleared and re-enrolled at the next sign-in.",
+    )
+    tr_group = tr.add_mutually_exclusive_group()
+    tr_group.add_argument(
+        "--new-recovery-codes",
+        action="store_true",
+        help="Only reissue the recovery codes; the secret is left alone.",
+    )
+    tr_group.add_argument(
+        "--disable",
+        action="store_true",
+        help="Disable the account. Closes the break-glass path without weakening anything.",
+    )
+    tr.add_argument("--reason", default="", help="Reason or ticket number for the audit trail.")
+    tr.set_defaults(func=cmd_local_admin_totp_reset)
 
     args = parser.parse_args()
     return args.func(args)

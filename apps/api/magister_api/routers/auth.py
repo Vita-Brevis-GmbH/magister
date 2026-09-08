@@ -18,6 +18,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
+from magister_api.auth import login_challenge
 from magister_api.auth.csrf import issue_csrf_token
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
 from magister_api.auth.effective_settings import get_effective_settings
@@ -25,16 +26,27 @@ from magister_api.auth.oidc import EntraOidcClient, OidcClient
 from magister_api.auth.sessions import new_session_id
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.models.base import utcnow
 from magister_api.repositories.auth import SessionRepository
 from magister_api.repositories.local_admin import LocalAdminRepository
 from magister_api.schemas.auth import CurrentUserOut
-from magister_api.schemas.local_admin import LocalLoginRequest
+from magister_api.schemas.local_admin import (
+    LocalEnrollConfirmOut,
+    LocalLoginRequest,
+    LocalLoginStageOut,
+    LocalTotpRequest,
+)
 from magister_api.services.auth import AuthService, LoginRefusedError
 from magister_api.services.local_admin import (
     LOCAL_ADMIN_GUID,
     LocalAdminService,
     LoginFailed,
     LoginRefusal,
+)
+from magister_api.services.local_admin_mfa import (
+    LocalAdminMfaService,
+    MfaAlreadyEnrolledError,
+    MfaStage,
 )
 
 OIDC_FLOW_COOKIE = "magister_oidc_flow"
@@ -257,6 +269,51 @@ _REFUSAL_TO_STATUS: dict[LoginRefusal, int] = {
 }
 
 
+async def _create_local_session(
+    session: AsyncSession,
+    settings: Settings,
+    *,
+    username: str,
+    ip: str | None,
+    user_agent: str | None,
+    request_id: str,
+    second_factor: str,
+) -> str:
+    """Create the local-admin session row, audit it, and return the session id.
+
+    ``second_factor`` records how the second step was satisfied — ``totp``,
+    ``recovery_code`` or ``suspended`` — so the audit trail shows an emergency
+    bypass rather than hiding it behind a plain ``local_login``.
+    """
+    sid = new_session_id()
+    await SessionRepository(session).create(
+        session_id=sid,
+        ad_object_guid=LOCAL_ADMIN_GUID,
+        oidc_subject="",  # not an OIDC session
+        lifetime=timedelta(minutes=settings.session_lifetime_minutes),
+        ip=ip,
+        user_agent=user_agent,
+        auth_kind="local",
+    )
+    await AuditService(session, settings).emit(
+        action="local_login",
+        target_kind="session",
+        target_id=sid[:12],
+        actor_upn=f"{username}@magister.local",
+        actor_object_guid=LOCAL_ADMIN_GUID,
+        school_id=None,
+        ip=ip,
+        request_id=request_id,
+        payload={"user_agent": user_agent, "second_factor": second_factor},
+    )
+    return sid
+
+
+def _attach_session_cookies(response: Response, sid: str, settings: Settings) -> None:
+    _set_session_cookie(response, sid, settings)
+    _set_csrf_cookie(response, issue_csrf_token(sid, settings), settings)
+
+
 @router.post("/login/local")
 # 20/min keeps the IP-level brute-force ceiling generous enough that the
 # per-account lockout (5 consecutive failures, see LocalAdminService) is the
@@ -269,7 +326,13 @@ async def login_local(
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    """Username + password login for the break-glass local admin.
+    """Step 1 of the local login: username + password.
+
+    No session is issued here unless the MFA requirement is suspended. A correct
+    password yields a short-lived, signed challenge plus the stage the client
+    must complete — ``totp`` or ``enroll`` (ADR-0015 D2). Issuing no session
+    until a second factor exists means there is no half-privileged state that
+    every other endpoint would have to guard against.
 
     CSRF-exempt (predates the session) via the existing `/auth/login` prefix
     in :class:`CsrfMiddleware.EXEMPT_PATH_PREFIXES`. Rate-limited per IP.
@@ -304,33 +367,186 @@ async def login_local(
         )
 
     # result is narrowed to LoginOk here: the LoginFailed branch above returns.
-    sid = new_session_id()
-    sessions_repo = SessionRepository(session)
-    await sessions_repo.create(
-        session_id=sid,
-        ad_object_guid=LOCAL_ADMIN_GUID,
-        oidc_subject="",  # not an OIDC session
-        lifetime=timedelta(minutes=settings.session_lifetime_minutes),
+    mfa = LocalAdminMfaService(session, settings)
+    stage = mfa.stage_for(result.admin)
+
+    if stage is MfaStage.SUSPENDED:
+        sid = await _create_local_session(
+            session,
+            settings,
+            username=result.admin.username,
+            ip=client_ip,
+            user_agent=user_agent,
+            request_id=request_id,
+            second_factor="suspended",
+        )
+        response = Response(status_code=status.HTTP_204_NO_CONTENT)
+        _attach_session_cookies(response, sid, settings)
+        return response
+
+    challenge = login_challenge.issue(
+        username=result.admin.username, stage=stage.value, settings=settings
+    )
+    if stage is MfaStage.TOTP:
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=LocalLoginStageOut(stage=stage.value, challenge=challenge).model_dump(),
+        )
+
+    try:
+        offer = await mfa.begin_enrollment(account=f"{result.admin.username}@magister.local")
+    except MfaAlreadyEnrolledError:
+        # A parallel login finished enrolment between our stage check and here.
+        # Nothing is broken — the client just has to start over in the TOTP stage.
+        return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": "retry"})
+    return JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=LocalLoginStageOut(
+            stage=stage.value,
+            challenge=challenge,
+            provisioning_uri=offer.provisioning_uri,
+            qr_data_uri=offer.qr_data_uri,
+            secret=offer.secret,
+        ).model_dump(),
+    )
+
+
+@router.post("/login/local/totp")
+@limiter.limit("20/minute")  # pyright: ignore[reportUntypedFunctionDecorator]
+async def login_local_totp(
+    request: Request,
+    payload: LocalTotpRequest,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Step 2 of the local login: the one-time code (or a recovery code).
+
+    A wrong code counts on the same per-account failure counter as a wrong
+    password, so the existing lockout also caps guesses at the second factor.
+    """
+    request_id = getattr(request.state, "request_id", "")
+    client_ip = getattr(request.state, "client_ip", None)
+    user_agent = request.headers.get("user-agent")
+
+    username = login_challenge.verify(
+        payload.challenge, stage=MfaStage.TOTP.value, settings=settings
+    )
+    if username is None:
+        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "expired"})
+
+    admin = await LocalAdminRepository(session).get_by_username(username)
+    if admin is None or not admin.enabled:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN, content={"detail": "local_login_disabled"}
+        )
+    if admin.locked_until is not None and admin.locked_until > utcnow():
+        return JSONResponse(
+            status_code=status.HTTP_423_LOCKED, content={"detail": "account_locked"}
+        )
+
+    mfa = LocalAdminMfaService(session, settings)
+    # Whether the code was a TOTP or a recovery code changes what the audit
+    # trail should say — read the remaining count before and after.
+    before = await mfa.status()
+    if not await mfa.verify(payload.code):
+        await AuditService(session, settings).emit(
+            action="local_login_failed",
+            target_kind="local_admin",
+            target_id=username[:64],
+            actor_upn=f"{username}@magister.local",
+            actor_object_guid=None,
+            school_id=None,
+            ip=client_ip,
+            request_id=request_id,
+            payload={"reason": "second_factor_invalid"},
+        )
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "invalid_code"}
+        )
+
+    after = await mfa.status()
+    used_recovery = (
+        before is not None
+        and after is not None
+        and after.recovery_codes_left < before.recovery_codes_left
+    )
+    sid = await _create_local_session(
+        session,
+        settings,
+        username=username,
         ip=client_ip,
         user_agent=user_agent,
-        auth_kind="local",
+        request_id=request_id,
+        second_factor="recovery_code" if used_recovery else "totp",
     )
-    audit = AuditService(session, settings)
-    await audit.emit(
-        action="local_login",
-        target_kind="session",
-        target_id=sid[:12],
-        actor_upn=f"{result.admin.username}@magister.local",
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    _attach_session_cookies(response, sid, settings)
+    return response
+
+
+@router.post("/login/local/enroll")
+@limiter.limit("20/minute")  # pyright: ignore[reportUntypedFunctionDecorator]
+async def login_local_enroll(
+    request: Request,
+    payload: LocalTotpRequest,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    """Finish enrolment: confirm the code, hand out the recovery codes, sign in.
+
+    The recovery codes are returned exactly once — they are stored as argon2id
+    hashes and cannot be shown again.
+    """
+    request_id = getattr(request.state, "request_id", "")
+    client_ip = getattr(request.state, "client_ip", None)
+    user_agent = request.headers.get("user-agent")
+
+    username = login_challenge.verify(
+        payload.challenge, stage=MfaStage.ENROLL.value, settings=settings
+    )
+    if username is None:
+        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "expired"})
+
+    admin = await LocalAdminRepository(session).get_by_username(username)
+    if admin is None or not admin.enabled:
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN, content={"detail": "local_login_disabled"}
+        )
+
+    mfa = LocalAdminMfaService(session, settings)
+    codes = await mfa.confirm_enrollment(payload.code)
+    if codes is None:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "invalid_code"}
+        )
+
+    await AuditService(session, settings).emit(
+        action="local_totp_enrolled",
+        target_kind="local_admin",
+        target_id=username[:64],
+        actor_upn=f"{username}@magister.local",
         actor_object_guid=LOCAL_ADMIN_GUID,
         school_id=None,
         ip=client_ip,
         request_id=request_id,
-        payload={"user_agent": user_agent},
+        payload={"recovery_codes_issued": len(codes)},
     )
-
-    response = Response(status_code=status.HTTP_204_NO_CONTENT)
-    _set_session_cookie(response, sid, settings)
-    _set_csrf_cookie(response, issue_csrf_token(sid, settings), settings)
+    sid = await _create_local_session(
+        session,
+        settings,
+        username=username,
+        ip=client_ip,
+        user_agent=user_agent,
+        request_id=request_id,
+        second_factor="totp",
+    )
+    # The codes go in the body, so this response carries both them and the
+    # session cookies — the operator is signed in and sees the codes once.
+    response = JSONResponse(
+        status_code=status.HTTP_200_OK,
+        content=LocalEnrollConfirmOut(recovery_codes=codes).model_dump(),
+    )
+    _attach_session_cookies(response, sid, settings)
     return response
 
 

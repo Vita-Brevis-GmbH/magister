@@ -44,8 +44,23 @@
     "errors": {
       "invalid_credentials": "Benutzername oder Passwort falsch.",
       "account_locked": "Konto vorübergehend gesperrt nach mehreren Fehlversuchen. Bitte später erneut versuchen.",
-      "local_login_disabled": "Lokale Anmeldung ist deaktiviert."
-    }
+      "local_login_disabled": "Lokale Anmeldung ist deaktiviert.",
+      "invalid_code": "Der Code stimmt nicht. Bitte den aktuellen Code aus der App eingeben.",
+      "challenge_expired": "Der Anmeldevorgang ist abgelaufen. Bitte von vorne beginnen."
+    },
+    "totp_intro": "Geben Sie den sechsstelligen Code aus Ihrer Authenticator-App ein.",
+    "totp_code": "Einmalcode",
+    "totp_submit": "Anmelden",
+    "totp_restart": "Von vorne beginnen",
+    "totp_recovery_hint": "Statt eines Codes können Sie auch einen Wiederherstellungscode eingeben.",
+    "enroll_title": "Zweiten Faktor einrichten",
+    "enroll_intro": "Dieses Konto ist der Notzugang und verlangt einen zweiten Faktor. Scannen Sie den Code mit einer Authenticator-App und bestätigen Sie mit dem angezeigten Einmalcode.",
+    "enroll_qr_alt": "QR-Code für die Authenticator-App",
+    "enroll_secret_label": "Falls die Kamera nicht geht",
+    "enroll_submit": "Einrichtung abschliessen",
+    "recovery_title": "Wiederherstellungscodes",
+    "recovery_intro": "Bewahren Sie diese Codes sicher auf. Jeder ist einmal verwendbar und ersetzt den Einmalcode, wenn Sie kein Telefon zur Hand haben. Sie werden nur jetzt angezeigt.",
+    "recovery_continue": "Codes gesichert, weiter"
   },
   "me": {
     "title": "Mein Profil",

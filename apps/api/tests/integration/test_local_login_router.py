@@ -1,16 +1,24 @@
 """End-to-end tests for the local-admin auth path.
 
+Since ADR-0015 D2 the local login is two steps: the password yields a signed
+challenge plus a stage, and only a valid second factor yields a session. A
+fresh account therefore lands in forced enrolment — there is deliberately no
+way to get a session with the password alone.
+
 Covers:
-- ``POST /auth/login/local`` happy path → session+csrf cookies, audit-event
-  with no ``password`` field, and a follow-up ``GET /auth/me`` confirms the
-  user is admin with ``auth_kind == "local"``.
-- Wrong-password and locked-account flows.
+- forced enrolment on first sign-in → session+csrf cookies plus the one-time
+  recovery codes, and a follow-up ``GET /auth/me`` confirming ``auth_kind``.
+- the ordinary two-step sign-in once a factor exists.
+- wrong-password and locked-account flows.
 - ``GET /auth/capabilities`` reflects DB state.
-- ``POST /auth/login/local`` skips CSRF (predates session).
+- the login endpoints skip CSRF (they predate the session).
 """
 
 from __future__ import annotations
 
+import time
+
+import pyotp
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
@@ -40,7 +48,65 @@ async def _seed(session: AsyncSession, *, password: str = "secret-pw-12345") -> 
     await LocalAdminService(session).seed_from_env_if_empty(settings)
 
 
+def _code(secret: str, *, step_offset: int = 0) -> str:
+    """A TOTP code, optionally for a neighbouring 30-second step.
+
+    Codes are single-use (``local_admins.totp_last_step``), so signing in right
+    after enrolment needs the *next* step's code rather than the one just
+    consumed — which is within the accepted ±1 drift, so no waiting is needed.
+    """
+    return pyotp.TOTP(secret, digits=6, interval=30).at(time.time() + step_offset * 30)
+
+
+async def _enroll(client: AsyncClient, *, password: str) -> tuple[str, list[str]]:
+    """Run the forced first sign-in. Returns (secret, recovery codes)."""
+    first = await client.post("/auth/login/local", json={"username": "admin", "password": password})
+    assert first.status_code == 200, first.text
+    body = first.json()
+    assert body["stage"] == "enroll"
+    assert body["secret"] and body["qr_data_uri"].startswith("data:image/svg+xml")
+
+    done = await client.post(
+        "/auth/login/local/enroll",
+        json={"challenge": body["challenge"], "code": _code(body["secret"])},
+    )
+    assert done.status_code == 200, done.text
+    codes = done.json()["recovery_codes"]
+    assert len(codes) == 10
+    return body["secret"], codes
+
+
+async def _sign_in(client: AsyncClient, *, password: str, secret: str) -> str:
+    """Ordinary two-step sign-in once a factor exists. Returns the session id."""
+    first = await client.post("/auth/login/local", json={"username": "admin", "password": password})
+    assert first.status_code == 200, first.text
+    assert first.json()["stage"] == "totp"
+    second = await client.post(
+        "/auth/login/local/totp",
+        json={"challenge": first.json()["challenge"], "code": _code(secret, step_offset=1)},
+    )
+    assert second.status_code == 204, second.text
+    sid = second.cookies.get("magister_session")
+    assert sid
+    return sid
+
+
 class TestLoginLocal:
+    async def test_password_alone_never_yields_a_session(
+        self, client: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """The whole point of D2: no session until a second factor exists."""
+        await _seed(db_session, password="hunter2hunter2")
+        await db_session.commit()
+
+        resp = await client.post(
+            "/auth/login/local",
+            json={"username": "admin", "password": "hunter2hunter2"},
+        )
+        assert resp.status_code == 200
+        assert resp.cookies.get("magister_session") is None
+        assert resp.json()["stage"] == "enroll"
+
     async def test_happy_path_issues_session_and_marks_admin(
         self,
         client: AsyncClient,
@@ -50,14 +116,8 @@ class TestLoginLocal:
         await _seed(db_session, password="hunter2hunter2")
         await db_session.commit()
 
-        resp = await client.post(
-            "/auth/login/local",
-            json={"username": "admin", "password": "hunter2hunter2"},
-        )
-        assert resp.status_code == 204, resp.text
-        sid = resp.cookies.get("magister_session")
-        csrf = resp.cookies.get("magister_csrf")
-        assert sid and csrf
+        secret, _codes = await _enroll(client, password="hunter2hunter2")
+        sid = await _sign_in(client, password="hunter2hunter2", secret=secret)
 
         me = await client.get("/auth/me", cookies={"magister_session": sid})
         assert me.status_code == 200
@@ -135,4 +195,10 @@ class TestLoginLocal:
             "/auth/login/local",
             json={"username": "admin", "password": "hunter2hunter2"},
         )
-        assert resp.status_code == 204, resp.text
+        assert resp.status_code == 200, resp.text
+        # The second step is under the same exempt prefix.
+        second = await client.post(
+            "/auth/login/local/enroll",
+            json={"challenge": resp.json()["challenge"], "code": "000000"},
+        )
+        assert second.status_code == 401, second.text  # wrong code, not a CSRF rejection

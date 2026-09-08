@@ -47,8 +47,23 @@
     "errors": {
       "invalid_credentials": "Nome utente o password errati.",
       "account_locked": "Account bloccato temporaneamente dopo troppi tentativi falliti. Riprova più tardi.",
-      "local_login_disabled": "L'accesso locale è disabilitato."
-    }
+      "local_login_disabled": "L'accesso locale è disabilitato.",
+      "invalid_code": "Il codice non è corretto. Inserire il codice attuale dell'app.",
+      "challenge_expired": "La procedura di accesso è scaduta. Ricominciare."
+    },
+    "totp_intro": "Inserire il codice a sei cifre della propria app di autenticazione.",
+    "totp_code": "Codice monouso",
+    "totp_submit": "Accedi",
+    "totp_restart": "Ricomincia",
+    "totp_recovery_hint": "Invece di un codice si può inserire anche un codice di ripristino.",
+    "enroll_title": "Configurare il secondo fattore",
+    "enroll_intro": "Questo account è l'accesso di emergenza e richiede un secondo fattore. Scansionare il codice con un'app di autenticazione e confermare con il codice monouso visualizzato.",
+    "enroll_qr_alt": "Codice QR per l'app di autenticazione",
+    "enroll_secret_label": "Se la fotocamera non funziona",
+    "enroll_submit": "Concludi la configurazione",
+    "recovery_title": "Codici di ripristino",
+    "recovery_intro": "Conservare questi codici in un luogo sicuro. Ognuno è utilizzabile una sola volta e sostituisce il codice monouso quando non si ha il telefono. Vengono mostrati solo ora.",
+    "recovery_continue": "Codici salvati, continua"
   },
   "me": {
     "title": "Il mio profilo",

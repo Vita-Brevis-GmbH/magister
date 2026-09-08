@@ -22,6 +22,12 @@ dependencies = [
     "jinja2>=3.1",
     "ldap3>=2.9",
     "python-multipart>=0.0.9",
+    # TOTP second factor for the local break-glass account (ADR-0015 D2). A
+    # reviewed RFC-6238 implementation rather than 30 hand-rolled lines of HMAC.
+    "pyotp>=2.9",
+    # QR rendering as inline SVG, server-side. The CSP allows img-src 'self'
+    # data:, so no CDN and no CSP change is needed.
+    "segno>=1.6",
     "slowapi>=0.1.9",
     "weasyprint>=62.3",
 ]

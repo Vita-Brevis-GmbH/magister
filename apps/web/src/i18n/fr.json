@@ -47,8 +47,23 @@
     "errors": {
       "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect.",
       "account_locked": "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard.",
-      "local_login_disabled": "La connexion locale est désactivée."
-    }
+      "local_login_disabled": "La connexion locale est désactivée.",
+      "invalid_code": "Le code est incorrect. Saisissez le code actuel de l'application.",
+      "challenge_expired": "La procédure de connexion a expiré. Veuillez recommencer."
+    },
+    "totp_intro": "Saisissez le code à six chiffres de votre application d'authentification.",
+    "totp_code": "Code à usage unique",
+    "totp_submit": "Se connecter",
+    "totp_restart": "Recommencer",
+    "totp_recovery_hint": "À la place d'un code, vous pouvez aussi saisir un code de récupération.",
+    "enroll_title": "Configurer le deuxième facteur",
+    "enroll_intro": "Ce compte est l'accès de secours et exige un deuxième facteur. Scannez le code avec une application d'authentification et confirmez avec le code affiché.",
+    "enroll_qr_alt": "Code QR pour l'application d'authentification",
+    "enroll_secret_label": "Si la caméra ne fonctionne pas",
+    "enroll_submit": "Terminer la configuration",
+    "recovery_title": "Codes de récupération",
+    "recovery_intro": "Conservez ces codes en lieu sûr. Chacun est utilisable une seule fois et remplace le code à usage unique si vous n'avez pas votre téléphone. Ils ne sont affichés que maintenant.",
+    "recovery_continue": "Codes sauvegardés, continuer"
   },
   "me": {
     "title": "Mon profil",
