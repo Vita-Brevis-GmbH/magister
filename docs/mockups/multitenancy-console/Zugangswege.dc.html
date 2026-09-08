@@ -195,7 +195,7 @@
         <tr>
           <td>
             <div style="font-weight: 500;">Kundenoberfl&auml;che</div>
-            <div class="muted mono" style="font-size: 12.5px;">magister.ch/k/&lt;kunde&gt;</div>
+            <div class="muted mono" style="font-size: 12.5px;">&lt;kunde&gt;.magister.ch</div>
           </td>
           <td class="mono">0.0.0.0:443</td>
           <td>Lehr- und Leitungspersonen</td>
@@ -238,8 +238,9 @@
       <p class="muted" style="margin: 0; font-size: 13px;">
         Das Usermanagement des Kunden geh&ouml;rt ins Internet, das Global Management nicht. Getrennte
         Listener sind die Voraussetzung daf&uuml;r: nur so l&auml;sst sich die Konsole an die interne
-        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Quell-IP-Regeln macht die Fortigate mit
-        der WAF &mdash; nicht Magister.
+        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Jeder Kunde hat dort seine eigene
+        Subdomain und damit eine eigene Origin. Quell-IP-Regeln macht die Fortigate mit der WAF &mdash;
+        nicht Magister.
       </p>
     </div>
   </div>

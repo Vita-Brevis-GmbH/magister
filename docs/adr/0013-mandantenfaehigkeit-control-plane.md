@@ -62,21 +62,26 @@ in jeden Kunden ausstellen und ist damit das höchstwertige Ziel im System.
 
 ### D3 · Origins und Pfade
 
-- Konsole: **eigene Origin** (`console.magister.ch`) auf einem **eigenen
-  Listener** (TCP 4444), nur auf der Management-Adresse veröffentlicht und mit
-  Client-Zertifikat — siehe [ADR-0015](0015-authentisierungs-haertung.md) D1.
-  Der Kunden-vhost auf 443 routet nie zur Konsole.
-- Kunden: `magister.ch/k/<slug>/…`, Session-Cookie mit `Path=/k/<slug>`;
-  optional später eine eigene Domain pro Kunde.
+**Jeder Kunde bekommt eine eigene Subdomain** — `<slug>.magister.ch`. Kein
+gemeinsamer Pfad auf einer geteilten Origin (Entscheid E1).
 
-Der Cookie-Pfad ist **Bequemlichkeit, keine Sicherheitsgrenze** (ein Operator
-kann parallel in zwei Kunden angemeldet sein). Die Grenze ist serverseitig: die
-Session-Zeile trägt `tenant_id`, eine Session von Kunde A auf dem Pfad von
-Kunde B ist ein hartes 401.
+- Kunden: `https://<slug>.magister.ch/…` auf `0.0.0.0:443`, Wildcard-Zertifikat
+  `*.magister.ch`, ein DNS-Eintrag pro Kunde, ein eigener Entra-Redirect-URI
+  pro Kunde.
+- Konsole: `console.magister.ch` auf einem **eigenen Listener** (TCP 4444), nur
+  auf der internen Adresse veröffentlicht und mit Client-Zertifikat — siehe
+  [ADR-0015](0015-authentisierungs-haertung.md) D1.
+- Connector: `connect.magister.ch` auf `0.0.0.0:46200`, nur mit
+  Client-Zertifikat — siehe [ADR-0014](0014-ad-connector-agent.md).
 
-Offen und zu entscheiden (siehe Plan, Entscheid E1): alle Kunden auf **einer**
-Origin teilen sich Browser-Storage und XSS-Radius. Eine Subdomain pro Kunde
-(`<slug>.magister.ch`) wäre die echte Trennung; der Pfad bleibt dann als Alias.
+Der Grund für die Subdomain statt eines Pfads: eine eigene Origin je Kunde
+heisst eigener Browser-Speicher, eigene Cookies und ein XSS-Radius, der beim
+Kunden endet. Ein Pfad-Präfix auf einer geteilten Origin hätte alle Kunden im
+selben Sicherheitskontext — der Cookie-`Path` ist Bequemlichkeit, keine Grenze.
+
+Serverseitig bleibt es doppelt abgesichert: die Auflösung geht über den
+`Host`-Header auf den Kunden, und die Session-Zeile trägt `tenant_id`. Eine
+Session von Kunde A auf der Subdomain von Kunde B ist ein hartes 401.
 
 ### D4 · Konsole ist Autorenstelle, Kundenschema hält die Kopie
 
@@ -123,12 +128,22 @@ Kopf-Version des Codes, wird dieser Kunde mit **503 Wartung** bedient statt mit
 möglicherweise falschen Queries. Migrationen sind pro Release **nur erweiternd**
 (expand/contract über zwei Releases).
 
-### D8 · Ein Codebase, zwei Betriebsarten
+### D8 · Eine Betriebsart, zwei Grössen
 
-`MAGISTER_MULTITENANT=0` (Default) heisst: genau ein Mandant, aufgelöst ohne
-Pfad-Präfix. Die bestehenden On-Prem-Installationen bleiben damit unverändert
-gültig und unterstützt; die gehostete Mehrmandanten-Variante ist eine
-**zusätzliche Betriebsart**, kein Ersatz.
+Es gibt **keinen** Einmandanten-Sonderweg. Jede Installation ist
+mandantenfähig; eine Installation beim Kunden hat einfach **genau einen**
+Mandanten. Dieselbe Auflösung über den `Host`-Header, dasselbe Schema pro
+Mandant, dieselbe eigene Datenbankrolle, derselbe Connector-Agent, dieselben
+Ports.
+
+Das ist bewusst strenger als ein Schalter, der das Verhalten umstellt: ein
+zweiter Codepfad wäre der schlechter getestete, und die Unterschiede würden
+über Jahre auseinanderlaufen. So läuft on-prem exakt derselbe Code wie
+gehostet — nur mit `n=1`. Kunden, die eine eigene Installation brauchen,
+bekommen keine eingeschränkte Variante, sondern dieselbe Plattform.
+
+Kommt bei einer On-prem-Installation später ein zweiter Mandant dazu, ist das
+ein Registry-Eintrag und kein Umbau.
 
 ### D9 · Geheimnisse pro Kunde
 
@@ -137,7 +152,7 @@ eigenen Datenschlüssel, verpackt in einem Plattform-Schlüssel (Envelope). Ein
 kompromittierter Kundenschlüssel entschlüsselt nichts von anderen Kunden. Dasselbe
 gilt für AD-Bind-Passwort und OIDC-Client-Secret.
 
-### D10 · AD-Erreichbarkeit über einen ausgehenden On-Prem-Connector
+### D10 · AD-Erreichbarkeit über einen ausgehenden Connector-Agenten
 
 Eine gehostete Installation erreicht die Domänencontroller im Kundennetz nicht.
 Die AD-Grenze aus ADR-0011 löst das: ein Connector-Agent bleibt beim Kunden vor
@@ -149,6 +164,11 @@ Absicherung, Anmeldeverfahren und Auslieferung des Agenten sind in
 [ADR-0014](0014-ad-connector-agent.md) ausgeführt: zwei unabhängige Faktoren
 (mTLS gegen eine private CA plus API-Key), Schlüsselerzeugung auf dem Agenten,
 Bezug des Pakets beim Erfassen des Kunden.
+
+Passend zu D8 gilt das **auch on-prem**: dort läuft derselbe Agent gegen
+denselben Connector-Endpunkt, nur im eigenen Netz. Es gibt keinen zweiten,
+direkten AD-Pfad für Einzelinstallationen — ein Mechanismus, ein Codepfad, eine
+Testabdeckung.
 
 ## Konsequenzen
 
@@ -163,7 +183,8 @@ Bezug des Pakets beim Erfassen des Kunden.
 - Vorlagen und Rechte einmal pflegen, kontrolliert ausrollen, pro Kunde
   nachvollziehbar.
 - „Eigene Datenbank" und „eigener Cluster" sind ein Registry-Eintrag, kein Umbau.
-- Bestehende On-Prem-Kunden sind nicht betroffen (D8).
+- On-prem und gehostet laufen auf demselben Code mit demselben Agenten; eine
+  Einzelinstallation ist keine Sonderausführung, sondern `n=1` (D8).
 
 **Negativ**
 

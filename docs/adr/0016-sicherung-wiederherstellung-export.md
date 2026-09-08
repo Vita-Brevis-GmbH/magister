@@ -65,18 +65,48 @@ Dump vermerkt nur die Schlüssel-Id (`audit_key_id` existiert seit Migration
 `0011_audit_key_id`). Wer wiederherstellt, braucht beide Quellen — genau so ist
 es gedacht.
 
-Ablage: lokal für die schnelle Wiederherstellung **und** in einem
-Objektspeicher in der Schweiz mit Unveränderlichkeit (Object Lock), damit ein
-Angreifer mit Serverzugang die Sicherungen nicht mitlöschen kann.
+**Ablage: ein lokaler Share, den das tägliche Unternehmens-Backup mitnimmt**
+(Entscheid E13). Magister schreibt die verschlüsselten Dumps auf einen Share
+(`/mnt/magister-backup/<kunde>/…`); die bestehende Backup-Infrastruktur von
+Vita Brevis sichert diesen Share im Tageslauf weg. Kein Objektspeicher, kein
+zweiter Anbieter.
 
-### D3 · Aufbewahrung pro Kunde, als Vertragswert
+Das ist betrieblich der einfachste Weg und nutzt eine Infrastruktur, die
+ohnehin läuft und überwacht ist. Zwei Dinge muss man dabei ausdrücklich
+mitdenken, sonst hat man ein Backup, das genau im Ernstfall nicht hilft:
 
-Default: 30 Tage täglich, 12 Monate monatlich. Pro Kunde in
-`tenant_backup_policy` überschreibbar, in der Konsole sichtbar.
+1. **Die Unveränderlichkeit liegt nicht mehr bei Magister, sondern beim
+   Tages-Backup.** Ein Angreifer mit Schreibzugriff auf den Share kann die
+   Dumps löschen oder verschlüsseln. Was danach noch existiert, ist die Kopie,
+   die das Unternehmens-Backup gezogen hat — dessen Aufbewahrung und
+   Unveränderlichkeit bestimmen also ab jetzt die tatsächliche
+   Wiederherstellungsgarantie, nicht Magister. Das ist vertretbar, muss aber
+   bewusst so entschieden und dokumentiert sein.
+2. **Schreiben ja, löschen nein.** Das Dienstkonto, mit dem Magister auf den
+   Share schreibt, bekommt `Erstellen`/`Schreiben`, aber **kein** `Löschen`.
+   Das Aufräumen alter Dumps läuft als getrennter Job mit einem eigenen Konto.
+   Damit kann ein übernommener Anwendungsserver die Sicherungen nicht
+   mitnehmen, auch ohne Object Lock.
+
+Verschlüsselung bleibt trotzdem Pflicht — auf einem Share sind die Dumps für
+mehr Personen und Systeme erreichbar als in der Datenbank.
+
+### D3 · Aufbewahrung: zwei Fristen, zwei Zuständigkeiten
+
+- **Auf dem Share:** 30 Tage täglich, dazu die `pre_migration`-Dumps für
+  30 Tage. Magister räumt selbst auf (getrennter Job, siehe D2), damit der
+  Share nicht unbegrenzt wächst. Pro Kunde in `tenant_backup_policy`
+  überschreibbar und in der Konsole sichtbar.
+- **Langfristig:** was darüber hinaus existiert, bestimmt die Aufbewahrung des
+  Unternehmens-Backups. Diese Frist ist **nicht** von Magister gesteuert.
+
+Daraus folgt eine Aufgabe, die vor der ersten Kundenzusage erledigt sein muss:
+die Aufbewahrung des Tages-Backups muss bekannt und schriftlich sein, denn sie
+ist die Zahl, die im Vertrag und in der Auftragsverarbeitungsvereinbarung
+steht — sowohl als Wiederherstellungszusage als auch als Löschfrist.
 
 Fristen sind hier keine Kostenfrage, sondern Datenschutz: Schülerdaten
-unbegrenzt aufzubewahren ist ein Problem und kein Feature. Die Frist gehört in
-den Vertrag und muss dem Kunden nennbar sein.
+unbegrenzt aufzubewahren ist ein Problem und kein Feature.
 
 ### D4 · Ein Backup gilt erst als Backup, wenn es eingespielt wurde
 
@@ -139,10 +169,11 @@ Was danach gilt, muss dem Kunden **so** zugesagt werden, wie es technisch ist:
   sofort und endgültig unlesbar (Audit-Payloads, gespeicherte Passwörter) —
   „Crypto-Shredding".
 - Die übrigen Daten (Namen, Klassen, Zuordnungen) liegen in bereits
-  geschriebenen, **unveränderlichen** Sicherungen. Aus einem Object-Lock-Archiv
-  kann man einzelne Zeilen nicht herausschneiden — das ist der Preis des
-  Ransomware-Schutzes. Vollständige Löschung tritt deshalb mit **Ablauf der
-  Aufbewahrungsfrist** ein.
+  geschriebenen Sicherungen — auf dem Share und in den Bändern oder Snapshots
+  des Unternehmens-Backups. Aus einem abgeschlossenen Backup-Satz kann man
+  einzelne Zeilen nicht herausschneiden. Vollständige Löschung tritt deshalb
+  mit **Ablauf der Aufbewahrungsfrist des Tages-Backups** ein — dieselbe Zahl
+  wie in D3.
 - Diese Frist gehört in den Vertrag und in die Auftragsverarbeitungs­vereinbarung.
   Ein „wir löschen sofort alles" wäre eine Zusage, die die Technik nicht hält.
 
@@ -157,7 +188,7 @@ Gemeinde mit einem Server bekommt keinen pgBackRest-Zwang.
 
 | Tabelle | Inhalt |
 |---|---|
-| `tenant_backups` | Kunde, Zeitpunkt, Art (`daily`/`monthly`/`pre_migration`/`manual`), Ablage-Referenz, Grösse, Prüfsumme, Schlüssel-Id, Status, `verified_at` |
+| `tenant_backups` | Kunde, Zeitpunkt, Art (`daily`/`pre_migration`/`manual`), Pfad auf dem Share, Grösse, Prüfsumme, Schlüssel-Id, Status, `verified_at` |
 | `tenant_backup_policy` | Aufbewahrung, Zeitfenster, Ziel-Ablagen, Wiederherstellungsziel (RPO/RTO) pro Kunde |
 | `restore_jobs` | Quelle, Ziel-Schema, Grund/Ticket, Freigaben, Status |
 | `export_jobs` | Kunde, Umfang, Prüfsumme, Ablauf des Download-Links, Besteller |
@@ -176,9 +207,13 @@ Gemeinde mit einem Server bekommt keinen pgBackRest-Zwang.
 
 **Negativ**
 
-- Deutlich mehr Bewegtteile: WAL-Archivierung, Objektspeicher, Prüfläufe,
-  Schlüsselverwahrung an zwei Orten.
-- Speicherkosten pro Kunde, die in die Preisgestaltung müssen.
+- Deutlich mehr Bewegtteile: WAL-Archivierung, Prüfläufe, Schlüsselverwahrung
+  an zwei Orten.
+- Speicherbedarf pro Kunde auf dem Share und im Tages-Backup, der in die
+  Preisgestaltung muss.
+- Die Wiederherstellungsgarantie hängt jetzt am Unternehmens-Backup. Dessen
+  Aufbewahrung, Unveränderlichkeit und Wiederherstellungszeit sind damit Teil
+  der Zusage an die Kunden und müssen dokumentiert sein.
 - Die Prüf-Wiederherstellung kostet jede Woche Rechenzeit und Platz.
 - Die Löschzusage ist erklärungsbedürftig („mit Ablauf der Frist", nicht
   „sofort") — das muss im Vertrieb sauber kommuniziert werden.
@@ -193,7 +228,12 @@ Gemeinde mit einem Server bekommt keinen pgBackRest-Zwang.
   Snapshots sind Cluster-weit — dasselbe Problem wie bei reinem PITR, plus
   Abhängigkeit vom Anbieter beim Restore-Werkzeug.
 - **Unverschlüsselte Dumps wie heute, aber pro Kunde.** Personendaten von
-  Minderjährigen auf einem Volume; kommt nicht in Frage.
+  Minderjährigen auf einem Share, der mehr Systemen offensteht als die
+  Datenbank; kommt nicht in Frage.
+- **Objektspeicher mit Object Lock statt Share.** Technisch der stärkere
+  Ransomware-Schutz, aber ein zweiter Anbieter und ein zweites
+  Betriebsverfahren neben einer Backup-Infrastruktur, die es schon gibt. Mit
+  den Schreibrechten aus D2 ist der Share nahe genug dran (Entscheid E13).
 - **Sicherungen beim Offboarding selektiv bereinigen.** Aus unveränderlichem
   Speicher technisch nicht möglich. Crypto-Shredding plus Fristablauf ist der
   ehrliche Weg.

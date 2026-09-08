@@ -16,8 +16,10 @@ Firmen) betrieben werden. Vita Brevis erfasst Kunden und pflegt deren
 Systemeinstellungen zentral; Kunden melden sich unter einem eigenen Pfad an und
 sehen von der Plattform nichts. Die Trennung ist auf Datenbankebene erzwungen.
 
-**Nicht Ziel:** die bestehenden On-Prem-Installationen ersetzen. Sie bleiben als
-Betriebsart „ein Mandant" unverändert unterstützt (ADR-0013 D8).
+**Kein Sonderweg für Einzelinstallationen.** Jede Installation ist
+mandantenfähig; eine Installation beim Kunden hat einfach genau einen Mandanten
+— gleiche Auflösung, gleicher Agent, gleiche Ports, gleicher Code (ADR-0013 D8).
+On-prem bleibt gebraucht und bekommt keine eingeschränkte Variante.
 
 ## 2 · Begriffe
 
@@ -46,8 +48,8 @@ flowchart TB
     API --> PG[(PostgreSQL)]
   end
 
-  KundeA[Kunde A<br/>magister.ch/k/wattwil] --> Caddy
-  KundeB[Kunde B<br/>magister.ch/k/uzwil] --> Caddy
+  KundeA[Kunde A<br/>wattwil.magister.ch] --> Caddy
+  KundeB[Kunde B<br/>uzwil.magister.ch] --> Caddy
 
   PG --- SA[Schema t_wattwil<br/>Rolle r_wattwil]
   PG --- SB[Schema t_uzwil<br/>Rolle r_uzwil]
@@ -66,11 +68,11 @@ Verbindung ins Kundennetz.
 
 Drei Listener mit drei Erreichbarkeiten:
 
-| Listener | Adresse | Wer | Aus dem Internet |
-|---|---|---|---|
-| Kundenoberfläche | `0.0.0.0:443` | Lehr- und Leitungspersonen, MFA über Entra | erreichbar, WAF davor |
-| Konsole | `10.0.0.5:4444` | Global Admin, Global Operator | **nicht geroutet** |
-| Connector | `0.0.0.0:46200` | Connector-Agenten, nur mit Client-Zertifikat | erreichbar |
+| Listener | Adresse | Hostname | Wer | Aus dem Internet |
+|---|---|---|---|---|
+| Kundenoberfläche | `0.0.0.0:443` | `<kunde>.magister.ch` | Lehr- und Leitungspersonen, MFA über Entra | erreichbar, WAF davor |
+| Konsole | `10.0.0.5:4444` | `console.magister.ch` | Global Admin, Global Operator | **nicht geroutet** |
+| Connector | `0.0.0.0:46200` | `connect.magister.ch` | Connector-Agenten, nur mit Client-Zertifikat | erreichbar |
 
 Das Usermanagement des Kunden gehört ins Internet, das Global Management nicht.
 Quell-IP-Regeln macht die Fortigate mit der WAF, nicht Magister.
@@ -128,18 +130,27 @@ Konsolen-DB.
 
 ## 5 · Anfrage-Pfad
 
-1. Caddy leitet `/k/<slug>/api/*` an die API weiter und gibt `<slug>` als Header mit.
-2. Middleware löst `<slug>` gegen einen Registry-Cache auf: unbekannt → 404,
-   `suspended` → eigene Seite, Stand ≠ Kopf-Version → 503 Wartung.
+1. Caddy nimmt `*.magister.ch` auf einem Wildcard-Zertifikat an und gibt den
+   `Host` als `X-Forwarded-Host` weiter.
+2. Middleware löst den Hostnamen gegen einen Registry-Cache auf: unbekannt →
+   404, `suspended` → eigene Seite, Stand ≠ Kopf-Version → 503 Wartung. Bei
+   einer Installation mit genau einem Mandanten trägt dessen Registry-Zeile den
+   konfigurierten Hostnamen — dieselbe Auflösung, nur eine Zeile.
 3. Aus dem Registry-Eintrag (DSN + Schema) kommt die Engine; pro Transaktion
    `SET LOCAL ROLE r_<slug>` und `SET LOCAL search_path = t_<slug>`.
 4. Zusicherung: `current_user` passt zum Kunden der Anfrage, sonst Abbruch.
-5. Session-Cookie wird gegen `sessions.tenant_id` geprüft; Kunde A auf Pfad B → 401.
+5. Session-Cookie wird gegen `sessions.tenant_id` geprüft; eine Session von
+   Kunde A auf der Subdomain von Kunde B → 401. Weil jeder Kunde eine eigene
+   Origin hat, trennt der Browser Cookies und Speicher ohnehin schon.
 6. Ab hier ist der bestehende Code unverändert — inklusive `school_id`-Filter,
    der weiterhin *innerhalb* eines Kunden gilt.
 
 Die `SET LOCAL`-Variante erlaubt **einen** gemeinsamen Verbindungs-Pool: beide
 Einstellungen enden mit der Transaktion, ein Pool kann nichts weitertragen.
+
+Neuer Kunde heisst betrieblich: ein DNS-Eintrag, eine Registry-Zeile, ein
+Entra-Redirect-URI. Das Wildcard-Zertifikat deckt die Subdomain ohne weiteres
+Zutun ab.
 
 ## 6 · Was zieht wohin
 
@@ -163,20 +174,26 @@ Einstellungen enden mit der Transaktion, ein Pool kann nichts weitertragen.
 
 ## 7 · Phasen
 
-### Phase 0 — Authentisierungs-Härtung (unabhängig, kann sofort)
+### Phase 0 — Authentisierungs-Härtung ← **hier fangen wir an**
 
 Braucht keine Mandantenfähigkeit und verkleinert die Angriffsfläche, bevor
-irgendetwas gehostet wird. Referenz: ADR-0015.
+irgendetwas gehostet wird. Läuft allein, nicht parallel zu Phase 1 — beide
+fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
 
-- **AD-Login entfernen.** Ausbau in zwei Releases nach der Datei-Liste in
-  ADR-0015 D3; Start bricht laut ab, wenn `MAGISTER_AD_LOGIN_*` noch gesetzt
-  ist; im zweiten Release entfernt Alembic die beiden Spalten.
+- **AD-Login entfernen.** Niemand nutzt ihn (E7), also direkt: Ausbau in zwei
+  Releases nach der Datei-Liste in ADR-0015 D3; Start bricht laut ab, wenn
+  `MAGISTER_AD_LOGIN_*` noch gesetzt ist; im zweiten Release entfernt Alembic
+  die beiden Spalten.
 - **TOTP für lokale Konten**, verpflichtend, mit Wiederherstellungscodes und
   erzwungener Einrichtung.
 - **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue
   Wiederherstellungscodes, Konto deaktivieren, MFA-Pflicht befristet aufheben —
-  on-prem über `magister-cli local-admin totp-reset`, gehostet später über die
-  Konsole. Jeder Eingriff mit eigenem, kundensichtbarem Audit-Ereignis.
+  zunächst über `magister-cli local-admin totp-reset`, in Phase 2a auch in der
+  Konsole. Jeder Eingriff mit eigenem, kundensichtbarem Audit-Ereignis. Das
+  Notkonto bleibt ein Singleton (E12).
+- **Plattform-CA anlegen** (E9): Offline-Root auf zwei verschlüsselten
+  Datenträgern, Intermediate im Betrieb, dazu das dokumentierte Verfahren für
+  Ausstellung, Erneuerung und Verlust.
 - **Konsolen-Listener** vorbereiten: eigener Site-Block, Bindung an die interne
   Adresse, Client-Zertifikat gegen die private CA, Marker-Riegel in der
   Anwendung. (Die Konsole selbst kommt in Phase 2 — Listener und CA sind die
@@ -199,7 +216,9 @@ Verhaltensänderung.
 - Schema-Umzug `public` → `t_default`; Alembic mit `version_table_schema`;
   Migrations-Runner über die Registry — der zieht pro Kunde einen Dump, **bevor**
   er migriert (ADR-0016 D6, die Rückfahrkarte).
-- `MAGISTER_MULTITENANT=0` löst ohne Pfad-Präfix auf.
+- Kein `MAGISTER_MULTITENANT`-Schalter: eine Installation mit einem Mandanten
+  löst über den konfigurierten Hostnamen seiner Registry-Zeile auf — dieselbe
+  Middleware, dieselben Abfragen (E4, ADR-0013 D8).
 - **Abnahme:** Alle bestehenden Tests grün, keine sichtbare Änderung, ein
   Contract-Test beweist, dass `r_default` ein zweites Schema nicht lesen kann.
 
@@ -222,15 +241,17 @@ Passwort-Reset. Referenz: ADR-0014.
   CSR-Anmeldung, Widerruf als Datenbank-Flag.
 - **Connector-Endpunkt** auf eigenem Listener `0.0.0.0:46200` mit
   `require_and_verify`, plus Abgleich von SPKI-Fingerprint und API-Key gegen
-  dieselbe Agent-Zeile. Optionale Rückfallebene auf 443 für Kundennetze, die
-  hohe Ports ausgehend sperren (Entscheid E11).
+  dieselbe Agent-Zeile. Keine Rückfallebene auf 443 (E11) — der Agent prüft die
+  Erreichbarkeit beim ersten Start und meldet klar, wenn der Port zu ist.
 - **Auftragswarteschlange** hinter der bestehenden `AdClient`-Schnittstelle als
   dritter Rücken (nach *direkt* und *eingehendem RPC*) — kein Aufrufer im
   Fachcode ändert sich. Methodenmenge ist die Allowlist aus `ad/rpc.py`.
 - **Agent** für Windows (MSI, Dienst), Linux (`.deb`, systemd) und als
   OCI-Image: Schlüsselerzeugung lokal, Long-Poll-Abruf, Ergebnis mit HMAC,
   Sync-Seiten als Push, lokale OU-Allowlist und Gruppen-Denylist, lokales
-  Protokoll, automatische Zertifikatserneuerung.
+  Protokoll, automatische Zertifikatserneuerung, automatische Updates (E10).
+  Derselbe Agent läuft auch bei einer Einzelinstallation gegen denselben
+  Endpunkt im eigenen Netz — es gibt keinen direkten AD-Pfad daneben.
 - **Konsole**: Paket-Download mit Einmal-Token, Fingerprint-Anzeige nach der
   Anmeldung, API-Key- und Zertifikatsrotation, Agent-Status, Ereignisliste.
 - **Konsole**: die vier Reset-Eingriffe für den Notzugang des Kunden
@@ -249,8 +270,9 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 
 - **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt".
 - **Logische Sicherung pro Kunde** (`pg_dump --schema=t_<slug>`), mit `age`
-  verschlüsselt, lokal und in einem unveränderlichen Objektspeicher in der
-  Schweiz.
+  verschlüsselt, auf einen Share geschrieben, den das tägliche
+  Unternehmens-Backup mitnimmt (E13). Magister schreibt, löscht aber nicht — das
+  Aufräumen läuft als getrennter Job unter eigenem Konto.
 - **Wöchentliche Prüf-Wiederherstellung** in ein Wegwerf-Schema mit
   Prüfabfragen; Ergebnis pro Kunde in der Konsole.
 - **Restore daneben, nie darüber**: neues Schema, Umschalten erst nach Freigabe
@@ -260,8 +282,9 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 - **Offboarding-Ablauf** mit Karenzzeit, Crypto-Shredding des Kundenschlüssels
   und Löschung mit Fristablauf.
 - **Aufbewahrung pro Kunde** als Vertragswert, in der Konsole sichtbar.
-- **On-prem**: bestehende Sidecar plus Verschlüsselung, Prüf-Wiederherstellung
-  und `magister-cli backup verify`.
+- **Einzelinstallationen**: derselbe Weg mit `n=1`; die bestehende Sidecar wird
+  um Verschlüsselung, Prüf-Wiederherstellung und `magister-cli backup verify`
+  erweitert, statt daneben etwas Eigenes zu bekommen.
 - **Abnahme:** Ein Kunde wird aus einem Dump in ein Nebenschema
   wiederhergestellt, ohne dass ein anderer Kunde etwas merkt; ein absichtlich
   beschädigter Dump fällt in der wöchentlichen Prüfung auf; ein Export ist ohne
@@ -365,55 +388,52 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 | Verlust des Agent-Schlüssels oder des Kundengeräts. | Schlüssel nicht exportierbar erzeugt, Widerruf als Datenbank-Flag mit sofortiger Wirkung, 90-Tage-Zertifikate mit automatischer Erneuerung. |
 | Notzugang verloren (kein Telefon, keine Wiederherstellungscodes). | Zehn Codes bei der Einrichtung, Reset über die Konsole (gehostet) beziehungsweise ein dokumentiertes und geübtes Offline-Verfahren (on-prem). |
 | Konsolen-Listener aus Versehen auf `0.0.0.0` gebunden. | Bindung an die interne Adresse ist die Massnahme; dazu Client-Zertifikat und Marker-Riegel als zweite und dritte Schicht, plus ein Start-Check, der eine Bindung auf `0.0.0.0` ablehnt. |
-| Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Firewall-Anforderung im Onboarding-Runbook benennen; Rückfallebene auf 443 mit demselben mTLS-Zwang (Entscheid E11). |
+| Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Bewusst ohne Rückfallebene (E11): die Freigabe von `TCP 46200` ist harte Onboarding-Voraussetzung und muss vor dem Termin bestätigt sein; der Agent meldet beim ersten Start klar, wenn der Port zu ist. |
 | Befristete MFA-Aufhebung wird zur Gewohnheit. | 24-Stunden-Automatik ohne Verlängerungsknopf, Grund/Ticket verpflichtend, Warnbalken in der Oberfläche, Ereignis im Kunden-Audit. |
 | Sicherung vorhanden, aber nicht wiederherstellbar. | Wöchentliche Prüf-Wiederherstellung mit Prüfabfragen; „zuletzt geprüft" pro Kunde in der Konsole; ein nie geprüfter Dump gilt als nicht vorhanden. |
 | Dump wiederhergestellt, aber Kundenschlüssel fehlt — Audit-Payloads unlesbar. | Schlüssel in getrenntem Tresor mit eigener Sicherung, Schlüssel-Id im Dump vermerkt, Entschlüsselbarkeit ist Teil der wöchentlichen Prüfung. |
-| Angreifer mit Serverzugang löscht die Sicherungen mit. | Kopie in einem Objektspeicher mit Object Lock; der Anwendungsserver kennt nur den öffentlichen Backup-Schlüssel. |
-| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Fristablauf — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg". |
+| Angreifer mit Serverzugang löscht die Sicherungen mit. | Magister hat auf dem Share Schreibrecht ohne Löschrecht, das Aufräumen läuft unter eigenem Konto, und der Anwendungsserver kennt nur den öffentlichen Backup-Schlüssel. Die letzte Instanz ist die Kopie des Tages-Backups — dessen Unveränderlichkeit trägt damit die Garantie (E13). |
+| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Ablauf der Aufbewahrungsfrist des Tages-Backups — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg". |
+| Wildcard-Zertifikat `*.magister.ch` kompromittiert. | Betrifft alle Kunden-Subdomains zugleich. Privater Schlüssel nur auf dem Reverse-Proxy, kurze Laufzeit, automatische Erneuerung, Zertifikatstransparenz überwachen. |
 | Operator setzt TOTP und Passwort zurück und übernimmt den Notzugang. | Liegt in der Natur eines Break-Glass-Kontos. Abgesichert durch: Reset zeigt nie ein Geheimnis, Passwort-Reset ist eine getrennte Handlung, beide Ereignisse stehen im Audit des Kunden und in dessen Zugriffsliste. |
 
-## 10 · Offene Entscheide
+## 10 · Entscheide
 
-- **E1 · Pfad oder Subdomain?** Der Auftrag nennt einen eigenen Pfad. Technisch
-  ist eine Subdomain pro Kunde die härtere Grenze (eigene Origin, eigener
-  Browser-Storage, XSS bleibt beim Kunden). *Vorschlag:* Subdomain als Zielbild,
-  Pfad als Alias — die Auflösung kann beides.
-- **E2 · Rollen*zuweisung* an Personen: Kunde oder global?** Der Auftrag sagt
-  „Rechte nur als Global Admin". Der Plan legt die **Matrix** global und lässt
-  die **Zuweisung** beim Kunden — sonst muss Vita Brevis jeden Rollenwechsel
-  einer Schulleitung selbst vornehmen. Muss bestätigt werden.
-- **E3 · Was bleibt dem Kunden-Admin?** Vorschlag: Standorte, Klassen,
-  Abteilungen, Benutzer, Importe, Geräte, Auswertungen, Rollenzuweisung. Ohne:
-  System, Rechte-Matrix, Module, Zertifikate, lokales Notkonto.
-- **E4 · Bestandskunden.** Bleiben die heutigen On-Prem-Installationen dauerhaft,
-  oder gibt es einen Migrationspfad in die gehostete Plattform (Export/Import
-  eines ganzen Schemas)?
-- **E5 · Standard-Isolationsstufe.** Schema für alle, eigene Datenbank ab einer
-  Grösse oder auf Wunsch — oder eigene Datenbank von Anfang an für alle?
-- **E6 · Konsole erweitern oder trennen?** Der Plan lässt `cockpit/` zur Konsole
-  wachsen. ADR-0003 sieht ohnehin die Auslagerung in ein eigenes Repo vor — die
-  Frage ist nur, ob das *vor* oder *nach* diesem Ausbau passiert.
-- **E7 · Nutzt heute jemand den AD-Login?** Wenn ja, muss dieser Kunde vor dem
-  Ausbau auf OIDC — Release-Notes und Runbook müssen es benennen.
-- **E8 · Wie viele Agenten pro Kunde?** Einer ist einfacher, zwei geben
-  Ausfallsicherheit und verlangen eine Auftragszuteilung („wer zuerst greift").
-  *Vorschlag:* Datenmodell erlaubt mehrere von Anfang an, Auslieferung startet
-  mit einem.
-- **E9 · Wo liegt der CA-Schlüssel?** HSM, Cloud-KMS oder Offline-Root auf
-  Papier plus verschlüsseltem Datenträger. Betrifft Kosten und Betriebsablauf
-  und sollte vor Phase 2a entschieden sein.
-- **E10 · Agent-Updates automatisch oder freigegeben?** Automatisch ist
-  betrieblich einfacher; manche Kunden werden eine Freigabe verlangen.
-- **E11 · Rückfallebene für den Connector-Port?** 46200 ist gesetzt. Offen ist,
-  ob es zusätzlich einen Zugang über 443 gibt, für Kundennetze, die ausgehend
-  nur 80 und 443 erlauben. *Vorschlag:* ja, mit identischem mTLS-Zwang — sonst
-  ist ein restriktives Netz ein Ausschlusskriterium.
-- **E12 · Mehrere lokale Konten?** `local_admins` ist heute ein Singleton
-  (`CHECK id = 1`). Mit mehreren Konten könnte ein Kunden-Admin den TOTP eines
-  Kollegen zurücksetzen, statt auf Vita Brevis oder das CLI zu warten. *Vorschlag:*
-  erst später, und dann bewusst — jedes weitere Notkonto ist ein weiterer Weg
-  ohne Entra.
+Alle zwölf offenen Punkte sind entschieden (2026-09-08). Sie stehen hier, weil
+der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selbst.
+
+| # | Frage | Entscheid |
+|---|---|---|
+| E1 | Pfad oder Subdomain? | **Nur Subdomain** `<kunde>.magister.ch`. Eigene Origin je Kunde, damit Browser-Speicher und XSS-Radius beim Kunden enden. Kein Pfad-Alias. |
+| E2 | Rollen*zuweisung*: Kunde oder global? | Matrix global, **Zuweisung beim Kunden-Admin**. Ist heute schon so: alle vier Endpunkte in `admin_roles.py` hängen an `require_admin`. Die Schulleitung weist keine Rollen zu. |
+| E3 | Was bleibt dem Kunden-Admin? | Standorte, Klassen, Abteilungen, Benutzer, Importe, Geräte, Auswertungen, Rollenzuweisung. Ohne: System, Rechte-Matrix, Module, Zertifikate. |
+| E4 | Bestandskunden? | **Beides dauerhaft**, aber ohne Sonderweg: on-prem ist dieselbe Plattform mit `n=1`, samt Agent und Ports (ADR-0013 D8). Keine Einschränkungen für Einzelinstallationen. |
+| E5 | Standard-Isolationsstufe? | **Eigenes Schema für alle**, eigene Datenbank auf Wunsch oder ab einer Grösse. Umzug ist ein Registry-Eintrag. |
+| E6 | Konsole erweitern oder trennen? | Im **Monorepo** wachsen lassen; `git subtree split` bleibt später möglich (ADR-0003). Solange Konsole und Kunden-API zusammen entwickelt werden, ist Cross-Repo-Koordination reiner Verlust. |
+| E7 | Nutzt jemand den AD-Login? | **Nein.** Der Ausbau läuft direkt, ohne Übergangsfrist — nur Release-Notes. |
+| E8 | Agenten pro Kunde? | Datenmodell erlaubt mehrere, Auslieferung startet mit einem. |
+| E9 | Wo liegt der CA-Schlüssel? | **Offline-Root auf zwei verschlüsselten Datenträgern** an getrennten Orten; Intermediate pro Kunde im Betrieb. Der Root wird nur zum Ausstellen eines Intermediate gebraucht. Verlangt ein dokumentiertes und geübtes Handverfahren. |
+| E10 | Agent-Updates? | **Automatisch, Sicherheits-Updates sofort.** Version und Fingerprint der Flotte in der Konsole, Alarm bei nicht anlaufenden Updates. |
+| E11 | Rückfallebene für den Connector-Port? | **Nein, nur 46200.** Die Firewall-Freigabe ist harte Onboarding-Voraussetzung; der Agent prüft sie beim ersten Start und meldet klar, wenn der Port zu ist. |
+| E12 | Mehrere lokale Notkonten? | **Nein**, der Singleton bleibt (`CHECK id = 1`). Jedes weitere Notkonto wäre ein weiterer Weg ohne Entra. |
+| E13 | Wohin die Sicherungen? | **Lokaler Share**, den das tägliche Unternehmens-Backup mitnimmt. Kein Objektspeicher. Dafür: Schreibrecht ohne Löschrecht für Magister, Aufräumen als getrennter Job (ADR-0016 D2). |
+
+### Was daraus noch zu beschaffen ist
+
+Keine Entscheidungen mehr, aber Angaben, die vor der ersten Kundenzusage
+vorliegen müssen:
+
+1. **Aufbewahrung und Wiederherstellungszeit des Tages-Backups.** Diese Zahlen
+   sind ab E13 die tatsächliche Wiederherstellungsgarantie *und* die Löschfrist
+   beim Offboarding — sie gehören in Vertrag und AVV. Magister kann sie nicht
+   liefern, nur benennen.
+2. **Bestätigung der Share-Rechte:** Dienstkonto von Magister mit
+   `Erstellen`/`Schreiben`, ohne `Löschen`; Aufräum-Job unter eigenem Konto.
+3. **Verfahren für den CA-Root:** wer hat die Datenträger, wo liegen sie, wie
+   wird ein Intermediate ausgestellt, wie sieht der Ablauf bei Verlust aus.
+4. **Onboarding-Checkliste für Kunden:** ausgehend `TCP 46200` freigegeben,
+   Dienstkonto mit delegierten AD-Rechten, Sicht auf die eigenen DCs über
+   LDAPS.
 
 ## 11 · Mockup
 

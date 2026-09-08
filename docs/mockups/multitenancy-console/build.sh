@@ -138,7 +138,7 @@ emit Main.dc.html <<'EOF'
   <div style="display: flex; align-items: center; gap: 8px; margin-top: 24px;">
     <div class="input" style="flex-grow: 1;">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      <span class="ph">Kunde, Pfad oder Schema suchen</span>
+      <span class="ph">Kunde, Subdomain oder Schema suchen</span>
     </div>
     <div class="input" style="width: 176px; justify-content: space-between;">
       <span>Alle Status</span>
@@ -154,10 +154,10 @@ emit Main.dc.html <<'EOF'
     <table>
       <thead>
         <tr>
-          <th style="width: 300px;">Kunde</th>
-          <th style="width: 140px;">Zugang</th>
+          <th style="width: 270px;">Kunde</th>
+          <th style="width: 190px;">Zugang</th>
           <th style="width: 86px;">Profil</th>
-          <th style="width: 210px;">Datenbank-Trennung</th>
+          <th style="width: 190px;">Datenbank-Trennung</th>
           <th style="width: 96px;">Schema</th>
           <th style="width: 130px;">AD-Sync</th>
           <th style="width: 120px;">Status</th>
@@ -170,7 +170,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Gemeinde Wattwil</div>
             <div class="muted" style="font-size: 13px;">4 Standorte &middot; 1 284 Benutzer</div>
           </td>
-          <td class="mono">/k/wattwil</td>
+          <td class="mono">wattwil.magister.ch</td>
           <td>Schule</td>
           <td>
             <div>Eigenes Schema</div>
@@ -191,7 +191,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Stadt Uzwil</div>
             <div class="muted" style="font-size: 13px;">7 Standorte &middot; 2 010 Benutzer</div>
           </td>
-          <td class="mono">/k/uzwil</td>
+          <td class="mono">uzwil.magister.ch</td>
           <td>Schule</td>
           <td>
             <div>Eigenes Schema</div>
@@ -212,7 +212,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Schulgemeinde Flawil</div>
             <div class="muted" style="font-size: 13px;">5 Standorte &middot; 1 640 Benutzer</div>
           </td>
-          <td class="mono">/k/flawil</td>
+          <td class="mono">flawil.magister.ch</td>
           <td>Schule</td>
           <td>
             <div>Eigene Datenbank</div>
@@ -233,7 +233,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Gemeinde Degersheim</div>
             <div class="muted" style="font-size: 13px;">2 Standorte &middot; 430 Benutzer</div>
           </td>
-          <td class="mono">/k/degersheim</td>
+          <td class="mono">degersheim.magister.ch</td>
           <td>Schule</td>
           <td>
             <div>Eigenes Schema</div>
@@ -254,7 +254,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Alpstein Treuhand AG</div>
             <div class="muted" style="font-size: 13px;">3 Abteilungen &middot; 96 Benutzer</div>
           </td>
-          <td class="mono">/k/alpstein</td>
+          <td class="mono">alpstein.magister.ch</td>
           <td>Firma</td>
           <td>
             <div>Eigenes Schema</div>
@@ -275,7 +275,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Toggenburg Energie AG</div>
             <div class="muted" style="font-size: 13px;">6 Abteilungen &middot; 212 Benutzer</div>
           </td>
-          <td class="mono">/k/tbenergie</td>
+          <td class="mono">tbenergie.magister.ch</td>
           <td>Firma</td>
           <td>
             <div>Eigenes Schema</div>
@@ -296,7 +296,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Schulgemeinde Nesslau</div>
             <div class="muted" style="font-size: 13px;">Erfasst am 04.09.2026</div>
           </td>
-          <td class="mono">/k/nesslau</td>
+          <td class="mono">nesslau.magister.ch</td>
           <td>Schule</td>
           <td>
             <div class="muted">Eigenes Schema</div>
@@ -316,7 +316,7 @@ emit Main.dc.html <<'EOF'
             <div style="font-weight: 500;">Gemeinde Ebnat-Kappel</div>
             <div class="muted" style="font-size: 13px;">3 Standorte &middot; 780 Benutzer</div>
           </td>
-          <td class="mono">/k/ebnat</td>
+          <td class="mono">ebnat.magister.ch</td>
           <td>Schule</td>
           <td>
             <div>Eigene Datenbank</div>
@@ -376,7 +376,7 @@ emit KundeDetail.dc.html <<'EOF'
         <span class="pill pill-ok">Aktiv</span>
       </div>
       <p class="muted" style="margin: 6px 0 0;">
-        <span class="mono">/k/wattwil</span> &middot; Profil Schule &middot; Kundennummer K-0041
+        <span class="mono">wattwil.magister.ch</span> &middot; Profil Schule &middot; Kundennummer K-0041
       </p>
     </div>
     <div style="display: flex; gap: 8px;">
@@ -435,7 +435,7 @@ emit KundeDetail.dc.html <<'EOF'
           </div>
           <div>
             <label class="label">Redirect-URI <span class="muted" style="font-weight: 400;">(abgeleitet)</span></label>
-            <div class="input" style="background: #f8fafc;"><span class="muted mono">/k/wattwil/api/auth/callback</span></div>
+            <div class="input" style="background: #f8fafc;"><span class="muted mono">https://wattwil.magister.ch/api/auth/callback</span></div>
           </div>
         </div>
       </div>
@@ -676,17 +676,21 @@ emit NeuerKunde.dc.html <<'EOF'
 
       <div class="card" style="padding: 24px;">
         <h2 class="serif h2">Zugang</h2>
-        <p class="muted" style="margin: 8px 0 20px;">Jeder Kunde meldet sich unter seinem eigenen Pfad an. Eine eigene Domain kann sp&auml;ter erg&auml;nzt werden.</p>
+        <p class="muted" style="margin: 8px 0 20px;">
+          Jeder Kunde bekommt eine eigene Subdomain &mdash; und damit eine eigene Origin: eigener
+          Browser-Speicher, eigene Cookies, XSS-Radius endet beim Kunden. Wildcard-Zertifikat deckt sie ab,
+          es braucht nur einen DNS-Eintrag.
+        </p>
         <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
           <div>
-            <label class="label">Pfad</label>
+            <label class="label">Subdomain</label>
             <div style="display: flex;">
-              <span style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 1px solid #e2e8f0; border-right: 0; border-radius: 6px 0 0 6px; background: #f8fafc; color: #64748b;" class="mono">magister.ch/k/</span>
-              <div class="input" style="border-radius: 0 6px 6px 0;"><span class="mono">nesslau</span></div>
+              <div class="input" style="border-radius: 6px 0 0 6px; border-right: 0;"><span class="mono">nesslau</span></div>
+              <span style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 0 6px 6px 0; background: #f8fafc; color: #64748b;" class="mono">.magister.ch</span>
             </div>
           </div>
           <div>
-            <label class="label">Eigene Domain <span class="muted" style="font-weight: 400;">(optional)</span></label>
+            <label class="label">Eigene Domain <span class="muted" style="font-weight: 400;">(optional, sp&auml;ter)</span></label>
             <div class="input"><span class="ph mono">magister.nesslau.ch</span></div>
           </div>
           <div style="grid-column: span 2;">
@@ -775,7 +779,7 @@ emit NeuerKunde.dc.html <<'EOF'
       <ol style="margin: 16px 0 0; padding-left: 0; list-style: none; display: grid; gap: 14px;">
         <li style="display: flex; gap: 12px;">
           <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">1</span>
-          <span style="font-size: 13px;">Eintrag in der Mandanten-Registry der Konsole</span>
+          <span style="font-size: 13px;">Eintrag in der Mandanten-Registry, DNS-Eintrag f&uuml;r die Subdomain</span>
         </li>
         <li style="display: flex; gap: 12px;">
           <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">2</span>
@@ -857,7 +861,7 @@ emit Kundenwahl.dc.html <<'EOF'
           <span class="serif" style="flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #0f172a; color: #f8fafc; font-size: 13px; font-weight: 600;">GW</span>
           <span style="flex-grow: 1;">
             <span style="display: block; font-weight: 500;">Gemeinde Wattwil</span>
-            <span class="muted mono" style="display: block; font-size: 12.5px;">/k/wattwil &middot; t_wattwil</span>
+            <span class="muted mono" style="display: block; font-size: 12.5px;">wattwil.magister.ch &middot; t_wattwil</span>
           </span>
           <span class="pill pill-ok">Aktiv</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
@@ -866,7 +870,7 @@ emit Kundenwahl.dc.html <<'EOF'
           <span class="serif" style="flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600;">AT</span>
           <span style="flex-grow: 1;">
             <span style="display: block; font-weight: 500;">Alpstein Treuhand AG</span>
-            <span class="muted mono" style="display: block; font-size: 12.5px;">/k/alpstein &middot; t_alpstein</span>
+            <span class="muted mono" style="display: block; font-size: 12.5px;">alpstein.magister.ch &middot; t_alpstein</span>
           </span>
           <span class="pill pill-ok">Aktiv</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
@@ -881,7 +885,7 @@ emit Kundenwahl.dc.html <<'EOF'
           <span class="serif" style="flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600;">SU</span>
           <span style="flex-grow: 1;">
             <span style="display: block; font-weight: 500;">Stadt Uzwil</span>
-            <span class="muted mono" style="display: block; font-size: 12.5px;">/k/uzwil &middot; t_uzwil</span>
+            <span class="muted mono" style="display: block; font-size: 12.5px;">uzwil.magister.ch &middot; t_uzwil</span>
           </span>
           <span class="pill pill-ok">Aktiv</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
@@ -890,7 +894,7 @@ emit Kundenwahl.dc.html <<'EOF'
           <span class="serif" style="flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600;">SF</span>
           <span style="flex-grow: 1;">
             <span style="display: block; font-weight: 500;">Schulgemeinde Flawil</span>
-            <span class="muted mono" style="display: block; font-size: 12.5px;">/k/flawil &middot; magister_flawil</span>
+            <span class="muted mono" style="display: block; font-size: 12.5px;">flawil.magister.ch &middot; magister_flawil</span>
           </span>
           <span class="pill pill-ok">Aktiv</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
@@ -899,7 +903,7 @@ emit Kundenwahl.dc.html <<'EOF'
           <span class="serif" style="flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 6px; background: #f1f5f9; color: #475569; font-size: 13px; font-weight: 600;">GE</span>
           <span style="flex-grow: 1;">
             <span style="display: block; font-weight: 500;">Gemeinde Ebnat-Kappel</span>
-            <span class="muted mono" style="display: block; font-size: 12.5px;">/k/ebnat &middot; magister_ebnat</span>
+            <span class="muted mono" style="display: block; font-size: 12.5px;">ebnat.magister.ch &middot; magister_ebnat</span>
           </span>
           <span class="pill pill-warn">Gesperrt</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
@@ -1517,7 +1521,7 @@ emit Kundenkontext.dc.html <<'EOF'
           <span style="padding: 6px 12px; border-radius: 6px; color: #64748b;">Einstellungen</span>
         </nav>
       </div>
-      <span class="muted" style="font-size: 13px;">Gemeinde Wattwil &middot; <span class="mono">/k/wattwil</span></span>
+      <span class="muted" style="font-size: 13px;">Gemeinde Wattwil &middot; <span class="mono">wattwil.magister.ch</span></span>
     </div>
     <div style="padding: 20px;">
       <div style="height: 12px; width: 200px; border-radius: 4px; background: #f1f5f9;"></div>
@@ -1613,7 +1617,7 @@ emit Connector.dc.html <<'EOF'
         <span class="pill pill-ok">Aktiv</span>
       </div>
       <p class="muted" style="margin: 6px 0 0;">
-        <span class="mono">/k/wattwil</span> &middot; Profil Schule &middot; Kundennummer K-0041
+        <span class="mono">wattwil.magister.ch</span> &middot; Profil Schule &middot; Kundennummer K-0041
       </p>
     </div>
     <button class="btn btn-primary" type="button">
@@ -2102,7 +2106,7 @@ emit Zugangswege.dc.html <<'EOF'
         <tr>
           <td>
             <div style="font-weight: 500;">Kundenoberfl&auml;che</div>
-            <div class="muted mono" style="font-size: 12.5px;">magister.ch/k/&lt;kunde&gt;</div>
+            <div class="muted mono" style="font-size: 12.5px;">&lt;kunde&gt;.magister.ch</div>
           </td>
           <td class="mono">0.0.0.0:443</td>
           <td>Lehr- und Leitungspersonen</td>
@@ -2145,8 +2149,9 @@ emit Zugangswege.dc.html <<'EOF'
       <p class="muted" style="margin: 0; font-size: 13px;">
         Das Usermanagement des Kunden geh&ouml;rt ins Internet, das Global Management nicht. Getrennte
         Listener sind die Voraussetzung daf&uuml;r: nur so l&auml;sst sich die Konsole an die interne
-        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Quell-IP-Regeln macht die Fortigate mit
-        der WAF &mdash; nicht Magister.
+        Adresse binden, w&auml;hrend 443 &ouml;ffentlich bleibt. Jeder Kunde hat dort seine eigene
+        Subdomain und damit eine eigene Origin. Quell-IP-Regeln macht die Fortigate mit der WAF &mdash;
+        nicht Magister.
       </p>
     </div>
   </div>
@@ -2187,7 +2192,7 @@ emit Notzugang.dc.html <<'EOF'
       <span class="pill pill-ok">Aktiv</span>
     </div>
     <p class="muted" style="margin: 6px 0 0;">
-      <span class="mono">/k/flawil</span> &middot; Profil Schule &middot; Kundennummer K-0043
+      <span class="mono">flawil.magister.ch</span> &middot; Profil Schule &middot; Kundennummer K-0043
     </p>
   </header>
 
@@ -2406,9 +2411,9 @@ emit Sicherungen.dc.html <<'EOF'
       <p class="muted" style="margin: 2px 0 0; font-size: 13px;">seit 9 Tagen nicht gepr&uuml;ft</p>
     </div>
     <div class="card" style="padding: 16px 18px;">
-      <div class="muted" style="font-size: 13px; font-weight: 500;">Ablage ausserhalb</div>
-      <p style="margin: 8px 0 0; font-weight: 500;">CH &middot; Object Lock</p>
-      <p class="muted" style="margin: 2px 0 0; font-size: 13px;">412 GB, letzte Kopie 02:48</p>
+      <div class="muted" style="font-size: 13px; font-weight: 500;">Ablage</div>
+      <p style="margin: 8px 0 0; font-weight: 500;">Share &middot; Tages-Backup</p>
+      <p class="muted" style="margin: 2px 0 0; font-size: 13px;">9.9 GB, weggesichert 03:40</p>
     </div>
   </div>
 
@@ -2419,9 +2424,9 @@ emit Sicherungen.dc.html <<'EOF'
           <th style="width: 230px;">Kunde</th>
           <th style="width: 150px;">Letzte Sicherung</th>
           <th style="width: 100px;">Gr&ouml;sse</th>
-          <th style="width: 175px;">Aufbewahrung</th>
+          <th style="width: 190px;">Aufbewahrung</th>
           <th style="width: 165px;">Zuletzt gepr&uuml;ft</th>
-          <th style="width: 130px;">Ausserhalb</th>
+          <th style="width: 145px;">Tages-Backup</th>
           <th></th>
         </tr>
       </thead>
@@ -2430,9 +2435,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Gemeinde Wattwil</td>
           <td>heute 02:15</td>
           <td class="mono">1.9 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-ok">05.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2444,9 +2449,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Stadt Uzwil</td>
           <td>heute 02:15</td>
           <td class="mono">3.1 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-ok">04.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2458,9 +2463,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Schulgemeinde Flawil</td>
           <td>heute 02:22</td>
           <td class="mono">2.4 GB</td>
-          <td>90 Tage &middot; 24 Monate</td>
+          <td>90 Tage auf dem Share</td>
           <td><span class="pill pill-ok">06.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2475,9 +2480,9 @@ emit Sicherungen.dc.html <<'EOF'
             <div class="muted" style="font-size: 13px;">plus <span class="mono">pre_migration</span></div>
           </td>
           <td class="mono">0.7 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-ok">03.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2489,9 +2494,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Alpstein Treuhand AG</td>
           <td>heute 02:15</td>
           <td class="mono">0.2 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-ok">06.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2503,9 +2508,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Toggenburg Energie AG</td>
           <td>heute 02:15</td>
           <td class="mono">0.4 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-warn">seit 9 Tagen offen</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Pr&uuml;fen</button>
@@ -2517,9 +2522,9 @@ emit Sicherungen.dc.html <<'EOF'
           <td style="font-weight: 500;">Gemeinde Ebnat-Kappel</td>
           <td>heute 02:31</td>
           <td class="mono">1.2 GB</td>
-          <td>30 Tage &middot; 12 Monate</td>
+          <td>30 Tage auf dem Share</td>
           <td><span class="pill pill-ok">05.09. bestanden</span></td>
-          <td class="muted">kopiert</td>
+          <td class="muted">mitgesichert</td>
           <td>
             <div style="display: flex; justify-content: flex-end; gap: 8px;">
               <button class="btn btn-outline btn-sm" type="button">Wiederherstellen</button>
@@ -2559,14 +2564,15 @@ emit Sicherungen.dc.html <<'EOF'
       </p>
     </div>
     <div class="card" style="padding: 20px 24px;">
-      <h2 class="serif h2" style="font-size: 16px;">Zwei Schl&uuml;ssel, zwei Orte</h2>
+      <h2 class="serif h2" style="font-size: 16px;">Share, aber schreibend</h2>
       <p class="muted" style="margin: 12px 0 0; font-size: 13px;">
-        Der Dump ist mit dem &ouml;ffentlichen Plattform-Schl&uuml;ssel verschl&uuml;sselt; Audit-Payloads
-        darin bleiben zus&auml;tzlich mit dem Kundenschl&uuml;ssel verschl&uuml;sselt.
+        Magister schreibt die verschl&uuml;sselten Dumps auf einen Share; das t&auml;gliche
+        Unternehmens-Backup nimmt ihn mit. Das Dienstkonto darf <strong style="color: #020817;">schreiben,
+        aber nicht l&ouml;schen</strong> &mdash; das Aufr&auml;umen l&auml;uft als getrennter Job.
       </p>
       <p class="muted" style="margin: 10px 0 0; font-size: 13px;">
-        Beide werden getrennt verwahrt &mdash; ein gestohlenes Backup gen&uuml;gt nicht, und ein Dump
-        ohne Kundenschl&uuml;ssel ist nur teilweise brauchbar. Die Pr&uuml;fung testet auch das.
+        Damit tr&auml;gt die Aufbewahrung des Tages-Backups die Wiederherstellungsgarantie. Diese Zahl
+        geh&ouml;rt in Vertrag und AVV &mdash; sie ist auch die L&ouml;schfrist beim Offboarding.
       </p>
     </div>
   </div>

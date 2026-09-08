@@ -58,14 +58,16 @@ Die Portbelegung der Plattform damit vollständig:
 | Konsole | `10.0.0.5:4444` | Global Admin, Operator | ja (ADR-0015 D1) |
 | Connector | `0.0.0.0:46200` | Connector-Agenten | ja, erforderlich |
 
-**Ein Vorbehalt, der vor dem ersten Kunden geklärt sein muss:** viele
-Firmen- und Gemeindenetze erlauben ausgehend nur 80 und 443, teils nur über
-einen HTTP-Proxy. Ein hoher Port wie 46200 wird dort blockiert, und der Agent
-kommt nicht heraus. Der Agent muss deshalb entweder eine dokumentierte
-Freigabe verlangen (Regel auf der Kunden-Firewall) oder auf 443 ausweichen
-können. Siehe Entscheid E11 im Umsetzungsplan; die Empfehlung ist 46200 als
-Standard plus 443 als Rückfallebene mit demselben mTLS-Zwang, damit ein
-restriktives Kundennetz kein Ausschlusskriterium ist.
+**Nur 46200, keine Rückfallebene auf 443** (Entscheid E11). Das ist eine
+bewusste Entscheidung mit einem Preis: viele Firmen- und Gemeindenetze erlauben
+ausgehend nur 80 und 443, teils nur über einen HTTP-Proxy. Dort muss die
+Kunden-IT die Freigabe machen, sonst kommt der Agent nicht heraus.
+
+Konsequenz für den Ablauf: die Firewall-Regel gehört in die
+Onboarding-Voraussetzungen und muss **vor** dem Termin bestätigt sein, nicht
+während der Installation entdeckt werden. Das Agent-Paket nennt sie, und der
+Agent prüft beim ersten Start die Erreichbarkeit und meldet klar, wenn der Port
+zu ist — statt still in einen Wiederholungszyklus zu gehen.
 
 ### 2 · Transport: Auftragsabruf plus Ergebnis-Rückgabe
 
@@ -141,8 +143,12 @@ mitzuliefern.
   Zertifikat plus API-Key).
 - Widerruf ist ein Datenbank-Flag, geprüft bei jeder Anfrage — keine CRL, kein
   OCSP, keine Wartezeit.
-- Agent-Updates über die Konsole angestossen, Version und Fingerprint dort
-  sichtbar.
+- **Agent-Updates laufen automatisch**, Sicherheits-Updates sofort (Entscheid
+  E10). Bei einer Lücke im Agenten ist das der Unterschied zwischen Stunden und
+  Monaten. Version und Fingerprint der ganzen Flotte sind in der Konsole
+  sichtbar; ein Update, das nicht anläuft, wird alarmiert. Ein Update tauscht
+  nur die Binärdatei — Schlüssel, Zertifikat und lokale Politik des Agenten
+  bleiben unangetastet.
 
 ### 7 · Der Kunde behält die Kontrolle
 
@@ -203,8 +209,11 @@ Fingerprint, damit der Kunde ihn vor Ort vergleichen kann.
 - Der Agent wird zur Voraussetzung für Passwort-Resets; sein Ausfall ist ein
   Betriebsereignis, das überwacht werden muss.
 - Der Kunde muss ausgehendes 46200 erlauben. Anders als 443 ist das in
-  restriktiven Netzen keine Selbstverständlichkeit und braucht eine
-  Firewall-Regel beim Kunden (dafür die Rückfallebene oben).
+  restriktiven Netzen keine Selbstverständlichkeit und ist ohne Rückfallebene
+  eine harte Onboarding-Voraussetzung.
+- Automatische Updates heissen: Vita Brevis kann jederzeit Code im Kundennetz
+  austauschen. Das ist Vertrauen, das der Agent verdienen muss — signierte
+  Pakete, reproduzierbare Builds und ein Rückrollweg gehören dazu.
 - Interaktive Operationen bekommen einen zusätzlichen Zustellschritt.
 
 ## Alternativen verworfen
@@ -216,6 +225,10 @@ Fingerprint, damit der Kunde ihn vor Ort vergleichen kann.
   schwächer, und jeder Kunde braucht Netzarbeit.
 - **Heutiges AD-RPC unverändert beim Kunden** (eingehender Listener): verlangt
   pro Kunde eine eingehende Freigabe.
+- **Direkter AD-Zugriff für Einzelinstallationen behalten** (Agent nur für
+  gehostete Kunden): wäre ein zweiter Codepfad für dieselbe Aufgabe, schlechter
+  getestet und über Jahre auseinanderlaufend. On-prem nutzt denselben Agenten
+  gegen denselben Endpunkt im eigenen Netz (ADR-0013 D8).
 - **Client-Schlüssel im Download-Paket mitliefern:** ein privater Schlüssel in
   einer Datei hinter einem Download-Link. Die CSR-Anmeldung ist strikt besser.
 - **Nur Entra, kein on-prem AD:** verliert den Passwort-Reset im lokalen AD und

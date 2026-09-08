@@ -123,17 +123,21 @@
 
       <div class="card" style="padding: 24px;">
         <h2 class="serif h2">Zugang</h2>
-        <p class="muted" style="margin: 8px 0 20px;">Jeder Kunde meldet sich unter seinem eigenen Pfad an. Eine eigene Domain kann sp&auml;ter erg&auml;nzt werden.</p>
+        <p class="muted" style="margin: 8px 0 20px;">
+          Jeder Kunde bekommt eine eigene Subdomain &mdash; und damit eine eigene Origin: eigener
+          Browser-Speicher, eigene Cookies, XSS-Radius endet beim Kunden. Wildcard-Zertifikat deckt sie ab,
+          es braucht nur einen DNS-Eintrag.
+        </p>
         <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
           <div>
-            <label class="label">Pfad</label>
+            <label class="label">Subdomain</label>
             <div style="display: flex;">
-              <span style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 1px solid #e2e8f0; border-right: 0; border-radius: 6px 0 0 6px; background: #f8fafc; color: #64748b;" class="mono">magister.ch/k/</span>
-              <div class="input" style="border-radius: 0 6px 6px 0;"><span class="mono">nesslau</span></div>
+              <div class="input" style="border-radius: 6px 0 0 6px; border-right: 0;"><span class="mono">nesslau</span></div>
+              <span style="display: inline-flex; align-items: center; height: 40px; padding: 0 12px; border: 1px solid #e2e8f0; border-radius: 0 6px 6px 0; background: #f8fafc; color: #64748b;" class="mono">.magister.ch</span>
             </div>
           </div>
           <div>
-            <label class="label">Eigene Domain <span class="muted" style="font-weight: 400;">(optional)</span></label>
+            <label class="label">Eigene Domain <span class="muted" style="font-weight: 400;">(optional, sp&auml;ter)</span></label>
             <div class="input"><span class="ph mono">magister.nesslau.ch</span></div>
           </div>
           <div style="grid-column: span 2;">
@@ -222,7 +226,7 @@
       <ol style="margin: 16px 0 0; padding-left: 0; list-style: none; display: grid; gap: 14px;">
         <li style="display: flex; gap: 12px;">
           <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">1</span>
-          <span style="font-size: 13px;">Eintrag in der Mandanten-Registry der Konsole</span>
+          <span style="font-size: 13px;">Eintrag in der Mandanten-Registry, DNS-Eintrag f&uuml;r die Subdomain</span>
         </li>
         <li style="display: flex; gap: 12px;">
           <span class="mono" style="flex-shrink: 0; width: 22px; height: 22px; border-radius: 9999px; background: #f1f5f9; color: #475569; display: inline-flex; align-items: center; justify-content: center; font-size: 12px;">2</span>
