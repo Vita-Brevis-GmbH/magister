@@ -6,11 +6,32 @@ All Magister settings use the ``MAGISTER_`` prefix. Secrets are wrapped in
 
 from __future__ import annotations
 
+import logging
+import os
+from collections.abc import Mapping
 from functools import lru_cache
 from typing import Annotated, Any
 
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# Env vars that were REMOVED on purpose, with the reason to show an operator.
+# ``extra="ignore"`` would swallow them silently — and a security setting that
+# looks like it is still in effect but is not is worse than no setting at all.
+REMOVED_ENV_VARS: dict[str, str] = {
+    "MAGISTER_AD_LOGIN_ENABLED": (
+        "Der direkte AD-Login wurde entfernt, nicht abgeschaltet (ADR-0015 D3): "
+        "kein Endpunkt nimmt mehr das Passwort eines Verzeichnisbenutzers an. "
+        "Es bleiben Entra ID (OIDC) und das lokale Notkonto mit zweitem Faktor."
+    ),
+    "MAGISTER_AD_LOGIN_GROUP": (
+        "Gehört zum entfernten AD-Login (ADR-0015 D3) und hat keine Wirkung mehr."
+    ),
+}
+
+_TRUTHY = frozenset({"1", "true", "yes", "on", "y", "t"})
 
 
 class Settings(BaseSettings):
@@ -125,24 +146,6 @@ class Settings(BaseSettings):
     )
     ad_bind_dn: str | None = None
     ad_bind_password: SecretStr | None = None
-    ad_login_enabled: bool = Field(
-        default=False,
-        description=(
-            "When true, users may sign in directly with their AD credentials "
-            "(username + password, LDAPS bind) in addition to Entra ID/OIDC. "
-            "There is NO MFA on this path — it is gated by membership in "
-            "``ad_login_group``."
-        ),
-    )
-    ad_login_group: str | None = Field(
-        default=None,
-        description=(
-            "AD group (full DN or CN) whose members are allowed to sign in via "
-            "the direct AD-credential path. Only DIRECT membership is honored "
-            "(nested groups are not resolved). Required for ad_login_enabled to "
-            "grant access."
-        ),
-    )
     ad_users_search_base: str | None = Field(
         default=None,
         description=(
@@ -262,6 +265,38 @@ class Settings(BaseSettings):
             missing.append("MAGISTER_CSRF_SECRET")
         if missing:
             raise RuntimeError("Missing required runtime secrets: " + ", ".join(missing))
+
+    @staticmethod
+    def reject_removed_env(environ: Mapping[str, str] | None = None) -> None:
+        """Refuse to start when a removed security setting is still switched ON.
+
+        A truthy leftover means the operator believes a login path exists that
+        no longer does — that must not pass silently, so it aborts the start. A
+        falsy leftover (``0``/``false``) is only stale config: it gets a loud
+        log line, but blocking an upgrade over it would be friction without any
+        security gain.
+        """
+        env = os.environ if environ is None else environ
+        fatal: list[str] = []
+        for name, reason in REMOVED_ENV_VARS.items():
+            raw = env.get(name)
+            if raw is None:
+                continue
+            value = raw.strip()
+            if value and value.lower() in _TRUTHY:
+                fatal.append(f"{name}: {reason}")
+            elif value:
+                logger.warning(
+                    "%s ist noch gesetzt (%r), hat aber keine Wirkung mehr. %s "
+                    "Bitte aus der Konfiguration entfernen.",
+                    name,
+                    value,
+                    reason,
+                )
+        if fatal:
+            raise RuntimeError(
+                "Entfernte Einstellungen sind noch aktiviert:\n  - " + "\n  - ".join(fatal)
+            )
 
 
 @lru_cache(maxsize=1)

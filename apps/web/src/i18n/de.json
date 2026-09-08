@@ -44,13 +44,8 @@
     "errors": {
       "invalid_credentials": "Benutzername oder Passwort falsch.",
       "account_locked": "Konto vorübergehend gesperrt nach mehreren Fehlversuchen. Bitte später erneut versuchen.",
-      "local_login_disabled": "Lokale Anmeldung ist deaktiviert.",
-      "ad_login_disabled": "AD-Anmeldung ist nicht verfügbar."
-    },
-    "login_ad_disclosure": "Mit AD-Konto anmelden",
-    "login_ad_username": "Benutzername (AD)",
-    "login_ad_password": "Passwort",
-    "login_ad_submit": "Anmelden"
+      "local_login_disabled": "Lokale Anmeldung ist deaktiviert."
+    }
   },
   "me": {
     "title": "Mein Profil",
@@ -481,9 +476,6 @@
         "zyklus1_max_grade": "Zyklus 1 bis Jahrgangsstufe",
         "zyklus2_max_grade": "Zyklus 2 bis Jahrgangsstufe",
         "ad_groups_search_base": "Such-Basis für Gruppen (optional)",
-        "ad_login_enabled": "AD-Login aktivieren",
-        "ad_login_group": "Berechtigungs-Gruppe",
-        "ad_login_group_hint": "AD-Gruppe (DN oder CN), deren Mitglieder sich per AD anmelden dürfen. Nur direkte Mitgliedschaft.",
         "ninja_enabled": "NinjaOne aktivieren",
         "ninja_enabled_hint": "Aus = der Connector ist inaktiv und in der Detailansicht erscheint nichts.",
         "ninja_region": "Region (Instanz)",
@@ -507,9 +499,6 @@
       "password_store_hint": "Erlaubt das Ablegen von Passwörtern pro User (verschlüsselt mit dem Server-Schlüssel MAGISTER_AUDIT_KEY, nicht in der DB). Grundlage für gesammelte Passwortlisten.",
       "userconfig_title": "Userkonfiguration – Standard-AD-Gruppen",
       "userconfig_hint": "Neu angelegte Konten (Import + Einzel-Anlegen) werden automatisch diesen AD-Gruppen zugefügt — eine Gruppen-DN pro Zeile. Wirkt nur auf neu angelegte User.",
-      "ad_login_title": "AD-Anmeldung",
-      "ad_login_enabled_hint": "Erlaubt die Anmeldung mit AD-Benutzername und Passwort (LDAPS) zusätzlich zu Entra ID. Kein MFA auf diesem Weg.",
-      "ad_login_group_required": "Ohne Gruppe kann sich niemand per AD anmelden. Bitte eine Gruppe angeben.",
       "danger_title": "Gefahrenzone",
       "purge_demo_desc": "Löscht die Beispieldaten unwiderruflich.",
       "purge_demo_button": "Beispieldaten löschen",

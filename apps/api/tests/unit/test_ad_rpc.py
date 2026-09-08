@@ -103,6 +103,14 @@ def test_sync_methods_are_not_on_the_rpc_surface() -> None:
         assert name not in ALLOWED_METHODS
 
 
+def test_directory_password_authentication_is_not_on_the_rpc_surface() -> None:
+    # ADR-0015 D3: the direct AD login was removed, not switched off. Nothing may
+    # bind with a directory user's own password over this boundary again.
+    assert "authenticate" not in ALLOWED_METHODS
+    assert not hasattr(AdClient, "authenticate")
+    assert not hasattr(AdRpcClient, "authenticate")
+
+
 # --- RPC client (httpx MockTransport) --------------------------------------------
 
 
@@ -115,7 +123,7 @@ def _client(handler: Any, *, secret: str = "s3cr3t") -> AdRpcClient:
     )
 
 
-async def test_client_forwards_and_deserializes_record() -> None:
+async def test_client_forwards_method_secret_and_body() -> None:
     seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -124,23 +132,23 @@ async def test_client_forwards_and_deserializes_record() -> None:
         import json
 
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"result": ad_user_record_to_jsonable(_record())})
+        return httpx.Response(200, json={"result": True})
 
     client = _client(handler)
     try:
-        rec = await client.authenticate(login="a@b.ch", password="pw")
+        ok = await client.probe_bind_as_user(user_dn="CN=A B,OU=x,DC=b,DC=ch", password="pw")
     finally:
         await client.aclose()
-    assert rec == _record()
-    assert seen["url"] == f"http://magister-api-ad:8000{RPC_PATH}/authenticate"
+    assert ok is True
+    assert seen["url"] == f"http://magister-api-ad:8000{RPC_PATH}/probe_bind_as_user"
     assert seen["secret"] == "s3cr3t"
-    assert seen["body"] == {"login": "a@b.ch", "password": "pw"}
+    assert seen["body"] == {"user_dn": "CN=A B,OU=x,DC=b,DC=ch", "password": "pw"}
 
 
-async def test_client_authenticate_none() -> None:
+async def test_client_passes_null_result_through() -> None:
     client = _client(lambda r: httpx.Response(200, json={"result": None}))
     try:
-        assert await client.authenticate(login="x", password="y") is None
+        assert await client.find_user_dn("unknown-guid") is None
     finally:
         await client.aclose()
 
@@ -192,8 +200,8 @@ class _FakeAd:
     async def find_user_dn(self, *, ad_object_guid: str) -> str | None:
         return f"CN={ad_object_guid}"
 
-    async def authenticate(self, *, login: str, password: str) -> AdUserRecord | None:
-        return _record() if password == "good" else None
+    async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
+        return password == "good"
 
     async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
         raise AdUnavailableError("ldap_modify_failed:denied")
@@ -220,9 +228,9 @@ async def test_server_dispatches_and_serializes() -> None:
     assert r.status_code == 200
     assert r.json() == {"result": "CN=g1"}
 
-    r = await _post("authenticate", {"login": "a", "password": "good"})
+    r = await _post("probe_bind_as_user", {"user_dn": "CN=x", "password": "good"})
     assert r.status_code == 200
-    assert ad_user_record_from_jsonable(r.json()["result"]) == _record()
+    assert r.json() == {"result": True}
 
 
 async def test_server_rejects_wrong_secret() -> None:

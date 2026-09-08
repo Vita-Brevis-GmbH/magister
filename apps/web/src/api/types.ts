@@ -17,12 +17,6 @@ export interface CurrentUserOut {
 export interface AuthCapabilities {
   oidc_enabled: boolean;
   local_login_enabled: boolean;
-  ad_login_enabled: boolean;
-}
-
-export interface AdLoginRequest {
-  login: string;
-  password: string;
 }
 
 // Built-in role keys still used for i18n label lookup; custom roles carry their
@@ -636,8 +630,6 @@ export interface AppSettingsOut {
   ad_bind_password_set: boolean;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string | null;
-  ad_login_enabled: boolean;
-  ad_login_group: string | null;
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
@@ -1097,8 +1089,6 @@ export interface AppSettingsUpdate {
   ad_bind_password?: string | null;
   ad_tls_verify?: boolean | null;
   ad_tls_ca_pem?: string | null;
-  ad_login_enabled?: boolean | null;
-  ad_login_group?: string | null;
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;

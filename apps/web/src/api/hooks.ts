@@ -5,7 +5,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
   AdConnectionTestOut,
-  AdLoginRequest,
   AdSyncResultOut,
   AdUserCreateRequest,
   AdUserCreateResponse,
@@ -907,16 +906,6 @@ export function useLocalLogin() {
   return useMutation<void, ApiError, LocalLoginRequest>({
     mutationFn: (body) =>
       apiFetch<void>("/auth/login/local", {
-        method: "POST",
-        body,
-      }),
-  });
-}
-
-export function useAdLogin() {
-  return useMutation<void, ApiError, AdLoginRequest>({
-    mutationFn: (body) =>
-      apiFetch<void>("/auth/login/ad", {
         method: "POST",
         body,
       }),

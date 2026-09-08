@@ -30,7 +30,6 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("/auth/login", "GET"),  # OIDC redirect start
         ("/auth/callback", "GET"),  # OIDC redirect return
         ("/auth/capabilities", "GET"),  # login-screen feature probe
-        ("/auth/login/ad", "POST"),  # AD credential login
         ("/auth/login/local", "POST"),  # local-admin fallback login
     }
 )
@@ -133,3 +132,13 @@ def test_toggleable_module_routes_are_guarded() -> None:
             unexpected_guard.append(f"{module_id}:{route.path}")
     assert missing_guard == [], f"toggleable-module routes without request guard: {missing_guard}"
     assert unexpected_guard == [], f"non-toggleable routes carry a guard: {unexpected_guard}"
+
+
+def test_no_directory_password_login_route() -> None:
+    """ADR-0015 D3: no endpoint may accept a directory user's own password.
+
+    The direct AD login was removed, not switched off — this pins that a future
+    change cannot quietly reintroduce a route under ``/auth/login/ad``.
+    """
+    offenders = [r.path for r in _own_routes() if r.path.startswith("/auth/login/ad")]
+    assert offenders == [], f"AD-credential login route(s) are back: {offenders}"

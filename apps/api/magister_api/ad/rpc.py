@@ -25,6 +25,9 @@ SECRET_HEADER = "x-ad-rpc-secret"  # noqa: S105 — header name, not a credentia
 
 # The exact AdClient surface reachable over RPC. The recurring sync/search
 # methods are deliberately absent — they run only in the AD container.
+# ``authenticate`` was removed with the direct AD login (ADR-0015 D3): no
+# endpoint accepts a directory user's password any more, so nothing may bind
+# with one over this boundary either.
 ALLOWED_METHODS: frozenset[str] = frozenset(
     {
         "find_user_dn",
@@ -32,7 +35,6 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "probe_service_connection",
         "probe_service_connection_detailed",
         "probe_bind_as_user",
-        "authenticate",
         "modify_password",
         "modify_user_attributes",
         "rename_user",

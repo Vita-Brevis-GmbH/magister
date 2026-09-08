@@ -40,7 +40,6 @@ from ldap3 import (
 )
 from ldap3.core.exceptions import LDAPException
 from ldap3.protocol.microsoft import security_descriptor_control
-from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import escape_rdn
 
 from magister_api.ad import security_descriptor as sd
@@ -249,30 +248,6 @@ def classify_kind_by_ou(
     if any(_dn_under_ou(dn, ou) for ou in student_ous):
         return "student"
     return fallback_kind
-
-
-def _is_member_of_group(member_of: Any, group: str) -> bool:
-    """True if ``group`` appears in a ``memberOf`` list (direct membership only).
-
-    ``group`` may be a full group DN (e.g. ``CN=Magister,OU=Groups,DC=…``) or a
-    bare CN (e.g. ``Magister``). Matching is case-insensitive; nested/primary
-    group membership is NOT resolved (AD does not expand it into ``memberOf``).
-    """
-    if not member_of:
-        return False
-    if isinstance(member_of, str):
-        member_of = [member_of]
-    target = group.strip().lower()
-    if not target:
-        return False
-    target_cn = target[3:].split(",", 1)[0] if target.startswith("cn=") else target
-    for dn in member_of:
-        d = str(dn).strip().lower()
-        if d == target:
-            return True
-        if d.startswith("cn=") and d[3:].split(",", 1)[0] == target_cn:
-            return True
-    return False
 
 
 def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
@@ -1046,73 +1021,6 @@ class AdClient:
                 pass
 
     # --- Direct AD-credential login ------------------------------------------
-
-    async def authenticate(self, *, login: str, password: str) -> AdUserRecord | None:
-        """Verify AD credentials + login-group membership for the direct-login path.
-
-        Returns the parsed :class:`AdUserRecord` on success, or ``None`` on any
-        failure (feature off, unknown user, wrong password, not in the login
-        group, misconfiguration). The single ``None`` return for every failure
-        avoids leaking which check failed (username enumeration). Never logs the
-        password; all ldap3 work runs in a worker thread.
-        """
-        if not self._settings.ad_login_enabled:
-            return None
-        return await run_in_threadpool(self._sync_authenticate, login, password)
-
-    def _sync_authenticate(self, login: str, password: str) -> AdUserRecord | None:
-        base = self._settings.ad_users_search_base
-        group = (self._settings.ad_login_group or "").strip()
-        if not base or not group:
-            logger.warning(
-                "AD login refused: search base or login group not configured "
-                "(base_set=%s, group_set=%s)",
-                bool(base),
-                bool(group),
-            )
-            return None
-        entry = self._sync_lookup_login_account(base, login)
-        if entry is None:
-            return None
-        dn, attrs = entry
-        # Authorize by group membership before spending a bind on the password.
-        if not _is_member_of_group(attrs.get("memberOf"), group):
-            return None
-        # Verify the password by binding as the user (LDAPS, service pool).
-        if not self._sync_probe_bind(dn, password):
-            return None
-        try:
-            return parse_ad_entry(attrs, dn)
-        except AdUserParseError:
-            return None
-
-    def _sync_lookup_login_account(
-        self, base: str, login: str
-    ) -> tuple[str, dict[str, Any]] | None:
-        """Find the AD account by sAMAccountName or userPrincipalName == login."""
-        conn, owned = self._acquire_connection()
-        try:
-            safe = escape_filter_chars(login)
-            search_filter = (
-                f"(&(objectClass=user)(|(sAMAccountName={safe})(userPrincipalName={safe})))"
-            )
-            _result, entries = self._single_search(
-                conn,
-                base=base,
-                search_filter=search_filter,
-                scope=SUBTREE,
-                attributes=list(DEFAULT_USER_ATTRIBUTES),
-            )
-            if not entries:
-                return None
-            entry = entries[0]
-            return entry.get("dn", ""), entry.get("attributes", {})
-        finally:
-            if owned:
-                try:
-                    conn.unbind()
-                except LDAPException:
-                    pass
 
     # --- Test helpers --------------------------------------------------------
 

@@ -180,10 +180,19 @@ Braucht keine Mandantenfähigkeit und verkleinert die Angriffsfläche, bevor
 irgendetwas gehostet wird. Läuft allein, nicht parallel zu Phase 1 — beide
 fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
 
-- **AD-Login entfernen.** Niemand nutzt ihn (E7), also direkt: Ausbau in zwei
-  Releases nach der Datei-Liste in ADR-0015 D3; Start bricht laut ab, wenn
-  `MAGISTER_AD_LOGIN_*` noch gesetzt ist; im zweiten Release entfernt Alembic
-  die beiden Spalten.
+- ✅ **AD-Login entfernen, Release N.** Endpunkt `/auth/login/ad`,
+  `complete_ad_login`, `AdClient.authenticate` samt Hilfsfunktionen,
+  `authenticate` aus der RPC-Allowlist, das Settings-Feld in Service, Schema und
+  Config, Formular und Einstellungs-Abschnitt im Frontend, 44 i18n-Schlüssel in
+  vier Sprachen. Neu: `Settings.reject_removed_env()` bricht den Start ab, wenn
+  `MAGISTER_AD_LOGIN_ENABLED` noch auf einen wahren Wert gesetzt ist, und warnt
+  bei einem veralteten `=false`. Zwei Regressionstests halten es fest: keine
+  Route unter `/auth/login/ad`, und `authenticate` weder in `ALLOWED_METHODS`
+  noch auf `AdClient`/`AdRpcClient`. Die Spalten `ad_login_enabled` /
+  `ad_login_group` bleiben als deprecated stehen, damit dieses Release ohne
+  Schemaänderung zurückrollbar ist.
+- **AD-Login, Release N+1:** Alembic entfernt die beiden Spalten (Rückbau von
+  `0019_ad_login`).
 - **TOTP für lokale Konten**, verpflichtend, mit Wiederherstellungscodes und
   erzwungener Einrichtung.
 - **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue

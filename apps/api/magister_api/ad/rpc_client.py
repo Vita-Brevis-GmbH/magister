@@ -16,12 +16,11 @@ from typing import Any
 
 import httpx
 
-from magister_api.ad.client import AdClient, AdUserRecord
+from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, AdUserParseError
 from magister_api.ad.rpc import (
     RPC_PATH,
     SECRET_HEADER,
-    ad_user_record_from_jsonable,
 )
 from magister_api.config import Settings
 
@@ -93,12 +92,6 @@ class AdRpcClient(AdClient):
         return bool(
             await self._rpc("probe_bind_as_user", {"user_dn": user_dn, "password": password})
         )
-
-    async def authenticate(self, *, login: str, password: str) -> AdUserRecord | None:
-        result = await self._rpc("authenticate", {"login": login, "password": password})
-        return ad_user_record_from_jsonable(result) if result else None
-
-    # --- writes --------------------------------------------------------------
 
     async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
         await self._rpc(

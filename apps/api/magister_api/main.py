@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings: Settings = app.state.settings
     settings.require_runtime_secrets()
+    settings.reject_removed_env()
     init_engine(settings)
 
     # First-run seeds. Both are idempotent and short-circuit when the
