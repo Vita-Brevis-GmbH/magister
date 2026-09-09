@@ -12,6 +12,9 @@ den Anwendungsserver übernimmt, soll alte Sicherungen **nicht** lesen können.
 
 | Schritt | Läuft auf | Braucht |
 |---|---|---|
+| WAL archivieren (Ebene 1) | Anwendungsserver (Postgres) | Client-Zertifikat des Kanals |
+| Basebackup (Ebene 1) | **Backup-Host**, holt | Passphrase des Repositories |
+| PITR-Übung (Ebene 1) | **Backup-Host** | dito, plus Postgres-Werkzeuge |
 | Sicherung schreiben | Anwendungsserver (Konsole) | öffentlicher age-Schlüssel |
 | Prüfsumme nachrechnen | Anwendungsserver oder Fileserver | nichts |
 | Prüf-Wiederherstellung | **Backup-Host** | privater age-Schlüssel |
@@ -71,6 +74,64 @@ COCKPIT_EXPORT_TTL_DAYS=7
 Ausdrücklich **nicht** der Backup-Share: hier liegen Kundendaten im Klartext.
 Das Verzeichnis wird mit `0700` angelegt, die Dateien mit `0600`.
 
+### 1.4 Cluster-PITR (Ebene 1, Entscheid E17)
+
+Das pgBackRest-Repository liegt auf dem **Backup-Host**. Aufbau, Begründung und
+die sechs Fallstricke, die beim Bauen aufgefallen sind, stehen in
+[`deploy/pgbackrest/README.md`](../../deploy/pgbackrest/README.md). Hier nur
+die Reihenfolge — und die ist wichtig, siehe die Warnung am Ende.
+
+**Auf dem Backup-Host:**
+
+```bash
+sudo apt-get install -y pgbackrest postgresql-16   # gleiche Hauptversion wie Produktion!
+sudo useradd --system --home /var/lib/pgbackrest --shell /usr/sbin/nologin pgbackrest
+sudo install -d -m 700 -o pgbackrest -g pgbackrest \
+     /var/lib/pgbackrest /var/lib/pgbackrest/repo /var/lib/pgbackrest/lock \
+     /var/log/pgbackrest /var/spool/pgbackrest
+
+# Zertifikate des Kanals (eigene kleine CA, NICHT die Plattform-CA)
+sudo deploy/pgbackrest/issue-channel-certs.sh --out /etc/pgbackrest/cert \
+     --app app.magister.intern --backup backup.magister.intern
+
+# Konfiguration; die Passphrase des Repositories erzeugen und einsetzen
+openssl rand -base64 48
+sudo install -m 600 -o pgbackrest -g pgbackrest \
+     deploy/pgbackrest/pgbackrest.conf.backup.example /etc/pgbackrest.conf
+sudoedit /etc/pgbackrest.conf        # repo1-cipher-pass, Hostnamen
+
+sudo install -m 644 deploy/pgbackrest/pgbackrest-server.service /etc/systemd/system/
+sudoedit /etc/systemd/system/pgbackrest-server.service   # User=pgbackrest
+sudo systemctl daemon-reload && sudo systemctl enable --now pgbackrest-server
+```
+
+`/var/spool/pgbackrest` gehört hier dem Konto `pgbackrest` und nicht `postgres`
+— sonst scheitert die PITR-Übung später mit einer Meldung über einen Pfad, den
+niemand angefasst hat (README.md, Punkt 4).
+
+**Auf dem Anwendungsserver:** `app.crt`, `app.key` und
+`backup-channel-ca.crt` vom Backup-Host holen (nur diese drei), nach
+`/etc/pgbackrest/cert`. Dann `pgbackrest.conf.app.example` nach
+`/etc/pgbackrest.conf`, den eigenen Server einrichten, und **erst danach** die
+Archivierung einschalten:
+
+```bash
+# Bei der containerisierten Installation:
+docker compose -f docker-compose.yml -f docker-compose.pitr.yml up -d
+```
+
+**Zuerst die Stanza, dann die Archivierung.** Auf dem Backup-Host:
+
+```bash
+sudo -u pgbackrest pgbackrest --stanza=magister stanza-create
+sudo -u pgbackrest pgbackrest --stanza=magister check      # muss grün sein
+```
+
+Wer `archive_mode=on` einschaltet, bevor die Stanza existiert, bekommt einen
+Postgres, der sein WAL nicht loswird. Er läuft weiter — und `pg_wal` wächst,
+bis die Platte voll ist. Dann bleibt er stehen. Der Weg zurück ist unangenehm,
+das Vermeiden ist ein Blick auf `check`.
+
 ## 2 · Täglich: Sicherung
 
 Pro Kunde ein Aufruf. In einer Cron-Zeile auf dem Anwendungsserver, gegen den
@@ -96,6 +157,31 @@ Bleibt eine Zeile länger als eine Stunde auf `running`, ist der Prozess
 mittendrin abgebrochen. Die Zeile bleibt stehen — sichtbar und richtig; ein
 stilles Verschwinden wäre schlimmer. Die Datei mit der Endung `.partial` auf
 dem Share ist der halbe Dump und kann weg (auf dem Fileserver).
+
+## 2a · Täglich: Basebackup (Ebene 1)
+
+Angestossen vom **Backup-Host**, nicht vom Anwendungsserver — die Seite, die
+das Repository besitzt, entscheidet, wann gesichert wird.
+
+```bash
+# Sonntags voll, an den übrigen Tagen inkrementell.
+sudo -u pgbackrest pgbackrest --stanza=magister --type=full backup
+sudo -u pgbackrest pgbackrest --stanza=magister --type=incr backup
+```
+
+`expire` läuft automatisch am Ende jeder Sicherung und hält sich an
+`repo1-retention-full=2`. Von Hand ist es nur nötig, wenn die Aufbewahrung
+geändert wurde und der Platz sofort gebraucht wird.
+
+Was danach im Repository steht, sagt:
+
+```bash
+sudo -u pgbackrest pgbackrest --stanza=magister info
+```
+
+Die Zeile, auf die es ankommt, ist `wal archive min/max`. Klafft zwischen `max`
+und jetzt eine Lücke, ist die Archivierung stehengeblieben — und der jüngste
+wiederherstellbare Zeitpunkt liegt dort, nicht heute.
 
 ## 3 · Wöchentlich: Prüf-Wiederherstellung
 
@@ -132,6 +218,30 @@ Ein Dump mit Klartext-Payloads wäre ein Fehler, den man sofort sehen will.
 Danach wird die Wegwerf-Datenbank verworfen. Das Ergebnis meldet das Werkzeug
 an die Konsole (`verified_at` und `verify_detail`); ohne `--console` gibt es
 nur die Ausgabe auf dem Terminal, und die Konsole zeigt weiter „nie geprüft".
+
+## 3a · Monatlich: PITR üben
+
+Eine Sicherung, die nie eingespielt wurde, ist eine Vermutung. `info` sagt,
+dass Dateien da sind; die Übung sagt, dass daraus eine Datenbank wird.
+
+Auf dem **Backup-Host**, gegen ein Wegwerf-Verzeichnis, ohne den Betrieb zu
+berühren:
+
+```bash
+sudo -u pgbackrest /opt/magister/scripts/pitr-drill.sh --stanza magister
+```
+
+Ohne `--target` nimmt sie einen Zeitpunkt vor einer Stunde: erreichbar, und
+trotzdem ein echter Zeitpunkt. „Neuester Stand" ginge auch ohne WAL und würde
+die halbe Kette nicht prüfen.
+
+Rückgabewert 0 heisst geübt und bestanden. Alles andere ist ein Befund, und die
+Meldung nennt ihn. Was die Übung im Einzelnen prüft — kam die Wiederherstellung
+bis zum Ziel, ist der Cluster aus der Recovery heraus, sind die Kundenschemata
+da — steht im Kopf des Skripts.
+
+Das Ergebnis gehört in dieselbe Notiz wie die wöchentliche
+Prüf-Wiederherstellung (§7).
 
 ## 4 · Wiederherstellung eines Kunden
 
@@ -359,6 +469,10 @@ Monatskopien; das ist es, was die Löschzusage aus Abschnitt 6 wahr hält.
 
 | Was | Wie oft | Woran man den Fehler merkt |
 |---|---|---|
+| Die WAL-Archivierung läuft | täglich | `pgbackrest --stanza=magister info`: Lücke zwischen `wal archive max` und jetzt. Oder auf dem Anwendungsserver: `select last_archived_time, last_failed_wal from pg_stat_archiver` |
+| Die WAL-Warteschlange läuft nicht voll | täglich | `du -sh /var/spool/pgbackrest` gegen `archive-push-queue-max` (32 GB). Bei Erreichen wirft pgBackRest Segmente weg und die PITR-Kette reisst |
+| Es gibt ein Basebackup von heute | täglich | `pgbackrest info`, Zeitpunkt der jüngsten Sicherung |
+| PITR ist geübt | monatlich | `pitr-drill.sh`, Rückgabewert |
 | Jeder Kunde hat eine Sicherung von heute | täglich | `GET /api/tenants/{id}/backups`, `started_at` |
 | Jeder Kunde hat eine **geprüfte** Sicherung | wöchentlich | `verified_at` älter als 8 Tage |
 | Das Dienstkonto darf nicht löschen | quartalsweise | der Test aus 1.2 |
@@ -413,11 +527,16 @@ bekommt keinen Plattform-Betrieb aufgezwungen.
 
 ## 9 · Was dieses Runbook nicht abdeckt
 
-* **Cluster-PITR (ADR-0016 D1, Ebene 1).** WAL-Archivierung und Basebackup mit
-  pgBackRest oder WAL-G sind noch nicht eingerichtet. Ohne sie gibt es keinen
-  Weg auf „gestern 14:37" und keinen Weg zurück nach einer beschädigten
-  Datenbank — nur den logischen Dump von heute Nacht. Das ist die grösste
-  offene Lücke in diesem Bereich.
+* ~~Cluster-PITR~~ — **entschieden und gebaut** (E17, 2026-09-09): pgBackRest,
+  Repository auf dem Backup-Host, Einrichtung in §1.4, Betrieb in §2a, Übung
+  in §3a. Die Wiederherstellung auf einen Zeitpunkt ist gegen ein echtes
+  Postgres 16 geprüft (`deploy/pgbackrest/README.md` nennt, was geprüft ist
+  und was beim Aufbau noch zu prüfen bleibt).
+
+  Offen bleibt daran ein Betriebswert und keine Technik: **wie viel WAL pro
+  Tag tatsächlich anfällt.** Die Annahme ist 5–15 GB; erst der erste Monat
+  echten Betriebs sagt, ob `archive-push-queue-max=32GB` und der Platz auf dem
+  Backup-Host stimmen.
 * ~~Die zwölf monatlichen Kopien~~ — **entschieden und umgesetzt**
   (E15, 2026-09-09). Siehe Abschnitt 6a für das Aufräumen, das damit
   nicht mehr aus einer `find`-Zeile besteht.
@@ -448,7 +567,34 @@ MAILTO=ops@vitabrevis.ch
 # Wöchentliche Prüf-Wiederherstellung, Sonntag 04:00. Hier liegt der private
 # Schlüssel — deshalb hier und nicht auf dem Anwendungsserver.
 0 4 * * 0 magister . /etc/magister/ops.env && /opt/magister/scripts/verify-all.sh
+
+# --- Ebene 1: Cluster-PITR (Entscheid E17) ---------------------------------
+# Vollsicherung sonntags 01:00, an den übrigen Tagen inkrementell 01:00.
+# Vor der Prüf-Wiederherstellung um 04:00 und vor dem Aufräumen um 04:30,
+# damit die drei sich nicht ins Gehege kommen.
+0 1 * * 0 pgbackrest pgbackrest --stanza=magister --type=full backup
+0 1 * * 1-6 pgbackrest pgbackrest --stanza=magister --type=incr backup
+
+# Die Übung, monatlich am ersten Sonntag um 05:30 — nach allem anderen, weil
+# sie eine vollständige Kopie des Clusters auspackt und Platz und Zeit braucht.
+30 5 * * 0 pgbackrest [ "$(date +\%d)" -le 07 ] && /opt/magister/scripts/pitr-drill.sh --stanza magister
 ```
+
+Die PITR-Zeilen laufen als `pgbackrest` und nicht als `magister`: dem Konto
+gehört das Repository, und die Passphrase steht in **seiner**
+`/etc/pgbackrest.conf`. Ein Aufruf unter einem anderen Konto scheitert an den
+Rechten — was die richtige Reihenfolge ist, aber um 01:00 wie ein kaputtes
+Backup aussieht.
+
+Der `date`-Test in der Übungszeile ist kein Zierrat. „Erster Sonntag im Monat"
+lässt sich in Cron **nicht** als `30 5 1-7 * 0` schreiben: sind Tag-des-Monats
+und Wochentag beide gesetzt, verknüpft Cron sie mit ODER, und die Zeile liefe
+an jedem Tag 1–7 *und* an jedem Sonntag. Also jeden Sonntag anstossen und im
+Befehl prüfen. Das `\%` ist die Escape-Form für Cron, das `%` sonst als
+Trennung zur Standardeingabe liest.
+
+Wer systemd lieber mag: `OnCalendar=Sun *-*-01..07 05:30` sagt dasselbe ohne
+den Umweg.
 
 Die beiden Skripte liegen im Repository (`scripts/backup-all.sh`,
 `scripts/verify-all.sh`). Sie holen die Kundenliste aus der

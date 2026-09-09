@@ -1,0 +1,76 @@
+# pgBackRest — Konfiguration des ANWENDUNGSSERVERS
+#
+# Nach /etc/pgbackrest.conf kopieren, Besitzer `postgres`, Rechte 0600.
+#
+# Der Pfad ist nicht verhandelbar: der Remote-Prozess, den der Backup-Host auf
+# dieser Maschine startet, liest seine lokalen Einstellungen (lock-path,
+# log-path, spool-path, pg1-path) aus der Standard-Konfiguration DIESES Hosts
+# — sie kommen nicht über die Leitung. Deshalb braucht jeder Host seine eigene
+# /etc/pgbackrest.conf, und deshalb können Anwendungsserver und Backup-Host
+# nicht dieselbe Maschine sein. (Gemessen; siehe README.md.)
+#
+# Was hier NICHT steht und nicht stehen darf:
+#   * repo1-path      — das Repository liegt auf dem Backup-Host
+#   * repo1-cipher-*  — die Passphrase des Repositories gehört dorthin, wo das
+#                       Repository liegt. Dieser Server verschlüsselt nichts
+#                       selbst; der Remote-Prozess auf dem Backup-Host tut es.
+#                       Wer diesen Server übernimmt, bekommt damit keinen
+#                       Schlüssel für alte Sicherungen — das ist der ganze
+#                       Sinn von Entscheid E17, Variante B.
+#
+# Referenz: ADR-0016 D1 (Ebene 1), Entscheid E17.
+
+[global]
+# --- Wo das Repository liegt ------------------------------------------------
+# TLS und nicht SSH (siehe README.md): der Anwendungsserver bekommt damit
+# keinen Shell-Zugang auf den Backup-Host, sondern kann ausschliesslich das
+# pgBackRest-Protokoll sprechen.
+repo1-host=backup.magister.intern
+repo1-host-type=tls
+repo1-host-port=8432
+repo1-host-cert-file=/etc/pgbackrest/cert/app.crt
+repo1-host-key-file=/etc/pgbackrest/cert/app.key
+repo1-host-ca-file=/etc/pgbackrest/cert/backup-channel-ca.crt
+
+# Der Name MUSS im Zertifikat des Backup-Hosts stehen (CN oder SAN).
+# pgBackRest prüft das und bricht sonst ab mit
+#   "unable to find hostname '...' in certificate common name or
+#    subject alternative names"
+# Eine IP-Adresse hier verlangt ein Zertifikat mit IP-SAN. Namen sind
+# einfacher und überleben einen Adresswechsel.
+
+# --- Eigener TLS-Server ----------------------------------------------------
+# Der Backup-Host stösst die Sicherung an (Pull) und braucht dafür einen
+# Gegenpart auf dieser Maschine. Er darf genau eine Stanza ansprechen.
+tls-server-address=0.0.0.0
+tls-server-port=8433
+tls-server-cert-file=/etc/pgbackrest/cert/app.crt
+tls-server-key-file=/etc/pgbackrest/cert/app.key
+tls-server-ca-file=/etc/pgbackrest/cert/backup-channel-ca.crt
+tls-server-auth=backup.magister.intern=magister
+
+# --- Lokale Pfade ----------------------------------------------------------
+# Explizit, nicht per Vorgabe: die Vorgabe ist /tmp/pgbackrest, und ein
+# gemeinsames /tmp ist der falsche Ort für eine Sperre, um die zwei
+# Dienstkonten streiten.
+lock-path=/var/lib/pgbackrest/lock
+log-path=/var/log/pgbackrest
+log-level-console=warn
+log-level-file=detail
+
+# --- Asynchrone Archivierung ------------------------------------------------
+# Ohne dies wartet jeder WAL-Wechsel auf die Übertragung zum Backup-Host, und
+# eine Störung dort wird zu einer Störung im Schreibpfad der Anwendung.
+archive-async=y
+spool-path=/var/spool/pgbackrest
+archive-push-queue-max=32GB
+# archive-push-queue-max ist eine Abwägung mit Zähnen: ist die Grenze erreicht,
+# wirft pgBackRest WAL-Segmente WEG, damit die Datenbank weiterläuft. Danach
+# ist die PITR-Kette unterbrochen und es braucht ein neues Basebackup. Ohne
+# Grenze läuft stattdessen die Platte des Anwendungsservers voll und Postgres
+# bleibt stehen. 32 GB sind ungefähr zwei Tage Reserve bei aktivem Betrieb —
+# Zeit genug für eine Alarmierung, wenn sie eingerichtet ist (Runbook §7).
+
+[magister]
+pg1-path=/var/lib/postgresql/16/main
+pg1-port=5432

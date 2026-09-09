@@ -453,7 +453,7 @@ Passwort-Reset. Referenz: ADR-0014.
   Passwort-Reset über den Agenten, das 503-Banner bei stehendem Agenten, und
   „Agent stoppen beendet jeden Plattformzugriff auf das AD".
 
-### Phase 2b — Sicherung, Wiederherstellung, Export (steht, ausser Cluster-PITR)
+### Phase 2b — Sicherung, Wiederherstellung, Export ✅
 
 Ebenfalls Voraussetzung für den ersten gehosteten Kunden: ohne Restore-Weg pro
 Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
@@ -495,7 +495,7 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 | Kundenschlüssel **je Mandant** | ✅ war Voraussetzung für D8 und fehlte (siehe unten) |
 | Aufbewahrung pro Kunde | ✅ `GET/PUT /api/tenants/{id}/backup-policy` |
 | Einzelinstallation | ✅ Sidecar verschlüsselt jetzt, `magister-cli backup verify` |
-| **Cluster-PITR (Ebene 1)** | ❌ **offen** |
+| **Cluster-PITR (Ebene 1)** | ✅ pgBackRest, Repository auf dem Backup-Host (E17), Wiederherstellung auf einen Zeitpunkt gegen echtes Postgres 16 geprüft |
 
 Vier Dinge sind beim Bauen anders herausgekommen als geplant; sie stehen
 ausführlich in den [Nachträgen zu
@@ -530,11 +530,16 @@ Kurz:
 
 **Was offen bleibt und wehtut:**
 
-- **Cluster-PITR** (ADR-0016 D1, Ebene 1). Ohne WAL-Archivierung gibt es
-  keinen Weg auf „gestern 14:37" und keinen Weg zurück nach einer beschädigten
-  Datenbank — nur den logischen Dump von heute Nacht. Das ist die grösste
-  offene Lücke im ganzen Bereich, und sie ist unabhängig von der
-  Mandantenfähigkeit.
+- ~~Cluster-PITR~~ — **entschieden (E17 = B) und gebaut am 2026-09-09.**
+  pgBackRest, Repository auf dem Backup-Host, TLS statt SSH zwischen den zwei
+  Maschinen, Sicherung wird von der Repository-Seite angestossen. Der Weg auf
+  „gestern 14:37" ist gegen ein echtes Postgres 16 belegt: Tabelle gelöscht,
+  auf einen Zeitpunkt davor zurückgeholt, 500 von 510 Zeilen zurück — die zehn
+  nach dem Zielzeitpunkt eingefügten korrekt nicht.
+
+  Was daran offen bleibt, ist ein Betriebswert und keine Technik: wie viel WAL
+  pro Tag wirklich anfällt. Erst der erste Monat sagt, ob die Reserve von
+  32 GB und der Platz auf dem Backup-Host stimmen.
 - ~~Entscheid E15~~ — **entschieden (ja) und umgesetzt am 2026-09-09.** Zwölf
   Monatskopien, ohne zweiten Dump: die erste geglückte Sicherung eines Monats
   wird *als* Monatskopie geschrieben. Dabei stellte sich heraus, dass E15 die

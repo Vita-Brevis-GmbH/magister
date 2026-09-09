@@ -37,6 +37,12 @@ Point-in-Time-Recovery des ganzen Clusters auf einen Zeitpunkt, RPO im
 Minutenbereich. Das ist das Werkzeug für „Datenbank beschädigt" und
 „Rechenzentrum weg".
 
+> **Nachtrag 2026-09-09 (Entscheid E17, Variante B):** pgBackRest, und das
+> Repository liegt auf dem **Backup-Host** — nicht auf demselben Share wie die
+> Dumps und nicht im Objektspeicher. Umsetzung, Aufbau und die sechs
+> Fallstricke: [`deploy/pgbackrest/README.md`](../../deploy/pgbackrest/README.md),
+> Nachtrag N7 unten.
+
 **Ebene 2 — logische Sicherung pro Kunde.** `pg_dump --schema=t_<slug>`
 (beziehungsweise `--dbname` bei eigener Datenbank) — genau die Daten eines
 Kunden, wiederherstellbar ohne die anderen anzufassen. Das ist das Werkzeug für
@@ -451,3 +457,43 @@ Zahlen.
   Dateien mit `0600`, eine Frist (`COCKPIT_EXPORT_TTL_DAYS`, Vorgabe 7 Tage)
   und ein Audit-Eintrag bei jedem Download. Ein Export, der liegen bleibt, ist
   ein Datenleck mit Verfallsdatum „nie".
+
+### N7 · Ebene 1: was der Aufbau über den Entscheid hinaus festgelegt hat
+
+E17 hat das *Wohin* entschieden (Backup-Host). Beim Bauen fielen vier
+Festlegungen an, die im Entscheid nicht standen und trotzdem zur Architektur
+gehören:
+
+1. **Die Sicherung wird vom Backup-Host angestossen, nicht vom
+   Anwendungsserver.** Damit gilt für Ebene 1 dieselbe Regel wie für Ebene 2
+   in D2: die Seite, die das Repository besitzt, entscheidet, wann gesichert
+   und was verworfen wird. Umgekehrt — der Anwendungsserver schiebt und ruft
+   `expire` — hätte ein übernommener Anwendungsserver in einem Schritt auch die
+   Sicherungen. WAL geht trotzdem in die andere Richtung: es muss laufend
+   fliessen, sonst ist die Kette lückenhaft.
+2. **TLS und nicht SSH** für den Kanal zwischen den beiden Maschinen. Bei SSH
+   hängt die Begrenzung an einer `command=`-Zeile in `authorized_keys`, also an
+   einer Zeile, die stimmen muss; bei TLS kann die Gegenseite ausschliesslich
+   das pgBackRest-Protokoll sprechen und nur die in `tls-server-auth`
+   genannten Stanzas. Dieselbe Annahme wie in ADR-0014: **der
+   Anwendungsserver könnte kompromittiert sein.**
+3. **Eine eigene kleine CA für diesen Kanal**, nicht die Plattform-CA. Ein
+   Zertifikat, das beim Aufsetzen eines Backup-Hosts gebraucht wird, darf nicht
+   von einem Schlüssel abhängen, für den zwei Personen und ein Tresorgang nötig
+   sind — und ein Widerruf hier soll die Agent-Flotte nicht berühren. Das ist
+   dieselbe Begründung, mit der platform-ca.md §2 zwei getrennte Intermediates
+   hat.
+4. **`archive_timeout=60`.** Ohne dies ist der jüngste wiederherstellbare
+   Zeitpunkt bei geringer Last der letzte WAL-Segmentwechsel — nachts also
+   möglicherweise Stunden her. Die Zusage „jeder Stand" wäre damit unwahr, ohne
+   dass es jemandem auffällt. Der Preis sind leere Segmente, komprimiert wenige
+   Kilobyte.
+
+Und eine Grenze, die ausgeschrieben gehört: **`archive-push-queue-max` hat
+Zähne.** Ist die Grenze erreicht, wirft pgBackRest WAL-Segmente weg, damit die
+Datenbank weiterläuft; danach ist die PITR-Kette unterbrochen und es braucht
+ein neues Basebackup. Ohne Grenze läuft stattdessen die Platte des
+Anwendungsservers voll und Postgres bleibt stehen. Beides ist schlecht, und
+wir haben die Variante gewählt, bei der der Betrieb weiterläuft — unter der
+Bedingung, dass die Warteschlange überwacht wird (Runbook §7). Ohne diese
+Überwachung ist die Wahl falsch.
