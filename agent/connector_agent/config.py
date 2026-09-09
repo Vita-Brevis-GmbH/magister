@@ -8,6 +8,14 @@ Der private Schlüssel und die Geheimnisse liegen mit ``0600`` in einem
 Verzeichnis mit ``0700``. Der Agent prüft das beim Start und **weigert sich**,
 mit zu weiten Rechten zu laufen — eine Warnung würde überlesen, und die Datei
 liegt auf einem Server, auf dem mehr als eine Person ein Konto hat.
+
+Unter **Windows** ist derselbe Satz wahr, aber die Prüfung eine andere: dort
+schützt die ACL und nicht ein POSIX-Modus. ``os.stat()`` liefert unter Windows
+erfundene Modus-Bits (Verzeichnisse melden ``0o777``), die POSIX-Prüfung würde
+also immer fehlschlagen und der Dienst nie starten. Geprüft wird deshalb die
+DACL — siehe :mod:`connector_agent.winsec`. Sie stumm zu überspringen wäre die
+schlechteste der drei Möglichkeiten: der Agent liefe, und die Zusage über den
+privaten Schlüssel wäre unbelegt.
 """
 
 from __future__ import annotations
@@ -24,11 +32,32 @@ from connector_agent.guardrails import DEFAULT_PROTECTED_GROUPS, Guardrails
 
 logger = logging.getLogger(__name__)
 
-#: Rechte, die das Zustandsverzeichnis haben muss.
+#: Rechte, die das Zustandsverzeichnis haben muss (nur POSIX).
 DIR_MODE = 0o700
 
-#: Rechte, die eine Geheimnisdatei haben muss.
+#: Rechte, die eine Geheimnisdatei haben muss (nur POSIX).
 FILE_MODE = 0o600
+
+#: Läuft der Agent unter Windows? Einmal ausgewertet, damit die Verzweigungen
+#: unten lesbar bleiben.
+IS_WINDOWS = os.name == "nt"
+
+#: Vorgabe für das Zustandsverzeichnis, je Betriebssystem.
+#:
+#: Unter Windows ``%ProgramData%``: dort gehören Daten hin, die zur Maschine
+#: und nicht zu einem Benutzer gehören, und das Installationsprogramm kann die
+#: ACL darauf setzen. ``%ProgramFiles%`` wäre falsch — dort schreibt ein
+#: Dienst nichts hinein, und ein Update würde es überschreiben.
+DEFAULT_STATE_DIR = (
+    Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Magister Connector"
+    if IS_WINDOWS
+    else Path("/var/lib/magister-connector")
+)
+
+#: Vorgabe für die Konfigurationsdatei.
+DEFAULT_CONFIG_PATH = (
+    DEFAULT_STATE_DIR / "config.json" if IS_WINDOWS else Path("/etc/magister-connector/config.json")
+)
 
 
 class ConfigError(RuntimeError):
@@ -50,6 +79,8 @@ class AgentConfig:
     #: Lokale OU-Allowlist. Leer heisst: keine Verzeichnisaufträge (siehe
     #: guardrails._check_dns) — nicht "alles erlaubt".
     allowed_ous: frozenset[str] = frozenset()
+    #: Geschützte Gruppen. Die eingebaute Liste ist eine **Untergrenze** —
+    #: Einträge aus der Konfiguration kommen dazu und ersetzen sie nicht.
     protected_groups: frozenset[str] = DEFAULT_PROTECTED_GROUPS
     #: Ausgehender HTTP-Proxy, falls das Kundennetz einen verlangt. Bewusst
     #: **explizit** und nicht aus ``HTTPS_PROXY`` der Umgebung: der Kanal
@@ -101,17 +132,23 @@ class AgentConfig:
                 "endpoint muss eine https-URL sein. Über diesen Kanal laufen "
                 "Passwörter; ein Klartext-Transport ist keine Option."
             )
-        state_dir = Path(str(raw.get("state_dir") or "/var/lib/magister-connector"))
+        state_dir = Path(str(raw.get("state_dir") or DEFAULT_STATE_DIR))
         ca_bundle = Path(str(raw.get("ca_bundle") or state_dir / "platform-ca.pem"))
         ous = frozenset(
             text for text in (str(o).strip() for o in _string_list(raw.get("allowed_ous"))) if text
         )
-        configured_groups = _string_list(raw.get("protected_groups"))
-        groups = (
-            frozenset(text for text in (str(g).strip().lower() for g in configured_groups) if text)
-            if configured_groups
-            else DEFAULT_PROTECTED_GROUPS
+        # VEREINIGUNG, nicht Ersetzung: die eingebaute Liste ist eine
+        # Untergrenze. Wer eine eigene geschützte Gruppe eintragen will, soll
+        # dabei nicht den Schutz für „Domänen-Admins" verlieren — und genau
+        # das täte er, wenn die Konfiguration die Vorgabe ersetzte. Der Fehler
+        # wäre still: alles läuft, und die Plattform darf plötzlich Konten in
+        # die Domänen-Admins aufnehmen.
+        configured_groups = frozenset(
+            text
+            for text in (str(g).strip().lower() for g in _string_list(raw.get("protected_groups")))
+            if text
         )
+        groups = DEFAULT_PROTECTED_GROUPS | configured_groups
         proxy_raw = raw.get("proxy")
         proxy = str(proxy_raw).strip() if isinstance(proxy_raw, str) and proxy_raw.strip() else None
         return cls(
@@ -142,7 +179,23 @@ class AgentSecrets:
 
 
 def ensure_state_dir(state_dir: Path) -> None:
+    """Zustandsverzeichnis anlegen und abdichten.
+
+    Zwei Betriebssysteme, zwei Mechanismen: unter Linux ``0700``, unter
+    Windows eine ACL, die nur SYSTEM und den Administratoren etwas gibt. Beides
+    macht der **Agent** und nicht das Installationsprogramm — dann gilt es für
+    jede Installationsart gleich, auch für die, die jemand „schnell zum Testen"
+    gemacht hat.
+    """
     state_dir.mkdir(parents=True, exist_ok=True)
+    if IS_WINDOWS:
+        from connector_agent.winsec import WindowsPermissionError, harden_directory
+
+        try:
+            harden_directory(state_dir)
+        except WindowsPermissionError as exc:
+            raise ConfigError(str(exc)) from exc
+        return
     state_dir.chmod(DIR_MODE)
 
 
@@ -152,6 +205,13 @@ def write_secret_file(path: Path, content: str) -> None:
     ``open`` und danach ``chmod`` hinterlässt ein Fenster, in dem die Datei mit
     der Standardmaske lesbar ist. Auf einem Server mit mehreren Konten ist das
     genau das Fenster, das man nicht will — deshalb ``os.open`` mit dem Modus.
+
+    Unter Windows tut der Modus fast nichts (er setzt nur das
+    Read-Only-Attribut). Der Schutz kommt dort von der ACL des
+    Zustandsverzeichnisses, die die Datei erbt — gesetzt vom
+    Installationsprogramm und bei jedem Start von ``assert_permissions``
+    nachgeprüft. Das ``0600`` bleibt trotzdem stehen: es kostet nichts und ist
+    unter Linux die ganze Miete.
     """
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, FILE_MODE)
     try:
@@ -169,9 +229,16 @@ def assert_permissions(config: AgentConfig) -> None:
     Verweigerung statt Warnung: eine Warnung im Dienst-Log liest niemand, und
     ein weltlesbarer privater Schlüssel ist kein Zustand, in dem man
     weiterarbeitet.
+
+    Zwei Betriebssysteme, zwei Mechanismen, eine Zusage. Unter Windows prüft
+    :func:`connector_agent.winsec.assert_windows_permissions` die DACL; der
+    POSIX-Modus ist dort ein Phantasiewert und taugt für keine Aussage.
     """
     if not config.state_dir.is_dir():
         raise ConfigError(f"Zustandsverzeichnis {config.state_dir} fehlt.")
+    if IS_WINDOWS:
+        _assert_windows(config)
+        return
     dir_mode = stat.S_IMODE(config.state_dir.stat().st_mode)
     if dir_mode & 0o077:
         raise ConfigError(
@@ -187,6 +254,25 @@ def assert_permissions(config: AgentConfig) -> None:
                 f"{path} hat Rechte {mode:04o}, erwartet {FILE_MODE:04o}. "
                 "Der Agent läuft nicht mit einem lesbaren Geheimnis."
             )
+
+
+def _assert_windows(config: AgentConfig) -> None:
+    """ACL des Zustandsverzeichnisses prüfen.
+
+    Nur das Verzeichnis, nicht jede Datei darin: die Dateien erben ihre Rechte
+    von ihm (das Installationsprogramm setzt ``(OI)(CI)``), und ``winsec``
+    verlangt zusätzlich, dass das Verzeichnis selbst **nicht** erbt. Damit ist
+    die ACL des Verzeichnisses die vollständige Aussage über den Inhalt.
+    """
+    from connector_agent.winsec import (
+        WindowsPermissionError,
+        assert_windows_permissions,
+    )
+
+    try:
+        assert_windows_permissions(config.state_dir, what="Zustandsverzeichnis")
+    except WindowsPermissionError as exc:
+        raise ConfigError(str(exc)) from exc
 
 
 def load_secrets(config: AgentConfig) -> AgentSecrets | None:
@@ -217,6 +303,9 @@ def save_secrets(config: AgentConfig, secrets: AgentSecrets) -> None:
 
 
 __all__ = [
+    "DEFAULT_CONFIG_PATH",
+    "DEFAULT_STATE_DIR",
+    "IS_WINDOWS",
     "AgentConfig",
     "AgentSecrets",
     "ConfigError",

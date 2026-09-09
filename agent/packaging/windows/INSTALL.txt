@@ -1,0 +1,144 @@
+Magister Connector-Agent — Einrichten
+=====================================
+
+Was dieser Agent tut
+--------------------
+Er holt Aufträge von der Magister-Plattform ab (Passwort zurücksetzen, Gruppe
+setzen, Benutzer suchen) und führt sie gegen Ihr Active Directory aus.
+
+Er baut dazu **ausschliesslich ausgehende** Verbindungen auf und nimmt keine
+an. In Ihrer Firewall muss also keine Regel für eingehenden Verkehr
+eingerichtet werden, und es muss kein Port veröffentlicht werden. Benötigt
+wird ausgehend TCP 46200 zum Connector-Endpunkt.
+
+Er führt nur Operationen aus, die eine Liste zulässt, und nur in
+Organisationseinheiten, die Sie freigeben. Geschützte Gruppen (Domänen-Admins
+und Verwandte) sind grundsätzlich gesperrt — auch dann, wenn die Plattform
+etwas anderes verlangt.
+
+
+Schritt 1 — Konfiguration anlegen
+---------------------------------
+Im Zustandsverzeichnis
+
+    C:\ProgramData\Magister Connector\
+
+liegt config.example.json. Kopieren Sie sie nach config.json und passen Sie
+sie an. Die Vorlage wird bei einem Update ersetzt, Ihre config.json nie.
+
+Wichtig sind:
+
+  endpoint      Die Adresse aus der Konsole, z. B.
+                "https://connect.magister.ch:46200". Muss https sein.
+  allowed_ous   Die Organisationseinheiten, in denen der Agent arbeiten darf.
+                **Eine leere Liste heisst: keine Verzeichnisaufträge.** Das
+                ist Absicht und nicht "alles erlaubt".
+  ca_bundle     Das CA-Bündel der Plattform. Fehlt es, gilt der
+                Windows-Truststore.
+
+
+Schritt 2 — AD-Zugang in die Dienst-Umgebung
+--------------------------------------------
+Der Agent bindet sich mit einem eigenen Dienstkonto an Ihr AD. Die Zugangsdaten
+kommen aus der Umgebung des Dienstes und **nie** von der Plattform:
+
+    MAGISTER_AD_DCS              Domänencontroller, kommagetrennt
+    MAGISTER_AD_BIND_DN          Bind-DN des Dienstkontos
+    MAGISTER_AD_BIND_PASSWORD    dessen Passwort
+    MAGISTER_AD_USERS_SEARCH_BASE
+
+Eintragen z. B. mit:
+
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\MagisterConnector" ^
+        /v Environment /t REG_MULTI_SZ ^
+        /d "MAGISTER_AD_DCS=dc01.schule.local\0MAGISTER_AD_BIND_DN=..." /f
+
+Die Verbindung geht immer über LDAPS auf Port 636, versiegelt und signiert.
+Klartext-LDAP ist nicht vorgesehen und lässt sich nicht einschalten.
+
+
+Schritt 3 — Anmelden
+--------------------
+Öffnen Sie über das Startmenü ("Magister Connector" →
+"Connector-Agent — Eingabeaufforderung") eine Eingabeaufforderung **als
+Administrator** und führen Sie aus:
+
+    magister-connector enroll
+
+Das Einmal-Token aus der Konsole wird abgefragt. Geben Sie es dort ein und
+nicht als Argument — sonst steht es in der Befehlsgeschichte und in der
+Prozessliste.
+
+Der Agent erzeugt dabei sein Schlüsselpaar **lokal**; der private Schlüssel
+verlässt diesen Server nie. Zum Schluss zeigt er einen Fingerprint an:
+
+    SPKI-Fingerprint:  a1b2c3...
+
+**Vergleichen Sie diesen Fingerprint mit der Anzeige in der Konsole.** Weichen
+sie ab, hat sich jemand anders mit Ihrem Token angemeldet. Dann: Agent in der
+Konsole widerrufen und neu anmelden.
+
+
+Schritt 4 — Prüfen
+------------------
+    magister-connector check
+
+Der Befehl verändert nichts und sagt, was noch fehlt: Rechte, Anmeldung,
+OU-Allowlist, CA-Bündel. Er ist der Abnahmebefehl — führen Sie ihn aus, bevor
+jemand auf einen Passwort-Reset wartet.
+
+
+Schritt 5 — Dienst starten
+--------------------------
+    sc start MagisterConnector
+
+Der Dienst steht auf "Automatisch" und kommt ab jetzt bei jedem Neustart mit.
+Das Installationsprogramm startet ihn absichtlich nicht: zum
+Installationszeitpunkt ist der Agent noch nicht angemeldet und der Start würde
+nur eine Fehlermeldung erzeugen.
+
+
+Wo etwas steht, wenn etwas nicht geht
+-------------------------------------
+Protokoll:              C:\ProgramData\Magister Connector\agent.log
+Ereignisprotokoll:      Anwendung, Quelle "MagisterConnector"
+
+Startet der Dienst nicht, steht der Grund in beidem — im Klartext und mit dem
+Befehl, der es behebt.
+
+Häufigster Fall: "Der Agent ist nicht angemeldet." Dann fehlt Schritt 3.
+
+Zweithäufigster: eine Meldung über die Rechte des Zustandsverzeichnisses. Dort
+liegt der private Schlüssel, und der Agent läuft nicht, wenn andere ihn lesen
+könnten. Die Meldung enthält die icacls-Zeile, die es richtet.
+
+
+Was in diesem Verzeichnis liegt — und was Sie sichern sollten
+-------------------------------------------------------------
+    config.json      Ihre Konfiguration
+    agent.pem        Zertifikat des Agenten
+    agent-key.pem    sein privater Schlüssel  — verlässt den Server nie
+    secrets.json     API-Key und HMAC-Schlüssel
+    agent.log        Protokoll
+
+Eine Sicherung dieses Verzeichnisses ist **nicht nötig**: geht der Server
+verloren, wird der Agent in der Konsole widerrufen und auf dem neuen Server
+neu angemeldet. Das ist der vorgesehene Weg und dauert zwei Minuten.
+
+Umgekehrt gilt: eine **Kopie** dieses Verzeichnisses ist ein vollwertiger
+Zugang zu Ihrem AD über die Plattform. Es gehört nicht in eine Dateiablage und
+nicht in ein Ticket.
+
+
+Deinstallieren
+--------------
+Über "Apps & Features". Das Zustandsverzeichnis bleibt absichtlich stehen —
+darin liegen Ihre Konfiguration und das Protokoll. Wenn es weg soll:
+
+    rmdir /s "C:\ProgramData\Magister Connector"
+
+Und den Agenten in der Konsole widerrufen; sonst bleibt eine Anmeldung
+gültig, zu der es keinen Agenten mehr gibt.
+
+
+Vita Brevis GmbH — Schola Levis

@@ -20,6 +20,7 @@ import sys
 from pathlib import Path
 
 from connector_agent.config import (
+    DEFAULT_CONFIG_PATH,
     AgentConfig,
     ConfigError,
     assert_permissions,
@@ -89,7 +90,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     from connector_agent.runner import AdExecutor, Runner
 
-    ad = _build_ad_client()
+    ad = build_ad_client()
     if ad is None:
         return 1
     runner = Runner(
@@ -170,8 +171,11 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def _build_ad_client() -> object | None:
+def build_ad_client() -> object | None:
     """AD-Client aus ``magister_api.ad`` bauen.
+
+    Öffentlich, weil ihn zwei Einsprungpunkte brauchen: der ``run``-Befehl von
+    Hand und der Windows-Dienst (:mod:`connector_agent.winservice`).
 
     Bewusst derselbe Code wie im direkten Pfad: siebzehn LDAP-Operationen ein
     zweites Mal zu schreiben hiesse, zwei Stände zu pflegen, von denen einer
@@ -200,8 +204,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="magister-connector", description=__doc__)
     parser.add_argument(
         "--config",
-        default="/etc/magister-connector/config.json",
-        help="Pfad zur Konfigurationsdatei",
+        default=str(DEFAULT_CONFIG_PATH),
+        help="Pfad zur Konfigurationsdatei (Vorgabe: %(default)s)",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--version", action="version", version=VERSION)

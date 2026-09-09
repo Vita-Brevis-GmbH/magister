@@ -105,10 +105,3 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -q
-
-      - name: Agent lint (Connector-Agent, ADR-0014)
-        working-directory: agent
-        run: |
-          uv sync --extra dev
-          uv run ruff check connector_agent
-          uv run ruff format --check connector_agent

@@ -1,9 +1,12 @@
 {
-  "_kommentar": "Konfiguration des Connector-Agenten (ADR-0014). Diese Datei gehört dem Dienstkonto, Rechte 0640.",
+  "_kommentar": "Konfiguration des Connector-Agenten (ADR-0014). Kopieren nach config.json und anpassen. Diese Vorlage wird bei einem Update ersetzt, Ihre config.json nie.",
 
+  "_endpoint": "Die Adresse aus der Konsole. MUSS https sein — über diesen Kanal laufen Passwörter.",
   "endpoint": "https://connect.magister.ch:46200",
-  "state_dir": "/var/lib/magister-connector",
-  "ca_bundle": "/etc/magister-connector/platform-ca.pem",
+
+  "_state_dir": "Wo Zertifikat, privater Schlüssel und Anmeldung liegen. HIER ABSICHTLICH NICHT GESETZT: die Vorgabe ist je Betriebssystem die richtige — unter Windows %ProgramData%\\Magister Connector, unter Linux /var/lib/magister-connector. Nur setzen, wenn es wirklich anderswo hin soll.",
+
+  "_ca_bundle": "CA-Bündel der Plattform, gegen das der Agent den Server prüft. Ohne Angabe: platform-ca.pem im Zustandsverzeichnis; fehlt auch die, gilt der System-Truststore.",
 
   "_allowed_ous": "Die OU-Allowlist. LOKAL konfiguriert — die Plattform kann sie nicht ändern, nicht lesen und nicht abschalten. Leer heisst: keine Verzeichnisaufträge, nicht 'alles erlaubt'.",
   "allowed_ous": [
@@ -12,7 +15,9 @@
     "OU=Gruppen,OU=Magister,DC=gemeinde,DC=local"
   ],
 
-  "_protected_groups": "Optional. Ohne diesen Eintrag gilt die eingebaute Liste (Domänen-Admins, Administratoren, Organisations-Admins, ... in deutsch und englisch).",
+  "_protected_groups": "Optional. Ohne diesen Eintrag gilt die eingebaute Liste (Domänen-Admins, Administratoren, Organisations-Admins, ... in deutsch und englisch). Sie ist eine Untergrenze: Einträge hier kommen dazu, sie ersetzen die eingebauten nicht.",
+
+  "_proxy": "Optional, z. B. \"http://proxy.gemeinde.local:8080\". Bewusst explizit und nicht aus HTTPS_PROXY der Umgebung: über diesen Kanal geht ein Client-Zertifikat, und ob es ankommt, darf nicht davon abhängen, was irgendwann jemand in ein Profil geschrieben hat. Ein Proxy, der TLS aufbricht, macht die Client-Authentisierung unmöglich — dann muss er für diesen Host umgangen werden.",
 
   "poll_seconds": 25,
   "backoff_seconds": 5.0

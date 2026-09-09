@@ -389,7 +389,29 @@ Passwort-Reset. Referenz: ADR-0014.
   zweiten lokal ab (`failed` mit Grund), und verfallene Aufträge stehen auf
   `expired` — alle Nutzlasten gelöscht. Vier Befunde daraus stehen in
   ADR-0014.
-- ⏳ **Offen: Windows-MSI und `.deb`**, Paket-Download in der Konsole,
+- ✅ **Windows-MSI** (`agent/packaging/windows/`). Payload unter Windows mit
+  PyInstaller, MSI drumherum unter Linux mit `wixl` — damit ist die WiX-Quelle
+  auf dem Entwicklerrechner prüfbar (`build-msi.sh --stub`) und nicht nur in
+  CI. Das Paket richtet den Dienst `MagisterConnector` ein, startet ihn aber
+  absichtlich nicht (zum Installationszeitpunkt ist der Agent nicht
+  angemeldet) und fragt nicht nach dem Einmal-Token (eine MSI-Eigenschaft
+  landet im Ereignisprotokoll und in jedem Verteilungswerkzeug).
+
+  Dabei kam ein Fehler heraus, der ohne den Windows-Lauf niemandem
+  aufgefallen wäre: **der Agent konnte unter Windows gar nicht starten.**
+  Seine Rechteprüfung liest POSIX-Modi, und `os.stat()` liefert unter Windows
+  erfundene Bits — Verzeichnisse melden `0o777`, die Prüfung schlug also immer
+  fehl. Sie dort stumm zu überspringen wäre die schlechtere Lösung gewesen:
+  dann liefe der Agent, und die Zusage über seinen privaten Schlüssel wäre
+  unbelegt. Er dichtet sein Zustandsverzeichnis jetzt selbst ab (`icacls` mit
+  SIDs) und prüft bei jedem Start die DACL über SDDL.
+
+  Zweiter Fund am Rand: die Liste geschützter Gruppen wurde von einer
+  Konfiguration **ersetzt** statt ergänzt. Wer eine eigene Gruppe eintrug,
+  verlor damit still den Schutz für „Domänen-Admins". Sie ist jetzt eine
+  Untergrenze.
+- ⏳ **Offen: `.deb`**, Signatur für das MSI (braucht ein
+  Code-Signing-Zertifikat auf einem HSM), Paket-Download in der Konsole,
   automatische Zertifikatserneuerung, automatische Updates (E10), AD-Sync als
   Push über den Agenten.
 - ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im

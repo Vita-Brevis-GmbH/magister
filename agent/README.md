@@ -53,6 +53,54 @@ der Anzeige in der Konsole übereinstimmen. Weicht er ab, hat sich jemand
 anders mit dem Token angemeldet — deshalb lebt es nur 24 Stunden und gilt nur
 einmal.
 
+## Installation (Windows)
+
+Für Windows gibt es ein MSI. Es installiert den Agenten, richtet den Dienst
+`MagisterConnector` ein und legt eine Konfigurationsvorlage ab.
+
+```
+msiexec /i magister-connector-0.1.0-x64.msi /qn
+```
+
+Danach am Server:
+
+1. `%ProgramData%\Magister Connector\config.example.json` nach `config.json`
+   kopieren und anpassen (`endpoint`, `allowed_ous`).
+2. Die `MAGISTER_AD_*`-Werte in die Umgebung des Dienstes eintragen.
+3. Eingabeaufforderung **als Administrator** (das Startmenü liefert eine):
+   `magister-connector enroll`, dann `magister-connector check`.
+4. `sc start MagisterConnector`.
+
+Der ganze Ablauf mit Begründungen steht in
+[`packaging/windows/INSTALL.txt`](packaging/windows/INSTALL.txt) — die Datei
+wird mitinstalliert und ist über das Startmenü erreichbar.
+
+**Das MSI startet den Dienst absichtlich nicht.** Zum Installationszeitpunkt
+ist der Agent nicht angemeldet; ein Start würde nur eine Fehlermeldung
+erzeugen. Und es fragt nicht nach dem Einmal-Token: eine MSI-Eigenschaft steht
+in der Kommandozeile des Installers und damit im Ereignisprotokoll und in
+jedem Verteilungswerkzeug.
+
+Wie das Paket gebaut wird — Payload unter Windows mit PyInstaller, MSI
+drumherum unter Linux mit `wixl` — steht in
+[`packaging/windows/README.md`](packaging/windows/README.md). Es ist noch
+**unsigniert**; siehe dort.
+
+### Die Rechte unter Windows
+
+Im Zustandsverzeichnis liegt der private Schlüssel des Agenten. Unter Linux
+schützt ihn `0700`; unter Windows schützt ihn die **ACL**, und das ist nicht
+dasselbe in anderer Schreibweise:
+
+* `os.stat()` liefert unter Windows erfundene Modus-Bits (Verzeichnisse melden
+  `0o777`). Die POSIX-Prüfung schlägt dort **immer** fehl — ohne Anpassung
+  wäre der Dienst nie gestartet.
+* Der Agent dichtet das Verzeichnis deshalb beim Anlegen selbst ab (`icacls`
+  mit SIDs, nicht mit lokalisierten Namen) und prüft bei jedem Start die DACL
+  über SDDL. Nicht das Installationsprogramm: ein Sicherheitsmerkmal, das nur
+  die MSI setzt, fehlt genau bei der Handinstallation, die dann drei Jahre
+  läuft.
+
 ## Voraussetzungen beim Kunden
 
 * **Ausgehend TCP 46200** zu `connect.magister.ch`. Kein Rückfall auf 443
@@ -84,8 +132,14 @@ uv run pyright
 
 ## Was noch fehlt
 
-* **Windows-MSI** und **`.deb`**. Heute gibt es das Python-Paket, die
-  systemd-Unit und das OCI-Abbild.
+* **`.deb` für Debian/Ubuntu.** Das MSI für Windows gibt es
+  (`packaging/windows/`), ebenso das Python-Paket, die systemd-Unit und das
+  OCI-Abbild. Für Debian fehlt das Paket drumherum.
+* **Signatur für das MSI.** Es ist unsigniert; Windows zeigt eine
+  SmartScreen-Warnung, und unter AppLocker oder WDAC lässt es sich nicht
+  installieren. Braucht ein Code-Signing-Zertifikat auf einem HSM — eine
+  Beschaffung mit Kosten und mit derselben Verwahrungsfrage wie beim
+  Plattform-CA-Schlüssel.
 * **Automatische Zertifikatserneuerung.** Das Zertifikat läuft nach 90 Tagen
   ab; die Erneuerung ist heute ein erneutes `enroll` nach Widerruf.
 * **Automatische Updates** (Entscheid E10).

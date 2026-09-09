@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Windows-Installationspaket für den Magister Connector-Agenten (ADR-0014).
+
+  Gebaut mit `wixl` (msitools), nicht mit dem WiX Toolset: dann läuft der
+  Paketbau auf demselben Linux wie alles andere, und die Datei hier ist auf
+  dem Entwicklerrechner prüfbar. `wixl` versteht eine Teilmenge von WiX v3 —
+  ServiceInstall, ServiceControl, CreateFolder und Registry sind dabei,
+  CustomAction mit `Directory=` nicht. Das ist der Grund, warum es hier keine
+  gibt (siehe unten).
+
+  Was dieses Paket NICHT tut, und warum:
+
+  * **Es setzt die Rechte des Zustandsverzeichnisses nicht.** Das macht der
+    Agent selbst (`connector_agent.winsec.harden_directory`), und zwar mit
+    Absicht: ein Sicherheitsmerkmal, das nur die MSI setzt, fehlt genau bei
+    der Installation, die jemand "schnell zum Testen" von Hand gemacht hat
+    und die dann drei Jahre läuft. Der Agent prüft die ACL zusätzlich bei
+    jedem Start und weigert sich, mit zu weiten Rechten zu laufen.
+
+  * **Es startet den Dienst nicht.** Zum Installationszeitpunkt ist der Agent
+    nicht angemeldet — er hat kein Zertifikat und keinen API-Key. Ein Start
+    würde nur eine Fehlermeldung ins Ereignisprotokoll schreiben. Der Dienst
+    steht auf "Automatisch"; nach `magister-connector enroll` startet ihn der
+    Betreiber einmal von Hand, danach kommt er bei jedem Neustart mit.
+
+  * **Es fragt nicht nach dem Einmal-Token.** Ein Token in einer
+    MSI-Eigenschaft steht in der Kommandozeile des Installers und damit im
+    Ereignisprotokoll und in jedem Verteilungswerkzeug. Es gehört über stdin
+    in `enroll` — dafür ist der Befehl so gebaut.
+
+  * **Es schreibt keine Konfiguration.** Die Vorlage wird als
+    `config.example.json` mitinstalliert; die echte `config.json` legt der
+    Betreiber daneben. Damit überschreibt ein Update nie eine
+    funktionierende Konfiguration, und das ist der Fehler, den man mit
+    Abstand am häufigsten sieht.
+-->
+<!--
+  Die Dateiliste des Payloads steht NICHT hier, sondern wird von
+  `wixl-heat` erzeugt und als ZWEITE Eingabedatei an wixl übergeben (siehe
+  build-msi.sh). PyInstaller legt rund hundert Dateien ab; eine handgepflegte
+  Liste wäre beim ersten Abhängigkeitswechsel falsch. Sie liefert die
+  ComponentGroup "Payload", auf die die Feature-Definition unten verweist.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Magister Connector-Agent"
+           Language="1031"
+           Codepage="65001"
+           Version="$(var.Version)"
+           Manufacturer="Vita Brevis GmbH"
+           UpgradeCode="8f3d5c1a-7b24-4e6f-9a15-2c8d4e0b6f37">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Description="Connector-Agent für Magister (Schola Levis)"
+             Comments="Baut ausschliesslich ausgehende Verbindungen auf. Nimmt keine an."
+             Manufacturer="Vita Brevis GmbH"/>
+
+    <Media Id="1" Cabinet="agent.cab" EmbedCab="yes"/>
+
+    <!--
+      Ein Update ersetzt die alte Fassung, statt zwei nebeneinander zu legen.
+      AllowSameVersionUpgrades, weil ein neu gebautes Paket derselben Version
+      sonst als "schon installiert" abgewiesen wird — beim Ausprobieren einer
+      Vorabfassung der übliche Stolperstein.
+    -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="Es ist bereits eine neuere Fassung des Magister Connector-Agenten installiert."/>
+
+    <!-- 64 Bit: der Agent läuft auf Windows Server, und den gibt es seit
+         Jahren nur noch in 64 Bit. -->
+    <Condition Message="Dieses Paket setzt ein 64-Bit-Windows voraus.">VersionNT64</Condition>
+    <Condition Message="Dieses Paket setzt Windows 8.1 / Server 2012 R2 oder neuer voraus.">Installed OR VersionNT &gt;= 603</Condition>
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="Magister Connector"/>
+      </Directory>
+
+      <!--
+        Der Zustand liegt unter %ProgramData% und NICHT unter
+        %ProgramFiles%: dort schreibt ein Dienst nichts hinein, und ein
+        Update würde es überschreiben. Hier liegen config.json, der private
+        Schlüssel, die Geheimnisse und agent.log.
+      -->
+      <Directory Id="CommonAppDataFolder">
+        <Directory Id="STATEDIR" Name="Magister Connector"/>
+      </Directory>
+
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="STARTMENUDIR" Name="Magister Connector"/>
+      </Directory>
+    </Directory>
+
+    <!--
+      Der Dienst. Type=ownProcess, Account=LocalSystem: der Agent braucht
+      Lesezugriff auf sein Zustandsverzeichnis (das nur SYSTEM und
+      Administratoren offensteht) und einen ausgehenden TLS-Kanal. Ein
+      eigenes Dienstkonto wäre schöner, hätte aber genau dieselben Rechte und
+      ein Passwort mehr, das jemand verwalten muss.
+
+      Kein `Start` in ServiceControl — siehe Kopfkommentar.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="C.Service" Guid="3e9a6b4c-1d82-4f57-b0a3-9c7e5d2f1b48" Win64="yes">
+        <File Id="F.ServiceExe"
+              Name="magister-connector-service.exe"
+              Source="$(var.PayloadDir)/magister-connector-service.exe"
+              KeyPath="yes"/>
+        <ServiceInstall Id="ServiceInstall"
+                        Name="MagisterConnector"
+                        DisplayName="Magister Connector-Agent"
+                        Description="Holt Verzeichnisaufträge von der Magister-Plattform ab und führt sie gegen das lokale Active Directory aus. Baut ausschliesslich ausgehende Verbindungen auf."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem"
+                        Vital="yes"/>
+        <ServiceControl Id="ServiceControl"
+                        Name="MagisterConnector"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes"/>
+      </Component>
+    </DirectoryRef>
+
+    <!--
+      Das Zustandsverzeichnis wird angelegt und beim Deinstallieren NICHT
+      entfernt: darin liegen der private Schlüssel, die Anmeldung und das
+      Protokoll. Eine Deinstallation, die das mitnimmt, macht eine
+      Neuinstallation zu einer Neuanmeldung — und im Zweifel verliert sie das
+      Protokoll, in dem steht, warum jemand deinstalliert hat. Wer aufräumen
+      will, löscht das Verzeichnis von Hand; das steht in INSTALL.txt.
+
+      Kein `Permanent="yes"`: wixl kennt das Attribut nicht (es baut dann
+      stillschweigend ohne). Gebraucht wird es hier auch nicht — es gibt
+      bewusst kein `RemoveFolder` auf STATEDIR, und Windows entfernt ein
+      Verzeichnis nur, wenn es leer ist. config.json, agent-key.pem,
+      secrets.json und agent.log stammen nicht aus dem MSI, bleiben also
+      liegen und halten das Verzeichnis. Entfernt wird nur
+      config.example.json, und das ist richtig: es ist eine Vorlage.
+    -->
+    <DirectoryRef Id="STATEDIR">
+      <Component Id="C.StateDir" Guid="4f0b7c5d-2e93-4068-c1b4-0d8f6e3a2c59" Win64="yes">
+        <CreateFolder/>
+        <File Id="F.ConfigExample"
+              Name="config.example.json"
+              Source="$(var.PayloadDir)/config.example.json"
+              KeyPath="yes"/>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="STARTMENUDIR">
+      <Component Id="C.StartMenu" Guid="5a1c8d6e-3f04-4179-d2c5-1e907f4b3d6a" Win64="yes">
+        <!--
+          Eine Eingabeaufforderung als Administrator im Installationsordner.
+          Genau das braucht die Abnahme beim Kunden: `magister-connector
+          enroll` und `magister-connector check` werden von Hand aufgerufen,
+          und beide brauchen Administratorrechte für das
+          Zustandsverzeichnis.
+        -->
+        <Shortcut Id="S.Shell"
+                  Name="Connector-Agent — Eingabeaufforderung"
+                  Description="Eingabeaufforderung im Installationsordner, für enroll und check"
+                  Target="[System64Folder]cmd.exe"
+                  Arguments="/K cd /d &quot;[INSTALLDIR]&quot;"
+                  WorkingDirectory="INSTALLDIR"/>
+        <Shortcut Id="S.Readme"
+                  Name="Installationsanleitung"
+                  Description="Einrichten, Anmelden, Prüfen"
+                  Target="[INSTALLDIR]INSTALL.txt"/>
+        <RemoveFolder Id="R.StartMenu" On="uninstall"/>
+        <RegistryValue Root="HKCU"
+                       Key="Software\Vita Brevis\Magister Connector"
+                       Name="StartMenu"
+                       Type="integer"
+                       Value="1"
+                       KeyPath="yes"/>
+      </Component>
+    </DirectoryRef>
+
+    <!--
+      Wo die Konfiguration liegt, für den Dienst und für die Fehlersuche.
+      HKLM, weil der Dienst als LocalSystem läuft und HKCU dort ein anderes
+      ist als das des Betreibers.
+    -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="C.Registry" Guid="6b2d9e7f-4015-428a-e3d6-2fa180514e7b" Win64="yes">
+        <RegistryKey Root="HKLM" Key="Software\Vita Brevis\Magister Connector">
+          <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLDIR]" KeyPath="yes"/>
+          <RegistryValue Name="StateDir" Type="string" Value="[STATEDIR]"/>
+          <RegistryValue Name="Version" Type="string" Value="$(var.Version)"/>
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <Feature Id="Complete" Title="Magister Connector-Agent" Level="1" Display="expand"
+             ConfigurableDirectory="INSTALLDIR"
+             Description="Der Agent, sein Dienst und die Anleitung.">
+      <ComponentGroupRef Id="Payload"/>
+      <ComponentRef Id="C.Service"/>
+      <ComponentRef Id="C.StateDir"/>
+      <ComponentRef Id="C.StartMenu"/>
+      <ComponentRef Id="C.Registry"/>
+    </Feature>
+
+    <Property Id="ARPPRODUCTICON" Value="AppIcon"/>
+    <Property Id="ARPHELPLINK" Value="https://github.com/Vita-Brevis-GmbH/magister"/>
+    <Property Id="ARPCONTACT" Value="Vita Brevis GmbH"/>
+    <!-- Kein Reparieren anbieten: bei diesem Paket ist "Reparieren" ein
+         Neuinstallieren, und der Unterschied verwirrt mehr als er hilft. -->
+    <Property Id="ARPNOREPAIR" Value="1"/>
+  </Product>
+</Wix>

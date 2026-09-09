@@ -9,9 +9,20 @@ dependencies = [
   # Die AD-Schicht von Magister, damit die LDAP-Operationen nicht ein zweites
   # Mal geschrieben werden. Seit ADR-0014 ist sie frei von FastAPI.
   "magister-api",
+  # Nur unter Windows: der Dienst-Einsprungpunkt. Windows erwartet von einem
+  # Dienstprozess, dass er sich beim Dienst-Manager meldet — ein gewöhnliches
+  # Konsolenprogramm scheitert mit "Fehler 1053", auch wenn es einwandfrei
+  # läuft. Siehe connector_agent/winservice.py.
+  'pywin32>=306; sys_platform == "win32"',
 ]
 
 [project.optional-dependencies]
+# Nur zum Paketbau, und nur unter Windows: PyInstaller kann nicht für eine
+# fremde Plattform bauen. Das MSI drumherum entsteht danach unter Linux mit
+# wixl (siehe packaging/windows/).
+packaging = [
+  "pyinstaller>=6.10",
+]
 dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
@@ -21,6 +32,9 @@ dev = [
 
 [project.scripts]
 magister-connector = "connector_agent.cli:main"
+# Der Dienst braucht einen eigenen Einsprungpunkt, weil Windows den Prozess
+# anders startet als ein Konsolenprogramm.
+magister-connector-service = "connector_agent.winservice:main"
 
 [tool.uv.sources]
 magister-api = { path = "../apps/api", editable = true }
