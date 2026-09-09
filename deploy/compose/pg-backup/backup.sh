@@ -68,7 +68,12 @@ fi
 mv "$partial" "$out"
 # Prüfsumme über die VERSCHLÜSSELTE Datei: damit lässt sich später feststellen,
 # ob das Volume sie unverändert hält, ohne sie entschlüsseln zu müssen.
-sha256sum "$out" | sed "s| .*/| |" >> "${BACKUP_DIR}/PRUEFSUMMEN.sha256"
+#
+# Mit relativem Namen (deshalb das cd), damit `sha256sum -c PRUEFSUMMEN.sha256`
+# im Verzeichnis funktioniert. Ein absoluter Pfad in der Datei bricht die
+# Prüfung, sobald das Volume woanders gemountet ist — und das ist auf dem
+# Backup-Host der Normalfall.
+(cd "$BACKUP_DIR" && sha256sum "$(basename "$out")") >> "${BACKUP_DIR}/PRUEFSUMMEN.sha256"
 
 echo "[pg-backup] geschrieben: $(du -h "$out" | cut -f1)"
 

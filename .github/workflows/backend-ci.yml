@@ -46,13 +46,20 @@ jobs:
       - name: Set up Python 3.12
         run: uv python install 3.12
 
-      - name: Install WeasyPrint system libraries
+      - name: Install system libraries
         # WeasyPrint needs Pango / Cairo / GDK-PixBuf at runtime; pure-pip
         # install isn't enough.
+        #
+        # age + postgresql-client sind fuer die Backup-Tests (ADR-0016 D9) da.
+        # Ohne sie ueberspringt tests/integration/test_backup_verify_cli.py
+        # sich selbst — und ein uebersprungener Test ist gruen und beweist
+        # nichts. Postgres selbst laeuft als Service-Container; pg_dump und
+        # pg_restore muessen trotzdem auf dem Runner liegen.
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 libgdk-pixbuf-2.0-0
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 libgdk-pixbuf-2.0-0 \
+            age postgresql-client
 
       - name: Install dependencies
         run: uv sync --extra dev

@@ -16,6 +16,11 @@
 #   MAGISTER_BACKUP_SHARE      Wurzel des Shares, z. B. /mnt/magister-backup
 #   MAGISTER_ADMIN_DSN         Verwaltungszugang in den Cluster (CREATEDB)
 #   COCKPIT_API_DIR            Verzeichnis mit dem cockpit_api-Paket
+#   MAGISTER_PSQL_DSN          optional: derselbe Cluster als libpq-URL
+#                              (postgresql://…), um Referenz-Zeilenzahlen aus
+#                              der Produktion zu holen. Ohne ihn entfaellt der
+#                              Groessenordnungs-Vergleich — dann prueft der
+#                              Lauf nur, dass der Dump einspielbar ist.
 set -uo pipefail
 
 : "${COCKPIT_URL:?COCKPIT_URL fehlt}"
@@ -86,6 +91,23 @@ for row in "${rows[@]}"; do
         --console "$COCKPIT_URL"
         --backup-id "$backup_id"
     )
+
+    # Referenz-Zeilenzahlen aus der PRODUKTION mitgeben. Ohne sie prueft die
+    # Pruef-Wiederherstellung nur, dass der Dump *einspielbar* ist — ein Dump
+    # mit drei statt dreihundert Schuelern spielt tadellos ein. Verglichen wird
+    # auf Groessenordnung und nicht auf Gleichheit; zwischen Sicherung und
+    # Pruefung liegen Tage produktiver Arbeit.
+    #
+    # Faellt die Abfrage aus (Cluster nicht erreichbar), laeuft die Pruefung
+    # ohne diesen Punkt weiter: eine fehlende Referenz soll nicht als kaputtes
+    # Backup gemeldet werden.
+    if [[ -n "${MAGISTER_PSQL_DSN:-}" ]]; then
+        for table in schools classes ad_user_cache; do
+            count=$(psql "$MAGISTER_PSQL_DSN" -Atc \
+                "SELECT count(*) FROM \"${schema}\".\"${table}\"" 2>/dev/null) || continue
+            [[ "$count" =~ ^[0-9]+$ ]] && args+=(--rows "${table}=${count}")
+        done
+    fi
     [[ -n "$sum" ]] && args+=(--checksum "$sum")
     [[ -n "$version" ]] && args+=(--expected-schema-version "$version")
     [[ -n "${COCKPIT_CA_BUNDLE:-}" ]] && args+=(--ca-bundle "$COCKPIT_CA_BUNDLE")

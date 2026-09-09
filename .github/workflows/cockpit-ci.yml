@@ -1,0 +1,114 @@
+name: cockpit-ci
+
+# Die Konsole (ADR-0013 D2) hatte bis hierhin keinen Workflow: 169 Tests, die
+# nur lokal liefen. Das ist genau der Zustand, in dem eine Regression erst
+# beim Ausrollen auffaellt — und die Konsole kann Sitzungen in jeden Kunden
+# ausstellen, ist also die Stelle, an der man das am wenigsten will.
+#
+# Zwei Datenbanken, weil die Tests zwei Rollen spielen: die Konsole schreibt
+# in ihre eigene, und sie legt Kundenrollen und -schemas in der des
+# Magister-Clusters an. Dieselbe Datenbank fuer beides wuerde die
+# Bereitstellungstests unbrauchbar machen.
+#
+# Kein pyright: die Konsole hat einen Bestand an strict-Fehlern aus ihrer
+# Entstehungszeit (Stand 2026-09-09: 8 in den geprueften Verzeichnissen, mehr
+# im Rest). Den erst abzubauen und dann CI einzuschalten hiesse, bis dahin
+# ohne CI zu leben. Ruff und Tests laufen deshalb jetzt; pyright kommt, wenn
+# der Bestand weg ist.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "cockpit/**"
+      - "apps/api/alembic/**"
+      - ".github/workflows/cockpit-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cockpit/api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cockpit_test
+          POSTGRES_PASSWORD: cockpit_test
+          POSTGRES_DB: cockpit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cockpit_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      COCKPIT_TEST_DATABASE_URL: postgresql+asyncpg://cockpit_test:cockpit_test@localhost:5432/cockpit_test
+      COCKPIT_TEST_TENANT_ADMIN_DSN: postgresql+asyncpg://cockpit_test:cockpit_test@localhost:5432/magister_test
+      # Ohne dieses Verzeichnis ueberspringen sich die Tests, die ein echtes
+      # Kundenschema brauchen — und damit auch der, der die Export-Allowlist
+      # gegen das echte Schema haelt. Genau der soll laufen.
+      # Die Bereitstellung ruft dort `python -m alembic upgrade head` auf, und
+      # zwar mit dem Python der KONSOLE (sys.executable) und cwd=apps/api.
+      # magister_api ist damit als Quellverzeichnis importierbar, und seine
+      # Abhaengigkeiten (SQLAlchemy, asyncpg, pydantic) hat die Konsole selbst.
+      # Ein zweites `uv sync` in apps/api braucht es deshalb nicht.
+      COCKPIT_TEST_MAGISTER_API_DIR: ${{ github.workspace }}/apps/api
+      COCKPIT_TEST_SCHEMA_VERSION: "0044_local_admin_totp"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install system tools
+        # age + postgresql-client fuer die Backup-, Export- und
+        # Wiederherstellungstests (ADR-0016). Fehlen sie, ueberspringen sich
+        # die Tests selbst — und ein uebersprungener Test ist gruen und
+        # beweist nichts.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends age postgresql-client
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Prepare databases
+        env:
+          PGPASSWORD: cockpit_test
+        run: |
+          psql -h localhost -U cockpit_test -d cockpit_test \
+            -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          # Die Datenbank fuer die Kundenschemas. Die Bereitstellung legt darin
+          # Rollen an, der Testbenutzer ist im Service-Container Superuser.
+          psql -h localhost -U cockpit_test -d postgres \
+            -c "CREATE DATABASE magister_test OWNER cockpit_test;"
+          psql -h localhost -U cockpit_test -d magister_test \
+            -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+
+      - name: Ruff lint
+        run: uv run ruff check cockpit_api tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check cockpit_api tests
+
+      - name: Pytest
+        run: uv run pytest -q
+
+      - name: Agent lint (Connector-Agent, ADR-0014)
+        working-directory: agent
+        run: |
+          uv sync --extra dev
+          uv run ruff check connector_agent
+          uv run ruff format --check connector_agent

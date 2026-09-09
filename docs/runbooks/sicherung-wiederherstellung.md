@@ -326,6 +326,32 @@ Protokoll steht, welche Variable fehlt.
 
 ## 8 · Einzelinstallation (on-prem)
 
+Die Sidecar schreibt `/var/backups/magister/<db>-<stamp>.dump.age` und hängt
+die Prüfsumme an `PRUEFSUMMEN.sha256` im selben Verzeichnis (mit relativem
+Namen, damit `sha256sum -c` auch dann funktioniert, wenn das Volume auf dem
+Backup-Host anders gemountet ist).
+
+Prüfen, wöchentlich:
+
+```bash
+cd /opt/magister/apps/api
+uv run ../../scripts/magister-cli backup verify \
+  --dump "$(ls -t /var/backups/magister/*.dump.age | head -1)" \
+  --identity /etc/magister/backup-identity.txt \
+  --expected-schema-version "$(uv run python -c \
+      'from magister_api.tenancy.version import HEAD_REVISION; print(HEAD_REVISION)')"
+```
+
+`--expected-schema-version` ist freiwillig, aber nützlich: ohne sie fällt ein
+Dump aus einer älteren Codefassung nicht auf, und beim Einspielen im Ernstfall
+merkt man erst dann, dass der passende Codestand ein anderer ist.
+
+Rückgabewert **1** heisst: diese Sicherung ist unbrauchbar. **2** heisst: die
+Prüfung konnte nicht laufen (kein `age`, kein Dump, kein DSN) — auch das
+gehört in die Post, denn eine Prüfung, die nicht läuft, prüft nichts.
+
+
+
 Bleibt bei der `pg-backup`-Sidecar und einem Volume (ADR-0016 D9). Erweitert
 um:
 
@@ -385,6 +411,12 @@ die Zugangsdaten (`COCKPIT_URL`, `COCKPIT_BOOTSTRAP_TOKEN`,
 zusätzlich `MAGISTER_BACKUP_IDENTITY`, `MAGISTER_BACKUP_SHARE`,
 `MAGISTER_ADMIN_DSN`); sie gehört mit `0600` dem Dienstkonto. `jq` wird
 gebraucht.
+
+`MAGISTER_PSQL_DSN` in `ops.env` auf dem Backup-Host ist optional, aber
+empfohlen: damit holt `verify-all.sh` die Zeilenzahlen aus der Produktion und
+gibt sie als Referenz mit. Ohne sie prüft der Lauf nur, dass der Dump
+**einspielbar** ist — und ein Dump mit drei statt dreihundert Schülern spielt
+tadellos ein.
 
 `PATH` steht ausdrücklich in der Datei: im Cron ist er sonst kurz, und
 `age: command not found` um 04:00 sieht aus wie ein kaputtes Backup und ist
