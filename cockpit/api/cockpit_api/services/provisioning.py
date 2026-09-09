@@ -39,7 +39,7 @@ import os
 import re
 import secrets
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -64,6 +64,10 @@ IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
 
 #: Passwortlänge der Mandantenrolle. 32 Bytes URL-safe base64 ≈ 43 Zeichen.
 ROLE_PASSWORD_BYTES = 32
+
+#: Länge des Kundenschlüssels in Byte. 32 Byte Zufall, urlsafe kodiert —
+#: deutlich über der Mindestlänge, die die Datenebene verlangt.
+DATA_KEY_BYTES = 32
 
 #: Erlaubte Zeichen im erzeugten Passwort. ``token_urlsafe`` liefert genau
 #: diese; die Prüfung ist trotzdem da, weil das Passwort als Literal in ein
@@ -93,6 +97,26 @@ class StepOutcome:
     #: Nur für ``create_role``: das erzeugte Passwort, genau einmal.
     #: Wird nie in den Auftrag geschrieben.
     secret: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class JobSecrets:
+    """Was ein Bereitstellungslauf herausgibt — jedes genau einmal.
+
+    Nichts davon wird gespeichert: nicht in der Konsolen-Datenbank, nicht im
+    Auftragsprotokoll, nicht im Log. Beim Kundenschlüssel kommt ein zweiter
+    Grund dazu: läge er in der Konsole, wäre er in deren Sicherung — und die
+    zweite Verschlüsselungsschicht über den Kunden-Dumps damit wertlos
+    (ADR-0016 D2).
+    """
+
+    role_password: str | None = None
+    data_key: str | None = None
+
+    def with_secret(self, step: ProvisioningStep, value: str) -> JobSecrets:
+        if step is ProvisioningStep.data_key:
+            return replace(self, data_key=value)
+        return replace(self, role_password=value)
 
 
 def _ident(value: str, *, field: str) -> str:
@@ -317,11 +341,14 @@ async def run_job(
     *,
     provisioner: TenantProvisioner,
     role_password: str | None = None,
-) -> tuple[ProvisioningJob, str | None]:
+) -> tuple[ProvisioningJob, JobSecrets]:
     """Auftrag von vorn oder von der Abbruchstelle weiter ausführen.
 
-    Rückgabe: der Auftrag und — falls in diesem Lauf eine Rolle angelegt oder
-    aktualisiert wurde — das Passwort, genau einmal.
+    Rückgabe: der Auftrag und die Geheimnisse dieses Laufs, jedes genau
+    einmal. Zwei Felder und nicht eines: der Lauf erzeugt ein Rollenpasswort
+    **und** einen Kundenschlüssel, und mit einem Feld hätte der zweite den
+    ersten überschrieben — der Betreiber hätte das Rollenpasswort verloren,
+    ohne es zu merken, bis die nächste Migration es braucht.
     """
     job.status = JobStatus.running
     job.attempts += 1
@@ -332,11 +359,15 @@ async def run_job(
     if job.last_completed_step is not None:
         start_index = STEP_ORDER.index(job.last_completed_step) + 1
 
-    secret = role_password
+    found = JobSecrets(role_password=role_password)
     for step in STEP_ORDER[start_index:]:
         try:
             outcome = await _run_step(
-                session, tenant, step, provisioner=provisioner, role_password=secret
+                session,
+                tenant,
+                step,
+                provisioner=provisioner,
+                role_password=found.role_password,
             )
         except Exception as exc:  # jeder Fehler endet gleich: Kunde bleibt provisioning
             # Der Kunde bleibt auf provisioning: nicht erreichbar ist besser
@@ -349,9 +380,9 @@ async def run_job(
                 "Bereitstellung von %s in Schritt %s gescheitert: %s", tenant.slug, step.value, exc
             )
             await session.flush()
-            return job, secret
+            return job, found
         if outcome.secret is not None:
-            secret = outcome.secret
+            found = found.with_secret(outcome.step, outcome.secret)
         job.steps = [*job.steps, _entry(step, ok=True, detail=outcome.detail)]
         job.last_completed_step = step
         await session.flush()
@@ -359,7 +390,7 @@ async def run_job(
     job.status = JobStatus.succeeded
     await session.flush()
     logger.info("Kunde %s bereitgestellt", tenant.slug)
-    return job, secret
+    return job, found
 
 
 async def _run_step(
@@ -393,19 +424,41 @@ async def _run_step(
     raise ProvisioningError(f"Unbekannter Schritt {step!r}")
 
 
-async def _provision_data_key(session: AsyncSession, tenant: Tenant) -> StepOutcome:
-    """Eigener Datenschlüssel je Kunde (ADR-0013 D9).
+def new_data_key() -> str:
+    """Kundenschlüssel für pgcrypto. 43 Zeichen aus 32 Byte Zufall."""
+    return secrets.token_urlsafe(DATA_KEY_BYTES)
 
-    Noch nicht umgesetzt: der Schlüssel gehört in einen Umschlag-verschlüsselten
-    Speicher, und den gibt es in der Konsole noch nicht. Der Schritt existiert
-    schon als Platz in der Reihenfolge, damit er später nicht die
-    Auftragsstruktur ändert — und er sagt ausdrücklich, dass der Kunde
-    vorläufig den installationsweiten Schlüssel benutzt, statt das zu verschweigen.
+
+async def _provision_data_key(session: AsyncSession, tenant: Tenant) -> StepOutcome:
+    """Eigener Datenschlüssel je Kunde (ADR-0013 D9, ADR-0016 D8).
+
+    Der Schlüssel wird hier erzeugt, **einmal** zurückgegeben und nirgends
+    gespeichert — genau wie das Rollenpasswort und aus demselben Grund: die
+    Konsole ist das höchstwertige Ziel im System, und was dort nicht liegt,
+    kann dort nicht gestohlen werden. Zusätzlich gilt hier: läge der
+    Kundenschlüssel in der Konsolen-Datenbank, wäre er in deren Sicherung —
+    und die zweite Verschlüsselungsschicht über den Kunden-Dumps damit wertlos
+    (ADR-0016 D2).
+
+    Was die Konsole **nicht** kann, und das ist die Grenze dieses Schritts: den
+    Schlüssel auf dem Anwendungsserver hinterlegen. Er gehört in dessen
+    Umgebung, und dorthin reicht die Konsole nicht. Der Schritt liefert deshalb
+    den Namen der Variablen mit; eingetragen wird sie beim Ausrollen. Bis das
+    geschehen ist, antwortet der Mandant mit 503 — die Middleware der
+    Datenebene prüft den Schlüssel, bevor sie eine Anfrage annimmt. Ein
+    stiller Rückfall auf den installationsweiten Schlüssel wäre die
+    schlimmere Variante: alles liefe, und die Löschzusage wäre unwahr.
     """
+    ref = tenant.slug.upper()
+    key = new_data_key()
+    tenant.audit_key_id = f"{tenant.slug}-v1"
+    await session.flush()
     return StepOutcome(
         ProvisioningStep.data_key,
-        "übersprungen: eigener Datenschlüssel folgt mit tenant_secrets "
-        "(ADR-0013 D9); bis dahin gilt der installationsweite MAGISTER_AUDIT_KEY",
+        f"Kundenschlüssel erzeugt (Id {tenant.audit_key_id}). Auf dem "
+        f"Anwendungsserver als MAGISTER_TENANT_AUDIT_KEY_{ref} setzen; "
+        "bis dahin antwortet der Mandant mit 503.",
+        secret=key,
     )
 
 

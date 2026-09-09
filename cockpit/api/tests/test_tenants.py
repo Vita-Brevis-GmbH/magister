@@ -351,10 +351,27 @@ class TestProvisioning:
         assert body["job"]["status"] == "succeeded"
         assert body["next_step"] is None
         assert body["tenant"]["schema_version"] == settings.expected_schema_version
-        # data_key ist noch nicht umgesetzt und sagt das ausdrücklich, statt
-        # den Eindruck zu erwecken, jeder Kunde hätte schon einen eigenen.
+        # Der Kundenschlüssel kommt genau einmal zurück und wird nicht
+        # gespeichert — wie das Rollenpasswort, plus dem zweiten Grund aus
+        # ADR-0016 D2: läge er in der Konsole, wäre er in deren Sicherung und
+        # die zweite Verschlüsselungsschicht über den Kunden-Dumps wertlos.
         data_key = next(s for s in body["job"]["steps"] if s["step"] == "data_key")
-        assert data_key["ok"] and "installationsweite" in data_key["detail"]
+        assert data_key["ok"], data_key
+        assert body["data_key"], "der Kundenschlüssel kommt genau einmal zurück"
+        assert len(body["data_key"]) >= 32
+        assert body["tenant"]["audit_key_id"] == "ganz-v1"
+        # Der Schritt nennt die Umgebungsvariable: die Konsole kann den
+        # Schlüssel nicht auf dem Anwendungsserver hinterlegen, und das soll
+        # sie auch nicht verschweigen.
+        assert "MAGISTER_TENANT_AUDIT_KEY_GANZ" in data_key["detail"]
+        # Und er steht nirgends im Auftragsprotokoll.
+        assert body["data_key"] not in str(body["job"])
+
+        # Zweiter Abruf: kein Geheimnis mehr. Es gibt es nur im Lauf, in dem
+        # es entsteht.
+        again = db_client.get(f"/api/tenants/{body['tenant']['id']}").json()
+        assert again["data_key"] is None
+        assert again["role_password"] is None
 
         import asyncio
 

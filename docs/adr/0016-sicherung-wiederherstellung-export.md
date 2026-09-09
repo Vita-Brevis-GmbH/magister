@@ -1,6 +1,6 @@
 # ADR 0016: Sicherung, Wiederherstellung und Export pro Kunde
 
-**Status:** Vorschlag · 2026-09-08
+**Status:** Angenommen · 2026-09-08, Nachträge 2026-09-09
 **Kontext:** [ADR-0013](0013-mandantenfaehigkeit-control-plane.md) — mit mehreren
 Kunden auf einer Installation wird die Sicherung zur Kundenangelegenheit.
 
@@ -257,3 +257,137 @@ Gemeinde mit einem Server bekommt keinen pgBackRest-Zwang.
 - **Sicherungen beim Offboarding selektiv bereinigen.** Aus unveränderlichem
   Speicher technisch nicht möglich. Crypto-Shredding plus Fristablauf ist der
   ehrliche Weg.
+
+## Nachträge aus der Umsetzung (2026-09-09)
+
+Die Umsetzung von Phase 2b hat vier Entscheide berührt. Zwei davon sind
+Abweichungen, zwei sind Voraussetzungen, die im ADR fehlten. Alle vier stehen
+hier, weil ein ADR, der die Umsetzung nicht kennt, beim nächsten Mal in
+dieselbe Falle führt.
+
+### N1 · D2 und D4 widersprechen sich auf **einer** Maschine
+
+D2 sagt, der private Backup-Schlüssel liege getrennt und werde auf dem
+Anwendungsserver nie gebraucht. D4 verlangt eine wöchentliche
+Prüf-Wiederherstellung — und die muss entschlüsseln. Beides gleichzeitig geht
+nicht.
+
+**Auflösung:** Wiederherstellen und Prüfen laufen **nicht** auf dem
+Anwendungsserver, sondern auf dem Backup-Host, wo der Schlüssel liegt. Jede
+Funktion in `cockpit_api/services/restore.py` nimmt den Pfad zur
+Identitätsdatei als **Argument** und liest ihn nicht aus den Einstellungen:
+eine Einstellung würde dazu verleiten, sie doch auf dem Anwendungsserver zu
+konfigurieren, und damit wäre D2 aufgehoben.
+
+Die Konsole **erfasst** deshalb Wiederherstellungen und **nimmt Ergebnisse
+entgegen** (`POST /api/restore-jobs/{id}/report`,
+`POST /api/backups/{id}/verify-result`). Sie führt keine aus. Ein Endpunkt,
+der eine Wiederherstellung „auslöst", wäre bequemer und würde bedeuten, dass
+ein übernommener Anwendungsserver alle alten Sicherungen lesen kann. Die
+Umständlichkeit ist der Zweck.
+
+Was die Konsole selbst kann, weil dafür nur der **öffentliche** Schlüssel
+nötig ist: sichern. Und exportieren, weil darin kein Backup-Schlüssel vorkommt.
+
+### N2 · Wiederhergestellt wird in eine eigene Datenbank, nicht in ein Nebenschema
+
+D5 nennt ein Schema `r_<slug>_<zeitstempel>` neben dem Produktivschema. Der
+Grund für die Abweichung ist handfest: ein `pg_dump --schema=t_slug` enthält
+`CREATE SCHEMA t_slug` und durchgängig qualifizierte Namen. In dieselbe
+Datenbank zurückspielen heisst also entweder auf das Produktivschema schreiben
+(verboten) oder den Schemanamen im ausgegebenen SQL umschreiben — eine
+Textersetzung auf SQL, die man nicht verantworten will.
+
+In eine frische Datenbank spielt derselbe Dump unverändert ein, und das
+Produktivschema wird nicht einmal geöffnet. Die Zusage „daneben, nie darüber"
+wird damit stärker, nicht schwächer.
+
+**Der Preis, ausgeschrieben:** D5 verspricht, das Umschalten sei „ein
+Registry-Eintrag". Das ist es weiterhin — die Registry trägt DSN *und* Schema
+(ADR-0013 D1), eine andere Datenbank ist dort dieselbe Art von Änderung wie
+ein anderes Schema. Aber der DSN steht in der Konsole nur als **Verweis**
+(ADR-0013 D2); aufgelöst wird er aus der Umgebung des Anwendungsservers
+(`MAGISTER_TENANT_DSN_<REF>`). Umschalten ist deshalb eine
+Konfigurationsänderung **auf dem Anwendungsserver** und kein Klick in der
+Konsole. Die Konsole hält fest, *dass* und *wann* umgeschaltet wurde und
+welches Schema verdrängt wurde; der Ablauf steht in
+`docs/runbooks/sicherung-wiederherstellung.md`. Wer das Umschalten ohne
+Umgebungsänderung will, findet dort auch den zweiten Weg (Produktivschema
+umbenennen und den geprüften Stand darüber einspielen) mit seinen Kosten.
+
+### N3 · D8 war ohne Kundenschlüssel je Mandant nicht erfüllbar
+
+Das Abnahmekriterium „nach dem Vernichten des Kundenschlüssels ist kein
+Audit-Payload mehr entschlüsselbar" war mit dem Stand vor der Umsetzung
+**unwahr**, und zwar nicht knapp: der pgcrypto-Schlüssel kam aus *einer*
+Umgebungsvariablen (`MAGISTER_AUDIT_KEY`) für die ganze Installation. Damit
+gab es nur zwei Möglichkeiten, und beide sind unbrauchbar:
+
+- Den Schlüssel vernichten und damit auch die Audit-Inhalte **aller** anderen
+  Kunden unlesbar machen.
+- Ihn behalten — dann ist die Löschzusage an den gekündigten Kunden unerfüllt,
+  und ein gestohlener Dump gibt mit demselben Schlüssel die Inhalte aller
+  Kunden her. Das hebt auch die zweite Verschlüsselungsschicht aus D2 auf.
+
+**Jeder Mandant hat jetzt seinen eigenen Schlüssel**, aus der Umgebung
+(`MAGISTER_TENANT_AUDIT_KEY_<REF>`) und nicht aus der Datenbank — aus der
+Datenbank wäre er im Dump, und die zweite Schicht damit wieder weg. Fehlt er
+bei mehr als einem Mandanten, antwortet die Datenebene für **diesen** Kunden
+mit 503; ein stiller Rückfall auf den gemeinsamen Schlüssel wäre die Variante,
+die niemandem auffällt. Bei genau einem Mandanten gilt der Rückfall weiter,
+damit eine bestehende Installation nach dem Update ohne neue Konfiguration
+läuft.
+
+Die Konsole erzeugt den Schlüssel im Bereitstellungsschritt `data_key`, gibt
+ihn **einmal** zurück und speichert ihn nicht — wie das Rollenpasswort und aus
+demselben Grund, plus dem zweiten aus D2. Eingetragen wird er beim Ausrollen;
+bis dahin antwortet der Mandant mit 503. Gespeichert wird nur die **Id**
+(`tenants.audit_key_id`), und jede Sicherung vermerkt sie.
+
+Beim Umbau fiel ein zweiter Fund an, der nicht zu diesem ADR gehört, aber
+dieselbe Wurzel hat: der Cache der überlagerten Einstellungen war nur nach
+`app_settings.version` geschlüsselt und liegt prozessweit. Zwei Kunden mit
+derselben Version bekamen die Einstellungen des jeweils anderen — OIDC-Issuer,
+AD-Domänencontroller, Bind-DN. Beide Installationen fangen bei Version 1 an,
+die Kollision war also der Normalfall.
+
+### N4 · Crypto-Shredding wird bestätigt, nicht geprüft
+
+Die Konsole kann den Kundenschlüssel nicht vernichten: er liegt in der
+Umgebung des Anwendungsservers. `tenant_offboarding.key_destroyed_at` ist
+deshalb die **Bestätigung eines Menschen** über eine Handlung, die er selbst
+ausgeführt hat — kein Nachweis. Das steht so im Modell, im Dienst und im
+Endpunkt, weil ein Feld dieses Namens sonst wie eine Prüfung aussieht.
+
+Was die Konsole dagegen nachprüft, ist das Löschen von Schema und Rolle: sie
+führt das SQL aus und fragt danach `information_schema.schemata` und
+`pg_roles` ab. Existiert eines von beiden noch, wird der Zustand **nicht** als
+gelöscht vermerkt. Zwei verschiedene Grade von Gewissheit gehören nicht in
+dasselbe Feld — deshalb sind `dropped_at` und `key_destroyed_at` getrennt.
+
+Und `purged` ist keine Handlung, sondern ein Datum: `key_destroyed_at` plus
+Aufbewahrungsfrist (E14: 10 Tage). Erst dann ist die Löschzusage erfüllt. Der
+Endpunkt weigert sich, den Zustand vorher zu setzen — „vollständig gelöscht"
+vor Fristablauf wäre eine unwahre Zusage an den Kunden.
+
+### N5 · Kleinere Festlegungen, die in der Umsetzung entschieden wurden
+
+- **CSV mit Semikolon und UTF-8-BOM** (`utf-8-sig`). Nicht Komma und nicht
+  reines UTF-8: der Empfänger ist eine Gemeinde-IT mit Excel in einer
+  deutschsprachigen Windows-Installation, und dort öffnet genau diese
+  Kombination per Doppelklick richtig. Beides steht ausdrücklich im Manifest,
+  damit ein Programm es nicht raten muss.
+- **Die Export-Allowlist ist gegen das echte Schema getestet.** Eine
+  handgeschriebene Spaltenliste verrottet gegen ein Schema, das sich mit jeder
+  Migration ändert. Ein Test migriert deshalb ein echtes Kundenschema und
+  verlangt, dass **jede** Tabelle entweder exportiert oder mit Begründung
+  ausgeschlossen ist. Eine neue Migration bricht diesen Test, bis jemand
+  entscheidet. Das ist die Absicht und kein Ärgernis.
+- **Die README im Export ist nur auf Deutsch.** Für einen französisch- oder
+  italienischsprachigen Kunden ist das eine offene Lücke; das Manifest selbst
+  ist maschinenlesbar und sprachneutral.
+- **Ein Export ist der einzige Ort mit Kundendaten im Klartext.** Deshalb ein
+  eigenes Verzeichnis mit `0700` (ausdrücklich **nicht** der Backup-Share),
+  Dateien mit `0600`, eine Frist (`COCKPIT_EXPORT_TTL_DAYS`, Vorgabe 7 Tage)
+  und ein Audit-Eintrag bei jedem Download. Ein Export, der liegen bleibt, ist
+  ein Datenleck mit Verfallsdatum „nie".

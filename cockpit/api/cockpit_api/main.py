@@ -9,8 +9,10 @@ from starlette.responses import Response
 from cockpit_api.config import settings
 from cockpit_api.management_guard import check_configuration, make_management_guard
 from cockpit_api.routers import (
+    backups,
     connector,
     instances,
+    offboarding,
     service_tokens,
     tenants,
     update_requests,
@@ -87,6 +89,8 @@ app.include_router(instances.router, prefix="/api")
 app.include_router(service_tokens.router, prefix="/api")
 app.include_router(update_requests.router, prefix="/api")
 app.include_router(tenants.router, prefix="/api")
+app.include_router(backups.router, prefix="/api")
+app.include_router(offboarding.router, prefix="/api")
 app.include_router(connector.console, prefix="/api")
 # Der Agentenpfad liegt NICHT unter /api: er kommt über den
 # Connector-Listener (TCP 46200) und nicht über den Management-Listener.

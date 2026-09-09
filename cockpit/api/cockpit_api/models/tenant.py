@@ -89,6 +89,12 @@ class Tenant(Base):
     #: Kopf-Version des Codes ab, bedient die Datenebene diesen Kunden mit
     #: 503 Wartung (ADR-0013 D7).
     schema_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    #: Id des Kundenschlüssels (ADR-0016 D2, D8). Ein **Verweis**, nie der
+    #: Schlüssel selbst: der liegt in der Umgebung des Anwendungsservers. Jede
+    #: Sicherung vermerkt diese Id, und wer wiederherstellt, sucht damit den
+    #: passenden Schlüssel — steht bei allen Kunden derselbe Wert, ist der
+    #: Vermerk wertlos.
+    audit_key_id: Mapped[str | None] = mapped_column(String(64), default=None)
     suspended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     #: Der Grund ist für den Kunden sichtbar — Sperren ohne Begründung ist
     #: der Anfang von Willkür.

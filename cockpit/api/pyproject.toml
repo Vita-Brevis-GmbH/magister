@@ -52,6 +52,12 @@ ignore = ["S101"]
 # Slug-Namen, die vorher gegen IDENTIFIER_PATTERN geprüft wurden. Ein noqa je
 # Aufruf sagt nichts, was nicht schon im Modul-Docstring steht.
 "cockpit_api/services/pgtools.py" = ["S603"]
+# S608, gleiche Sache wie in restore.py: Schema-, Tabellen- und Spaltennamen
+# können in Postgres keine Bind-Parameter sein. Die Grenze ist _check_plan()
+# und _qualified() — jeder Bezeichner wird gegen IDENTIFIER_PATTERN geprüft
+# und gequotet, bevor er ins SQL geht, und _check_plan läuft bei JEDEM Export,
+# nicht nur im Test.
+"cockpit_api/services/export.py" = ["S608"]
 # Dieselbe Sache in den Sicherungstests: sie bauen Testschemas und
 # Zählabfragen mit Schema- und Tabellennamen (nicht als Bind-Parameter
 # möglich) und rufen age-keygen über PATH auf, wie jeder Betreiber auch.

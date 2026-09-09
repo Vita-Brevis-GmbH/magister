@@ -36,6 +36,7 @@ from cockpit_api.schemas.tenant import (
     TenantSuspend,
 )
 from cockpit_api.services.provisioning import (
+    JobSecrets,
     ProvisioningError,
     TenantProvisioner,
     admin_engine,
@@ -58,11 +59,15 @@ def _next_step(job: ProvisioningJob) -> str | None:
     return STEP_ORDER[index].value if index < len(STEP_ORDER) else None
 
 
-def _result(tenant: Tenant, job: ProvisioningJob, password: str | None) -> TenantProvisionResult:
+def _result(
+    tenant: Tenant, job: ProvisioningJob, secrets: JobSecrets | None
+) -> TenantProvisionResult:
+    found = secrets or JobSecrets()
     return TenantProvisionResult(
         tenant=TenantOut.model_validate(tenant),
         job=ProvisioningJobOut.model_validate(job),
-        role_password=password,
+        role_password=found.role_password,
+        data_key=found.data_key,
         next_step=_next_step(job),
     )
 
@@ -229,7 +234,7 @@ async def rotate_role_password(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "no provisioning job for this tenant")
     engine = admin_engine()
     try:
-        password = await TenantProvisioner(
+        rotated = await TenantProvisioner(
             engine, extension_schema=settings.tenant_extension_schema
         ).rotate_role_password(tenant)
     except ProvisioningError as exc:
@@ -237,7 +242,7 @@ async def rotate_role_password(
     finally:
         await engine.dispose()
     await session.commit()
-    return _result(tenant, job, password)
+    return _result(tenant, job, JobSecrets(role_password=rotated))
 
 
 async def _execute(
@@ -260,7 +265,7 @@ async def _execute(
         job.last_error = str(exc)
         return await _commit_and_serialize(session, tenant, job, None)
     try:
-        job, password = await run_job(
+        job, secrets = await run_job(
             session,
             tenant,
             job,
@@ -270,7 +275,7 @@ async def _execute(
         )
     finally:
         await engine.dispose()
-    return await _commit_and_serialize(session, tenant, job, password)
+    return await _commit_and_serialize(session, tenant, job, secrets)
 
 
 async def _commit_and_refresh(session: AsyncSession, tenant: Tenant) -> None:
@@ -286,9 +291,9 @@ async def _commit_and_refresh(session: AsyncSession, tenant: Tenant) -> None:
 
 
 async def _commit_and_serialize(
-    session: AsyncSession, tenant: Tenant, job: ProvisioningJob, password: str | None
+    session: AsyncSession, tenant: Tenant, job: ProvisioningJob, secrets: JobSecrets | None
 ) -> TenantProvisionResult:
     await session.commit()
     await session.refresh(tenant)
     await session.refresh(job)
-    return _result(tenant, job, password)
+    return _result(tenant, job, secrets)

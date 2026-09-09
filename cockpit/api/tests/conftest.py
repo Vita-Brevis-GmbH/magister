@@ -141,6 +141,11 @@ def cockpit_schema(cockpit_database_url: str) -> str:
                 # sonst über einen bestehenden Typ stolpern.
                 await conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
                 for enum_name in (
+                    "offboarding_state",
+                    "export_state",
+                    "restore_state",
+                    "backup_status",
+                    "backup_kind",
                     "connector_job_state",
                     "connector_agent_status",
                     "provisioning_step",

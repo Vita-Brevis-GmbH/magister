@@ -13,6 +13,11 @@ Subcommands:
                        a pre-migration dump first, the canary before the rest,
                        and each schema migrated with the tenant's own login
                        role so the tables end up owned by it.
+    backup           — ``verify`` spielt eine verschlüsselte Sicherung in eine
+                       Wegwerf-Datenbank ein und prüft sie (ADR-0016 D9). Ein
+                       Backup gilt erst als Backup, wenn es eingespielt wurde.
+                       Braucht den PRIVATEN age-Schlüssel, läuft also dort, wo
+                       der liegt — nicht auf dem Anwendungsserver.
     local-admin      — the local break-glass account. Currently one action:
                        ``totp-reset`` clears the second factor (ADR-0015 D2),
                        ``--new-recovery-codes`` only reissues the codes, and
@@ -164,6 +169,15 @@ def main() -> int:
         pass
     else:
         add_tenants_parser(sub)
+
+    # Sicherungen prüfen (ADR-0016 D9). Braucht den PRIVATEN age-Schlüssel und
+    # läuft deshalb dort, wo er liegt — nicht auf dem Anwendungsserver.
+    try:
+        from magister_api.cli.backup import add_parser as add_backup_parser
+    except ImportError:
+        pass
+    else:
+        add_backup_parser(sub)
 
     args = parser.parse_args()
     return args.func(args)

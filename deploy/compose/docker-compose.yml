@@ -11,6 +11,9 @@
 #   MAGISTER_WEB_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-web:latest
 #   POSTGRES_USER / _PASSWORD / _DB     — Postgres bootstrap
 #   MAGISTER_AUDIT_KEY                  — pgcrypto sym key (do NOT rotate)
+#   MAGISTER_BACKUP_AGE_RECIPIENT       — ÖFFENTLICHER age-Schlüssel für die
+#                                         Sicherungen (age-keygen auf dem
+#                                         Backup-Host, nicht hier)
 #   MAGISTER_SESSION_SECRET             — session signing
 #   MAGISTER_CSRF_SECRET                — csrf hmac
 #   MAGISTER_OIDC_*                     — OIDC against Entra
@@ -25,8 +28,11 @@
 #   (GUI-editable, no restart). Manual on-demand trigger:
 #   docker compose exec magister-api curl -X POST http://localhost:8000/admin/ad-sync ...
 # Backup:
-#   pg-backup writes /var/backups/magister/<date>.sql.gz; mount the volume
-#   to your backup host or rsync it off-box from there.
+#   pg-backup writes /var/backups/magister/<date>.dump.age — mit dem
+#   öffentlichen age-Schlüssel verschlüsselt (ADR-0016 D9). Volume auf den
+#   Backup-Host mounten oder von dort wegrsyncen. Prüfen mit
+#   `magister-cli backup verify`; das braucht den PRIVATEN Schlüssel und
+#   läuft deshalb auf dem Backup-Host, nicht hier.
 
 name: magister
 
@@ -162,6 +168,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-magister}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_CRON: ${BACKUP_CRON:-15 2 * * *}  # 02:15 daily by default
+      # ÖFFENTLICHER age-Schlüssel (ADR-0016 D9). Pflicht: ohne ihn bricht der
+      # Lauf ab, statt unverschlüsselt auf das Volume zu schreiben. Der
+      # PRIVATE Schlüssel gehört nicht auf diese Maschine.
+      MAGISTER_BACKUP_AGE_RECIPIENT: ${MAGISTER_BACKUP_AGE_RECIPIENT}
     volumes:
       - backups:/var/backups/magister
     networks: [internal]

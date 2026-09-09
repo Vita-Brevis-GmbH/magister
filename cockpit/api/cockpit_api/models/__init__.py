@@ -17,6 +17,7 @@ from cockpit_api.models.connector import (
     JobState,
 )
 from cockpit_api.models.instance import Instance, InstanceChannel
+from cockpit_api.models.offboarding import OffboardingState, TenantOffboarding
 from cockpit_api.models.provisioning_job import (
     STEP_ORDER,
     JobStatus,
@@ -50,6 +51,7 @@ __all__ = [
     "IsolationMode",
     "JobState",
     "JobStatus",
+    "OffboardingState",
     "ProvisioningJob",
     "ProvisioningStep",
     "RestoreJob",
@@ -58,6 +60,7 @@ __all__ = [
     "Tenant",
     "TenantBackup",
     "TenantBackupPolicy",
+    "TenantOffboarding",
     "TenantProfile",
     "TenantStatus",
     "UpdateRequest",

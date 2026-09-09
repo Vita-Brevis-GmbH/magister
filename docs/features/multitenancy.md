@@ -402,7 +402,7 @@ Passwort-Reset. Referenz: ADR-0014.
   Passwort-Reset über den Agenten, das 503-Banner bei stehendem Agenten, und
   „Agent stoppen beendet jeden Plattformzugriff auf das AD".
 
-### Phase 2b — Sicherung, Wiederherstellung, Export
+### Phase 2b — Sicherung, Wiederherstellung, Export (steht, ausser Cluster-PITR)
 
 Ebenfalls Voraussetzung für den ersten gehosteten Kunden: ohne Restore-Weg pro
 Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
@@ -430,6 +430,66 @@ Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
   beschädigter Dump fällt in der wöchentlichen Prüfung auf; ein Export ist ohne
   Magister lesbar; nach dem Vernichten des Kundenschlüssels ist kein
   Audit-Payload mehr entschlüsselbar.
+
+**Stand 2026-09-09.** Umgesetzt und gegen echtes Postgres, echtes
+`pg_dump`/`pg_restore` und echtes `age` geprüft:
+
+| Punkt | Stand |
+|---|---|
+| Logische Sicherung pro Kunde, `age`-verschlüsselt | ✅ `POST /api/tenants/{id}/backups` |
+| Prüf-Wiederherstellung mit Prüfabfragen | ✅ `cockpit_api.cli.verify_backup` (Backup-Host) |
+| Restore daneben, Freigabe durch zweite Person | ✅ erfasst und freigegeben in der Konsole, eingespielt auf dem Backup-Host |
+| Export in offenen Formaten, befristeter Download | ✅ `POST /api/tenants/{id}/exports` |
+| Offboarding mit Fristen und Crypto-Shredding | ✅ fünf Endpunkte mit Reihenfolgeschranken |
+| Kundenschlüssel **je Mandant** | ✅ war Voraussetzung für D8 und fehlte (siehe unten) |
+| Aufbewahrung pro Kunde | ✅ `GET/PUT /api/tenants/{id}/backup-policy` |
+| Einzelinstallation | ✅ Sidecar verschlüsselt jetzt, `magister-cli backup verify` |
+| **Cluster-PITR (Ebene 1)** | ❌ **offen** |
+
+Vier Dinge sind beim Bauen anders herausgekommen als geplant; sie stehen
+ausführlich in den [Nachträgen zu
+ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md#nachträge-aus-der-umsetzung-2026-09-09).
+Kurz:
+
+1. **D2 und D4 widersprechen sich auf einer Maschine.** Prüfen und
+   Wiederherstellen müssen entschlüsseln; der private Schlüssel darf nicht auf
+   dem Anwendungsserver liegen. Beides läuft deshalb auf dem Backup-Host, und
+   die Konsole *erfasst* Aufträge und *nimmt Ergebnisse entgegen* — sie führt
+   nichts aus. Damit ist ADR-0013 D4 („eine Störung in der Verwaltung ist kein
+   Ausfall des Betriebs") für diesen Weg umgekehrt zu lesen: eine Störung im
+   Betrieb ist kein Ausfall der Wiederherstellung.
+2. **Wiederhergestellt wird in eine eigene Datenbank, nicht in ein
+   Nebenschema.** Ein `pg_dump --schema=t_slug` enthält `CREATE SCHEMA t_slug`;
+   in dieselbe Datenbank zurückspielen hiesse, den Schemanamen im SQL
+   umzuschreiben. Der Preis: Umschalten ist eine Konfigurationsänderung auf dem
+   Anwendungsserver, kein Klick in der Konsole. Beide Wege stehen im
+   [Runbook](../runbooks/sicherung-wiederherstellung.md).
+3. **Das Abnahmekriterium zum Crypto-Shredding war vorher unwahr.** Der
+   pgcrypto-Schlüssel kam aus *einer* Umgebungsvariablen für die ganze
+   Installation — den Schlüssel eines Kunden zu vernichten hätte die
+   Audit-Inhalte aller Kunden unlesbar gemacht, und ein gestohlener Dump hätte
+   mit demselben Schlüssel die Inhalte aller Kunden hergegeben. Jeder Mandant
+   hat jetzt seinen eigenen (`MAGISTER_TENANT_AUDIT_KEY_<REF>`); fehlt er,
+   antwortet die Datenebene für diesen Kunden mit 503 statt still auf den
+   gemeinsamen zurückzufallen.
+4. **Crypto-Shredding wird bestätigt, nicht geprüft.** Die Konsole kommt nicht
+   an die Umgebung des Anwendungsservers. Was sie nachprüft, ist das Löschen
+   von Schema und Rolle; was sie festhält, ist die Bestätigung eines Menschen
+   über den Schlüssel. Zwei verschiedene Grade von Gewissheit, zwei Felder.
+
+**Was offen bleibt und wehtut:**
+
+- **Cluster-PITR** (ADR-0016 D1, Ebene 1). Ohne WAL-Archivierung gibt es
+  keinen Weg auf „gestern 14:37" und keinen Weg zurück nach einer beschädigten
+  Datenbank — nur den logischen Dump von heute Nacht. Das ist die grösste
+  offene Lücke im ganzen Bereich, und sie ist unabhängig von der
+  Mandantenfähigkeit.
+- **Entscheid E15** (zwölf monatliche Kopien) ist weiter offen. Ohne sie ist
+  ein Fehler, der erst nach zwei Wochen auffällt, nicht rückholbar.
+- **Kein Zeitplaner.** Tägliche Sicherung und wöchentliche Prüfung sind
+  Cron-Zeilen im Runbook, kein Dienst in der Konsole.
+- **Die README im Export ist nur auf Deutsch.** Das Manifest selbst ist
+  sprachneutral und maschinenlesbar.
 
 ### Phase 3 — Systemeinstellungen und Rechte umziehen
 

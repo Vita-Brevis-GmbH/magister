@@ -3,8 +3,11 @@
 
 FROM postgres:16
 
+# age für die Verschlüsselung der Dumps (ADR-0016 D9). Aus Debian, nicht per
+# curl aus einem Release: dann ist es Teil der Paketverwaltung und bekommt
+# Sicherheitsaktualisierungen wie alles andere im Bild.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends cron gzip \
+ && apt-get install -y --no-install-recommends cron gzip age \
  && rm -rf /var/lib/apt/lists/*
 
 COPY backup.sh /usr/local/bin/backup.sh

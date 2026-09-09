@@ -61,6 +61,10 @@ class TenantOut(BaseModel):
     schema_name: str
     db_role: str
     schema_version: str | None
+    #: Nur die **Id** des Kundenschlüssels, nie der Schlüssel. Sie steht hier,
+    #: damit die Konsole zeigen kann, welcher Schlüssel für diesen Kunden gilt —
+    #: und weil jede Sicherung sie vermerkt (ADR-0016 D2).
+    audit_key_id: str | None = None
     suspended_at: datetime | None
     suspended_reason: str | None
     created_at: datetime
@@ -84,14 +88,26 @@ class ProvisioningJobOut(BaseModel):
 class TenantProvisionResult(BaseModel):
     """Ergebnis eines Bereitstellungslaufs.
 
-    ``role_password`` kommt **genau einmal** — beim Anlegen der Rolle oder beim
-    Drehen. Es steht nicht in der Konsolen-Datenbank und ist über die API
-    später nicht mehr abrufbar. Wer es verliert, dreht es neu.
+    ``role_password`` und ``data_key`` kommen **genau einmal** — beim Anlegen
+    beziehungsweise beim Drehen. Keines steht in der Konsolen-Datenbank, und
+    über die API sind sie später nicht mehr abrufbar. Wer das Rollenpasswort
+    verliert, dreht es neu.
+
+    Beim ``data_key`` ist Verlieren teurer: mit ihm sind die Audit-Payloads
+    und gespeicherten Passwörter dieses Kunden verschlüsselt. Ein Wechsel
+    verlangt eine Umschlüsselung aller Zeilen, kein Neusetzen — deshalb sagt
+    der Schritt im Auftragsprotokoll ausdrücklich, in welche Umgebungsvariable
+    er gehört.
+
+    Zwei Felder und nicht eines: mit einem hätte der zweite Wert den ersten
+    überschrieben, und der Betreiber hätte das Rollenpasswort verloren, ohne
+    es zu merken.
     """
 
     tenant: TenantOut
     job: ProvisioningJobOut
     role_password: str | None = None
+    data_key: str | None = None
     next_step: str | None = None
 
 

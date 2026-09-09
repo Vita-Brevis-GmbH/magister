@@ -55,6 +55,15 @@ class Settings(BaseSettings):
     # deshalb gibt es keine Einstellung dafür.
     backup_age_recipient: str = Field(default="")
 
+    # --- Export (ADR-0016 D7) ---------------------------------------------
+    # Ein Export ist der eine Ort, an dem Kundendaten **unverschlüsselt** und
+    # ohne Magister lesbar liegen — das ist sein Zweck. Deshalb ein eigenes
+    # Verzeichnis mit 0700, ausdrücklich NICHT der Backup-Share, und eine
+    # Frist. Ein Export, der liegen bleibt, ist ein Datenleck mit
+    # Verfallsdatum „nie".
+    export_root: str = Field(default="")
+    export_ttl_days: int = Field(default=7)
+
     # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
     # NUR diesen Verweis, nie den DSN mit Passwort.
     dsn_ref_template: str = Field(default="tenant_{slug}")
