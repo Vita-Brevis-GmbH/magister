@@ -12,6 +12,13 @@ Warum die Versions-Schranke: ein Schema, das noch nicht auf dem Stand des Codes
 ist, beantwortet Abfragen nicht falsch — es beantwortet sie **plausibel** falsch,
 mit fehlenden Spalten oder stillen Vorgabewerten. 503 mit Wartungshinweis ist
 die ehrlichere Antwort (ADR-0013 D7).
+
+Und derselbe Gedanke beim fehlenden Kundenschlüssel (ADR-0016 D8): ohne ihn
+liesse sich zwar lesen, aber kein Audit-Ereignis schreiben — die Anwendung
+würde also erst mitten in der ersten Mutation abbrechen. 503 **vor** der ersten
+Abfrage sagt dasselbe, nur früher und ohne halbe Vorgänge. Geprüft wird hier
+pro Anfrage und nicht beim Start, damit ein neu angelegter Kunde ohne Schlüssel
+nicht die laufende Installation aller anderen mitnimmt.
 """
 
 from __future__ import annotations
@@ -22,7 +29,9 @@ from collections.abc import Awaitable, Callable
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
+from magister_api.config import Settings, get_settings
 from magister_api.tenancy.context import REQUEST_STATE_ATTR, get_registry
+from magister_api.tenancy.keys import TenantKeyError, resolve_tenant_keys
 from magister_api.tenancy.registry import Tenant, TenantRegistry
 from magister_api.tenancy.version import HEAD_REVISION
 
@@ -76,6 +85,28 @@ def is_servable(tenant: Tenant) -> tuple[bool, str]:
     return True, ""
 
 
+def has_tenant_key(
+    tenant: Tenant, registry: TenantRegistry, settings: Settings
+) -> tuple[bool, str]:
+    """Liegt der Kundenschlüssel dieses Mandanten vor (ADR-0016 D8)?
+
+    Der Fehlertext von ``resolve_tenant_keys`` erklärt den Grund; er geht ins
+    Protokoll und nicht in die Antwort — die sagt nur „Wartung". Was der
+    Betreiber falsch konfiguriert hat, ist keine Auskunft für einen Anwender.
+    """
+    try:
+        resolve_tenant_keys(
+            tenant.slug,
+            fallback_audit_key=settings.audit_key.get_secret_value(),
+            fallback_audit_key_id=settings.audit_key_id,
+            fallback_secrets_key=settings.secrets_key.get_secret_value(),
+            single_tenant=len(registry.tenants) == 1,
+        )
+    except TenantKeyError as exc:
+        return False, f"kein Kundenschlüssel: {exc}"
+    return True, ""
+
+
 def make_tenant_middleware(
     read_registry: Callable[[], TenantRegistry] = get_registry,
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
@@ -98,6 +129,15 @@ def make_tenant_middleware(
         servable, reason = is_servable(tenant)
         if not servable:
             return _maintenance(tenant, reason)
+
+        # Wie in auth/csrf.py: die Einstellungen aus app.state, wenn der
+        # Lebenszyklus sie dort hinterlegt hat, sonst die aus der Umgebung.
+        # Eine Middleware darf nicht daran scheitern, dass eine Anwendung
+        # ohne Lifespan gebaut wurde — dann wäre jede Anfrage ein 500.
+        settings: Settings = getattr(request.app.state, "settings", None) or get_settings()
+        keyed, key_reason = has_tenant_key(tenant, registry, settings)
+        if not keyed:
+            return _maintenance(tenant, key_reason)
 
         setattr(request.state, REQUEST_STATE_ATTR, tenant)
         return await call_next(request)

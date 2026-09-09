@@ -32,6 +32,9 @@ pytestmark = pytest.mark.asyncio
 SLUG = "e2e"
 SCHEMA = f"t_{SLUG}"
 ROLE = f"r_{SLUG}"
+
+#: Frei erfunden, nur in dieser Datei gültig.
+ROLE_PASSWORD = "test-rollenpasswort"  # noqa: S105
 HOST = f"{SLUG}.magister.test"
 
 
@@ -41,7 +44,8 @@ async def tenant_schema(engine: AsyncEngine, database_url: str) -> AsyncIterator
     async with engine.begin() as conn:
         await conn.exec_driver_sql(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
         await conn.exec_driver_sql(f"DROP ROLE IF EXISTS {ROLE}")
-        await conn.exec_driver_sql(f"CREATE ROLE {ROLE} LOGIN")
+        create = f"CREATE ROLE {ROLE} LOGIN PASSWORD '{ROLE_PASSWORD}'"
+        await conn.exec_driver_sql(create)
         await conn.exec_driver_sql(f"CREATE SCHEMA {SCHEMA} AUTHORIZATION {ROLE}")
         await conn.exec_driver_sql(f"REVOKE ALL ON SCHEMA {SCHEMA} FROM PUBLIC")
         await conn.exec_driver_sql(f"GRANT USAGE, CREATE ON SCHEMA {SCHEMA} TO {ROLE}")
@@ -88,7 +92,14 @@ async def tenant_schema(engine: AsyncEngine, database_url: str) -> AsyncIterator
         await conn.exec_driver_sql(reassign)
         await conn.exec_driver_sql(seed_settings)
 
-    yield str(make_url(database_url).set(username=ROLE, password=None))
+    # hide_password=False, und überhaupt ein Passwort: ohne eines liefe dieser
+    # Test nur auf einem Cluster mit trust-Authentisierung — eine unsichtbare
+    # Annahme, die auf scram-sha-256 wie ein kaputtes Testkonto aussieht.
+    yield (
+        make_url(database_url)
+        .set(username=ROLE, password=ROLE_PASSWORD)
+        .render_as_string(hide_password=False)
+    )
 
     async with engine.begin() as conn:
         await conn.exec_driver_sql(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")

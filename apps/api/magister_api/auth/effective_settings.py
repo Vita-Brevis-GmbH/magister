@@ -10,11 +10,25 @@ graph.
 The clone is cached per-request — and the OIDC/AD client itself is cached
 across requests on ``app.state``, keyed by ``app_settings.version``, so a
 GUI write invalidates it without a process restart.
+
+Seit ADR-0013 hängt an diesem Cache eine Mandantengrenze, und deshalb steht
+der Slug im Schlüssel. Vorher stand dort nur die Version — und weil
+``app.state`` prozessweit ist, hätte Kunde B mit derselben
+``app_settings.version`` die überlagerten Einstellungen von Kunde A bekommen:
+dessen OIDC-Issuer, dessen AD-Domänencontroller, dessen Bind-DN. Beide
+Installationen fangen bei Version 1 an, die Kollision ist also der Normalfall
+und nicht der Sonderfall.
+
+Der **Kundenschlüssel** wird hier absichtlich nicht überlagert: er hängt an
+der Sitzung (:mod:`magister_api.tenancy.keys`), weil ihn sechs Stellen über
+``Depends(get_settings)`` bräuchten und das ein prozessweit gecachtes Objekt
+ohne Mandantenbezug ist.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import cast
 
 from fastapi import Depends, Request
 from pydantic import SecretStr
@@ -23,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.services.app_settings import AppSettingsService, EffectiveAppSettings
+from magister_api.tenancy.context import tenant_from_request
 
 
 def _overlay(base: Settings, eff: EffectiveAppSettings) -> Settings:
@@ -94,16 +109,22 @@ async def get_effective_settings(
     Cached on ``app.state.effective_settings_cache`` keyed by ``version`` —
     one cheap ``SELECT version`` per request; full reload only on bumps.
     """
+    tenant = tenant_from_request(request)
     svc = AppSettingsService(session, settings)
     version = await svc.get_version()
-    cache: _SettingsCacheEntry | None = getattr(request.app.state, "effective_settings_cache", None)
+    # Schlüssel: (Mandant, Version). Ohne den Slug bekäme der zweite Kunde die
+    # überlagerten Einstellungen des ersten — app.state ist prozessweit.
+    stored: object = getattr(request.app.state, "effective_settings_cache", None)
+    caches: dict[str, _SettingsCacheEntry] = (
+        cast(dict[str, _SettingsCacheEntry], stored) if isinstance(stored, dict) else {}
+    )
+    cache = caches.get(tenant.slug)
     if cache is not None and cache.version == version:
         return cache.settings
     eff = await svc.get_effective()
     overlaid = _overlay(settings, eff)
-    request.app.state.effective_settings_cache = _SettingsCacheEntry(
-        version=version, settings=overlaid
-    )
+    caches[tenant.slug] = _SettingsCacheEntry(version=version, settings=overlaid)
+    request.app.state.effective_settings_cache = caches
     return overlaid
 
 

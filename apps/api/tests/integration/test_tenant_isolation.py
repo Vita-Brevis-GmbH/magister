@@ -24,11 +24,29 @@ ALPHA = "iso_alpha"
 BETA = "iso_beta"
 
 
+#: Passwort der Testrollen. Frei erfunden und nur in dieser Datei gültig.
+#:
+#: Warum überhaupt eines: ohne Passwort läuft dieser Test nur auf einem
+#: Cluster mit ``trust``-Authentisierung. Das ist eine unsichtbare Annahme —
+#: auf einem Cluster mit ``scram-sha-256`` scheitert er mit
+#: ``InvalidPasswordError``, und das sieht aus wie ein kaputtes Testkonto und
+#: nicht wie eine fehlende Zeile in der Vorbereitung.
+ROLE_PASSWORD = "test-rollenpasswort"  # noqa: S105
+
+
 def _dsn(base: str, user: str) -> str:
-    """Denselben DSN mit anderer Anmelderolle."""
+    """Denselben DSN mit anderer Anmelderolle.
+
+    ``render_as_string(hide_password=False)`` und nicht ``str(url)``: letzteres
+    ersetzt das Passwort durch ``***``.
+    """
     from sqlalchemy.engine import make_url
 
-    return str(make_url(base).set(username=user, password=None))
+    return (
+        make_url(base)
+        .set(username=user, password=ROLE_PASSWORD)
+        .render_as_string(hide_password=False)
+    )
 
 
 def _tenant(slug: str, dsn: str) -> Tenant:
@@ -56,7 +74,8 @@ async def two_tenants(engine: AsyncEngine, database_url: str) -> AsyncIterator[d
             await conn.exec_driver_sql(f"DROP SCHEMA IF EXISTS t_{slug} CASCADE")
             await conn.exec_driver_sql(f"DROP ROLE IF EXISTS r_{slug}")
         for slug in (ALPHA, BETA):
-            await conn.exec_driver_sql(f"CREATE ROLE r_{slug} LOGIN")
+            create = f"CREATE ROLE r_{slug} LOGIN PASSWORD '{ROLE_PASSWORD}'"
+            await conn.exec_driver_sql(create)
             await conn.exec_driver_sql(f"CREATE SCHEMA t_{slug} AUTHORIZATION r_{slug}")
             await conn.exec_driver_sql(f"REVOKE ALL ON SCHEMA t_{slug} FROM PUBLIC")
             await conn.exec_driver_sql(f"GRANT USAGE, CREATE ON SCHEMA t_{slug} TO r_{slug}")

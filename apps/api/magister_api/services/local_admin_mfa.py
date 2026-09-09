@@ -34,6 +34,7 @@ from magister_api.config import Settings
 from magister_api.models.base import utcnow
 from magister_api.models.local_admin import LocalAdmin
 from magister_api.services.local_admin import LOCKOUT_DURATION, MAX_FAILED_ATTEMPTS
+from magister_api.tenancy.keys import keys_for
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,9 @@ class LocalAdminMfaService:
 
     @property
     def _key(self) -> str:
-        key = self._settings.audit_key.get_secret_value()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self._settings).audit_key
         if not key:
             raise RuntimeError("MAGISTER_AUDIT_KEY is empty — TOTP storage refused")
         return key

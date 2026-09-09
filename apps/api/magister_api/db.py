@@ -26,7 +26,8 @@ from sqlalchemy.ext.asyncio import (
 from starlette.requests import Request
 
 from magister_api.config import Settings, get_settings
-from magister_api.tenancy.context import get_engines, tenant_from_request
+from magister_api.tenancy.context import get_engines, get_registry, tenant_from_request
+from magister_api.tenancy.keys import attach_keys, resolve_tenant_keys
 from magister_api.tenancy.scope import apply_tenant_scope
 
 _engine: AsyncEngine | None = None
@@ -83,11 +84,27 @@ async def get_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
     verifies against the database that this transaction really is the tenant's,
     before any handler code runs. A failure there aborts the request rather
     than serving a query whose scope nobody checked.
+
+    An die Sitzung kommt ausserdem der **Kundenschlüssel** dieses Mandanten
+    (ADR-0016 D8). Er hängt hier und nicht in den Einstellungen, weil die
+    sechs pgcrypto-Aufrufer ihre ``Settings`` über ``Depends(get_settings)``
+    beziehen — ein prozessweit gecachtes Objekt ohne Mandantenbezug. Eine
+    Sitzung dagegen ist immer schon die eines Mandanten. Dass der Schlüssel da
+    ist, hat die Middleware vorher geprüft; hier wäre ein Fehlen ein 500
+    mitten in der Anfrage.
     """
     tenant = tenant_from_request(request)
     settings: Settings = request.app.state.settings
+    keys = resolve_tenant_keys(
+        tenant.slug,
+        fallback_audit_key=settings.audit_key.get_secret_value(),
+        fallback_audit_key_id=settings.audit_key_id,
+        fallback_secrets_key=settings.app_secrets_key(),
+        single_tenant=len(get_registry().tenants) == 1,
+    )
     sm = get_engines().sessionmaker_for(tenant)
     async with sm() as session:
+        attach_keys(session, keys)
         try:
             await apply_tenant_scope(session, tenant, extension_schema=settings.extension_schema)
             yield session

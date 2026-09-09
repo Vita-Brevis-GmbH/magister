@@ -1,4 +1,9 @@
-"""Auflösung, Wartungs-Schranke und Kopf-Version (ADR-0013 D3, D7)."""
+"""Auflösung, Wartungs-Schranke, Kopf-Version, Kundenschlüssel.
+
+ADR-0013 D3 und D7 sowie ADR-0016 D8. Die vier Schranken stehen in dieser
+Reihenfolge vor jeder Anfrage, und jede hat einen eigenen Grund; die letzte
+ist der Kundenschlüssel, ohne den kein Audit-Ereignis geschrieben werden kann.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +14,20 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from magister_api.tenancy.keys import ENV_AUDIT_KEY, MIN_KEY_LENGTH
 from magister_api.tenancy.middleware import make_tenant_middleware
 from magister_api.tenancy.registry import Tenant, TenantRegistry, TenantStatus
 from magister_api.tenancy.version import HEAD_REVISION
+
+
+#: Bei mehr als einem Mandanten braucht jeder seinen eigenen Kundenschlüssel
+#: (ADR-0016 D8). Die Tests hier prüfen die Auflösung, nicht die
+#: Schlüsselverwaltung — also werden die Schlüssel gesetzt, ausser dort, wo
+#: gerade ihr Fehlen geprüft wird.
+@pytest.fixture(autouse=True)
+def _tenant_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+    for slug in ("alpha", "beta", "gamma", "default", "einzeln"):
+        monkeypatch.setenv(ENV_AUDIT_KEY.format(ref=slug.upper()), slug * MIN_KEY_LENGTH)
 
 
 def _tenant(slug: str, **over: object) -> Tenant:
@@ -43,6 +59,47 @@ def _app(registry: TenantRegistry) -> TestClient:
 
     app.middleware("http")(make_tenant_middleware(lambda: registry))
     return TestClient(app)
+
+
+class TestTenantKeyGate:
+    """ADR-0016 D8: ohne eigenen Kundenschlüssel wird nicht bedient."""
+
+    def test_a_tenant_without_a_key_gets_503(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Und zwar **vor** der ersten Abfrage, nicht mitten in der Mutation.
+
+        Der andere Weg wäre ein stiller Rückfall auf den installationsweiten
+        Schlüssel. Damit liefe alles — und die Löschzusage an den Kunden wäre
+        unwahr, weil sein Schlüssel nichts wäre, was man einzeln vernichten
+        kann.
+        """
+        monkeypatch.delenv(ENV_AUDIT_KEY.format(ref="BETA"), raising=False)
+        client = _app(TenantRegistry([_tenant("alpha"), _tenant("beta")]))
+        resp = client.get("/whoami", headers={"host": "beta.magister.ch"})
+        assert resp.status_code == 503
+        assert resp.json() == {"detail": "maintenance"}
+        # Der Nachbar wird weiter bedient: ein fehlender Schlüssel ist das
+        # Problem eines Kunden, nicht der Installation.
+        assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 200
+
+    def test_the_response_does_not_name_the_variable(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Was der Betreiber falsch konfiguriert hat, ist keine Auskunft für Anwender."""
+        monkeypatch.delenv(ENV_AUDIT_KEY.format(ref="BETA"), raising=False)
+        client = _app(TenantRegistry([_tenant("alpha"), _tenant("beta")]))
+        body = client.get("/whoami", headers={"host": "beta.magister.ch"}).text
+        assert "MAGISTER_TENANT_AUDIT_KEY" not in body
+
+    def test_a_single_tenant_needs_no_own_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Eine bestehende Installation läuft nach dem Update unverändert weiter."""
+        monkeypatch.delenv(ENV_AUDIT_KEY.format(ref="EINZELN"), raising=False)
+        monkeypatch.setenv("MAGISTER_AUDIT_KEY", "x" * MIN_KEY_LENGTH)
+        from magister_api.config import reset_settings_cache
+
+        reset_settings_cache()
+        try:
+            client = _app(TenantRegistry([_tenant("einzeln")]))
+            assert client.get("/whoami", headers={"host": "einzeln.magister.ch"}).status_code == 200
+        finally:
+            reset_settings_cache()
 
 
 class TestResolution:

@@ -28,6 +28,7 @@ from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from magister_api.services import web_tls
+from magister_api.tenancy.keys import keys_for
 
 
 def _resolve_web_tls_import(
@@ -114,7 +115,9 @@ class AppSettingsService:
     @property
     def _key(self) -> str:
         # Dedicated secrets key when configured, else the audit key (default).
-        key = self._settings.app_secrets_key()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self._settings).secrets_key
         if not key:
             raise RuntimeError(
                 "neither MAGISTER_SECRETS_KEY nor MAGISTER_AUDIT_KEY is set — "
