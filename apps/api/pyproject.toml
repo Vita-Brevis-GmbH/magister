@@ -56,10 +56,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
+# `packages` nimmt alles unter magister_api/ mit, auch die Nicht-Python-Dateien
+# (Brief-Vorlagen, CSS). Hatchling arbeitet nicht wie setuptools mit
+# package_data — eine zusätzliche `force-include` für dieselben Dateien war
+# deshalb nicht nur überflüssig, sie machte den Radbau UNMÖGLICH:
+#
+#   ValueError: A second file is being added to the wheel archive at the same
+#   path: `magister_api/letters/templates/_base.css`
+#
+# Aufgefallen beim Bau des .deb, das `pip install apps/api` braucht. Über den
+# Entwicklungsweg (`uv sync` mit editable) fällt es nicht auf, weil dabei kein
+# Rad entsteht — das Paket war also nie installierbar, ohne dass es jemand
+# merkte.
 packages = ["magister_api"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"magister_api/letters/templates" = "magister_api/letters/templates"
 
 [tool.ruff]
 line-length = 100

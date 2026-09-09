@@ -53,6 +53,24 @@ der Anzeige in der Konsole übereinstimmen. Weicht er ab, hat sich jemand
 anders mit dem Token angemeldet — deshalb lebt es nur 24 Stunden und gilt nur
 einmal.
 
+### Als Paket
+
+```bash
+sudo dpkg -i magister-connector_0.1.0_amd64.deb
+sudo cp /etc/magister-connector/config.example.json /etc/magister-connector/config.json
+sudoedit /etc/magister-connector/config.json      # endpoint, allowed_ous
+sudoedit /etc/magister-connector/ad.env           # MAGISTER_AD_*
+sudo runuser -u magister-connector -- magister-connector enroll
+sudo runuser -u magister-connector -- magister-connector check
+sudo systemctl start magister-connector
+```
+
+Das Paket legt Dienstkonto, Zustandsverzeichnis (`0700`) und `ad.env` (`0640`)
+an und aktiviert die Unit — startet den Dienst aber absichtlich nicht: der
+Agent ist noch nicht angemeldet. Einzelheiten und die beiden Abwägungen dahinter
+(venv unter `/opt`, Zustand überlebt den Purge) in
+[`packaging/debian/README.md`](packaging/debian/README.md).
+
 ## Installation (Windows)
 
 Für Windows gibt es ein MSI. Es installiert den Agenten, richtet den Dienst
@@ -166,14 +184,12 @@ uv run pyright
 
 ## Was noch fehlt
 
-* **`.deb` für Debian/Ubuntu.** Das MSI für Windows gibt es
-  (`packaging/windows/`), ebenso das Python-Paket, die systemd-Unit und das
-  OCI-Abbild. Für Debian fehlt das Paket drumherum.
-* **Signatur für das MSI.** Es ist unsigniert; Windows zeigt eine
-  SmartScreen-Warnung, und unter AppLocker oder WDAC lässt es sich nicht
-  installieren. Braucht ein Code-Signing-Zertifikat auf einem HSM — eine
-  Beschaffung mit Kosten und mit derselben Verwahrungsfrage wie beim
-  Plattform-CA-Schlüssel.
+* **Signaturen und ein Repository.** MSI und `.deb` sind beide **unsigniert**.
+  Windows zeigt beim MSI eine SmartScreen-Warnung, und unter AppLocker oder
+  WDAC lässt es sich nicht installieren; für ein `apt`-Repository fehlt ein
+  GPG-Schlüssel. Beides braucht eine Beschaffung mit Kosten und dieselbe
+  Verwahrungsfrage wie der Plattform-CA-Schlüssel. Ohne `apt`-Repository gibt
+  es auch keine automatische Aktualisierung (E10).
 * **Automatische Updates** (Entscheid E10).
 * **Sync-Seiten als Push.** Der Agent holt heute nur Aufträge ab; der
   wiederkehrende AD-Sync läuft noch über den direkten Weg.

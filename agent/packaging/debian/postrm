@@ -1,0 +1,35 @@
+#!/bin/sh
+# Beim Entfernen: systemd aufräumen. Beim Purge: Konfiguration weg — aber
+# NICHT das Zustandsverzeichnis.
+#
+# Darin liegen der private Schlüssel, die Anmeldung und das Protokoll. Ein
+# Purge, der das mitnimmt, macht eine Neuinstallation zu einer Neuanmeldung und
+# löscht im Zweifel das Protokoll, in dem steht, warum jemand deinstalliert
+# hat. Wer aufräumen will, tut es von Hand — und widerruft den Agenten in der
+# Konsole, sonst bleibt eine Anmeldung gültig, zu der es keinen Agenten mehr
+# gibt.
+set -e
+
+STATE=/var/lib/magister-connector
+
+case "$1" in
+remove)
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    ;;
+purge)
+    rm -rf /etc/magister-connector
+    rm -rf /opt/magister-connector
+    if [ -d "$STATE" ]; then
+        echo "Das Zustandsverzeichnis $STATE bleibt stehen."
+        echo "  Darin: privater Schlüssel, Anmeldung, Protokoll."
+        echo "  Wenn es weg soll:  rm -rf $STATE"
+        echo "  Und den Agenten in der Konsole widerrufen."
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+    fi
+    ;;
+esac
+exit 0

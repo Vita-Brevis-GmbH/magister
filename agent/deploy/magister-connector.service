@@ -19,7 +19,12 @@ RestartSec=10
 
 # Die AD-Zugangsdaten kommen aus einer Datei mit 0600, die dem Dienstkonto
 # gehört — nicht aus der Unit, denn die ist für jeden lesbar.
-EnvironmentFile=/etc/magister-connector/ad.env
+#
+# Mit "-": fehlt die Datei, startet der Dienst trotzdem und der Agent meldet
+# "AD-Konfiguration unvollständig: ..." mit dem fehlenden Wert. Ohne "-" wäre
+# die Meldung "Failed to load environment files" — richtig, aber sie zeigt in
+# die falsche Richtung, und im Journal steht dann nicht, WAS fehlt.
+EnvironmentFile=-/etc/magister-connector/ad.env
 
 # Härtung. Der Agent liest Konfiguration, schreibt sein Zustandsverzeichnis und
 # spricht das Netz — mehr braucht er nicht, also bekommt er auch nicht mehr.

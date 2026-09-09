@@ -423,9 +423,23 @@ Passwort-Reset. Referenz: ADR-0014.
   ausgesperrt, und endgültig. Deshalb gelten beide Fingerprints sieben Tage,
   und lokal bleibt das alte Paar als `.prev` liegen, falls der Prozess mitten
   im Dateiwechsel stirbt. Einzelheiten im Nachtrag zu ADR-0014.
-- ⏳ **Offen: `.deb`**, Signatur für das MSI (braucht ein
-  Code-Signing-Zertifikat auf einem HSM), Paket-Download in der Konsole,
-  automatische Updates (E10), AD-Sync als Push über den Agenten.
+- ✅ **`.deb` für Debian/Ubuntu** (`agent/packaging/debian/`). Anders als beim
+  MSI ist hier alles prüfbar, und CI prüft es bis zum Purge: bauen,
+  installieren, den Agenten als Dienstkonto aufrufen, Rechte des
+  Zustandsverzeichnisses und der `ad.env` messen, die Unit von
+  `systemd-analyze` prüfen lassen, purgen und nachsehen, dass der private
+  Schlüssel überlebt hat. Ein Paket, von dem nur der Inhalt geprüft ist, lässt
+  ein kaputtes `postinst` durch.
+
+  Dabei fiel ein Fehler ausserhalb des Pakets auf: **`apps/api` liess sich
+  überhaupt nicht als Rad bauen.** Eine `force-include` in `pyproject.toml`
+  fügte die Brief-Vorlagen ein zweites Mal hinzu, was hatchling abweist. Über
+  den Entwicklungsweg (`uv sync`, editable) entsteht kein Rad, deshalb ist es
+  nie aufgefallen — das Paket war nie installierbar.
+- ⏳ **Offen: Signaturen** (Code-Signing-Zertifikat auf einem HSM für das MSI,
+  GPG-Schlüssel für ein `apt`-Repository), Paket-Download in der Konsole,
+  automatische Updates (E10, braucht das Repository), AD-Sync als Push über
+  den Agenten.
 - ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
   CLI).
 - **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem

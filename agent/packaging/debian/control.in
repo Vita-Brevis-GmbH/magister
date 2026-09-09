@@ -1,0 +1,23 @@
+Package: magister-connector
+Version: @VERSION@
+Section: admin
+Priority: optional
+Architecture: @ARCH@
+Depends: python3 (>= 3.12), python3-venv | python3.12-venv, adduser, systemd
+Recommends: ca-certificates
+Maintainer: Vita Brevis GmbH <support@vitabrevis.ch>
+Homepage: https://github.com/Vita-Brevis-GmbH/magister
+Description: Connector-Agent für Magister (Schola Levis)
+ Holt Verzeichnisaufträge von der Magister-Plattform ab und führt sie gegen
+ das lokale Active Directory aus — Passwörter zurücksetzen, Gruppen setzen,
+ Benutzer suchen.
+ .
+ Der Agent baut ausschliesslich ausgehende Verbindungen auf und nimmt keine
+ an. In der Firewall braucht es keine Regel für eingehenden Verkehr und keinen
+ veröffentlichten Port; benötigt wird ausgehend TCP 46200.
+ .
+ Er führt nur Operationen aus, die eine feste Liste zulässt, und nur in
+ Organisationseinheiten, die der Betreiber lokal freigibt. Geschützte Gruppen
+ (Domänen-Admins und Verwandte) sind grundsätzlich gesperrt — auch dann, wenn
+ die Plattform etwas anderes verlangt. Diese Grenzen liegen beim Kunden; die
+ Plattform kann sie nicht ändern, nicht lesen und nicht abschalten.

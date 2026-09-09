@@ -18,6 +18,12 @@ name: agent-ci
 #           für eine fremde Plattform bauen), MSI drumherum unter Linux mit
 #           wixl. Läuft bei jedem Push, damit ein Fehler in der WiX-Quelle
 #           nicht erst beim Ausliefern auffällt.
+#
+#   deb   — Das Debian-Paket. Anders als beim MSI lässt sich hier ALLES
+#           prüfen: bauen, installieren, den Agenten aufrufen, wieder
+#           entfernen. Genau das tut der Job — ein Paket, von dem nur der
+#           Inhalt geprüft ist, hat schon zweimal ein kaputtes postinst
+#           durchgelassen.
 
 on:
   push:
@@ -199,4 +205,64 @@ jobs:
         with:
           name: magister-connector-msi
           path: magister-connector-x64.msi
+          if-no-files-found: error
+
+  deb:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        # Nicht über uv: das .deb bringt ein venv mit, und das muss mit dem
+        # Python gebaut werden, das auf dem Zielsystem liegt — nicht mit einem,
+        # das uv dazustellt.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bauen
+        run: agent/packaging/debian/build-deb.sh /tmp/magister-connector.deb
+
+      - name: Installieren
+        run: sudo dpkg -i /tmp/magister-connector.deb
+
+      - name: Der Agent läuft aus dem Paket
+        run: |
+          magister-connector --version
+          sudo cp /etc/magister-connector/config.example.json \
+                  /etc/magister-connector/config.json
+          # check gibt 1 zurück, weil die Anmeldung fehlt — das ist richtig.
+          # Geprüft wird, dass es eine lesbare Ausgabe ist und kein Stacktrace.
+          sudo runuser -u magister-connector -- magister-connector check | tee /tmp/check.txt || true
+          grep -q "Rechte:       ok" /tmp/check.txt
+          grep -q "Anmeldung:    fehlt" /tmp/check.txt
+
+      - name: Rechte des Zustandsverzeichnisses
+        # 0700 und dem Dienstkonto gehörend — dort liegt der private
+        # Schlüssel. Ein postinst, das das vergisst, fällt hier auf.
+        run: |
+          test "$(stat -c '%a %U' /var/lib/magister-connector)" \
+             = "700 magister-connector"
+          test "$(stat -c '%a %U:%G' /etc/magister-connector/ad.env)" \
+             = "640 root:magister-connector"
+
+      - name: Die Unit ist gültig
+        run: systemd-analyze verify /lib/systemd/system/magister-connector.service
+
+      - name: Purge behält den Zustand
+        # Die eine Eigenschaft, die man nicht falsch haben will: darin liegen
+        # der private Schlüssel und das Protokoll.
+        run: |
+          sudo touch /var/lib/magister-connector/agent-key.pem
+          sudo dpkg --purge magister-connector
+          test -e /var/lib/magister-connector/agent-key.pem
+          test ! -e /opt/magister-connector
+          test ! -e /etc/magister-connector
+
+      - name: Paket hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-connector-deb
+          path: /tmp/magister-connector.deb
           if-no-files-found: error
