@@ -184,12 +184,17 @@ uv run pyright
 
 ## Was noch fehlt
 
-* **Signaturen und ein Repository.** MSI und `.deb` sind beide **unsigniert**.
-  Windows zeigt beim MSI eine SmartScreen-Warnung, und unter AppLocker oder
-  WDAC lässt es sich nicht installieren; für ein `apt`-Repository fehlt ein
-  GPG-Schlüssel. Beides braucht eine Beschaffung mit Kosten und dieselbe
-  Verwahrungsfrage wie der Plattform-CA-Schlüssel. Ohne `apt`-Repository gibt
-  es auch keine automatische Aktualisierung (E10).
-* **Automatische Updates** (Entscheid E10).
+* **Windows-Signatur.** Das MSI ist **unsigniert**: Windows zeigt eine
+  SmartScreen-Warnung, unter AppLocker oder WDAC lässt es sich nicht
+  installieren. Entscheid E18 hat das an ein Ereignis gebunden statt an einen
+  Zeitpunkt — beim ersten Kunden mit AppLocker oder ab der dritten
+  Windows-Installation. Kosten: 400–700 CHF einmalig für die
+  Hardware-Verwahrung, 300–600 CHF jährlich für das Zertifikat.
+* **Der Ort für das apt-Repository.** Das Repository selbst ist gebaut und
+  geprüft ([packaging/apt/README.md](packaging/apt/README.md)); es fehlt
+  `apt.magister.ch` — ein DNS-Eintrag und statisches HTTPS.
+* **Automatische Updates** (Entscheid E10). Durch das signierte Repository
+  jetzt möglich; zu entscheiden bleibt, ob `unattended-upgrades` mit unserer
+  Quelle in der Allowlist oder nur ein Hinweis in der Konsole.
 * **Sync-Seiten als Push.** Der Agent holt heute nur Aufträge ab; der
   wiederkehrende AD-Sync läuft noch über den direkten Weg.

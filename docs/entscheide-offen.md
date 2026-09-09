@@ -195,7 +195,7 @@ und Redirect-URI ein.
 | Nr. | Entscheid | Stand |
 |---|---|---|
 | E9 | Schlüsselhalter Plattform-CA: Hadorn und Straubhaar, zwei USB-Sticks im Tresor, Passphrasen bei den Haltern | ✅ 2026-09-08 |
-| E10 | Automatische Agenten-Updates | ⏳ frei durch E18 Schritt 1, noch nicht gebaut |
+| E10 | Automatische Agenten-Updates | ⏳ signiertes apt-Repository steht (2026-09-09), damit technisch frei. Offen: `unattended-upgrades` mit unserer Quelle oder nur ein Hinweis in der Konsole |
 | E11 | Kein Rückfall auf 443 für den Connector-Kanal | ✅ |
 | E13 | Lokaler Share statt Objektspeicher für die Dumps | ✅ |
 | E14 | 10 Tage Aufbewahrung | ✅ |

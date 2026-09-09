@@ -266,3 +266,74 @@ jobs:
           name: magister-connector-deb
           path: /tmp/magister-connector.deb
           if-no-files-found: error
+
+      # --- apt-Repository (Entscheid E18, Schritt 1) ------------------------
+      # Mit einem Wegwerfschlüssel: der echte Signierschlüssel gehört nicht in
+      # CI, und für die Frage, ob das Werkzeug funktioniert, taugt jeder
+      # Schlüssel. Geprüft wird nicht "der Script läuft durch", sondern ob
+      # **apt** das Ergebnis annimmt — und ob es ein manipuliertes ablehnt.
+      - name: Werkzeuge
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - name: Wegwerf-Signierschlüssel
+        run: |
+          # Kurzes GNUPGHOME: der Socket von gpg-agent hat eine Längengrenze,
+          # und ein Pfad unter $GITHUB_WORKSPACE reisst sie.
+          export GNUPGHOME=/tmp/gnupg-ci
+          mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+          cat >/tmp/keyparams <<'EOF'
+          %no-protection
+          Key-Type: eddsa
+          Key-Curve: ed25519
+          Key-Usage: sign
+          Name-Real: Magister Packaging CI
+          Name-Email: ci@invalid
+          Expire-Date: 1d
+          %commit
+          EOF
+          gpg --batch --gen-key /tmp/keyparams
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Repository bauen
+        run: |
+          agent/packaging/apt/build-repo.sh --out /tmp/apt \
+              --key 'Magister Packaging CI' /tmp/magister-connector.deb
+
+      - name: apt nimmt es an
+        run: |
+          sudo install -d -m 755 /etc/apt/keyrings
+          gpg --batch --yes --export 'Magister Packaging CI' \
+            | sudo tee /etc/apt/keyrings/magister-ci.gpg >/dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/magister-ci.gpg] file:///tmp/apt stable main" \
+            | sudo tee /etc/apt/sources.list.d/magister-ci.list
+          sudo apt-get update
+          # 500 heisst: gesehen und vertrauenswürdig. Eine nicht
+          # vertrauenswürdige Quelle bekäme hier keine Kandidatenversion.
+          apt-cache policy magister-connector | tee /tmp/policy.txt
+          grep -q "Candidate: " /tmp/policy.txt
+          # `grep -qv` waere hier falsch: es gibt 0 zurueck, sobald IRGENDEINE
+          # Zeile nicht passt, also praktisch immer. Die Verneinung gehoert vor
+          # den Aufruf, nicht hinein.
+          ! grep -q "Candidate: (none)" /tmp/policy.txt
+
+      - name: apt lehnt ein unsigniertes Repository ab
+        # Die wichtigere Richtung. Ohne diesen Schritt wüsste der Test nicht,
+        # ob apt überhaupt prüft — er würde auch grün, wenn die Signatur
+        # bedeutungslos wäre.
+        run: |
+          agent/packaging/apt/build-repo.sh --out /tmp/apt-unsigned \
+              --unsigned /tmp/magister-connector.deb
+          echo "deb [signed-by=/etc/apt/keyrings/magister-ci.gpg] file:///tmp/apt-unsigned stable main" \
+            | sudo tee /etc/apt/sources.list.d/magister-ci.list
+          if sudo apt-get update 2>&1 | tee /tmp/update.txt; then
+            echo "apt hat ein unsigniertes Repository angenommen — das ist ein Befund." >&2
+            exit 1
+          fi
+          grep -q "is not signed" /tmp/update.txt
+
+      - name: Repository hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-apt-repo
+          path: /tmp/apt
+          if-no-files-found: error
