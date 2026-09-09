@@ -29,6 +29,7 @@ from cockpit_api.services.provisioning import (
     SCRAM_ITERATIONS,
     ProvisioningError,
     _ident,
+    _tenant_dsn,
     new_role_password,
     scram_verifier,
 )
@@ -124,6 +125,35 @@ class TestScramVerifier:
             assert scram_verifier(new_role_password())
 
 
+class TestTenantDsn:
+    """Der DSN, mit dem Alembic sich als Mandantenrolle anmeldet."""
+
+    ADMIN = "postgresql+asyncpg://konsole:geheim@db.example.ch:5432/magister"
+    #: Frei erfunden, nur zum Vergleich in diesem Test.
+    ROLE_PASSWORD = "S3hr-Geheim_x"  # noqa: S105
+
+    def test_the_password_is_in_the_dsn_not_masked(self) -> None:
+        """``str(URL)`` ersetzt das Passwort durch ``***`` — hier ist das fatal.
+
+        SQLAlchemy maskiert bewusst, damit ein DSN nicht versehentlich mit
+        Passwort im Protokoll landet. Dieser DSN ist aber zum *Anmelden* da.
+        Mit ``str()`` bekam Alembic das Passwort ``***`` und die Migration
+        scheiterte an jedem Cluster mit Passwort-Authentisierung — also an
+        jedem produktiven. Gefunden erst, als die Testdatenbank eines
+        Neuaufbaus zufällig scram-Authentisierung verlangte.
+        """
+        dsn = _tenant_dsn(self.ADMIN, "r_musterstadt", self.ROLE_PASSWORD)
+        assert self.ROLE_PASSWORD in dsn
+        assert "***" not in dsn
+        assert make_url(dsn).password == self.ROLE_PASSWORD
+
+    def test_only_user_and_password_change(self) -> None:
+        url = make_url(_tenant_dsn(self.ADMIN, "r_musterstadt", self.ROLE_PASSWORD))
+        assert url.username == "r_musterstadt"
+        assert (url.host, url.port, url.database) == ("db.example.ch", 5432, "magister")
+        assert url.drivername == "postgresql+asyncpg"
+
+
 class TestValidation:
     """Braucht keine Datenbank: die Prüfung greift vor jedem DB-Zugriff."""
 
@@ -174,7 +204,14 @@ class TestProvisioning:
         import asyncio
 
         async def probe() -> tuple[bool, str]:
-            dsn = str(make_url(magister_admin_dsn).set(username="r_iso_a", password=pw_a))
+            # hide_password=False: mit str(URL) steht hier ``***`` statt
+            # des Passworts, und dann prüft dieser Test nichts mehr — auf
+            # einem Cluster mit trust-Authentisierung wäre er trotzdem grün.
+            dsn = (
+                make_url(magister_admin_dsn)
+                .set(username="r_iso_a", password=pw_a)
+                .render_as_string(hide_password=False)
+            )
             engine = create_async_engine(dsn, pool_size=1, max_overflow=0)
             try:
                 async with engine.connect() as conn:
@@ -210,7 +247,14 @@ class TestProvisioning:
         import asyncio
 
         async def connect_as_tenant() -> str | None:
-            dsn = str(make_url(magister_admin_dsn).set(username="r_anmeldbar", password=password))
+            # hide_password=False: mit str(URL) steht hier ``***`` statt
+            # des Passworts, und dann prüft dieser Test nichts mehr — auf
+            # einem Cluster mit trust-Authentisierung wäre er trotzdem grün.
+            dsn = (
+                make_url(magister_admin_dsn)
+                .set(username="r_anmeldbar", password=password)
+                .render_as_string(hide_password=False)
+            )
             engine = create_async_engine(dsn, pool_size=1, max_overflow=0)
             try:
                 async with engine.connect() as conn:

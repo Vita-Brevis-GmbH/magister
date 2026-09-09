@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     # Wie lange ein Long-Poll offen bleibt, bevor er leer zurückkommt.
     connector_poll_seconds: int = Field(default=25, ge=1, le=110)
 
+    # --- Sicherung (ADR-0016) ---------------------------------------------
+    # Wurzelverzeichnis auf dem Share. Das Dienstkonto braucht dort
+    # Schreibrechte, aber KEINE Löschrechte (Entscheid E13): das Aufräumen
+    # läuft als eigener Cron-Job mit eigenem Konto auf dem Fileserver.
+    backup_share_root: str = Field(default="")
+    # ÖFFENTLICHER age-Schlüssel. Der private liegt getrennt und wird auf dem
+    # Anwendungsserver nie gebraucht — deshalb steht er hier auch nicht, und
+    # deshalb gibt es keine Einstellung dafür.
+    backup_age_recipient: str = Field(default="")
+
     # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
     # NUR diesen Verweis, nie den DSN mit Passwort.
     dsn_ref_template: str = Field(default="tenant_{slug}")

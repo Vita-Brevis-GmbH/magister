@@ -272,10 +272,25 @@ class TenantProvisioner:
 
 
 def _tenant_dsn(admin_dsn: str, role: str, password: str) -> str:
-    """Admin-DSN auf die Mandantenrolle umschreiben."""
+    """Admin-DSN auf die Mandantenrolle umschreiben.
+
+    ``render_as_string(hide_password=False)`` und **nicht** ``str(url)``:
+    SQLAlchemy ersetzt das Passwort in ``__repr__``/``__str__`` durch ``***``,
+    damit es nicht versehentlich in ein Protokoll gerät. Das ist richtig — nur
+    ist dieser DSN dafür da, sich damit anzumelden. Mit ``str()`` bekäme
+    Alembic das Passwort ``***`` und die Migration scheiterte an einem Cluster
+    mit Passwort-Authentisierung, also an jedem produktiven.
+
+    Der Rückgabewert ist ein Geheimnis: er geht in die Umgebung eines
+    Kindprozesses und **nie** in ein Protokoll.
+    """
     from sqlalchemy.engine import make_url
 
-    return str(make_url(admin_dsn).set(username=role, password=password))
+    return (
+        make_url(admin_dsn)
+        .set(username=role, password=password)
+        .render_as_string(hide_password=False)
+    )
 
 
 def admin_engine() -> AsyncEngine:

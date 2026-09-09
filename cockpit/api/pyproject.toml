@@ -40,6 +40,23 @@ ignore = ["S101"]
 [tool.ruff.lint.extend-per-file-ignores]
 "cockpit_api/routers/*.py" = ["B008"]
 "cockpit_api/auth.py" = ["B008"]
+# S608 (SQL aus Zeichenketten): dieses Modul baut Abfragen mit Schema- und
+# Tabellennamen, und die können in Postgres nicht als Bind-Parameter übergeben
+# werden. Die Grenze ist `_ident()` — es prüft jeden Bezeichner gegen ein
+# enges Muster und quotet ihn. Ein noqa je Zeile wäre hier Rauschen; die
+# Begründung steht einmal im Modul-Docstring.
+"cockpit_api/services/restore.py" = ["S608"]
+# S603 (subprocess mit variablem argv): pgtools ruft pg_dump, pg_restore und
+# age auf — das ist der Zweck des Moduls. Kein `shell=True`, argv immer als
+# Liste, und die einzigen variablen Bestandteile sind Schema-, Datenbank- und
+# Slug-Namen, die vorher gegen IDENTIFIER_PATTERN geprüft wurden. Ein noqa je
+# Aufruf sagt nichts, was nicht schon im Modul-Docstring steht.
+"cockpit_api/services/pgtools.py" = ["S603"]
+# Dieselbe Sache in den Sicherungstests: sie bauen Testschemas und
+# Zählabfragen mit Schema- und Tabellennamen (nicht als Bind-Parameter
+# möglich) und rufen age-keygen über PATH auf, wie jeder Betreiber auch.
+# Alles Konstanten dieser Datei, keine Eingabewerte.
+"tests/test_backup.py" = ["S603", "S607", "S608"]
 
 [tool.pyright]
 typeCheckingMode = "strict"
