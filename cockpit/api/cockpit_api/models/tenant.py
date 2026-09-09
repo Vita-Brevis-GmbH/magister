@@ -19,11 +19,11 @@ import re
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, Index, String, func
+from sqlalchemy import DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cockpit_api.models.base import Base
+from cockpit_api.models.base import Base, enum_column
 
 #: Dasselbe Muster wie in der Datenebene
 #: (``magister_api.tenancy.registry.SLUG_PATTERN``). Aus dem Slug werden
@@ -73,13 +73,13 @@ class Tenant(Base):
     customer_no: Mapped[str | None] = mapped_column(String(64), default=None)
     hostname: Mapped[str] = mapped_column(String(253), unique=True, index=True)
     status: Mapped[TenantStatus] = mapped_column(
-        Enum(TenantStatus, name="tenant_status"), default=TenantStatus.provisioning
+        enum_column(TenantStatus, name="tenant_status"), default=TenantStatus.provisioning
     )
     profile: Mapped[TenantProfile] = mapped_column(
-        Enum(TenantProfile, name="tenant_profile"), default=TenantProfile.school
+        enum_column(TenantProfile, name="tenant_profile"), default=TenantProfile.school
     )
     isolation_mode: Mapped[IsolationMode] = mapped_column(
-        Enum(IsolationMode, name="tenant_isolation_mode"), default=IsolationMode.schema_only
+        enum_column(IsolationMode, name="tenant_isolation_mode"), default=IsolationMode.schema_only
     )
     #: Verweis auf den DSN im Geheimnisspeicher der Datenebene, NICHT der DSN.
     dsn_ref: Mapped[str] = mapped_column(String(64))

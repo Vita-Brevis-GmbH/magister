@@ -93,7 +93,27 @@ https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
 https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.magister.ch}:46200 {
 	tls /certs/connector.pem /certs/connector-key.pem {
 		client_auth {
-			mode require_and_verify
+			# `verify_if_given`, NOT `require_and_verify` — and this is not a
+			# weakening, it is the only mode that works at all:
+			#
+			# A new agent has no certificate yet. Getting one IS the purpose of
+			# /connector/enroll. With `require_and_verify` the TLS handshake
+			# fails before the path is even known, so enrollment could never
+			# happen — measured against a running Caddy, where the agent got
+			# `tlsv13 alert certificate required` on its very first call.
+			#
+			# `verify_if_given` means: no certificate -> handshake succeeds;
+			# certificate presented -> chain verified against the platform CA.
+			# Everything except /connector/enroll then refuses to serve without
+			# a verified certificate, and that refusal is in the application
+			# (cockpit_api/routers/connector.py), where the path is known.
+			#
+			# What protects /connector/enroll is therefore the one-time token
+			# alone: 32 bytes of entropy, 24 hours, single-use. That is
+			# inherent — an agent without a certificate must be able to get
+			# one — and it is why the token is short-lived and why the console
+			# shows the fingerprint afterwards.
+			mode verify_if_given
 			trust_pool file /certs/platform-ca.pem
 		}
 		protocols tls1.3 tls1.3

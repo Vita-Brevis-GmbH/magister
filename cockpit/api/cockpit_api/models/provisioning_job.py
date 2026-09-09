@@ -17,11 +17,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cockpit_api.models.base import Base
+from cockpit_api.models.base import Base, enum_column
 
 
 class JobStatus(enum.StrEnum):
@@ -65,11 +65,11 @@ class ProvisioningJob(Base):
         UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
     )
     status: Mapped[JobStatus] = mapped_column(
-        Enum(JobStatus, name="provisioning_job_status"), default=JobStatus.pending
+        enum_column(JobStatus, name="provisioning_job_status"), default=JobStatus.pending
     )
     #: Bis hierher ist es gelaufen. ``None`` heisst: noch kein Schritt fertig.
     last_completed_step: Mapped[ProvisioningStep | None] = mapped_column(
-        Enum(ProvisioningStep, name="provisioning_step"), default=None
+        enum_column(ProvisioningStep, name="provisioning_step"), default=None
     )
     #: Protokoll je Schritt: ``[{"step": ..., "ok": bool, "detail": str, "at": iso}]``.
     #: Bewusst JSONB und keine eigene Tabelle: es wird nur angehängt und im

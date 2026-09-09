@@ -212,6 +212,59 @@ class TestListenerSeparation:
 
 
 @pytest.mark.usefixtures("connector_ca")
+class TestEnrollmentNeedsNoCertificate:
+    """Der einzige Endpunkt des Kanals ohne Client-Zertifikat.
+
+    Ein neuer Agent hat noch keines — es zu bekommen ist der Zweck des
+    Aufrufs. Deshalb steht der Connector-Listener auf ``verify_if_given``
+    und nicht auf ``require_and_verify``: sonst scheitert der Handshake, bevor
+    der Pfad überhaupt bekannt ist, und eine Anmeldung wäre unmöglich.
+    Nachgemessen gegen einen laufenden Caddy — der Agent bekam
+    ``tlsv13 alert certificate required`` beim allerersten Aufruf.
+
+    Die Kehrseite muss dann hier gelten: **alles andere** verlangt ein
+    Zertifikat, und diese Prüfung liegt in der Anwendung, wo der Pfad bekannt
+    ist.
+    """
+
+    def test_enrollment_works_without_a_client_certificate(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "ohnecert2")
+        _set_status(tenant_id, "active")
+        token = db_client.post(
+            f"/api/tenants/{tenant_id}/enrollments", json={"agent_name": "dc01"}
+        ).json()["token"]
+        # Kein settings.connector_client_cert_header, kein API-Key.
+        resp = db_client.post(
+            "/connector/enroll",
+            headers=agent_headers,
+            json={"token": token, "csr_pem": _csr()},
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_every_other_path_still_demands_a_certificate(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "brauchtcert")
+        _set_status(tenant_id, "active")
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        # Nur der API-Key, kein Zertifikat: das ist der Fall, den
+        # verify_if_given auf TLS-Ebene durchlässt und den die Anwendung
+        # abfangen muss.
+        headers = {**agent_headers, "X-Connector-Api-Key": agent["api_key"]}
+        assert db_client.get("/connector/jobs?wait=false", headers=headers).status_code == 401
+        assert (
+            db_client.post(
+                f"/connector/jobs/{agent['agent_id']}/result",
+                headers=headers,
+                json={"ok": True, "result": None, "error": None, "signature": "0" * 64},
+            ).status_code
+            == 401
+        )
+
+
+@pytest.mark.usefixtures("connector_ca")
 class TestEnrollment:
     def test_a_token_is_redeemable_exactly_once(
         self, db_client: TestClient, agent_headers: dict[str, str]
@@ -397,6 +450,47 @@ class TestJobFlow:
         )
         assert done.status_code == 200, done.text
         assert done.json()["state"] == "done"
+
+    def test_a_non_object_result_is_accepted(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """``find_user_dn`` liefert einen String, kein Objekt.
+
+        Das Schema forderte ursprünglich ein Objekt, und damit wurde **jedes**
+        erfolgreiche Ergebnis mit 422 abgewiesen. Aufgefallen erst mit einem
+        echten Agenten, weil die Tests hier dict-Ergebnisse benutzten — der
+        Grund, warum dieser Test jetzt die Formen durchgeht, die die Allowlist
+        wirklich liefert.
+        """
+        tenant_id = _tenant(db_client, "formen")
+        _set_status(tenant_id, "active")
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        headers = _auth(agent, agent_headers)
+
+        shapes: list[Any] = [
+            "CN=Muster,OU=Lehrer,DC=x",  # find_user_dn
+            ["CN=A", "CN=B"],  # fetch_user_groups
+            True,  # probe_service_connection
+            [True, "ok"],  # probe_service_connection_detailed
+            None,  # modify_password
+            {"a": 1},  # ein Objekt geht natürlich weiter
+        ]
+        for shape in shapes:
+            job_id = db_client.post(
+                f"/api/tenants/{tenant_id}/jobs", json={"method": "find_user_dn"}
+            ).json()["id"]
+            db_client.get("/connector/jobs?wait=false", headers=headers)
+            body = {"ok": True, "result": shape, "error": None}
+            raw = json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+            resp = db_client.post(
+                f"/connector/jobs/{job_id}/result",
+                headers=headers,
+                json={**body, "signature": sign_result(agent["result_hmac_key"], job_id, raw)},
+            )
+            assert resp.status_code == 200, f"{shape!r} wurde abgewiesen: {resp.text}"
+            detail = db_client.get(f"/api/tenants/{tenant_id}/jobs/{job_id}").json()
+            assert detail["state"] == "done"
+            assert detail["result"] == shape
 
     def test_a_forged_signature_is_refused(
         self, db_client: TestClient, agent_headers: dict[str, str]

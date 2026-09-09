@@ -170,7 +170,7 @@ async def submit_result(
     job_id: UUID,
     *,
     ok: bool,
-    result: dict[str, Any] | None,
+    result: Any,
     error: str | None,
 ) -> ConnectorJob:
     job = await session.get(ConnectorJob, job_id)

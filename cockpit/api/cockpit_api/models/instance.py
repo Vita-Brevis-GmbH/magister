@@ -4,11 +4,11 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, String, func
+from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cockpit_api.models.base import Base
+from cockpit_api.models.base import Base, enum_column
 
 
 class InstanceChannel(enum.StrEnum):
@@ -24,7 +24,7 @@ class Instance(Base):
     display_name: Mapped[str] = mapped_column(String(200))
     base_url: Mapped[str] = mapped_column(String(500))
     channel: Mapped[InstanceChannel] = mapped_column(
-        Enum(InstanceChannel, name="instance_channel"), default=InstanceChannel.stable
+        enum_column(InstanceChannel, name="instance_channel"), default=InstanceChannel.stable
     )
     deployed_version: Mapped[str | None] = mapped_column(String(64), default=None)
     latest_available_version: Mapped[str | None] = mapped_column(String(64), default=None)

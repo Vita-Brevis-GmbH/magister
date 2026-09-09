@@ -373,12 +373,25 @@ Passwort-Reset. Referenz: ADR-0014.
   umhängen.
 - ✅ **Widerruf als Datenbank-Flag**, bei jeder Anfrage geprüft — keine CRL,
   kein OCSP. Ein gesperrter Kunde stoppt seinen Agenten mit.
-- ⏳ **Offen: der Agent selbst** (Windows-MSI, `.deb`, OCI-Image),
-  Paket-Download in der Konsole, automatische Zertifikatserneuerung,
-  automatische Updates (E10), lokale OU-Allowlist und Gruppen-Denylist.
-- ⏳ **Offen: die Warteschlange hinter `AdClient`** in der Datenebene als
-  dritter Rücken (nach *direkt* und *eingehendem RPC*) — kein Aufrufer im
-  Fachcode ändert sich.
+- ✅ **Der Agent** (`agent/`): Schlüsselerzeugung lokal, Anmeldung mit
+  Einmal-Token, Long-Poll, HMAC über Ergebnisse, systemd-Unit mit Härtung,
+  OCI-Abbild, `check`-Befehl für die Abnahme. **Lokale Grenzen**, die die
+  Plattform nicht ändern kann: OU-Allowlist, Gruppen-Denylist (deutsch *und*
+  englisch benannt), Attribut-Denylist gegen Privilegierung, Methoden-Allowlist
+  ein zweites Mal. Die Annahme dahinter ist ausdrücklich, dass die Plattform
+  kompromittiert sein könnte.
+- ✅ **Die Warteschlange hinter `AdClient`** als dritter Rücken — kein Aufrufer
+  im Fachcode ändert sich, und die Methodenkörper der beiden entfernten Rücken
+  liegen gemeinsam auf `RemoteAdClient`, damit sie nicht auseinanderlaufen.
+- ✅ **Ende-zu-Ende gemessen**, nicht nur im Mock: echter Caddy mit Test-CA,
+  echtes Client-Zertifikat, echte Konsole, echte Datenbank. Der Agent meldet
+  sich an, holt Aufträge, führt einen aus (Ergebnis `done`), lehnt einen
+  zweiten lokal ab (`failed` mit Grund), und verfallene Aufträge stehen auf
+  `expired` — alle Nutzlasten gelöscht. Vier Befunde daraus stehen in
+  ADR-0014.
+- ⏳ **Offen: Windows-MSI und `.deb`**, Paket-Download in der Konsole,
+  automatische Zertifikatserneuerung, automatische Updates (E10), AD-Sync als
+  Push über den Agenten.
 - ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
   CLI).
 - **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem

@@ -224,6 +224,55 @@ Listener seinen Marker, und die beiden sind **nicht** austauschbar:
 Gleiche Werte für beide heben die Trennung auf, deshalb bricht die Anwendung
 beim Start ab, wenn sie gleich sind.
 
+### Weitere Nachträge (Agent gebaut, Ende-zu-Ende gemessen)
+
+Vier Befunde, jeder einzelne hätte den Kanal unbenutzbar gemacht, und keiner
+davon war in einem Modultest sichtbar.
+
+**Der Connector-Listener steht auf `verify_if_given`, nicht auf
+`require_and_verify`.** Ein neuer Agent hat noch kein Zertifikat — es zu
+bekommen ist der Zweck von `/connector/enroll`. Mit `require_and_verify`
+scheitert der Handshake, **bevor** der Pfad bekannt ist; der Agent bekam beim
+allerersten Aufruf `tlsv13 alert certificate required`. Eine Anmeldung wäre
+also nie möglich gewesen. `verify_if_given` heisst: ohne Zertifikat kommt die
+Verbindung zustande, mit Zertifikat wird die Kette geprüft — und alles außer
+`/connector/enroll` verweigert ohne geprüftes Zertifikat den Dienst, diese
+Prüfung liegt in der Anwendung, wo der Pfad bekannt ist. Damit schützt
+`/connector/enroll` allein das Einmal-Token: 32 Byte Entropie, 24 Stunden,
+einmal einlösbar. Das ist unvermeidbar und der Grund, warum das Token kurz
+lebt und die Konsole danach den Fingerprint zeigt.
+
+**httpx schickt seit 0.28 mit `verify=<str>` und `cert=(…)` kein
+Client-Zertifikat mehr** — lautlos, die Gegenseite antwortet mit 401 wie bei
+einem Agenten ohne Zertifikat. Der Agent baut deshalb einen ausdrücklichen
+`ssl.SSLContext` mit `load_verify_locations` und `load_cert_chain`. Unsichtbar
+in den Modultests, weil die `MockTransport` benutzen: ein Test, der den
+Transport ersetzt, kann über den Transport nichts aussagen.
+
+**Aufträge liefern nicht nur Objekte.** `result` war als `dict` typisiert;
+`find_user_dn` gibt einen String, `fetch_user_groups` eine Liste,
+`probe_service_connection` ein Bool. Damit wurde **jedes** erfolgreiche
+Ergebnis mit 422 abgewiesen. Jetzt `Any`, mit einem Test über die Formen, die
+die Allowlist wirklich liefert.
+
+**Der Agent benutzt keinen Proxy aus der Umgebung** (`trust_env=False`). Über
+den Kanal geht ein Client-Zertifikat, und ob es ankommt, darf nicht davon
+abhängen, was jemand in ein Profil geschrieben hat. Braucht das Kundennetz
+einen Proxy, steht er in der Konfiguration — ein Proxy, der TLS aufbricht,
+macht die Client-Authentisierung ohnehin unmöglich und muss diesen Host
+umgehen.
+
+Dazu ein Fund an der Konsole, der nichts mit dem Connector zu tun hat, aber
+denselben Ursprung: die Testsuite baute ihr Schema mit
+`Base.metadata.create_all`. Damit erzeugt sie den Postgres-Typ aus denselben
+Modell-Annahmen, mit denen die Anwendung schreibt — ein Fehler in einer
+Annahme baut sich das passende Schema selbst. So blieb unentdeckt, dass
+`IsolationMode.schema_only = "schema"` als *Name* gespeichert wurde
+(`schema_only`), während die Migration den *Wert* anlegte (`schema`): alle
+Tests grün, und die erste Kunden-Anlage gegen die echte Datenbank endete im
+500er. Die Konsolen-Tests laufen seither über dasselbe Alembic wie
+Produktion, und alle Enum-Spalten speichern über `values_callable` den Wert.
+
 ## Konsequenzen
 
 **Positiv**

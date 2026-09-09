@@ -1,0 +1,53 @@
+# systemd-Unit für den Connector-Agenten (ADR-0014).
+#
+# Der Agent baut ausgehende Verbindungen auf und nimmt keine an. Er braucht
+# deshalb keinen offenen Port und keine Root-Rechte — nur Lesezugriff auf sein
+# Zustandsverzeichnis und ein AD-Dienstkonto.
+[Unit]
+Description=Magister Connector Agent
+Documentation=https://github.com/Vita-Brevis-GmbH/magister/blob/main/docs/adr/0014-ad-connector-agent.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=magister-connector
+Group=magister-connector
+ExecStart=/opt/magister-connector/bin/magister-connector --config /etc/magister-connector/config.json run
+Restart=always
+RestartSec=10
+
+# Die AD-Zugangsdaten kommen aus einer Datei mit 0600, die dem Dienstkonto
+# gehört — nicht aus der Unit, denn die ist für jeden lesbar.
+EnvironmentFile=/etc/magister-connector/ad.env
+
+# Härtung. Der Agent liest Konfiguration, schreibt sein Zustandsverzeichnis und
+# spricht das Netz — mehr braucht er nicht, also bekommt er auch nicht mehr.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+# Nur das Zustandsverzeichnis ist beschreibbar.
+ReadWritePaths=/var/lib/magister-connector
+# Ausgehend IPv4/IPv6 und Unix-Sockets; nichts anderes wird gebraucht.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

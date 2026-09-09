@@ -10,7 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
+import sys
 from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -110,25 +113,63 @@ def magister_admin_dsn() -> str:
 
 @pytest.fixture
 def cockpit_schema(cockpit_database_url: str) -> str:
-    """Konsolen-Schema neu aufbauen.
+    """Konsolen-Schema über **Alembic** neu aufbauen.
 
-    Bewusst eine **synchrone** Fixture mit ``asyncio.run`` und ``NullPool``:
-    ``TestClient`` fährt die Anwendung in einer eigenen Ereignisschleife. Eine
-    Engine, die in der Schleife der Fixture entstanden ist, bringt ihre
-    Verbindungen dorthin mit und scheitert dann mit „attached to a different
-    loop". Jede Engine wird deshalb in der Schleife gebaut, die sie benutzt.
+    Nicht ``Base.metadata.create_all``. Der Unterschied ist nicht Geschmack:
+    ``create_all`` erzeugt das Schema aus denselben Modell-Annahmen, mit denen
+    die Anwendung schreibt. Ein Fehler in einer Annahme baut sich damit das
+    passende Schema selbst und fällt nie auf.
+
+    Genau so passiert: ``IsolationMode.schema_only = "schema"`` — SQLAlchemy
+    speichert standardmässig den *Namen*, die Migration legte den *Wert* an.
+    Alle Tests waren grün, und die erste Kunden-Anlage gegen die echte
+    Datenbank endete im 500er. Seit diesem Fund läuft hier dasselbe Alembic
+    wie in Produktion.
+
+    Bewusst eine **synchrone** Fixture: ``TestClient`` fährt die Anwendung in
+    einer eigenen Ereignisschleife, und eine Engine aus der Fixture-Schleife
+    bringt ihre Verbindungen dorthin mit ("attached to a different loop").
+    Alembic bekommt deshalb einen eigenen Prozess.
     """
 
-    async def rebuild() -> None:
+    async def drop_everything() -> None:
         engine = create_async_engine(cockpit_database_url, poolclass=NullPool)
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.drop_all)
-                await conn.run_sync(Base.metadata.create_all)
+                # Enum-Typen überleben drop_all nicht immer; Alembic würde
+                # sonst über einen bestehenden Typ stolpern.
+                await conn.exec_driver_sql("DROP TABLE IF EXISTS alembic_version")
+                for enum_name in (
+                    "connector_job_state",
+                    "connector_agent_status",
+                    "provisioning_step",
+                    "provisioning_job_status",
+                    "tenant_isolation_mode",
+                    "tenant_profile",
+                    "tenant_status",
+                    "update_request_status",
+                    "instance_channel",
+                ):
+                    await conn.exec_driver_sql(f"DROP TYPE IF EXISTS {enum_name}")
         finally:
             await engine.dispose()
 
-    asyncio.run(rebuild())
+    asyncio.run(drop_everything())
+    env = dict(os.environ)
+    env["COCKPIT_DATABASE_URL"] = cockpit_database_url
+    # Feste Argumentliste, keine Shell.
+    proc = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=Path(__file__).resolve().parents[1],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        tail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        pytest.fail(f"alembic upgrade head fehlgeschlagen: {tail[-1] if tail else '?'}")
     return cockpit_database_url
 
 

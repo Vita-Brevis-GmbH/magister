@@ -1,0 +1,19 @@
+{
+  "_kommentar": "Konfiguration des Connector-Agenten (ADR-0014). Diese Datei gehört dem Dienstkonto, Rechte 0640.",
+
+  "endpoint": "https://connect.magister.ch:46200",
+  "state_dir": "/var/lib/magister-connector",
+  "ca_bundle": "/etc/magister-connector/platform-ca.pem",
+
+  "_allowed_ous": "Die OU-Allowlist. LOKAL konfiguriert — die Plattform kann sie nicht ändern, nicht lesen und nicht abschalten. Leer heisst: keine Verzeichnisaufträge, nicht 'alles erlaubt'.",
+  "allowed_ous": [
+    "OU=Schueler,OU=Magister,DC=gemeinde,DC=local",
+    "OU=Lehrer,OU=Magister,DC=gemeinde,DC=local",
+    "OU=Gruppen,OU=Magister,DC=gemeinde,DC=local"
+  ],
+
+  "_protected_groups": "Optional. Ohne diesen Eintrag gilt die eingebaute Liste (Domänen-Admins, Administratoren, Organisations-Admins, ... in deutsch und englisch).",
+
+  "poll_seconds": 25,
+  "backoff_seconds": 5.0
+}

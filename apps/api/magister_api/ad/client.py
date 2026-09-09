@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from fastapi.concurrency import run_in_threadpool
 from ldap3 import (
     ALL_ATTRIBUTES,
     BASE,
@@ -49,6 +48,7 @@ from magister_api.ad.errors import (
     AdUserParseError,
     classify_ldap_error,
 )
+from magister_api.ad.threadpool import run_in_threadpool
 from magister_api.config import Settings
 
 logger = logging.getLogger(__name__)

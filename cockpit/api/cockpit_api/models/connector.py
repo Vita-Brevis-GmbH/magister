@@ -24,11 +24,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cockpit_api.models.base import Base
+from cockpit_api.models.base import Base, enum_column
 
 
 class AgentStatus(enum.StrEnum):
@@ -62,7 +62,7 @@ class ConnectorAgent(Base):
     )
     name: Mapped[str] = mapped_column(String(200))
     status: Mapped[AgentStatus] = mapped_column(
-        Enum(AgentStatus, name="connector_agent_status"), default=AgentStatus.enrolled
+        enum_column(AgentStatus, name="connector_agent_status"), default=AgentStatus.enrolled
     )
     #: SHA-256 über den DER-kodierten öffentlichen Schlüssel (SubjectPublicKeyInfo),
     #: hex. Bindet den Kanal an genau dieses Schlüsselpaar — und übersteht eine
@@ -149,9 +149,15 @@ class ConnectorJob(Base):
         DateTime(timezone=True), default=None
     )
     state: Mapped[JobState] = mapped_column(
-        Enum(JobState, name="connector_job_state"), default=JobState.queued
+        enum_column(JobState, name="connector_job_state"), default=JobState.queued
     )
-    result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    #: Ergebnis des Agenten. Bewusst ``Any`` und nicht ``dict``: die Methoden
+    #: der Allowlist liefern Verschiedenes — ``find_user_dn`` einen String,
+    #: ``fetch_user_groups`` eine Liste, ``probe_service_connection`` ein Bool,
+    #: ``set_account_enabled`` ein Paar. Eine Einschränkung auf Objekte hat
+    #: jedes erfolgreiche Ergebnis mit 422 abgewiesen — gefunden erst beim Lauf
+    #: mit einem echten Agenten, weil die Tests dict-Ergebnisse benutzten.
+    result: Mapped[Any | None] = mapped_column(JSONB, default=None)
     error: Mapped[str | None] = mapped_column(String(2000), default=None)
     #: Nach dieser Zeit gilt der Auftrag als verfallen. Ein Agent, der zehn
     #: Minuten weg war, soll ein Passwort nicht mehr setzen — der Anwender hat

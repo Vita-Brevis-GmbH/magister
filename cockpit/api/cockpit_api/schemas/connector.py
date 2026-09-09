@@ -113,7 +113,9 @@ class JobForAgent(BaseModel):
 
 class JobResultIn(BaseModel):
     ok: bool
-    result: dict[str, Any] | None = None
+    #: ``Any``: die Methoden der Allowlist liefern String, Liste, Bool oder
+    #: Paar — nicht nur Objekte. Siehe ConnectorJob.result.
+    result: Any = None
     error: str | None = Field(default=None, max_length=2000)
     #: HMAC über Auftrags-Id und Ergebniskörper, hex.
     signature: str = Field(min_length=64, max_length=64)
@@ -132,7 +134,7 @@ class JobDetailOut(BaseModel):
     id: UUID
     method: str
     state: JobState
-    result: dict[str, Any] | None
+    result: Any
     error: str | None
     expires_at: datetime
     finished_at: datetime | None
