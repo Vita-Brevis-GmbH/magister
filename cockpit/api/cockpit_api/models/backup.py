@@ -22,7 +22,16 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,6 +42,15 @@ class BackupKind(enum.StrEnum):
     """Art der Sicherung. Bestimmt die Aufbewahrung."""
 
     daily = "daily"
+    #: Die erste geglückte Sicherung eines Kalendermonats (Entscheid E15).
+    #: Wird nicht zusätzlich gezogen, sondern **statt** der täglichen: es ist
+    #: derselbe Dump, nur mit längerer Frist. Ein zweiter Lauf am Monatsersten
+    #: wäre doppelte Last für dieselben Daten.
+    #:
+    #: Deckt die zwei Fälle ab, die zehn Tage nicht abdecken: ein Fehler, der
+    #: erst am Quartalsende auffällt (bei Schulen das übliche Muster), und ein
+    #: Verschlüsselungstrojaner, der Wochen im Netz sass, bevor er zuschlug.
+    monthly = "monthly"
     #: Vor jeder Migration (ADR-0016 D6). Wird 30 Tage gehalten, unabhängig
     #: von der normalen Frist — es ist die Rückfahrkarte für eine misslungene
     #: Migration, und die merkt man nicht immer am selben Tag.
@@ -123,6 +141,15 @@ class TenantBackupPolicy(Base):
     retention_days: Mapped[int] = mapped_column(Integer, default=10)
     #: Vor-Migrations-Dumps werden länger gehalten (ADR-0016 D6).
     pre_migration_retention_days: Mapped[int] = mapped_column(Integer, default=30)
+    #: Monatskopien (Entscheid E15, entschieden 2026-09-09). Eingeschaltet,
+    #: weil zehn Tage die beiden Fälle nicht abdecken, die bei Schulen
+    #: realistisch sind: ein Fehler, der erst am Quartalsende auffällt, und ein
+    #: Trojaner, der wochenlang im Netz sass.
+    monthly_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    #: Wie viele Monatskopien bleiben. **Anzahl, nicht Tage** — „die letzten
+    #: zwölf" ist ohne Monatsarithmetik ausdrückbar und trifft die Zusage
+    #: genauer als 365 Tage.
+    monthly_keep: Mapped[int] = mapped_column(Integer, default=12)
     #: Zielwerte für den Vertrag. Die Konsole zeigt sie neben dem tatsächlich
     #: Erreichten, damit eine Zusage nicht nur im Vertrag steht.
     rpo_hours: Mapped[int] = mapped_column(Integer, default=24)

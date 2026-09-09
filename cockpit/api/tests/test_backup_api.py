@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import uuid
 import zipfile
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -28,6 +30,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from cockpit_api.config import settings
+from cockpit_api.models import BackupKind, BackupStatus, TenantBackupPolicy
+from cockpit_api.services.backup_policy import COUNTS_AS_PRESENT, keep_for, resolve_kind
 
 SLUG = "apitest"
 
@@ -360,3 +364,287 @@ class TestExports:
         resp = db_client.get(f"/api/exports/{body['id']}/download")
         assert resp.status_code == 410, resp.text
         assert db_client.get(f"/api/tenants/{tenant_id}/exports").json()[0]["state"] == "expired"
+
+
+class TestMonthlyCopiesPureLogic:
+    """Wann eine tägliche Sicherung zur Monatskopie wird (Entscheid E15).
+
+    Zehn Tage (E14) decken zwei Fälle nicht ab, und beide sind bei Schulen
+    realistisch: ein Fehler, der erst am Quartalsende auffällt, und ein
+    Trojaner, der Wochen im Netz sass. Deshalb zwölf Monatskopien — aber ohne
+    zweiten Dump: die erste geglückte Sicherung des Monats wird *als*
+    Monatskopie geschrieben.
+    """
+
+    def _policy(self, **over: object) -> TenantBackupPolicy:
+        row = TenantBackupPolicy(tenant_id=uuid.uuid4())
+        row.retention_days = 10
+        row.pre_migration_retention_days = 30
+        row.monthly_enabled = True
+        row.monthly_keep = 12
+        for key, value in over.items():
+            setattr(row, key, value)
+        return row
+
+    def test_the_first_daily_of_a_month_becomes_the_monthly_copy(self) -> None:
+        assert (
+            resolve_kind(BackupKind.daily, policy=self._policy(), monthly_present=False)
+            is BackupKind.monthly
+        )
+
+    def test_later_dailies_stay_daily(self) -> None:
+        assert (
+            resolve_kind(BackupKind.daily, policy=self._policy(), monthly_present=True)
+            is BackupKind.daily
+        )
+
+    @pytest.mark.parametrize(
+        "kind",
+        [BackupKind.manual, BackupKind.pre_migration, BackupKind.offboarding],
+    )
+    def test_only_a_daily_is_promoted(self, kind: BackupKind) -> None:
+        """Sonst hätte ein Handgriff plötzlich eine Zwölfmonatsfrist.
+
+        Und eine Vor-Migrations-Sicherung hat ihre eigene Frist aus D6; sie zur
+        Monatskopie zu machen würde die eine Frist durch die andere ersetzen.
+        """
+        assert resolve_kind(kind, policy=self._policy(), monthly_present=False) is kind
+
+    def test_it_can_be_switched_off_per_tenant(self) -> None:
+        """Es ist eine Vertragsfrage — mit Folgen, die im ADR stehen."""
+        assert (
+            resolve_kind(
+                BackupKind.daily,
+                policy=self._policy(monthly_enabled=False),
+                monthly_present=False,
+            )
+            is BackupKind.daily
+        )
+
+    def test_without_a_policy_row_the_default_applies(self) -> None:
+        """E15 ist entschieden, also gilt es auch ohne eigene Zeile."""
+        assert (
+            resolve_kind(BackupKind.daily, policy=None, monthly_present=False) is BackupKind.monthly
+        )
+
+    def test_the_retention_is_named_in_words(self) -> None:
+        policy = self._policy()
+        assert keep_for(BackupKind.monthly, policy) == "die letzten 12 Monatskopien"
+        assert keep_for(BackupKind.daily, policy) == "10 Tage"
+        assert keep_for(BackupKind.pre_migration, policy) == "30 Tage"
+
+    def test_a_running_backup_does_not_count_as_present(self) -> None:
+        """Ein Lauf, der noch nicht fertig ist, kann scheitern.
+
+        Zählte er mit, hätte der Monat keine Kopie und niemand würde es
+        nachholen — eine Lücke, die erst auffällt, wenn sie gebraucht wird.
+        """
+        assert BackupStatus.running not in COUNTS_AS_PRESENT
+        assert BackupStatus.failed not in COUNTS_AS_PRESENT
+        assert BackupStatus.written in COUNTS_AS_PRESENT
+        assert BackupStatus.verified in COUNTS_AS_PRESENT
+
+
+@pytest.mark.usefixtures("cockpit_schema")
+class TestMonthlyCopies:
+    def test_the_first_backup_of_the_month_is_a_monthly_copy(
+        self, db_client: TestClient, tenant_id: str, backup_config: tuple[Path, Path]
+    ) -> None:
+        """Die Cron-Zeile schickt weiter `daily`; die Konsole entscheidet."""
+        first = db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        assert first.status_code == 201, first.text
+        assert first.json()["kind"] == "monthly", "die erste des Monats wird befördert"
+        assert first.json()["status"] == "written"
+
+        second = db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        assert second.json()["kind"] == "daily", "die zweite bleibt täglich"
+
+    def test_only_one_dump_is_written_not_two(
+        self, db_client: TestClient, tenant_id: str, backup_config: tuple[Path, Path]
+    ) -> None:
+        """Kein zusätzlicher Lauf am Monatsersten: derselbe Dump, andere Frist."""
+        share, _ = backup_config
+        db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        files = sorted((share / SLUG).glob("*.dump.age"))
+        assert len(files) == 1
+        assert files[0].name.endswith("-monthly.dump.age")
+
+    def test_a_failed_monthly_is_retried_the_next_day(
+        self, db_client: TestClient, tenant_id: str, backup_config: tuple[Path, Path]
+    ) -> None:
+        """Entschieden wird „gibt es eine", nicht „ist heute der Erste".
+
+        Scheitert die Sicherung am 1., wird die vom 2. zur Monatskopie. Ein
+        Monat ohne Kopie wäre eine Lücke, die niemandem auffällt.
+        """
+        settings.backup_age_recipient = ""
+        failed = db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        assert failed.json()["status"] == "failed"
+        # Auch die gescheiterte trug schon `monthly` — sie zählt aber nicht.
+        _, exports = backup_config
+        settings.backup_age_recipient = _recipient(exports)
+
+        again = db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        assert again.json()["status"] == "written"
+        assert again.json()["kind"] == "monthly", "der gescheiterte Lauf zählt nicht"
+
+    def test_the_retention_hint_lands_next_to_the_dumps(
+        self, db_client: TestClient, tenant_id: str, backup_config: tuple[Path, Path]
+    ) -> None:
+        """Der Aufräumjob läuft auf dem Fileserver und hat keinen Konsolenzugang.
+
+        Ohne diese Datei müsste er die Fristen raten — und ein Kunde mit 30
+        Tagen Zusage, dessen Dumps nach 10 gelöscht werden, ist ein
+        Vertragsbruch, den niemand bemerkt.
+        """
+        share, _ = backup_config
+        db_client.put(
+            f"/api/tenants/{tenant_id}/backup-policy",
+            json={"retention_days": 30, "monthly_keep": 6},
+        )
+        db_client.post(f"/api/tenants/{tenant_id}/backups", json={"kind": "daily"})
+        hint = (share / SLUG / ".retention").read_text(encoding="utf-8")
+        assert "retention_days=30" in hint
+        assert "monthly_keep=6" in hint
+        # Kein Geheimnis darin.
+        assert "age1" not in hint and "postgres" not in hint
+
+    def test_the_policy_exposes_the_monthly_settings(
+        self, db_client: TestClient, tenant_id: str
+    ) -> None:
+        body = db_client.get(f"/api/tenants/{tenant_id}/backup-policy").json()
+        assert body["monthly_enabled"] is True
+        assert body["monthly_keep"] == 12
+
+    def test_zero_monthly_copies_is_not_reachable_by_a_number(
+        self, db_client: TestClient, tenant_id: str
+    ) -> None:
+        """„Keine Monatskopien" heisst monthly_enabled=false, nicht keep=0.
+
+        Zwei Wege zum selben Zustand sind zwei Wege, ihn versehentlich zu
+        erreichen.
+        """
+        resp = db_client.put(f"/api/tenants/{tenant_id}/backup-policy", json={"monthly_keep": 0})
+        assert resp.status_code == 422
+
+
+@pytest.mark.usefixtures("cockpit_schema")
+class TestOffboardingKeepsItsDeletionPromise:
+    """E15 hätte die Löschzusage aus D8 unwahr gemacht.
+
+    „Zehn Tage nach dem Crypto-Shredding ist auch der Rest weg" — mit zwölf
+    Monatskopien läge eine Kopie von vor elf Monaten an diesem Datum noch auf
+    dem Share. Löschen darf die Konsole nicht (D2: kein Löschrecht, damit ein
+    übernommener Anwendungsserver die Sicherungen nicht mitnehmen kann), also
+    schreibt sie dem Aufräumjob eine Markierung.
+    """
+
+    def test_the_marker_is_written_with_the_purge_date(
+        self,
+        db_client: TestClient,
+        tenant_id: str,
+        backup_config: tuple[Path, Path],
+        cockpit_schema: str,
+    ) -> None:
+        share, _ = backup_config
+        # Der DSN kommt aus der Fixture, nicht aus settings: die Tests hängen
+        # die Sitzung auf die Testdatenbank um.
+        _run_offboarding_to_shredding(db_client, tenant_id, cockpit_dsn=cockpit_schema)
+        marker = share / SLUG / ".offboarding"
+        assert marker.is_file(), "ohne die Markierung bleibt die Zusage unerfüllt"
+        text = marker.read_text(encoding="utf-8")
+        assert f"slug={SLUG}" in text
+        assert "purge_due_at=" in text
+        # Ein Auftrag zum Löschen, kein Zugang.
+        assert "api_key" not in text and "age1" not in text
+
+    def test_without_a_share_the_answer_says_so(
+        self,
+        db_client: TestClient,
+        tenant_id: str,
+        backup_config: tuple[Path, Path],
+        cockpit_schema: str,
+    ) -> None:
+        """Der Schlüssel ist vernichtet — unwiderruflich. Also kein Rollback.
+
+        Aber die Antwort muss sagen, dass eine Frist läuft, die niemand
+        einhält, statt es in einer Protokollzeile untergehen zu lassen.
+        """
+        settings.backup_share_root = ""
+        body = _run_offboarding_to_shredding(db_client, tenant_id, cockpit_dsn=cockpit_schema)
+        assert body["state"] == "shredded", "der Schritt selbst gilt"
+        assert body["warning"], "die Antwort muss die offene Frist nennen"
+        assert "Monatskopien" in body["warning"]
+
+
+def _recipient(directory: Path) -> str:
+    """Den öffentlichen age-Schlüssel aus der Fixture wiederfinden."""
+    return settings.backup_age_recipient or _regenerate(directory)
+
+
+def _regenerate(directory: Path) -> str:
+    keygen = shutil.which("age-keygen") or "age-keygen"
+    identity = directory / "wieder-identity.txt"
+    proc = subprocess.run(  # noqa: S603
+        [keygen, "-o", str(identity)], capture_output=True, text=True, check=True
+    )
+    for line in (proc.stderr or "").splitlines():
+        if "public key:" in line.lower():
+            return line.split(":", 1)[1].strip()
+    raise AssertionError("age-keygen hat keinen Schlüssel gemeldet")
+
+
+def _run_offboarding_to_shredding(
+    client: TestClient, tenant_id: str, *, cockpit_dsn: str
+) -> dict[str, Any]:
+    """Offboarding bis zur Bestätigung des Crypto-Shreddings durchspielen."""
+    started = client.post(
+        f"/api/tenants/{tenant_id}/offboarding",
+        json={"reason": "Kündigung, Test", "requested_by": "matthias", "grace_days": 0},
+    )
+    assert started.status_code == 201, started.text
+    export_id = _insert_ready_export(cockpit_dsn, tenant_id)
+    assert (
+        client.post(f"/api/tenants/{tenant_id}/offboarding/export/{export_id}").status_code == 200
+    )
+    dropped = client.post(
+        f"/api/tenants/{tenant_id}/offboarding/drop",
+        json={"dropped_by": "matthias", "approved_by": "rolf"},
+    )
+    assert dropped.status_code == 200, dropped.text
+    shredded = client.post(
+        f"/api/tenants/{tenant_id}/offboarding/key-destroyed",
+        json={"confirmed_by": "matthias"},
+    )
+    assert shredded.status_code == 200, shredded.text
+    body: dict[str, Any] = shredded.json()
+    return body
+
+
+def _insert_ready_export(cockpit_dsn: str, tenant_id: str) -> str:
+    import asyncio
+    import uuid as _uuid
+
+    export_id = _uuid.uuid4()
+
+    async def insert() -> None:
+        engine = create_async_engine(cockpit_dsn, poolclass=NullPool)
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text(
+                        "INSERT INTO export_jobs (id, tenant_id, state, requested_by, "
+                        "path, size_bytes, expires_at) VALUES "
+                        "(:i, :t, 'ready', 'matthias', '/tmp/kein-echter-export.zip', 1, :e)"
+                    ),
+                    {
+                        "i": export_id,
+                        "t": _uuid.UUID(tenant_id),
+                        "e": datetime.now(UTC) + timedelta(days=7),
+                    },
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(insert())
+    return str(export_id)

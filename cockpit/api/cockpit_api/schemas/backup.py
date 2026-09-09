@@ -48,6 +48,8 @@ class BackupPolicyOut(BaseModel):
     tenant_id: UUID
     retention_days: int
     pre_migration_retention_days: int
+    monthly_enabled: bool
+    monthly_keep: int
     rpo_hours: int
     rto_hours: int
     share_root: str | None
@@ -63,6 +65,14 @@ class BackupPolicyUpdate(BaseModel):
     #: unter einem Tag gibt es keine sinnvolle Zusage.
     retention_days: int | None = Field(default=None, ge=1, le=3650)
     pre_migration_retention_days: int | None = Field(default=None, ge=1, le=3650)
+    #: Monatskopien (E15). Abschalten ist zulässig und eine Vertragsfrage —
+    #: ohne sie ist ein Fehler, der erst am Quartalsende auffällt, nicht
+    #: rückholbar.
+    monthly_enabled: bool | None = None
+    #: Anzahl, nicht Tage. Untergrenze 1: „null Monatskopien" heisst
+    #: ``monthly_enabled: false`` und soll nicht über zwei Wege erreichbar
+    #: sein.
+    monthly_keep: int | None = Field(default=None, ge=1, le=120)
     rpo_hours: int | None = Field(default=None, ge=1, le=8760)
     rto_hours: int | None = Field(default=None, ge=1, le=8760)
     share_root: str | None = None
@@ -169,6 +179,12 @@ class OffboardingOut(BaseModel):
     aborted_at: datetime | None
     aborted_reason: str | None
     updated_at: datetime
+    #: Gesetzt, wenn ein Schritt geglückt ist, aber etwas daneben nicht.
+    #: Konkret: der Kundenschlüssel ist vernichtet (unwiderruflich), die
+    #: Markierung für den Aufräumjob liess sich aber nicht schreiben — dann
+    #: läuft eine Frist, die niemand einhält, und das darf nicht in einer
+    #: Protokollzeile untergehen.
+    warning: str | None = None
 
 
 __all__ = [

@@ -121,12 +121,28 @@ ist eine 10-Tage-Zusage ein Verkaufsargument.
   zuschlagen. Sind alle Sicherungen aus dieser Zeit, ist auch die letzte saubere
   Kopie weg.
 
-Deshalb die Empfehlung, ohne die Entscheidung umzustossen: **zusätzlich eine
-monatliche Kopie mit längerer Frist** (12 Monate) — das sind pro Kunde zwölf
-Dateien und kaum Platz, deckt aber genau die beiden Fälle oben ab. Der
-tägliche Zyklus bleibt bei 10 Tagen. Das Datenmodell (`tenant_backup_policy`)
-hält die zwei Fristen ohnehin getrennt; sie einzuschalten ist ein Konfigwert,
-kein Umbau. Offen als E15.
+Deshalb **zusätzlich zwölf Monatskopien** — Entscheid **E15, entschieden am
+2026-09-09 (ja)**. Der tägliche Zyklus bleibt bei 10 Tagen.
+
+Drei Festlegungen aus der Umsetzung:
+
+**Kein zweiter Dump.** Die erste geglückte Sicherung eines Kalendermonats wird
+*als* Monatskopie geschrieben — derselbe Dump, nur mit längerer Frist. Ein
+zusätzlicher Lauf am Monatsersten wäre doppelte Last für dieselben Daten und
+ein zweiter Weg, auf dem etwas schiefgehen kann. Die Cron-Zeile bleibt
+unverändert `{"kind":"daily"}`; die Konsole entscheidet.
+
+**Gezählt, nicht datiert.** `monthly_keep` ist eine Anzahl (12) und keine Frist
+in Tagen. „Die letzten zwölf" hat keine Kanten am 31., braucht keine
+Monatsarithmetik und trifft die Zusage genauer als 365 Tage.
+
+**Ausgefallen heisst nachgeholt.** Entschieden wird nicht „ist heute der
+Erste", sondern „gibt es für diesen Monat schon eine". Scheitert die Sicherung
+am 1., wird die vom 2. zur Monatskopie. Ein Monat ohne Kopie wäre eine Lücke,
+die niemandem auffällt, bis sie gebraucht wird.
+
+**Und die Nebenwirkung, die dazugehört:** E15 hätte die Löschzusage aus D8
+unwahr gemacht. Siehe dort.
 
 ### D4 · Ein Backup gilt erst als Backup, wenn es eingespielt wurde
 
@@ -194,6 +210,24 @@ Was danach gilt, muss dem Kunden **so** zugesagt werden, wie es technisch ist:
   einzelne Zeilen nicht herausschneiden. Vollständige Löschung tritt deshalb
   **10 Tage** nach dem Crypto-Shredding ein (D3). Das ist eine Zusage, die man
   einem Kunden gut hinschreiben kann.
+
+  **Mit E15 wäre dieser Satz unwahr geworden**, und zwar deutlich: eine
+  Monatskopie kann elf Monate alt sein und läge an diesem Datum noch auf dem
+  Share. Für einen gekündigten Kunden muss die kurze Frist also auch für die
+  Monatskopien gelten.
+
+  Löschen darf die Konsole nicht — das Dienstkonto hat auf dem Share
+  ausdrücklich kein Löschrecht (D2). Sie kann aber **schreiben**, sie schreibt
+  ja die Dumps. Beim Bestätigen des Crypto-Shreddings legt sie deshalb eine
+  Markierung `.offboarding` im Kundenverzeichnis ab; der Aufräumjob auf dem
+  Fileserver liest sie und wendet die kurze Frist auf alles an. Die
+  Alternative wäre gewesen, dem Aufräumjob Zugangsdaten für die Konsolen-API
+  zu geben — für eine Auskunft, die in eine Zeile passt. Nicht dafür.
+
+  Scheitert das Schreiben der Markierung, wird der Vorgang **nicht**
+  zurückgenommen: der Kundenschlüssel ist vernichtet, das ist der wesentliche
+  und unwiderrufliche Schritt. Aber die Antwort des Endpunkts trägt eine
+  Warnung mit dem Handgriff — sonst läuft eine Frist, die niemand einhält.
 - Diese Frist gehört in den Vertrag und in die Auftragsverarbeitungs­vereinbarung.
   Ein „wir löschen sofort alles" wäre eine Zusage, die die Technik nicht hält.
 
@@ -370,7 +404,33 @@ Aufbewahrungsfrist (E14: 10 Tage). Erst dann ist die Löschzusage erfüllt. Der
 Endpunkt weigert sich, den Zustand vorher zu setzen — „vollständig gelöscht"
 vor Fristablauf wäre eine unwahre Zusage an den Kunden.
 
-### N5 · Kleinere Festlegungen, die in der Umsetzung entschieden wurden
+### N5 · Der Aufräumjob braucht ein Skript, kein `find`
+
+D2 sagt, das Aufräumen läuft „als eigener Cron-Job mit eigenem Konto auf dem
+Fileserver". D3 nannte dazu die Regel „älter als 10 Tage". Mit E15 stimmt das
+nicht mehr, und ein `find -mtime +10 -delete` wäre jetzt aktiv schädlich:
+
+An einem Bestand aus zwölf täglichen und vierzehn Monatskopien löscht diese
+Zeile **21 Dateien, davon 17 Monatskopien** — also genau die, die für „ein
+Fehler, der erst am Quartalsende auffällt" da sind. Der Fehler wäre still: die
+Sicherungen sähen weiter vollständig aus, weil die täglichen da sind, und die
+Lücke fiele erst auf, wenn jemand ein halbes Jahr zurück will.
+
+Deshalb `scripts/prune-backups.sh` mit vier Klassen (täglich, manuell,
+vor-Migration, Monatskopie), dem Sonderfall Offboarding, Trockenlauf als
+Vorgabe und einer Prüfung, ob der übergebene Pfad überhaupt wie der Share
+aussieht — ein falscher Pfad in einer Cron-Zeile ist der wahrscheinlichste Weg,
+mit diesem Skript Schaden anzurichten.
+
+Die Fristen kann das Skript nicht raten: ein Kunde mit 30 Tagen Zusage, dessen
+Dumps nach 10 gelöscht werden, ist ein Vertragsbruch, den niemand bemerkt.
+Die Konsole schreibt sie deshalb bei jeder Sicherung als `.retention` neben
+die Dumps — dieselbe Mechanik wie die Offboarding-Markierung und aus demselben
+Grund: der Fileserver braucht dafür keinen Konsolenzugang. Das Skript **liest**
+die Datei und führt sie nicht aus; nur die drei erwarteten Schlüssel, und nur
+Zahlen.
+
+### N6 · Kleinere Festlegungen, die in der Umsetzung entschieden wurden
 
 - **CSV mit Semikolon und UTF-8-BOM** (`utf-8-sig`). Nicht Komma und nicht
   reines UTF-8: der Empfänger ist eine Gemeinde-IT mit Excel in einer

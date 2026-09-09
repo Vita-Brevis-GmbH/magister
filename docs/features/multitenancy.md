@@ -532,8 +532,13 @@ Kurz:
   Datenbank — nur den logischen Dump von heute Nacht. Das ist die grösste
   offene Lücke im ganzen Bereich, und sie ist unabhängig von der
   Mandantenfähigkeit.
-- **Entscheid E15** (zwölf monatliche Kopien) ist weiter offen. Ohne sie ist
-  ein Fehler, der erst nach zwei Wochen auffällt, nicht rückholbar.
+- ~~Entscheid E15~~ — **entschieden (ja) und umgesetzt am 2026-09-09.** Zwölf
+  Monatskopien, ohne zweiten Dump: die erste geglückte Sicherung eines Monats
+  wird *als* Monatskopie geschrieben. Dabei stellte sich heraus, dass E15 die
+  Löschzusage aus D8 unwahr gemacht hätte (eine Monatskopie kann elf Monate
+  alt sein) und dass das Aufräumen mit `find -mtime +10 -delete` genau die
+  Monatskopien gelöscht hätte. Beides ist mitgelöst: eine
+  `.offboarding`-Markierung auf dem Share und `scripts/prune-backups.sh`.
 - **Kein Zeitplaner.** Tägliche Sicherung und wöchentliche Prüfung sind
   Cron-Zeilen im Runbook, kein Dienst in der Konsole.
 - **Die README im Export ist nur auf Deutsch.** Das Manifest selbst ist

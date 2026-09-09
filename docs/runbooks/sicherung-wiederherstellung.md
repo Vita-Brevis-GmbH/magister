@@ -274,6 +274,11 @@ curl ... -d '{"dropped_by":"matthias","approved_by":"rolf"}' \
   .../tenants/$TENANT_ID/offboarding/drop
 
 # 6. Kundenschlüssel auf dem Anwendungsserver vernichten:
+#    (Die Bestätigung unten schreibt zugleich eine .offboarding-Markierung auf
+#     den Share. Sie ist es, die die kurze Frist auch für die Monatskopien
+#     gelten lässt — ohne sie wäre die Löschzusage unten unwahr. Trägt die
+#     Antwort ein "warning", ist sie NICHT geschrieben worden; dann von Hand
+#     anlegen, der Text nennt den Pfad.)
 #    MAGISTER_TENANT_AUDIT_KEY_<REF> aus der Umgebung entfernen, Prozess neu
 #    starten, und den Wert aus dem Passwortspeicher löschen.
 #    DANACH bestätigen:
@@ -308,6 +313,48 @@ Ein Widerruf ist möglich, solange nichts gelöscht ist
 (`POST .../offboarding/abort` mit Begründung). Nach Schritt 5 nicht mehr —
 und der Endpunkt sagt das, statt einen Rückweg vorzutäuschen.
 
+## 6a · Aufräumen (auf dem Fileserver)
+
+**Nicht auf dem Anwendungsserver.** Das Dienstkonto, mit dem Magister die
+Dumps schreibt, hat auf dem Share kein Löschrecht — damit ein übernommener
+Anwendungsserver die Sicherungen nicht mitnehmen kann (ADR-0016 D2). Läuft der
+Aufräumjob dort mit einem Konto, das löschen darf, ist diese Eigenschaft
+aufgehoben.
+
+```cron
+# /etc/cron.d/magister-prune  (auf dem FILESERVER)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=ops@vitabrevis.ch
+
+30 4 * * * mgbackup /opt/magister/scripts/prune-backups.sh --apply /mnt/magister-backup
+```
+
+Ohne `--apply` ist es ein Trockenlauf — so sieht man zuerst, was wegkäme.
+Beim ersten Einrichten und nach jeder Änderung an den Fristen: erst trocken
+laufen lassen.
+
+**Ein `find -mtime +10 -delete` genügt seit E15 nicht mehr und ist aktiv
+schädlich.** Es gibt vier Klassen im selben Verzeichnis:
+
+| Datei | Frist |
+|---|---|
+| `*-daily.dump.age` | 10 Tage (E14) |
+| `*-monthly.dump.age` | die letzten **12** (E15) |
+| `*-pre_migration.dump.age` | 30 Tage (D6) |
+| `*-manual.dump.age`, `*-offboarding.dump.age` | 10 Tage |
+
+An einem Bestand aus zwölf täglichen und vierzehn Monatskopien löscht die
+`find`-Zeile **21 Dateien, davon 17 Monatskopien** — genau die, die für „ein
+Fehler, der erst am Quartalsende auffällt" da sind. Und es fällt nicht auf: die
+täglichen Sicherungen sind ja da, alles sieht vollständig aus, und die Lücke
+zeigt sich erst, wenn jemand ein halbes Jahr zurück will.
+
+Die Fristen liest das Skript aus `.retention` im Kundenverzeichnis, das die
+Konsole bei jeder Sicherung schreibt — es muss sie also nicht raten. Liegt eine
+`.offboarding` daneben, gilt die kurze Frist für **alles**, auch für die
+Monatskopien; das ist es, was die Löschzusage aus Abschnitt 6 wahr hält.
+
 ## 7 · Was regelmässig zu prüfen ist
 
 | Was | Wie oft | Woran man den Fehler merkt |
@@ -317,6 +364,8 @@ und der Endpunkt sagt das, statt einen Rückweg vorzutäuschen.
 | Das Dienstkonto darf nicht löschen | quartalsweise | der Test aus 1.2 |
 | Der private Backup-Schlüssel ist an beiden Orten | jährlich | Testentschlüsselung eines alten Dumps |
 | Alte Exporte sind weg | monatlich | `find` aus Abschnitt 5 |
+| Jeder Kunde hat 12 Monatskopien | quartalsweise | `ls /mnt/magister-backup/<kunde>/*-monthly.dump.age \| wc -l` |
+| Der Aufräumjob läuft und löscht das Richtige | monatlich | Trockenlauf: `prune-backups.sh /mnt/magister-backup` |
 | Jeder Mandant hat seinen Kundenschlüssel | bei jedem Ausrollen | der Mandant antwortet mit 503 |
 
 Die letzte Zeile ist der häufigste Fehler nach dem Anlegen eines Kunden: der
@@ -369,10 +418,9 @@ bekommt keinen Plattform-Betrieb aufgezwungen.
   Weg auf „gestern 14:37" und keinen Weg zurück nach einer beschädigten
   Datenbank — nur den logischen Dump von heute Nacht. Das ist die grösste
   offene Lücke in diesem Bereich.
-* **Die zwölf monatlichen Kopien** (Entscheid E15, ADR-0016 D3) sind
-  vorgesehen, aber nicht entschieden. Ohne sie ist ein Fehler, der erst nach
-  zwei Wochen auffällt, nicht rückholbar — bei Schulen ein realistisches
-  Muster, weil etwas am Quartalsende auffällt und nicht am nächsten Tag.
+* ~~Die zwölf monatlichen Kopien~~ — **entschieden und umgesetzt**
+  (E15, 2026-09-09). Siehe Abschnitt 6a für das Aufräumen, das damit
+  nicht mehr aus einer `find`-Zeile besteht.
 * **Ein Zeitplaner.** Die Aufrufe in 2 und 3 gehören in Cron-Zeilen; einen
   eigenen Scheduler in der Konsole gibt es (noch) nicht.
 
@@ -428,6 +476,20 @@ Zeile ist der Gürtel dazu.)
 Cron-Job, von dem niemand weiss, dass er seit sechs Wochen scheitert. Die
 Werkzeuge geben **1** zurück, wenn eine Sicherung unbrauchbar ist, und **2**,
 wenn die Prüfung selbst nicht laufen konnte — beides erzeugt Post.
+
+Auf dem **Fileserver** (`/etc/cron.d/magister-prune`) — und ausdrücklich nur
+dort, weil nur dieses Konto löschen darf:
+
+```cron
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+MAILTO=ops@vitabrevis.ch
+
+30 4 * * * mgbackup /opt/magister/scripts/prune-backups.sh --apply /mnt/magister-backup
+```
+
+04:30, also nach der Prüf-Wiederherstellung um 04:00: sonst könnte der
+Aufräumjob genau den Dump entfernen, den die Prüfung gerade einspielt.
 
 Für eine **Einzelinstallation** genügt eine Zeile, weil die Sidecar die
 Sicherung selbst fährt:

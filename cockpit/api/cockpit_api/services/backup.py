@@ -143,6 +143,102 @@ async def create_backup(
     return BackupArtifact(path=target, size_bytes=size, checksum_sha256=digest)
 
 
+#: Name der Markierung, mit der die Konsole dem Aufräumjob mitteilt, dass für
+#: diesen Kunden die kurze Frist gilt.
+OFFBOARDING_MARKER = ".offboarding"
+
+#: Name der Datei, in der die Aufbewahrung dieses Kunden steht.
+RETENTION_HINT = ".retention"
+
+
+def write_retention_hint(
+    share_root: Path,
+    slug: str,
+    *,
+    retention_days: int,
+    pre_migration_retention_days: int,
+    monthly_keep: int,
+) -> Path:
+    """Die Aufbewahrung dieses Kunden neben seine Dumps schreiben.
+
+    Der Aufräumjob läuft auf dem **Fileserver** mit eigenem Konto (ADR-0016
+    D2) und hat keinen Zugang zur Konsole. Er müsste die Fristen also aus
+    Vorgabewerten raten — und läge falsch, sobald ein Kunde eine
+    Vertragsabweichung hat. Ein Kunde mit 30 Tagen Zusage, dessen Dumps nach
+    10 Tagen gelöscht werden, ist ein Vertragsbruch, den niemand bemerkt,
+    bis er gebraucht wird.
+
+    Die Alternative wäre gewesen, dem Aufräumjob Zugangsdaten für die
+    Konsolen-API zu geben — für eine Auskunft, die in drei Zeilen passt. Nicht
+    dafür. Geschrieben wird bei jeder Sicherung, also ist die Datei immer
+    aktuell, und sie enthält kein Geheimnis.
+    """
+    if not IDENTIFIER_PATTERN.match(slug):
+        raise BackupError(f"slug={slug!r} ist kein zulässiger Bezeichner.")
+    directory = share_root / slug
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / RETENTION_HINT
+    target.write_text(
+        "# Aufbewahrung dieses Kunden. Von der Konsole geschrieben, von\n"
+        "# prune-backups.sh gelesen. Kein Geheimnis.\n"
+        f"retention_days={retention_days}\n"
+        f"pre_migration_retention_days={pre_migration_retention_days}\n"
+        f"monthly_keep={monthly_keep}\n",
+        encoding="utf-8",
+    )
+    return target
+
+
+def write_offboarding_marker(
+    share_root: Path, slug: str, *, purge_due_at: datetime, key_id: str | None
+) -> Path:
+    """Dem Aufräumjob sagen, dass dieser Kunde offboardet ist (E15, D8).
+
+    **Warum das nötig ist, und warum als Datei.** Mit zwölf Monatskopien (E15)
+    wäre die Löschzusage aus D8 unwahr: „zehn Tage nach dem Crypto-Shredding
+    ist auch der Rest weg" — eine Monatskopie kann elf Monate alt sein und
+    läge an diesem Datum noch da. Für einen gekündigten Kunden muss die kurze
+    Frist also auch für die Monatskopien gelten.
+
+    Löschen darf die Konsole nicht: das Dienstkonto hat auf dem Share
+    ausdrücklich kein Löschrecht, damit ein übernommener Anwendungsserver die
+    Sicherungen nicht mitnehmen kann (ADR-0016 D2). Sie kann aber
+    **schreiben** — sie schreibt ja die Dumps. Eine Markierung im
+    Kundenverzeichnis ist deshalb der Weg, der ohne neue Rechte und ohne
+    zweiten Zugang auskommt: der Aufräumjob auf dem Fileserver liest sie und
+    wendet die kurze Frist an.
+
+    Die Alternative wäre gewesen, dem Aufräumjob Zugang zur Konsolen-API zu
+    geben. Das hiesse: Zugangsdaten für die Konsole auf dem Fileserver, für
+    eine Auskunft, die in eine Zeile passt. Nicht dafür.
+
+    Die Datei enthält kein Geheimnis — Datum, Slug und die Id des vernichteten
+    Schlüssels. Sie ist ein Auftrag zum Löschen, kein Zugang.
+    """
+    if not IDENTIFIER_PATTERN.match(slug):
+        raise BackupError(f"slug={slug!r} ist kein zulässiger Bezeichner.")
+    directory = share_root / slug
+    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / OFFBOARDING_MARKER
+    target.write_text(
+        "# Dieser Kunde ist offboardet (ADR-0016 D8).\n"
+        "# Fuer ALLE Sicherungen dieses Verzeichnisses gilt ab jetzt die kurze\n"
+        "# Frist, auch fuer die Monatskopien. prune-backups.sh liest diese Datei.\n"
+        f"slug={slug}\n"
+        f"purge_due_at={purge_due_at.isoformat()}\n"
+        f"key_id={key_id or ''}\n"
+        f"written_at={datetime.now(UTC).isoformat()}\n",
+        encoding="utf-8",
+    )
+    logger.info(
+        "Offboarding-Markierung für %s geschrieben: %s (Frist %s)",
+        slug,
+        target,
+        purge_due_at.isoformat(),
+    )
+    return target
+
+
 def verify_checksum(path: Path, expected: str) -> bool:
     """Prüfsumme der verschlüsselten Datei nachrechnen.
 
@@ -166,11 +262,15 @@ def _sha256(path: Path) -> str:
 
 __all__ = [
     "IDENTIFIER_PATTERN",
+    "OFFBOARDING_MARKER",
     "RECIPIENT_PATTERN",
+    "RETENTION_HINT",
     "BackupArtifact",
     "BackupError",
     "backup_path",
     "check_recipient",
     "create_backup",
     "verify_checksum",
+    "write_offboarding_marker",
+    "write_retention_hint",
 ]

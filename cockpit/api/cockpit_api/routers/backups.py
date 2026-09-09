@@ -61,7 +61,8 @@ from cockpit_api.schemas.backup import (
     RestoreJobOut,
     RestoreRequest,
 )
-from cockpit_api.services.backup import BackupError, create_backup
+from cockpit_api.services.backup import BackupError, create_backup, write_retention_hint
+from cockpit_api.services.backup_policy import keep_for, monthly_exists, resolve_kind
 from cockpit_api.services.export import ExportError, create_export
 from cockpit_api.services.restore import RESTORE_DB_PATTERN, scratch_database_name
 
@@ -146,9 +147,27 @@ async def run_backup(
     tenant = await _tenant(session, tenant_id)
     policy = await session.get(TenantBackupPolicy, tenant_id)
     root = _share_root(policy)
+    # Die erste geglückte Sicherung eines Kalendermonats wird zur Monatskopie
+    # (E15). Kein zweiter Dump: derselbe Dump, nur mit längerer Frist. Der
+    # Aufrufer bekommt in der Antwort die tatsächliche Art — die Cron-Zeile
+    # bleibt unverändert `{"kind":"daily"}`.
+    kind = resolve_kind(
+        body.kind,
+        policy=policy,
+        monthly_present=await monthly_exists(session, tenant_id),
+    )
+    if kind is not body.kind:
+        logger.info(
+            "Sicherung für %s wird als %s geschrieben (%s), nicht als %s: "
+            "erste Sicherung dieses Monats.",
+            tenant.slug,
+            kind.value,
+            keep_for(kind, policy),
+            body.kind.value,
+        )
     row = TenantBackup(
         tenant_id=tenant.id,
-        kind=body.kind,
+        kind=kind,
         status=BackupStatus.running,
         path="",
         audit_key_id=tenant.audit_key_id,
@@ -161,7 +180,7 @@ async def run_backup(
             dsn=_tenant_dsn_for_reading(tenant),
             schema_name=tenant.schema_name,
             slug=tenant.slug,
-            kind=body.kind.value,
+            kind=kind.value,
             share_root=root,
             recipient=settings.backup_age_recipient,
         )
@@ -179,7 +198,25 @@ async def run_backup(
     row.checksum_sha256 = artifact.checksum_sha256
     row.status = BackupStatus.written
     row.finished_at = datetime.now(UTC)
-    if body.kind is BackupKind.offboarding:
+    # Die Fristen neben die Dumps, damit der Aufräumjob auf dem Fileserver sie
+    # nicht raten muss. Scheitert es, ist die Sicherung trotzdem gut — also
+    # nur eine Warnung.
+    try:
+        write_retention_hint(
+            root,
+            tenant.slug,
+            retention_days=policy.retention_days if policy else 10,
+            pre_migration_retention_days=(policy.pre_migration_retention_days if policy else 30),
+            monthly_keep=policy.monthly_keep if policy else 12,
+        )
+    except (BackupError, OSError) as exc:
+        logger.warning(
+            "Aufbewahrungs-Hinweis für %s nicht geschrieben (%s). Der "
+            "Aufräumjob benutzt dann seine Vorgabewerte.",
+            tenant.slug,
+            exc,
+        )
+    if kind is BackupKind.offboarding:
         # Der letzte Stand vor dem Löschen gehört an die Offboarding-Zeile:
         # dort sucht man ihn, wenn ein gekündigter Kunde ein Jahr später
         # anruft. Ohne diese Zuordnung wäre er eine Datei unter vielen.

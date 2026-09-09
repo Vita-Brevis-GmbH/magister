@@ -16,12 +16,14 @@ reicht die Konsole nicht.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.models import ExportJob, Tenant, TenantOffboarding
 from cockpit_api.schemas.backup import (
@@ -32,6 +34,11 @@ from cockpit_api.schemas.backup import (
     OffboardingStart,
 )
 from cockpit_api.services import offboarding as flow
+from cockpit_api.services.backup import (
+    OFFBOARDING_MARKER,
+    BackupError,
+    write_offboarding_marker,
+)
 from cockpit_api.services.provisioning import admin_engine
 
 logger = logging.getLogger(__name__)
@@ -179,7 +186,45 @@ async def confirm_key_destroyed(
         )
     except flow.OffboardingError as exc:
         raise _conflict(exc) from exc
-    return await _serialized(session, row)
+
+    # Dem Aufräumjob sagen, dass für diesen Kunden ab jetzt die kurze Frist
+    # gilt — auch für die Monatskopien (E15). Ohne diesen Schritt wäre die
+    # Löschzusage aus D8 unwahr: eine Monatskopie kann elf Monate alt sein und
+    # läge an `purge_due_at` noch auf dem Share.
+    #
+    # Scheitert das Schreiben, wird der Vorgang NICHT zurückgenommen: der
+    # Kundenschlüssel ist vernichtet, das ist der wesentliche Schritt und
+    # unwiderruflich. Aber die Antwort sagt es, und die Meldung nennt den
+    # Handgriff — sonst läuft eine Frist, die niemand einhält.
+    warning: str | None = None
+    if settings.backup_share_root and row.purge_due_at is not None:
+        try:
+            write_offboarding_marker(
+                Path(settings.backup_share_root),
+                tenant.slug,
+                purge_due_at=row.purge_due_at,
+                key_id=row.key_id,
+            )
+        except (BackupError, OSError) as exc:
+            warning = (
+                f"Die Offboarding-Markierung auf dem Share liess sich nicht "
+                f"schreiben ({exc}). Ohne sie behält der Aufräumjob die "
+                f"Monatskopien zwölf Monate, und die Löschzusage zum "
+                f"{row.purge_due_at.date().isoformat()} wird nicht eingehalten. "
+                f"Von Hand anlegen: "
+                f"{Path(settings.backup_share_root) / tenant.slug / OFFBOARDING_MARKER}"
+            )
+            logger.error("%s", warning)
+    elif not settings.backup_share_root:
+        warning = (
+            "COCKPIT_BACKUP_SHARE_ROOT ist nicht gesetzt — es wurde keine "
+            "Offboarding-Markierung geschrieben. Der Aufräumjob behält die "
+            "Monatskopien damit zwölf Monate."
+        )
+        logger.warning("%s", warning)
+
+    out = await _serialized(session, row)
+    return out.model_copy(update={"warning": warning}) if warning else out
 
 
 @router.post("/purged", response_model=OffboardingOut)
