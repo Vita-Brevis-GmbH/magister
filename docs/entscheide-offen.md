@@ -6,6 +6,12 @@ nicht entscheiden, und eine Empfehlung. Keine offenen Fragen ohne Optionen.
 
 Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 
+> **Am 2026-09-09 entschieden: E17 = B, E18 = C (in zwei Schritten),
+> E19 = B, E20 = A** — jeweils der Empfehlung folgend. Die vier Abschnitte
+> unten bleiben stehen, weil sie die Begründung tragen; was daraus folgt,
+> steht unter jedem als *Entschieden*. Offen ist nur noch **E21**, und das ist
+> keine Wahl zwischen Optionen, sondern ein Vorgang im Entra-Verzeichnis.
+
 ---
 
 ## E17 · Cluster-PITR: wohin gehen die WAL-Dateien?
@@ -39,7 +45,10 @@ technisch am stärksten, bringt aber einen zweiten Anbieter und ein zweites
 Betriebsverfahren — dasselbe Argument, mit dem wir bei E13 gegen
 Objektspeicher entschieden haben.
 
-**Entscheidung nötig:** A, B oder C.
+**Entschieden am 2026-09-09: B.** Das pgBackRest-Repository liegt auf dem
+Backup-Host, der Anwendungsserver archiviert dorthin und hat auf dem
+Repository selbst kein Löschrecht — dieselbe Trennung wie bei den Dumps.
+Umsetzung: `deploy/pgbackrest/`, Runbook §2a und §3a.
 
 ---
 
@@ -71,8 +80,15 @@ neues Verfahren — aber ein zweiter Gegenstand im Tresor.
 Update-Frage für Linux), dann das Windows-Zertifikat, sobald der erste Kunde
 mit AppLocker kommt oder mehr als zwei Windows-Installationen anstehen.
 
-**Entscheidung nötig:** A, B oder C — und bei C, ob jetzt oder beim ersten
-Bedarf.
+**Entschieden am 2026-09-09: C, in zwei Schritten.**
+
+| Schritt | Was | Wann |
+|---|---|---|
+| 1 | GPG-Schlüssel, signiertes `apt`-Repository, damit E10 | **jetzt** |
+| 2 | Windows-Code-Signing-Zertifikat mit Hardware-Verwahrung | beim ersten Kunden mit AppLocker oder ab der dritten Windows-Installation |
+
+Schritt 2 wird damit nicht vertagt, sondern an ein Ereignis gebunden. Das ist
+der Unterschied: „später" verfällt, „beim dritten Windows-Server" nicht.
 
 ---
 
@@ -101,7 +117,10 @@ Zeitpunkte und Namen. Es gehört ins Repository unter `docs/ca/`, wo es
 versioniert und ohne Tresorgang lesbar ist. C ist die Variante für eine
 Zertifizierung; wenn keine ansteht, ist es Papier ohne Zweck.
 
-**Entscheidung nötig:** A, B oder C.
+**Entschieden am 2026-09-09: B.** Das Protokoll liegt auf dem Stick *und* im
+Repository unter `docs/ca/`. Das Zeremonie-Skript exportiert es dorthin und
+prüft es vorher auf Geheimnisse, damit der Weg ins Repository nicht der Weg
+ist, auf dem ein Schlüssel dort landet.
 
 ---
 
@@ -131,7 +150,11 @@ im Schrank liegt, ist teurer als der Gewinn. Wenn später eine Zertifizierung
 ein dediziertes Gerät verlangt, ist der Wechsel eine Beschaffung und kein
 Umbau.
 
-**Entscheidung nötig:** A oder B. Danach kann die Zeremonie terminiert werden.
+**Entschieden am 2026-09-09: A**, mit einem Live-System, dessen Hash im
+Protokoll steht. Das Skript prüft im `preflight`, ob die Wurzel wirklich
+flüchtig ist, und verlangt bei `root` und `intermediate` den Image-Hash — sonst
+wäre „Hash im Protokoll" eine Absicht und keine Eigenschaft. **Die Zeremonie
+kann jetzt terminiert werden.**
 
 ---
 
@@ -172,9 +195,13 @@ und Redirect-URI ein.
 | Nr. | Entscheid | Stand |
 |---|---|---|
 | E9 | Schlüsselhalter Plattform-CA: Hadorn und Straubhaar, zwei USB-Sticks im Tresor, Passphrasen bei den Haltern | ✅ 2026-09-08 |
-| E10 | Automatische Agenten-Updates | ⏳ hängt an E18 (Repository) |
+| E10 | Automatische Agenten-Updates | ⏳ frei durch E18 Schritt 1, noch nicht gebaut |
 | E11 | Kein Rückfall auf 443 für den Connector-Kanal | ✅ |
 | E13 | Lokaler Share statt Objektspeicher für die Dumps | ✅ |
 | E14 | 10 Tage Aufbewahrung | ✅ |
 | E15 | Zwölf Monatskopien | ✅ 2026-09-09, umgesetzt |
+| E17 | WAL-Archivierung auf den Backup-Host | ✅ 2026-09-09 |
+| E18 | Signaturen: GPG jetzt, Windows-Zertifikat beim ersten Bedarf | ✅ 2026-09-09 |
+| E19 | Zeremonie-Protokoll auf Stick **und** in Git | ✅ 2026-09-09 |
+| E20 | Live-System statt dediziertem Gerät, Hash im Protokoll | ✅ 2026-09-09 |
 | E16 | Kunden-Admin für mehrere Kunden: über Rollen je Kunde, nicht über einen Über-Mandanten | ✅ |
