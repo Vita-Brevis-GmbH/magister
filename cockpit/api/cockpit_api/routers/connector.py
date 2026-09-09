@@ -35,6 +35,7 @@ from cockpit_api.models import (
     AgentStatus,
     ConnectorAgent,
     ConnectorJob,
+    JobState,
     Tenant,
     TenantStatus,
 )
@@ -45,6 +46,7 @@ from cockpit_api.schemas.connector import (
     AgentRevoke,
     EnrollmentCreate,
     EnrollmentOut,
+    JobDetailOut,
     JobEnqueue,
     JobForAgent,
     JobOut,
@@ -61,6 +63,7 @@ from cockpit_api.services.connector_queue import (
     MethodNotAllowedError,
     claim_next,
     enqueue,
+    expire_stale_jobs,
     submit_result,
 )
 
@@ -164,6 +167,30 @@ async def list_jobs(
         .limit(min(limit, 200))
     )
     return list((await session.execute(stmt)).scalars())
+
+
+@console.get("/jobs/{job_id}", response_model=JobDetailOut)
+async def get_job(
+    tenant_id: UUID, job_id: UUID, session: AsyncSession = Depends(get_session)
+) -> ConnectorJob:
+    """Einen Auftrag samt Ergebnis lesen — der Weg der Datenebene.
+
+    Sie stellt einen Auftrag ein und fragt hier, bis er fertig ist. Der
+    Kundenbezug wird geprüft: eine Auftrags-Id allein genügt nicht, sie muss
+    zu dem Kunden im Pfad gehören. Sonst könnte ein Kunde mit einem geratenen
+    UUID das Ergebnis eines anderen lesen.
+    """
+    await _tenant(session, tenant_id)
+    job = await session.get(ConnectorJob, job_id)
+    if job is None or job.tenant_id != tenant_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown job")
+    # Verfallene Aufträge sollen als verfallen gelesen werden und nicht ewig
+    # als "queued" — sonst wartet die Datenebene auf etwas, das nie kommt.
+    if job.state in (JobState.queued, JobState.claimed) and job.expires_at <= datetime.now(UTC):
+        await expire_stale_jobs(session, tenant_id)
+        await session.commit()
+        await session.refresh(job)
+    return job
 
 
 @console.post("/jobs", response_model=JobOut, status_code=201)

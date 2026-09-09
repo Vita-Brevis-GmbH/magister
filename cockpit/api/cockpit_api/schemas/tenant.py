@@ -103,6 +103,9 @@ class TenantRegistryEntry(BaseModel):
     also niemandem Datenbankzugang (ADR-0013 D4).
     """
 
+    #: Die Id in der Konsole. Kein Geheimnis, aber die Datenebene braucht sie,
+    #: um Connector-Aufträge zu adressieren (ADR-0014).
+    id: UUID
     slug: str
     name: str
     hostname: str

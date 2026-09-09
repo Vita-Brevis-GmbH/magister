@@ -21,6 +21,7 @@ from magister_api.config import Settings
 from magister_api.db import get_session
 from magister_api.schemas.ad_users import AdConnectionTestOut, AdSyncResultOut
 from magister_api.services.ad_sync import AdSyncService
+from magister_api.tenancy.context import tenant_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -37,16 +38,29 @@ def get_ad_client(
     overlay dep returns the same Settings instance until app_settings.version
     bumps, so this small identity-keyed cache is enough.
 
-    Strict AD boundary (ADR-0011): when ``MAGISTER_AD_RPC_URL`` is configured
-    this process holds no directory credentials and gets an ``AdRpcClient`` that
-    forwards to the AD container; otherwise it talks to AD directly. The RPC
-    URL/secret are deploy-time env (not DB-overlaid), so they are read from the
-    base settings on ``app.state``.
+    Three backends behind one interface, in this order of precedence:
+
+    1. ``MAGISTER_AD_RPC_URL`` set → ``AdRpcClient``. The strict AD boundary of
+       ADR-0011: this process holds no directory credentials and forwards to
+       the AD container in the same network.
+    2. ``MAGISTER_AD_CONNECTOR_ENABLED`` and a tenant with a console id →
+       ``AdConnectorClient``. The hosted case (ADR-0014): the platform never
+       opens a connection into the customer's network, the agent calls out.
+    3. Otherwise ``AdClient``, talking to AD directly.
+
+    No caller in the domain code knows the difference — that is the whole point
+    of the third backend. The cache is per-request per app.state, keyed on the
+    identity of the overlaid settings, and now also on the tenant: two tenants
+    in one process must not share a client that carries the other's console id.
     """
-    cached: tuple[int, AdClient] | None = getattr(request.app.state, "_ad_client_cache", None)
-    if cached is not None and cached[0] == id(eff):
-        return cached[1]
     base: Settings = request.app.state.settings
+    tenant = tenant_from_request(request)
+    cache_key = (id(eff), tenant.slug)
+    cached: tuple[tuple[int, str], AdClient] | None = getattr(
+        request.app.state, "_ad_client_cache", None
+    )
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
     client: AdClient
     if base.ad_rpc_url and base.ad_rpc_secret is not None:
         # Imported lazily so the direct-AD path carries no httpx-client import.
@@ -55,10 +69,32 @@ def get_ad_client(
         client = AdRpcClient(
             eff, base_url=base.ad_rpc_url, secret=base.ad_rpc_secret.get_secret_value()
         )
+    elif base.ad_connector_enabled and base.console_registry_url and tenant.console_id:
+        from magister_api.ad.connector_client import AdConnectorClient
+
+        client = AdConnectorClient(
+            eff,
+            console_url=_console_base(base.console_registry_url),
+            token=base.console_registry_token.get_secret_value(),
+            tenant_id=tenant.console_id,
+            management_marker=base.console_management_marker.get_secret_value(),
+        )
     else:
         client = AdClient(eff)
-    request.app.state._ad_client_cache = (id(eff), client)
+    request.app.state._ad_client_cache = (cache_key, client)
     return client
+
+
+def _console_base(registry_url: str) -> str:
+    """Basis-URL der Konsole aus der Registry-URL ableiten.
+
+    Eine Einstellung weniger, die auseinanderlaufen kann: die Registry-URL
+    steht ohnehin schon da, und beide Pfade liegen auf derselben Konsole.
+    """
+    marker = "/api/tenants/registry"
+    if registry_url.endswith(marker):
+        return registry_url[: -len(marker)]
+    return registry_url.rstrip("/")
 
 
 @router.post("/sync", response_model=AdSyncResultOut, status_code=status.HTTP_200_OK)

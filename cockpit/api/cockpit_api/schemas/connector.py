@@ -117,3 +117,22 @@ class JobResultIn(BaseModel):
     error: str | None = Field(default=None, max_length=2000)
     #: HMAC über Auftrags-Id und Ergebniskörper, hex.
     signature: str = Field(min_length=64, max_length=64)
+
+
+class JobDetailOut(BaseModel):
+    """Ein Auftrag samt Ergebnis — für die Datenebene, nicht für die Liste.
+
+    Anders als ``JobOut`` trägt dieses Schema ``result``: die Datenebene
+    braucht es, um dem Aufrufer zu antworten. ``payload`` fehlt weiter, denn
+    der kann ein Passwort enthalten und wird nach Abschluss ohnehin gelöscht.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    method: str
+    state: JobState
+    result: dict[str, Any] | None
+    error: str | None
+    expires_at: datetime
+    finished_at: datetime | None

@@ -16,8 +16,8 @@ from typing import Any
 
 import httpx
 
-from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, AdUserParseError
+from magister_api.ad.remote_base import RemoteAdClient
 from magister_api.ad.rpc import (
     RPC_PATH,
     SECRET_HEADER,
@@ -34,7 +34,7 @@ _ERROR_TYPES: dict[str, type[Exception]] = {
 }
 
 
-class AdRpcClient(AdClient):
+class AdRpcClient(RemoteAdClient):
     def __init__(
         self,
         settings: Settings,
@@ -52,7 +52,7 @@ class AdRpcClient(AdClient):
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def _rpc(self, method: str, payload: dict[str, Any]) -> Any:
+    async def _call(self, method: str, payload: dict[str, Any]) -> Any:
         url = f"{self._base_url}{RPC_PATH}/{method}"
         try:
             resp = await self._http.post(url, json=payload, headers={SECRET_HEADER: self._secret})
@@ -72,109 +72,6 @@ class AdRpcClient(AdClient):
         except (ValueError, httpx.HTTPError):
             pass
         raise _ERROR_TYPES.get(err_type, AdUnavailableError)(detail)
-
-    # --- reads ---------------------------------------------------------------
-
-    async def find_user_dn(self, ad_object_guid: str) -> str | None:
-        return await self._rpc("find_user_dn", {"ad_object_guid": ad_object_guid})
-
-    async def fetch_user_groups(self, ad_object_guid: str) -> list[str] | None:
-        return await self._rpc("fetch_user_groups", {"ad_object_guid": ad_object_guid})
-
-    async def probe_service_connection(self) -> bool:
-        return bool(await self._rpc("probe_service_connection", {}))
-
-    async def probe_service_connection_detailed(self) -> tuple[bool, str]:
-        ok, reason = await self._rpc("probe_service_connection_detailed", {})
-        return bool(ok), str(reason)
-
-    async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
-        return bool(
-            await self._rpc("probe_bind_as_user", {"user_dn": user_dn, "password": password})
-        )
-
-    async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
-        await self._rpc(
-            "modify_password",
-            {"user_dn": user_dn, "new_password": new_password, "force_change": force_change},
-        )
-
-    async def modify_user_attributes(
-        self, *, user_dn: str, attributes: dict[str, str | None]
-    ) -> None:
-        await self._rpc("modify_user_attributes", {"user_dn": user_dn, "attributes": attributes})
-
-    async def rename_user(self, *, user_dn: str, new_common_name: str) -> str:
-        return await self._rpc(
-            "rename_user", {"user_dn": user_dn, "new_common_name": new_common_name}
-        )
-
-    async def set_proxy_addresses(
-        self, *, user_dn: str, primary: str | None, aliases: list[str]
-    ) -> None:
-        await self._rpc(
-            "set_proxy_addresses",
-            {"user_dn": user_dn, "primary": primary, "aliases": aliases},
-        )
-
-    async def set_account_enabled(self, *, user_dn: str, enabled: bool) -> tuple[bool, bool]:
-        changed, now_enabled = await self._rpc(
-            "set_account_enabled", {"user_dn": user_dn, "enabled": enabled}
-        )
-        return bool(changed), bool(now_enabled)
-
-    async def set_password_never_expires(self, *, user_dn: str, value: bool) -> None:
-        await self._rpc("set_password_never_expires", {"user_dn": user_dn, "value": value})
-
-    async def set_cannot_change_password(self, *, user_dn: str, value: bool) -> None:
-        await self._rpc("set_cannot_change_password", {"user_dn": user_dn, "value": value})
-
-    async def delete_user_object(self, *, user_dn: str) -> None:
-        await self._rpc("delete_user_object", {"user_dn": user_dn})
-
-    async def add_user_to_groups(self, *, user_dn: str, group_dns: list[str]) -> list[str]:
-        return await self._rpc("add_user_to_groups", {"user_dn": user_dn, "group_dns": group_dns})
-
-    async def remove_user_from_groups(self, *, user_dn: str, group_dns: list[str]) -> list[str]:
-        return await self._rpc(
-            "remove_user_from_groups", {"user_dn": user_dn, "group_dns": group_dns}
-        )
-
-    async def create_user(
-        self,
-        *,
-        ou_dn: str,
-        common_name: str,
-        sam_account_name: str,
-        user_principal_name: str,
-        mail: str | None,
-        given_name: str,
-        surname: str,
-        display_name: str,
-        password: str,
-        force_change: bool,
-        password_never_expires: bool = False,
-        cannot_change_password: bool = False,
-        group_dns: list[str] | None = None,
-    ) -> str:
-        return await self._rpc(
-            "create_user",
-            {
-                "ou_dn": ou_dn,
-                "common_name": common_name,
-                "sam_account_name": sam_account_name,
-                "user_principal_name": user_principal_name,
-                "mail": mail,
-                "given_name": given_name,
-                "surname": surname,
-                "display_name": display_name,
-                "password": password,
-                "force_change": force_change,
-                "password_never_expires": password_never_expires,
-                "cannot_change_password": cannot_change_password,
-                "group_dns": list(group_dns or []),
-            },
-        )
 
 
 __all__ = ["AdRpcClient"]

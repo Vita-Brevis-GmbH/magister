@@ -102,6 +102,7 @@ def registry_from_console_payload(
                 schema_version=str(entry.get("schema_version") or ""),
                 status=status,
                 hostname=str(entry.get("hostname") or "").lower() or None,
+                console_id=str(entry.get("id") or "") or None,
             )
         )
     if skipped:

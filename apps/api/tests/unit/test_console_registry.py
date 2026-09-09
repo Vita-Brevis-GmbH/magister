@@ -111,6 +111,22 @@ class TestPayloadTranslation:
         beta = registry.by_slug("beta")
         assert beta is not None and beta.status is TenantStatus.SUSPENDED
 
+    def test_the_console_id_is_carried_for_connector_jobs(self) -> None:
+        """Die Datenebene braucht sie, um Connector-Aufträge zu adressieren.
+
+        Kein Geheimnis: wer die Id hat, kann ohne Konsolen-Token nichts damit
+        tun. Fehlt sie, bleibt der Connector-Rücken für diesen Kunden aus und
+        Magister spricht das AD wie bisher an.
+        """
+        registry = registry_from_console_payload(
+            [_entry("alpha", id="7f000000-0000-0000-0000-000000000001")], environ=ENV
+        )
+        assert registry.tenants[0].console_id == "7f000000-0000-0000-0000-000000000001"
+
+    def test_a_missing_console_id_is_not_an_error(self) -> None:
+        registry = registry_from_console_payload([_entry("alpha")], environ=ENV)
+        assert registry.tenants[0].console_id is None
+
     def test_the_payload_carries_no_dsn_field(self) -> None:
         """Gegenprobe zur Zusage: der Verweis genügt, ein DSN wird ignoriert.
 

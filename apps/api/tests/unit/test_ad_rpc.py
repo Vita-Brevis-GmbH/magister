@@ -16,7 +16,9 @@ import pytest
 from pydantic import SecretStr
 
 from magister_api.ad.client import AdClient, AdUserRecord
+from magister_api.ad.connector_client import AdConnectorClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.remote_base import RemoteAdClient
 from magister_api.ad.rpc import (
     ALLOWED_METHODS,
     RPC_PATH,
@@ -81,11 +83,34 @@ def test_allowed_methods_are_async_on_adclient() -> None:
         assert inspect.iscoroutinefunction(fn), f"{name} must be async"
 
 
-def test_rpc_client_overrides_every_allowed_method() -> None:
-    # Each RPC method must be defined ON AdRpcClient (forwarding), not inherited
-    # from AdClient — otherwise a client container would try to hit AD directly.
-    for name in ALLOWED_METHODS:
-        assert name in AdRpcClient.__dict__, f"{name} is not overridden on AdRpcClient"
+def test_every_remote_backend_overrides_every_allowed_method() -> None:
+    """Kein entfernter Rücken darf eine Methode von ``AdClient`` erben.
+
+    Ein geerbter Körper würde ldap3 benutzen — in einem Container ohne
+    Verzeichnis-Zugangsdaten also scheitern, und in einem gehosteten Aufbau
+    hiesse es, dass die Plattform selbst ins Kundennetz greifen will.
+
+    Seit ADR-0014 gibt es zwei entfernte Rücken (RPC und Connector). Die
+    Methodenkörper liegen deshalb gemeinsam auf ``RemoteAdClient``; geprüft
+    wird, dass die Auflösung dort und nicht bei ``AdClient`` endet.
+    """
+    for backend in (AdRpcClient, AdConnectorClient):
+        for name in ALLOWED_METHODS:
+            owner = next(klass for klass in backend.__mro__ if name in klass.__dict__)
+            assert owner is not AdClient, (
+                f"{backend.__name__}.{name} kommt von AdClient — der Aufruf würde "
+                "direkt ins Verzeichnis gehen statt über den Transport"
+            )
+            assert issubclass(owner, RemoteAdClient), (
+                f"{backend.__name__}.{name} kommt aus {owner.__name__}, "
+                "erwartet ist RemoteAdClient oder der Rücken selbst"
+            )
+
+
+def test_every_remote_backend_implements_the_transport() -> None:
+    # _call ist die einzige Methode, die ein Rücken selbst beitragen muss.
+    for backend in (AdRpcClient, AdConnectorClient):
+        assert "_call" in backend.__dict__, f"{backend.__name__} implementiert _call nicht"
 
 
 def test_rpc_client_signatures_match_adclient() -> None:

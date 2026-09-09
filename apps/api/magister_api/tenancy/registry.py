@@ -88,6 +88,10 @@ class Tenant:
     #: möglicherweise falschen Abfragen (ADR-0013 D7).
     schema_version: str
     status: TenantStatus = TenantStatus.ACTIVE
+    #: Die Id dieses Kunden in der Konsole. Nur gesetzt, wenn die Registry von
+    #: dort kommt; sie adressiert Connector-Aufträge (ADR-0014). Kein
+    #: Geheimnis — wer sie hat, kann ohne Konsolen-Token nichts damit tun.
+    console_id: str | None = None
     #: Hostname, unter dem der Mandant erreichbar ist. ``None`` heisst
     #: „jeder Hostname" und ist nur bei genau einem Mandanten zulässig — der
     #: On-prem-Fall, wo der Betreiber den Namen frei wählt (ADR-0013 D8).

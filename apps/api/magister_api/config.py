@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     # nichts am Betrieb — der letzte gute Stand bleibt gültig.
     console_registry_interval_s: int = Field(default=300, ge=30)
 
+    # AD über den Connector-Agenten (ADR-0014). Eingeschaltet, sobald eine
+    # Konsolen-URL steht und der Kunde eine console_id in der Registry hat —
+    # kein eigener Schalter, sondern eine Folge der Konfiguration.
+    # Reihenfolge der Rücken: ad_rpc_url gewinnt (ADR-0011, eigener
+    # AD-Container im selben Netz), dann der Connector, dann direkt.
+    ad_connector_enabled: bool = Field(default=False)
+
     # Schema, in dem die Erweiterungen liegen (pgcrypto für den Audit-Dienst).
     # Steht als ZWEITER Eintrag auf dem search_path und darf keine
     # Anwendungstabellen enthalten — sonst könnte eine im Mandantenschema

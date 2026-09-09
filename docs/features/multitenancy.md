@@ -546,6 +546,8 @@ der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selb
 | E13 | Wohin die Sicherungen? | **Lokaler Share**, den das tägliche Unternehmens-Backup mitnimmt. Kein Objektspeicher. Magister hat **nur Schreibrechte**; ein Cron-Job auf dem Fileserver (eigenes Konto, nicht der Anwendungsserver) löscht nach Frist (ADR-0016 D2). |
 | E14 | Aufbewahrungsfrist? | **10 Tage** — auf dem Share und im Tages-Backup gleich. Dieselbe Zahl ist Wiederherstellungszusage, Löschfrist beim Offboarding und der Wert in Vertrag und AVV. |
 
+| E16 | Darf ein Kunden-Admin mehrere Kunden bedienen? | **Innerhalb eines Kunden ja, mandantenübergreifend nein.** Ein Mandant ist ein Schulträger; die Schulen darin sind Standorte, und ein Kunden-Admin ohne `school_id` ist schon heute für alle zuständig — der Gemeinde-IT-Fall braucht also gar keine Änderung. Für zwei *getrennte* Kunden bleibt es bei zwei Anmeldungen: die Sitzungen liegen im Kundenschema, und eine Sitzung über beide bräuchte einen Rollenwechsel in der Datenbank — genau den Ausbruch, den Phase 1 geschlossen hat. Bequemlichkeit kommt als **Umschalter in der Oberfläche** (ein Klick, Redirect plus SSO), nicht als gemeinsame Sitzung. Siehe Abschnitt 9. |
+
 ### Ein Punkt bleibt offen
 
 - **E15 · Monatliche Kopie mit längerer Frist?** Die 10 Tage aus E14 decken
@@ -579,3 +581,69 @@ Beide enthalten am Ende die konkreten Angaben, die noch von dir kommen müssen
 
 Farben, Schrift und Bausteine sind aus `apps/web` übernommen; alle Kundennamen,
 Zahlen, Fingerprints und Tokens sind Platzhalter.
+
+
+## 9 · Ein Kunden-Admin für mehrere Kunden? (Entscheid E16)
+
+Die Frage kommt aus der Praxis: der IT-Verantwortliche der Gemeinde soll auch
+die Schule bedienen. Dahinter stecken zwei verschiedene Fälle, und nur einer
+ist überhaupt mandantenübergreifend.
+
+### 9.1 Der häufige Fall braucht keine Änderung
+
+Ein Mandant ist **ein Schulträger** (eine Gemeinde, ein Zweckverband). Die
+Schulen darin sind keine Mandanten, sondern Standorte: die Tabelle `schools`,
+der `school_id`-Scope, die Standort-Zuordnung der OUs. Ein Kunden-Admin mit
+einer Rollenzuweisung **ohne** `school_id` ist damit für *alle* Schulen seines
+Trägers zuständig — genau der Gemeinde-IT-Verantwortliche. Eine Schulleitung
+ist auf ihre Schule eingeschränkt.
+
+Das funktioniert heute, ohne Zutun. Wer also fragt „darf der Gemeinde-Mensch
+auch die Schule bedienen", bekommt in der Regel die Antwort: er tut es schon.
+
+### 9.2 Der echte Fall: zwei getrennte Kunden
+
+Mandantenübergreifend wird es erst, wenn es **zwei Verträge** sind: zwei
+Schulträger, zwei AD, zwei Entra-Tenants, zwei AVV — und eine Person, die beide
+betreut. Das geht heute nicht, und zwar aus drei Gründen, von denen nur der
+erste technisch ist.
+
+**Die Sitzung liegt im Kundenschema.** `sessions` ist eine Tabelle des
+Kundenschemas. Eine Sitzungs-Id aus Kunde A existiert im Schema von Kunde B
+nicht — der Versuch endet in einem 401, ohne dass die Anwendung etwas prüfen
+müsste. Die Schematrennung *ist* die Sitzungstrennung. (Die in Abschnitt 4.2
+geplante Spalte `sessions.tenant_id` ist die Gegenprobe dazu, nicht der
+Mechanismus.)
+
+**Der Anfragepfad läuft unter der Anmelderolle des Kunden.** Eine Sitzung, die
+beide Kunden sieht, müsste innerhalb einer Anfrage die Datenbankrolle wechseln.
+Genau dieser Wechsel ist der Ausbruch, den Phase 1 gemessen und geschlossen hat
+(ADR-0013 D1, Korrektur). Ihn für einen Kunden-Admin wieder zu öffnen, wäre die
+teuerste denkbare Ausnahme.
+
+**Datenschutz.** Zwei Schulträger sind zwei Verantwortliche. Eine Ansicht, die
+Personendaten beider gleichzeitig zeigt, ist keine Bequemlichkeit, sondern eine
+Bekanntgabe — und in den AVV so nicht abgebildet. Das ist der Grund, der auch
+dann bliebe, wenn die Technik es hergäbe.
+
+### 9.3 Was stattdessen kommen soll
+
+**Ein Umschalter in der Oberfläche, ohne gemeinsame Sitzung.** Eine
+Entra-Identität, in beiden Kunden berechtigt. Nach der Anmeldung bei Kunde A
+zeigt die Oberfläche „Sie sind auch für B berechtigt → wechseln"; der Klick ist
+ein Redirect auf die Subdomain von B und dort eine Anmeldung über Entra — die
+in der Regel ohne erneute Eingabe durchläuft, weil Entra die Sitzung schon hat.
+
+Für die Person ist das ein Klick. Für die Trennung ist es kein Abstrich: jeder
+Kunde behält seine eigene Sitzung, seine eigene Datenbankrolle, sein eigenes
+Audit. Und in den Audit-Ereignissen beider Kunden steht sauber getrennt, was
+diese Person wo getan hat.
+
+Was dafür fehlt: die Liste „welche Identität darf in welchen Kunden". Sie gehört
+in die **Konsole** (Control Plane) und in kein Kundenschema — sonst wüsste
+Kunde A, für wen Kunde B Berechtigungen vergeben hat. Der Registry-Feed liefert
+sie dann pro Kunde gefiltert mit: „diese Identität hat auch bei X ein Konto".
+
+Aufwand: klein, aber nicht null (Konsolen-Tabelle, ein Feld im Feed, eine
+Kachel in der Oberfläche). Eingeplant für Phase 3, wenn die Konsolen-Oberfläche
+steht — vorher gibt es keinen Ort, an dem man die Zuordnung pflegen könnte.
