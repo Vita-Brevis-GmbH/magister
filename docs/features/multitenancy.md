@@ -344,9 +344,12 @@ gemessen, nicht überlegt:
 Blockiert den ersten gehosteten Kunden: ohne Agenten gibt es keinen
 Passwort-Reset. Referenz: ADR-0014.
 
-- ⏳ **Plattform-CA**: Verfahren und Skript stehen
-  ([platform-ca.md](../runbooks/platform-ca.md)), die Zeremonie ist Handarbeit
-  bei Vita Brevis. Der Code-Pfad der Ausstellung ist fertig und gegen eine
+- ⏳ **Plattform-CA**: Verfahren und Skript stehen vollständig
+  ([platform-ca.md](../runbooks/platform-ca.md)); seit den Entscheiden E19 und
+  E20 (2026-09-09) ist auch geklärt, worauf die Zeremonie läuft (Live-System,
+  Hash im Protokoll) und wo das Protokoll lebt (Stick **und** `docs/ca/`).
+  Offen ist nur noch der Termin — die Zeremonie ist Handarbeit bei Vita
+  Brevis. Der Code-Pfad der Ausstellung ist fertig und gegen eine
   eigens gebaute Test-CA geprüft: der Agent schickt nur einen **CSR**, der
   Subject kommt aus der Agent-Zeile und nicht aus dem CSR, ein RSA-Schlüssel
   unter 3072 Bit wird abgelehnt, das Zertifikat trägt ausschliesslich

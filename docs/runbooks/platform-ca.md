@@ -6,7 +6,8 @@
 > Entscheid E9: **Offline-Root auf verschlüsselten USB-Sticks im Tresor**,
 > Passphrase getrennt davon bei zwei Schlüsselverwahrern.
 > Verwahrer: **Matthias Hadorn** und **Rolf Straubhaar**.
-> Status: **Verfahren festgelegt, Zeremonie noch nicht ausgeführt.**
+> Status: **Verfahren vollständig festgelegt (E9, E19, E20), Zeremonie noch
+> nicht ausgeführt — sie kann terminiert werden.**
 
 ## 1 · Warum es dieses Verfahren braucht
 
@@ -43,9 +44,33 @@ nicht, weil der Fingerprint-Abgleich ohnehin die scharfe Prüfung ist.)
 ## 3 · Einrichtung des Root (einmalig)
 
 **Vorbereitung.** Ein Rechner ohne Netzverbindung (Notebook, Netzwerkkabel
-gezogen, WLAN aus), ein Linux-Live-System vom USB-Stick, zwei neue
-USB-Sticks. Anwesend: **Matthias Hadorn** und **Rolf Straubhaar**, beide
-zeichnen das Protokoll.
+gezogen, WLAN aus), ein Linux-Live-System vom USB-Stick, zwei neue USB-Sticks
+plus einen **dritten, gewöhnlichen Transport-Stick** für das Protokoll.
+Anwesend: **Matthias Hadorn** und **Rolf Straubhaar**, beide zeichnen das
+Protokoll.
+
+**Das Live-System und sein Hash (Entscheid E20).** Kein dediziertes Gerät,
+sondern ein Live-System — aber eines, dessen Hash im Protokoll steht. Vor der
+Zeremonie, auf einem Rechner mit Netz:
+
+```bash
+# 1. Image und die signierten Prüfsummen des Herstellers holen
+#    (Debian: SHA256SUMS und SHA256SUMS.sign neben dem Image)
+gpg --verify SHA256SUMS.sign SHA256SUMS
+sha256sum -c SHA256SUMS --ignore-missing
+
+# 2. Diesen Hash notieren — er geht in die Zeremonie mit
+sha256sum debian-live-12.5-amd64-standard.iso
+```
+
+Die Reihenfolge ist der Punkt: erst die Signatur prüfen, dann den Hash nehmen.
+Wer den Hash des heruntergeladenen Images ohne Signaturprüfung protokolliert,
+protokolliert den Hash von etwas, das schon manipuliert sein konnte — sauber
+nachvollziehbar und wertlos.
+
+Das Skript **verlangt** diesen Hash bei `root` und `intermediate` und prüft im
+`preflight`, ob die Wurzel wirklich flüchtig ist (`overlay`, `tmpfs`,
+`squashfs`). Ein installiertes System ist dort ein Befund, kein Hinweis.
 
 [`scripts/platform-ca-ceremony.sh`](../../scripts/platform-ca-ceremony.sh)
 führt die Zeremonie schrittweise durch, prüft die Voraussetzungen und schreibt
@@ -53,7 +78,9 @@ die Fingerprints ins Protokoll, statt sie abschreiben zu lassen:
 
 ```bash
 ./scripts/platform-ca-ceremony.sh preflight
-./scripts/platform-ca-ceremony.sh root  --workdir /mnt/ceremony
+./scripts/platform-ca-ceremony.sh root  --workdir /mnt/ceremony \
+    --live-image debian-live-12.5-amd64-standard.iso \
+    --live-sha256 <der oben geprüfte Hash>
 ./scripts/platform-ca-ceremony.sh stick --workdir /mnt/ceremony --device /dev/sdX   # zweimal
 ```
 
@@ -133,7 +160,9 @@ immer mit Protokoll.
 ```bash
 # Mit dem Skript, auf dem Offline-Rechner mit entsperrtem Stick:
 ./scripts/platform-ca-ceremony.sh intermediate \
-    --workdir /mnt/ca --csr connector-int.csr --purpose connector
+    --workdir /mnt/ca --csr connector-int.csr --purpose connector \
+    --live-image debian-live-12.5-amd64-standard.iso \
+    --live-sha256 <der geprüfte Hash>
 ```
 
 Es prüft die Selbstsignatur der CSR, lässt den Subject bestätigen, setzt
@@ -159,8 +188,45 @@ Der private Schlüssel des Intermediate entsteht auf dem Server und verlässt ih
 nie. Der Root-Schlüssel verlässt den Offline-Rechner nie.
 
 **Protokoll** (Papier, beide Unterschriften): Datum, Anwesende, Zweck,
-Seriennummer, Fingerprint, welcher Datenträger benutzt wurde, wann er wieder
-verschlossen wurde.
+Seriennummer, Fingerprint, Live-System und dessen Hash, welcher Datenträger
+benutzt wurde, wann er wieder verschlossen wurde.
+
+## 4a · Das Protokoll ins Repository (Entscheid E19)
+
+Das Protokoll lebt an **zwei** Orten: auf dem Stick und im Repository unter
+[`docs/ca/`](../ca/). Der zweite Ort existiert für den Fall „wer hat dieses
+Intermediate ausgestellt, und wer war dabei?" zwei Jahre später — ohne
+Tresorgang, und auch dann noch, wenn beide Sticks verloren sind.
+
+Noch auf dem Offline-Rechner, **vor** dem Neustart:
+
+```bash
+# Nur diese eine Datei, auf einen gewöhnlichen Transport-Stick.
+cp /mnt/ceremony/PROTOKOLL.md /mnt/transport/
+```
+
+Danach, an einem Rechner **mit** Netz und Repository-Klon:
+
+```bash
+./scripts/platform-ca-ceremony.sh protokoll --file /mnt/transport/PROTOKOLL.md
+git add docs/ca/protokoll-*.md && git commit -m 'docs(ca): Protokoll der Zeremonie vom ...'
+```
+
+Zwei Dinge daran sind nicht Bequemlichkeit:
+
+* **Der CA-Stick hängt nie an einem Rechner mit Netz.** Deshalb der dritte,
+  gewöhnliche Transport-Stick — und deshalb läuft `protokoll` nicht auf dem
+  Offline-Rechner, der keinen Klon hat.
+* **Das Skript prüft, bevor es kopiert.** Der Weg ins Repository ist der einzige
+  Weg, auf dem etwas aus einer Zeremonie öffentlich werden kann; wer im Eifer
+  das ganze Arbeitsverzeichnis kopiert, kopiert den Root-Schlüssel mit. Es
+  lehnt PEM-Marker privater Schlüssel, `AGE-SECRET-KEY-1`, `MK digest:` und
+  einen Passphrase-**Wert** ab. Das Wort *Passphrase* darf stehen —
+  „Passphrase in zwei versiegelten Umschlägen" ist genau die Aussage, die
+  hineingehört.
+
+Gültig bleibt das unterschriebene Papier. Was im Repository liegt, ist die
+durchsuchbare Kopie.
 
 ## 5 · Widerruf
 
@@ -198,7 +264,7 @@ den Anschluss verliert.
 
 | Wann | Was |
 |---|---|
-| Jährlich | Beide Sticks lesen (Bitrot), `SHA256SUMS` prüfen, Protokoll ergänzen. Gleichzeitig prüfen, ob Matthias Hadorn und Rolf Straubhaar noch die richtigen Verwahrer sind und ob **beide Umschläge** noch vorhanden und versiegelt sind. |
+| Jährlich | Beide Sticks lesen (Bitrot), `SHA256SUMS` prüfen, Protokoll ergänzen — und das ergänzte Protokoll wieder nach `docs/ca/` exportieren (`protokoll --file ...`), sonst driftet die Kopie im Repository von der auf dem Stick weg. Gleichzeitig prüfen, ob Matthias Hadorn und Rolf Straubhaar noch die richtigen Verwahrer sind und ob **beide Umschläge** noch vorhanden und versiegelt sind. |
 | Jährlich | Verlustfall einmal trocken durchspielen: Stick holen, mit dem Umschlag entschlüsseln, `platform-ca-ceremony.sh verify --workdir /mnt/ca` laufen lassen, zurücklegen. Ein Verfahren, das nie geübt wurde, funktioniert im Ernstfall nicht. Diese Übung ist gleichzeitig die einzige regelmässige Prüfung, dass die Passphrase noch stimmt. |
 | 6 Monate vor Ablauf | Intermediate erneuern (Abschnitt 4). |
 | Bei Personalwechsel | Verwahrer wechseln, Umschlag neu versiegeln. |
@@ -215,16 +281,17 @@ den Anschluss verliert.
 | Dritter Datenträger | **nein** — zwei Kopien am kontrollierten Ort, dafür die Jahreskontrolle |
 | Zweiter Standort | **vorerst nicht**; die Begründung und der offen gelassene Fall stehen in Abschnitt 3 |
 
-**Noch offen — blockiert die Zeremonie nicht, sollte aber vor der ersten
-Ausstellung entschieden sein:**
+**Festgelegt (2026-09-09, Entscheide E19 und E20):**
 
-1. **Wo das Protokoll liegt.** Vorschlag: Papierordner im gleichen Tresor wie
-   die Sticks. Das Protokoll enthält **keine** Passphrase, nur Datum,
-   Anwesende, Zweck, Seriennummern und Fingerprints — es ist damit nicht
-   geheim, sondern beweisend, und gehört dorthin, wo man es beim nächsten Mal
-   sucht.
-2. **Ob der Offline-Rechner ein dediziertes Gerät** ist (bleibt im Tresor) oder
-   ein Live-System auf beliebiger Hardware. Vorschlag: Live-System — es ist
-   billiger, hinterlässt nichts und kann nicht veralten, während ein Gerät im
-   Tresor nach fünf Jahren mit ungepatchtem System aufwacht. Nachteil: bei jeder
-   Zeremonie eine halbe Stunde Aufsetzen.
+| Punkt | Entscheid |
+|---|---|
+| Wo das Protokoll liegt | **auf dem Stick und im Repository** unter `docs/ca/` (E19, Variante B). Das unterschriebene Papier bleibt das gültige Dokument; die Kopie im Repository ist die, die ohne Tresorgang lesbar ist und einen Verlust beider Sticks überlebt. Der Weg dorthin läuft über `platform-ca-ceremony.sh protokoll`, das vorher auf Geheimnisse prüft. |
+| Offline-Rechner | **Live-System auf bestehender Hardware** (E20, Variante A), kein dediziertes Gerät. Der Hash des Images steht im Protokoll und ist bei `root` und `intermediate` Pflicht. Ein Gerät für 250–400 CHF, das drei Jahre im Schrank liegt und dann mit ungepatchtem System aufwacht, ist teurer als der Gewinn. |
+
+**Damit ist nichts mehr offen, was die Zeremonie blockiert.** Sie braucht:
+das geprüfte Live-Image samt Hash, drei USB-Sticks (zwei neue für die CA, einer
+für den Transport des Protokolls), zwei Umschläge, beide Verwahrer und
+ungefähr zwei Stunden.
+
+Kommt später eine Zertifizierung, die ein dediziertes Gerät verlangt, ist der
+Wechsel eine Beschaffung und kein Umbau — das Verfahren bleibt dasselbe.
