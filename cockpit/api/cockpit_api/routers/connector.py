@@ -43,6 +43,8 @@ from cockpit_api.schemas.connector import (
     AgentEnrollRequest,
     AgentEnrollResponse,
     AgentOut,
+    AgentRenewRequest,
+    AgentRenewResponse,
     AgentRevoke,
     EnrollmentCreate,
     EnrollmentOut,
@@ -314,6 +316,75 @@ async def enroll(
         certificate_not_after=issued.not_after,
         api_key=secrets_.api_key,
         result_hmac_key=secrets_.result_hmac_key,
+    )
+
+
+@agent_api.post("/renew", response_model=AgentRenewResponse)
+async def renew(
+    payload: AgentRenewRequest,
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+    session: AsyncSession = Depends(get_session),
+) -> AgentRenewResponse:
+    """Zertifikat erneuern, ohne dass ein Mensch beim Kunden vorbeimuss.
+
+    Das Agentenzertifikat gilt 90 Tage. Ohne diesen Endpunkt wäre die
+    Erneuerung ein Widerruf in der Konsole plus ein neues Einmal-Token plus
+    ein Besuch beim Kunden — alle drei Monate, je Agent. Das würde niemand
+    durchhalten, und die Folge wäre nicht ein sauberer Ablauf, sondern
+    stillgelegte Agenten und ein längeres Zertifikat.
+
+    Beglaubigt wird die Anfrage durch ``current_agent``: bestehendes
+    Client-Zertifikat plus API-Key. Wer den aktuellen Schlüssel hat, darf
+    einen neuen bekommen — und ein widerrufener Agent kommt hier nicht durch,
+    weil ``authenticate_agent`` den Widerruf bei **jeder** Anfrage prüft. Das
+    ist der Grund, warum der Widerruf ein Datenbank-Flag ist und keine CRL:
+    eine CRL wäre morgen aktuell, und der Erneuerungs-Endpunkt wäre bis dahin
+    der Weg, aus einem widerrufenen Agenten einen gültigen zu machen.
+
+    Der Kunde wird nicht neu gewählt: er kommt aus der Agent-Zeile. Ein Agent
+    kann sich also nicht in einen anderen Kunden hinein erneuern.
+    """
+    agent, tenant = identity
+    try:
+        ca = ConnectorCa.from_settings(settings.connector_ca_cert, settings.connector_ca_key)
+        issued = ca.issue(payload.csr_pem, tenant_slug=tenant.slug, agent_name=agent.name)
+    except CertificateIssueError as exc:
+        logger.warning("Erneuerung für Agent %s abgelehnt: %s", agent.id, exc)
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+
+    if issued.spki_sha256 == agent.spki_sha256:
+        # Derselbe Schlüssel wie bisher. Zulässig wäre es, aber es hebt den
+        # Zweck auf: ein Schlüssel, der über Jahre auf einem Kundenserver
+        # liegt, wird nie gewechselt, und die Erneuerung ist die Gelegenheit.
+        # Ausserdem wäre die Buchhaltung unten falsch — previous und current
+        # wären derselbe Wert.
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Der CSR trägt denselben öffentlichen Schlüssel wie das bestehende "
+            "Zertifikat. Für eine Erneuerung ein neues Schlüsselpaar erzeugen.",
+        )
+
+    now = datetime.now(UTC)
+    agent.previous_spki_sha256 = agent.spki_sha256
+    agent.spki_rotated_at = now
+    agent.spki_sha256 = issued.spki_sha256
+    agent.certificate_serial = issued.serial_hex
+    agent.certificate_not_after = issued.not_after
+    if payload.agent_version:
+        agent.agent_version = payload.agent_version
+    await session.commit()
+    logger.info(
+        "Agent %s (%s) erneuert. Neuer SPKI %s, alter gilt noch bis %s.",
+        agent.name,
+        tenant.slug,
+        issued.spki_sha256,
+        (now + svc.ROTATION_GRACE).isoformat(),
+    )
+    return AgentRenewResponse(
+        certificate_pem=issued.certificate_pem,
+        spki_sha256=issued.spki_sha256,
+        certificate_not_after=issued.not_after,
+        previous_valid_until=now + svc.ROTATION_GRACE,
     )
 
 

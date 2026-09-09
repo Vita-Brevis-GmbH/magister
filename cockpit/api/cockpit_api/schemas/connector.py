@@ -53,6 +53,45 @@ class AgentEnrollResponse(BaseModel):
     result_hmac_key: str
 
 
+class AgentRenewRequest(BaseModel):
+    """Zertifikatserneuerung (ADR-0014).
+
+    Nur ein CSR — **kein Token**. Beglaubigt wird die Anfrage durch das
+    bestehende Client-Zertifikat und den API-Key: wer den aktuellen Schlüssel
+    besitzt, darf einen neuen bekommen. Ein Einmal-Token zu verlangen hiesse,
+    dass alle 90 Tage ein Mensch beim Kunden vorbeimuss, und genau das ist der
+    Zustand, den diese Erneuerung abschafft.
+
+    Der CSR trägt ein **neues** Schlüsselpaar. Dasselbe wiederzuverwenden wäre
+    einfacher (der Fingerprint bliebe gleich, es bräuchte kein
+    Übergangsfenster) und falsch: ein Schlüssel, der über Jahre auf einem
+    Kundenserver liegt, wird nie gewechselt. Die Erneuerung ist die
+    Gelegenheit.
+    """
+
+    csr_pem: str = Field(min_length=64, max_length=8192)
+    agent_version: str | None = Field(default=None, max_length=64)
+
+
+class AgentRenewResponse(BaseModel):
+    """Das neue Zertifikat.
+
+    **Ohne** API-Key und HMAC-Schlüssel: die bleiben unverändert. Sie in
+    derselben Antwort mitzudrehen wäre bequem und riskant — geht die Antwort
+    auf dem Rückweg verloren, hätte der Agent einen alten API-Key zu einem
+    neuen Zertifikat, und dann helfen auch zwei gültige Fingerprints nicht
+    mehr. Ein Ding zur Zeit.
+    """
+
+    certificate_pem: str
+    spki_sha256: str
+    certificate_not_after: datetime
+    #: Bis wann der alte Fingerprint zusätzlich gilt. Der Agent braucht das
+    #: nicht, aber es steht in seinem Protokoll — und wenn jemand eine
+    #: Aussperrung untersucht, ist es die erste Frage.
+    previous_valid_until: datetime
+
+
 class AgentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -63,6 +102,13 @@ class AgentOut(BaseModel):
     spki_sha256: str
     certificate_serial: str
     certificate_not_after: datetime
+    #: Läuft gerade eine Erneuerung, für die der Agent den neuen Fingerprint
+    #: noch nicht bestätigt hat? Gesetzt heisst: er hat sich seit der
+    #: Erneuerung noch nicht mit dem neuen Schlüssel gemeldet. Steht in der
+    #: Auskunft, weil es die erste Frage ist, wenn ein Agent nach einer
+    #: Erneuerung stumm wird.
+    previous_spki_sha256: str | None = None
+    spki_rotated_at: datetime | None = None
     agent_version: str | None
     last_seen_at: datetime | None
     revoked_at: datetime | None

@@ -323,3 +323,66 @@ Produktion, und alle Enum-Spalten speichern über `values_callable` den Wert.
   damit den Kern des Produkts.
 - **Agent mit eigener Geschäftslogik** (Reset lokal entscheiden): würde Logik
   und Audit duplizieren und die ADR-0011-Grenze aufweichen.
+
+
+## Nachtrag: Zertifikatserneuerung (2026-09-09)
+
+Das Agentenzertifikat gilt 90 Tage (`connector_ca.AGENT_CERT_DAYS`). Der ADR
+sagt nicht, wie es erneuert wird, und der Weg ohne Erneuerung wäre: Widerruf in
+der Konsole, neues Einmal-Token, Besuch beim Kunden — alle drei Monate, je
+Agent. Das hält niemand durch. Die Folge wäre nicht ein sauberer Ablauf,
+sondern stillgelegte Agenten und, beim ersten Ärger, ein Zertifikat mit fünf
+Jahren Laufzeit.
+
+**Erneuert wird über den beglaubigten Kanal** (`POST /connector/renew`):
+bestehendes Client-Zertifikat plus API-Key. Wer den aktuellen Schlüssel
+besitzt, darf einen neuen bekommen. Ein Einmal-Token zu verlangen hiesse, das
+Problem nur zu verschieben.
+
+Drei Festlegungen, die dazugehören:
+
+**N1 · Ein neues Schlüsselpaar, nicht dasselbe.** Denselben Schlüssel
+weiterzuverwenden wäre einfacher — der Fingerprint bliebe gleich, es bräuchte
+kein Übergangsfenster — und falsch: ein Schlüssel, der über Jahre auf einem
+Kundenserver liegt, wird nie gewechselt. Die Erneuerung ist die Gelegenheit.
+Ein CSR mit dem bestehenden Schlüssel wird abgewiesen.
+
+**N2 · Beide Fingerprints gelten sieben Tage.** Der Fall, um den herum das
+gebaut ist: die Plattform schreibt den neuen Fingerprint in die Agent-Zeile,
+und die Antwort geht auf dem Rückweg verloren — abgebrochene Verbindung,
+Proxy-Zeitüberschreitung, Neustart des Agenten in genau diesem Moment. Der
+Agent klopft dann weiter mit dem alten Schlüssel an, auf eine Zeile, die ihn
+nicht mehr kennt. Er wäre **ausgesperrt, und zwar endgültig**: ein neues
+Einmal-Token kann nur ein Mensch ausstellen, und beim Kunden sitzt niemand
+daneben.
+
+`connector_agents.previous_spki_sha256` und `spki_rotated_at` lösen das.
+Meldet sich der Agent mit dem **neuen** Fingerprint, ist die Erneuerung
+bestätigt und der alte wird sofort verworfen — je kürzer er gilt, desto
+besser. Nach Ablauf des Fensters gilt nur noch der neue; ein Schlüssel, der
+ewig zusätzlich gilt, ist ein zweiter Schlüssel und kein Übergang.
+
+**N3 · API-Key und HMAC-Schlüssel werden dabei nicht gedreht.** Beide in
+derselben Antwort mitzudrehen wäre bequem und würde die Aussperrung wieder
+möglich machen, die N2 verhindert: geht die Antwort verloren, hätte der Agent
+einen alten API-Key zu einem neuen Zertifikat, und dann helfen auch zwei
+gültige Fingerprints nicht. Ein Ding zur Zeit.
+
+**Was ein widerrufener Agent nicht kann:** sich erneuern. `authenticate_agent`
+prüft den Widerruf bei **jeder** Anfrage, und das ist der Grund, warum der
+Widerruf ein Datenbank-Flag ist und keine CRL. Eine CRL wäre morgen aktuell,
+und dieser Endpunkt wäre bis dahin der Weg um den Widerruf herum.
+
+**Auf der Agentenseite** wechselt die Erneuerung zwei Dateien (Zertifikat und
+Schlüssel), und dazwischen kann der Prozess sterben. Dann liegt ein neuer
+Schlüssel neben einem alten Zertifikat, der TLS-Handshake scheitert lokal, und
+im Protokoll steht eine OpenSSL-Meldung, die niemand mit „Erneuerung"
+verbindet. Der Agent legt deshalb das alte Paar als `.prev` daneben und
+stellt es beim Start wieder her, wenn das aktive Paar nicht zusammenpasst —
+das alte Zertifikat gilt zu diesem Zeitpunkt noch (erneuert wird 30 Tage
+vorher), und die Plattform akzeptiert den alten Fingerprint im
+Übergangsfenster. Der Agent läuft also weiter und versucht es erneut.
+
+Erneuert wird **30 Tage** vor Ablauf und nach einem Fehlschlag stündlich. 30
+von 90 ist reichlich, und das ist Absicht: bei sieben Tagen wären
+Betriebsferien beim Kunden genug, um den Agenten stillzulegen.

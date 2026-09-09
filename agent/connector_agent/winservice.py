@@ -126,6 +126,19 @@ class MagisterConnectorService(win32serviceutil.ServiceFramework):  # type: igno
             self._fail(str(exc))
             return
 
+        # Vor der ersten TLS-Verbindung: passt das Zertifikat noch zum
+        # Schlüssel? Eine Erneuerung, die mitten im Dateiwechsel abgebrochen
+        # ist, hinterlässt ein Paar, das nicht zusammengehört — und dann wäre
+        # die erste Meldung im Ereignisprotokoll ein OpenSSL-Fehler, den
+        # niemand mit „Erneuerung" verbindet.
+        from connector_agent.renewal import RenewalError, recover_if_broken
+
+        try:
+            recover_if_broken(config)
+        except RenewalError as exc:
+            self._fail(str(exc))
+            return
+
         secrets = load_secrets(config)
         if secrets is None:
             self._fail(

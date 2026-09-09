@@ -80,6 +80,18 @@ def cmd_run(args: argparse.Namespace) -> int:
     except ConfigError as exc:
         sys.stderr.write(f"{exc}\n")
         return 1
+
+    # Vor allem anderen: passt das Zertifikat noch zum Schlüssel? Eine
+    # Erneuerung, die mitten im Wechsel abgebrochen ist, hinterlässt ein Paar,
+    # das nicht zusammengehört — und dann wäre die erste Meldung ein
+    # OpenSSL-Fehler, den niemand mit „Erneuerung" verbindet.
+    from connector_agent.renewal import RenewalError, recover_if_broken
+
+    try:
+        recover_if_broken(config)
+    except RenewalError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
     secrets = load_secrets(config)
     if secrets is None:
         sys.stderr.write(
@@ -144,6 +156,7 @@ def cmd_check(args: argparse.Namespace) -> int:
         problems += 1
     else:
         sys.stdout.write(f"Anmeldung:    ok, SPKI {secrets.spki_sha256}\n")
+        problems += _report_certificate(config)
 
     if config.allowed_ous:
         sys.stdout.write(f"OU-Allowlist: {len(config.allowed_ous)} Eintrag/Einträge\n")
@@ -168,6 +181,39 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stdout.write(f"\n{problems} Punkt(e) offen.\n")
         return 1
     sys.stdout.write("\nAlles bereit.\n")
+    return 0
+
+
+def _report_certificate(config: AgentConfig) -> int:
+    """Restlaufzeit des Zertifikats melden. Rückgabe: Anzahl Probleme.
+
+    Steht im ``check``, weil es die Frage ist, die man bei einem Agenten, der
+    „seit gestern nichts mehr tut" als erste stellt — und weil ein Zertifikat,
+    das in drei Tagen abläuft, ein Befund ist und keine Randnotiz.
+    """
+    from connector_agent.renewal import RENEW_BEFORE_DAYS, RenewalError, days_until_expiry
+
+    try:
+        days = days_until_expiry(config.cert_path)
+    except RenewalError as exc:
+        sys.stdout.write(f"Zertifikat:   FEHLER — {exc}\n")
+        return 1
+    if days < 0:
+        sys.stdout.write(
+            f"Zertifikat:   ABGELAUFEN seit {abs(days):.0f} Tagen. Der Agent kommt "
+            "nicht mehr durch; in der Konsole widerrufen und neu anmelden.\n"
+        )
+        return 1
+    if days <= RENEW_BEFORE_DAYS:
+        # Kein Problem, sondern der vorgesehene Zustand: der Dienst erneuert
+        # in diesem Fenster selbständig. Ein "FEHLER" hier würde eine Abnahme
+        # unnötig durchfallen lassen.
+        sys.stdout.write(
+            f"Zertifikat:   läuft in {days:.0f} Tagen ab — der Dienst erneuert "
+            "selbständig (stündlicher Versuch, solange es nicht klappt).\n"
+        )
+        return 0
+    sys.stdout.write(f"Zertifikat:   ok, {days:.0f} Tage Restlaufzeit\n")
     return 0
 
 

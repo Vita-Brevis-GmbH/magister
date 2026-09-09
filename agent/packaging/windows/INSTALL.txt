@@ -98,6 +98,27 @@ Installationszeitpunkt ist der Agent noch nicht angemeldet und der Start würde
 nur eine Fehlermeldung erzeugen.
 
 
+Das Zertifikat erneuert sich selbst
+-----------------------------------
+Das Zertifikat des Agenten gilt 90 Tage. Der Dienst erneuert es selbständig, 30
+Tage vor Ablauf, über denselben Kanal. Sie müssen dafür nichts tun und es
+kommt niemand vorbei.
+
+  * `magister-connector check` nennt die Restlaufzeit. Innerhalb der letzten 30
+    Tage ist das kein Fehler, sondern der vorgesehene Zustand — der Dienst
+    versucht die Erneuerung dann stündlich, bis sie klappt.
+  * Scheitert sie, bleibt ein Monat Zeit. Im Protokoll steht der Grund; der
+    häufigste ist eine geschlossene Firewall.
+  * Bei jeder Erneuerung entsteht ein neues Schlüsselpaar. Das alte bleibt als
+    agent.pem.prev / agent-key.pem.prev daneben liegen — falls der Server
+    mitten im Wechsel neu startet, stellt der Dienst es beim nächsten Start
+    wieder her.
+
+Wurde der Agent in der Konsole **widerrufen**, kann er sich nicht erneuern. Das
+ist Absicht: sonst wäre die Erneuerung der Weg um einen Widerruf herum. Nach
+einem Serveraustausch also widerrufen und neu anmelden.
+
+
 Wo etwas steht, wenn etwas nicht geht
 -------------------------------------
 Protokoll:              C:\ProgramData\Magister Connector\agent.log
@@ -118,6 +139,8 @@ Was in diesem Verzeichnis liegt — und was Sie sichern sollten
     config.json      Ihre Konfiguration
     agent.pem        Zertifikat des Agenten
     agent-key.pem    sein privater Schlüssel  — verlässt den Server nie
+    agent.pem.prev   das vorherige Paar, aus der letzten Erneuerung
+    agent-key.pem.prev
     secrets.json     API-Key und HMAC-Schlüssel
     agent.log        Protokoll
 

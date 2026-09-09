@@ -56,6 +56,22 @@ SECRET_BYTES = 32
 #: bestehende Wartungsbanner, keinen Fehler.
 STALE_AFTER = timedelta(minutes=5)
 
+#: Wie lange der vorherige SPKI-Fingerprint nach einer Erneuerung zusätzlich
+#: gilt (ADR-0014).
+#:
+#: Der Übergang ist nötig, weil die Erneuerung sonst ein Vabanquespiel wäre:
+#: die Plattform schreibt den neuen Fingerprint, die Antwort geht auf dem
+#: Rückweg verloren (abgebrochene Verbindung, Proxy-Zeitüberschreitung,
+#: Neustart des Agenten in genau diesem Moment), und der Agent klopft weiter
+#: mit dem alten Schlüssel an — auf eine Zeile, die ihn nicht mehr kennt. Er
+#: wäre ausgesperrt, und zwar endgültig: ein neues Einmal-Token kann nur ein
+#: Mensch ausstellen, und beim Kunden sitzt niemand daneben.
+#:
+#: Sieben Tage, weil der Agent 30 Tage vor Ablauf erneuert und einen
+#: gescheiterten Versuch danach stündlich wiederholt. Länger wäre kein
+#: Übergang mehr, sondern ein zweiter gültiger Schlüssel.
+ROTATION_GRACE = timedelta(days=7)
+
 
 class ConnectorAuthError(RuntimeError):
     """Die Anfrage gehört zu keinem brauchbaren Agenten.
@@ -193,11 +209,40 @@ async def authenticate_agent(
     des Agenten und des Kunden entscheiden über die Bedienung.
     """
     normalized = spki_sha256.strip().lower()
+    now = datetime.now(UTC)
     agent = (
         await session.execute(
             select(ConnectorAgent).where(ConnectorAgent.spki_sha256 == normalized)
         )
     ).scalar_one_or_none()
+    via_previous = False
+    if agent is None:
+        # Zweiter Versuch über den vorherigen Fingerprint: eine Erneuerung, bei
+        # der die Antwort verloren ging. Ohne diesen Zweig wäre der Agent
+        # ausgesperrt (siehe ROTATION_GRACE).
+        agent = (
+            await session.execute(
+                select(ConnectorAgent).where(ConnectorAgent.previous_spki_sha256 == normalized)
+            )
+        ).scalar_one_or_none()
+        if agent is not None:
+            rotated = agent.spki_rotated_at
+            if rotated is None or now - rotated > ROTATION_GRACE:
+                # Übergangsfenster abgelaufen. Der alte Schlüssel ist damit
+                # endgültig ungültig — sonst wäre er ein zweiter gültiger.
+                logger.warning(
+                    "Agent %s meldet sich mit dem alten Fingerprint, das "
+                    "Übergangsfenster ist aber abgelaufen.",
+                    agent.id,
+                )
+                raise ConnectorAuthError("Übergangsfenster abgelaufen")
+            via_previous = True
+            logger.info(
+                "Agent %s meldet sich noch mit dem alten Fingerprint. Die "
+                "Erneuerung ist bei ihm nicht angekommen; er wird sie "
+                "wiederholen.",
+                agent.id,
+            )
     if agent is None:
         logger.warning("Connector-Anfrage mit unbekanntem SPKI-Fingerprint abgewiesen")
         raise ConnectorAuthError("unbekannter Agent")
@@ -223,9 +268,16 @@ async def authenticate_agent(
         )
         raise ConnectorAuthError("Kunde nicht aktiv")
 
-    agent.last_seen_at = datetime.now(UTC)
+    agent.last_seen_at = now
     if agent.status is not AgentStatus.online:
         agent.status = AgentStatus.online
+    if not via_previous and agent.previous_spki_sha256 is not None:
+        # Der Agent benutzt den NEUEN Schlüssel — die Erneuerung ist bei ihm
+        # angekommen. Damit ist der alte nicht mehr nötig, und je kürzer er
+        # gilt, desto besser.
+        logger.info("Erneuerung von Agent %s bestätigt, alter Fingerprint verworfen", agent.id)
+        agent.previous_spki_sha256 = None
+        agent.spki_rotated_at = None
     return agent, tenant
 
 

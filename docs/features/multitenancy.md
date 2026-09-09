@@ -410,10 +410,22 @@ Passwort-Reset. Referenz: ADR-0014.
   Konfiguration **ersetzt** statt ergänzt. Wer eine eigene Gruppe eintrug,
   verlor damit still den Schutz für „Domänen-Admins". Sie ist jetzt eine
   Untergrenze.
+- ✅ **Automatische Zertifikatserneuerung.** Das Agentenzertifikat gilt 90
+  Tage; ohne Erneuerung hätte jeder ausgelieferte Agent nach drei Monaten
+  aufgehört zu arbeiten, gleichzeitig bei allen Kunden. Der Dienst erneuert
+  jetzt selbständig 30 Tage vor Ablauf über den beglaubigten Kanal — kein
+  Token, kein Mensch beim Kunden. Ein widerrufener Agent kommt dabei nicht
+  durch; genau dafür ist der Widerruf ein Datenbank-Flag und keine CRL.
+
+  Der schwierige Teil war nicht die Erneuerung, sondern ihr Scheitern: geht
+  die Antwort auf dem Rückweg verloren, klopft der Agent weiter mit dem alten
+  Schlüssel an — auf eine Zeile, die ihn nicht mehr kennt. Er wäre
+  ausgesperrt, und endgültig. Deshalb gelten beide Fingerprints sieben Tage,
+  und lokal bleibt das alte Paar als `.prev` liegen, falls der Prozess mitten
+  im Dateiwechsel stirbt. Einzelheiten im Nachtrag zu ADR-0014.
 - ⏳ **Offen: `.deb`**, Signatur für das MSI (braucht ein
   Code-Signing-Zertifikat auf einem HSM), Paket-Download in der Konsole,
-  automatische Zertifikatserneuerung, automatische Updates (E10), AD-Sync als
-  Push über den Agenten.
+  automatische Updates (E10), AD-Sync als Push über den Agenten.
 - ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
   CLI).
 - **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem

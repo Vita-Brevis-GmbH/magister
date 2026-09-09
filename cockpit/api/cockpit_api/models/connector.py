@@ -69,6 +69,22 @@ class ConnectorAgent(Base):
     #: Zertifikatserneuerung mit demselben Schlüssel, anders als ein Fingerprint
     #: über das Zertifikat.
     spki_sha256: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    #: Der **vorherige** Fingerprint, während einer Zertifikatserneuerung
+    #: (ADR-0014). Ohne dieses Feld wäre die Erneuerung ein Vabanquespiel:
+    #: die Plattform schreibt den neuen Fingerprint, die Antwort geht auf dem
+    #: Rückweg verloren, und der Agent klopft weiter mit dem alten Schlüssel
+    #: an — auf eine Zeile, die ihn nicht mehr kennt. Er wäre ausgesperrt, und
+    #: zwar endgültig, denn ein neues Einmal-Token kann nur ein Mensch
+    #: ausstellen.
+    #:
+    #: Beide Fingerprints gelten deshalb für ein Zeitfenster (``ROTATION_GRACE``).
+    #: Meldet sich der Agent mit dem neuen, ist die Erneuerung bestätigt und
+    #: der alte wird gelöscht.
+    previous_spki_sha256: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
+    #: Wann der Fingerprint gedreht wurde. Begrenzt die Gültigkeit des
+    #: vorherigen: ein Schlüssel, der ewig zusätzlich gilt, ist ein zweiter
+    #: Schlüssel und kein Übergang.
+    spki_rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     #: Seriennummer des ausgestellten Zertifikats, hex. Fürs Protokoll.
     certificate_serial: Mapped[str] = mapped_column(String(64))
     certificate_not_after: Mapped[datetime] = mapped_column(DateTime(timezone=True))

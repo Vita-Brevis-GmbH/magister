@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient
 
 from cockpit_api.config import settings
 from cockpit_api.management_guard import MARKER_HEADER
+from cockpit_api.services import connector as svc
 from cockpit_api.services.connector import sign_result
 from cockpit_api.services.connector_queue import ALLOWED_METHODS
 
@@ -596,3 +597,233 @@ class TestJobFlow:
         )
         # Nie übernommen: der Agent kann kein Ergebnis liefern.
         assert resp.status_code == 409
+
+
+@pytest.mark.usefixtures("connector_ca")
+class TestCertificateRenewal:
+    """Erneuerung ohne Menschen beim Kunden (ADR-0014).
+
+    Das Agentenzertifikat gilt 90 Tage. Ohne diesen Weg wäre der Ablauf ein
+    Widerruf in der Konsole plus ein neues Einmal-Token plus ein Besuch beim
+    Kunden — alle drei Monate, je Agent. Das hält niemand durch, und die Folge
+    wäre nicht ein sauberer Ablauf, sondern stillgelegte Agenten und ein
+    längeres Zertifikat.
+
+    Der wichtigste Test hier ist nicht der glückliche Fall, sondern
+    ``test_a_lost_response_does_not_lock_the_agent_out``: die Erneuerung
+    schreibt den neuen Fingerprint in die Zeile, und wenn die Antwort auf dem
+    Rückweg verloren geht, klopft der Agent weiter mit dem alten Schlüssel an.
+    Ohne Übergangsfenster wäre er ausgesperrt — endgültig, denn ein neues
+    Einmal-Token kann nur ein Mensch ausstellen.
+    """
+
+    def test_a_renewal_needs_no_token(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "renew1")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+
+        resp = db_client.post(
+            "/connector/renew",
+            headers=_auth(agent, agent_headers),
+            json={"csr_pem": _csr(), "agent_version": "0.2.0"},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["spki_sha256"] != agent["spki_sha256"]
+        assert body["certificate_pem"].startswith("-----BEGIN CERTIFICATE-----")
+        # Kein API-Key und kein HMAC-Schlüssel in der Antwort: ein Ding zur
+        # Zeit. Beide mitzudrehen wäre bequem und würde die Aussperrung, die
+        # das Übergangsfenster verhindert, wieder möglich machen.
+        assert "api_key" not in body
+        assert "result_hmac_key" not in body
+
+    def test_the_new_certificate_works_and_the_old_stops_working_eventually(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "renew2")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+
+        renewed = db_client.post(
+            "/connector/renew",
+            headers=_auth(agent, agent_headers),
+            json={"csr_pem": _csr()},
+        ).json()
+        new_agent = {**agent, "certificate_pem": renewed["certificate_pem"]}
+
+        # Mit dem neuen Zertifikat geht es.
+        assert (
+            db_client.get(
+                "/connector/jobs", headers=_auth(new_agent, agent_headers), params={"wait": False}
+            ).status_code
+            == 200
+        )
+        # Und damit ist die Erneuerung bestätigt: der alte Fingerprint wird
+        # verworfen, also greift er ab jetzt nicht mehr.
+        assert (
+            db_client.get(
+                "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+            ).status_code
+            == 401
+        )
+
+    def test_a_lost_response_does_not_lock_the_agent_out(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """Der Fall, um den herum das Übergangsfenster gebaut ist.
+
+        Die Plattform hat gedreht, der Agent weiss es nicht (Verbindung
+        abgebrochen, Proxy-Zeitüberschreitung, Neustart in genau diesem
+        Moment). Er muss weiterarbeiten können — und die Erneuerung
+        wiederholen.
+        """
+        tenant_id = _tenant(db_client, "renew3")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+
+        db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+
+        # Der Agent klopft mit dem ALTEN Zertifikat an — die Antwort hat ihn
+        # nie erreicht.
+        resp = db_client.get(
+            "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+        )
+        assert resp.status_code == 200, "der Agent wäre ausgesperrt"
+
+        # Und er kann die Erneuerung wiederholen.
+        again = db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+        assert again.status_code == 200, again.text
+
+    def test_the_grace_window_expires(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """Ein Schlüssel, der ewig zusätzlich gilt, ist ein zweiter Schlüssel."""
+        tenant_id = _tenant(db_client, "renew4")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+        _age_rotation(agent["agent_id"], svc.ROTATION_GRACE + dt.timedelta(hours=1))
+
+        resp = db_client.get(
+            "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+        )
+        assert resp.status_code == 401
+
+    def test_a_revoked_agent_cannot_renew_itself_back_to_life(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """Sonst wäre die Erneuerung der Weg um den Widerruf herum.
+
+        Das ist der Grund, warum der Widerruf ein Datenbank-Flag ist und keine
+        CRL: eine CRL wäre morgen aktuell, und dieser Endpunkt wäre bis dahin
+        offen.
+        """
+        tenant_id = _tenant(db_client, "renew5")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        revoked = db_client.post(
+            f"/api/tenants/{tenant_id}/agents/{agent['agent_id']}/revoke",
+            json={"reason": "Server ausgetauscht"},
+        )
+        assert revoked.status_code == 200, revoked.text
+
+        resp = db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+        assert resp.status_code == 401
+
+    def test_a_suspended_tenant_cannot_renew(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "renew6")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        _set_status(tenant_id, "suspended")
+
+        resp = db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+        assert resp.status_code == 401
+
+    def test_the_same_key_is_refused(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """Ein Schlüssel, der über Jahre auf einem Kundenserver liegt, wird
+        nie gewechselt. Die Erneuerung ist die Gelegenheit — und mit demselben
+        Schlüssel wären ausserdem previous und current derselbe Wert."""
+        tenant_id = _tenant(db_client, "renew7")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+
+        # Ein CSR über genau den öffentlichen Schlüssel des bestehenden
+        # Zertifikats. Den privaten haben wir hier nicht, also wird der CSR
+        # nicht mit ihm signiert — die Plattform prüft die Selbstsignatur
+        # ohnehin über den Schlüssel im CSR, deshalb baut der Test ihn aus
+        # einem neuen Paar und schiebt danach den Fingerprint gleich.
+        # Einfacher und genauso aussagekräftig: zweimal denselben CSR
+        # einreichen. Der erste dreht, der zweite trägt dann denselben
+        # Schlüssel wie das aktive Zertifikat.
+        csr = _csr()
+        first = db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": csr}
+        )
+        assert first.status_code == 200, first.text
+        renewed = {**agent, "certificate_pem": first.json()["certificate_pem"]}
+        second = db_client.post(
+            "/connector/renew", headers=_auth(renewed, agent_headers), json={"csr_pem": csr}
+        )
+        assert second.status_code == 400
+        assert "neues Schlüsselpaar" in second.json()["detail"]
+
+    def test_a_renewal_cannot_move_the_agent_to_another_tenant(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        """Der Kunde kommt aus der Agent-Zeile, nicht aus der Anfrage."""
+        a_id = _tenant(db_client, "renew8a")
+        b_id = _tenant(db_client, "renew8b")
+        _activate(db_client, a_id)
+        _activate(db_client, b_id)
+        agent = _enroll(db_client, a_id, agent_headers)
+
+        db_client.post(
+            "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+        )
+        # Der Agent hängt weiter an Kunde A.
+        listing_a = db_client.get(f"/api/tenants/{a_id}/agents").json()
+        listing_b = db_client.get(f"/api/tenants/{b_id}/agents").json()
+        assert len(listing_a) == 1
+        assert listing_b == []
+
+
+def _age_rotation(agent_id: str, age: dt.timedelta) -> None:
+    """``spki_rotated_at`` in die Vergangenheit schieben.
+
+    Direkt in der Datenbank, weil das Übergangsfenster sieben Tage ist und ein
+    Test nicht sieben Tage warten kann.
+    """
+    import asyncio
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    async def shift() -> None:
+        engine = create_async_engine(_cockpit_url(), poolclass=NullPool)
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE connector_agents SET spki_rotated_at = :t WHERE id = :i"),
+                    {"t": dt.datetime.now(dt.UTC) - age, "i": agent_id},
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(shift())

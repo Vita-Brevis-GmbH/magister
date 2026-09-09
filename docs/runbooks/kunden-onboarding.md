@@ -167,6 +167,27 @@ Einzelheiten und der laufende Betrieb:
 4. AD-Verbindungstest aus der Konsole (`Verbindung testen`).
 5. Ersten AD-Sync auslösen, Benutzerzahl gegen die Erwartung prüfen.
 
+Unter **Windows** läuft Schritt 1 über das MSI; der Ablauf steht in
+`agent/packaging/windows/INSTALL.txt` und wird mitinstalliert. Zwei Dinge,
+die dort erklärt sind und hier oft gefragt werden: das Paket startet den
+Dienst absichtlich nicht (der Agent ist noch nicht angemeldet), und es fragt
+nicht nach dem Einmal-Token (eine MSI-Eigenschaft landet im
+Ereignisprotokoll).
+
+**Das Zertifikat des Agenten gilt 90 Tage und erneuert sich selbst** — 30 Tage
+vor Ablauf, über den beglaubigten Kanal, ohne Token und ohne Termin. Es gibt
+also keinen wiederkehrenden Besuch beim Kunden. Was zu wissen ist:
+
+* `magister-connector check` nennt die Restlaufzeit. Innerhalb der 30 Tage ist
+  das kein Befund, sondern der vorgesehene Zustand.
+* In der Konsole zeigt die Agent-Auskunft `spki_rotated_at`, solange der Agent
+  eine Erneuerung noch nicht bestätigt hat. Steht dort etwas älter als sieben
+  Tage, ist die Erneuerung nicht angekommen und der Agent arbeitet mit dem
+  alten Schlüssel — dann nachsehen, warum.
+* Ein **widerrufener** Agent kann sich nicht erneuern. Wer einen Server
+  austauscht, widerruft und meldet neu an; ein Widerruf ist nicht rückgängig
+  zu machen und das ist Absicht.
+
 ## 4 · Abnahme
 
 Der Kunde ist erst produktiv, wenn alle sechs Punkte grün sind:

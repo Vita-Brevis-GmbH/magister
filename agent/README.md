@@ -101,6 +101,40 @@ dasselbe in anderer Schreibweise:
   die MSI setzt, fehlt genau bei der Handinstallation, die dann drei Jahre
   läuft.
 
+## Zertifikatserneuerung
+
+Das Agentenzertifikat gilt 90 Tage. Der Dienst erneuert es **selbständig**, 30
+Tage vor Ablauf, über den beglaubigten Kanal — bestehendes Client-Zertifikat
+plus API-Key, kein Einmal-Token und kein Mensch beim Kunden. Scheitert es,
+wird stündlich erneut versucht; es bleibt ein Monat, in dem jemand eingreifen
+kann.
+
+`magister-connector check` nennt die Restlaufzeit. Innerhalb der 30 Tage ist
+das kein Befund, sondern der vorgesehene Zustand.
+
+**Ein widerrufener Agent kann sich nicht erneuern.** Der Widerruf ist ein
+Datenbank-Flag und wird bei jeder Anfrage geprüft — genau deshalb, und nicht
+über eine CRL: eine CRL wäre morgen aktuell, und der Erneuerungs-Endpunkt wäre
+bis dahin der Weg, aus einem widerrufenen Agenten einen gültigen zu machen.
+
+Bei jeder Erneuerung entsteht ein **neues Schlüsselpaar**. Dasselbe
+wiederzuverwenden wäre einfacher und falsch: ein Schlüssel, der über Jahre auf
+einem Kundenserver liegt, wird nie gewechselt.
+
+Damit der Wechsel keine Aussperrung werden kann, gelten in der Plattform für
+sieben Tage **beide** Fingerprints. Der Grund ist ein konkreter Fall: die
+Plattform schreibt den neuen Fingerprint, die Antwort geht auf dem Rückweg
+verloren (abgebrochene Verbindung, Proxy-Zeitüberschreitung, Neustart in genau
+diesem Moment), und der Agent klopft weiter mit dem alten Schlüssel an — auf
+eine Zeile, die ihn nicht mehr kennt. Er wäre ausgesperrt, und zwar endgültig.
+Meldet er sich mit dem neuen Fingerprint, gilt die Erneuerung als bestätigt und
+der alte wird verworfen.
+
+Lokal wechselt die Erneuerung zwei Dateien (Zertifikat und Schlüssel). Stirbt
+der Prozess dazwischen, passen sie nicht zusammen — der Agent legt deshalb das
+alte Paar als `.prev` daneben und stellt es beim Start wieder her, wenn das
+aktive Paar nicht zusammengehört.
+
 ## Voraussetzungen beim Kunden
 
 * **Ausgehend TCP 46200** zu `connect.magister.ch`. Kein Rückfall auf 443
@@ -140,8 +174,6 @@ uv run pyright
   installieren. Braucht ein Code-Signing-Zertifikat auf einem HSM — eine
   Beschaffung mit Kosten und mit derselben Verwahrungsfrage wie beim
   Plattform-CA-Schlüssel.
-* **Automatische Zertifikatserneuerung.** Das Zertifikat läuft nach 90 Tagen
-  ab; die Erneuerung ist heute ein erneutes `enroll` nach Widerruf.
 * **Automatische Updates** (Entscheid E10).
 * **Sync-Seiten als Push.** Der Agent holt heute nur Aufträge ab; der
   wiederkehrende AD-Sync läuft noch über den direkten Weg.

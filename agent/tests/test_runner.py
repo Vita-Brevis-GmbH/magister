@@ -8,7 +8,10 @@ werden, sonst wartet die Plattform auf etwas, das nie kommt.
 
 from __future__ import annotations
 
+import contextlib
+import datetime as dt
 import json
+from collections.abc import Generator
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +20,7 @@ import pytest
 
 from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.guardrails import Guardrails
+from connector_agent.renewal import RETRY_AFTER, RenewalError, RenewalResult
 from connector_agent.runner import AdExecutor, Runner
 from connector_agent.signing import canonical_result_body, sign_result
 from tests.helpers import FakeCa, write_enrolled_state
@@ -229,3 +233,96 @@ class TestPlatformStates:
         runner = _runner(tmp_path, platform, FakeAd())
         async with runner.build_client() as client:
             assert await runner.run_once(client) == 0
+
+
+class TestRenewalScheduling:
+    """Wann der Runner erneuert — und wie oft er es versucht (ADR-0014).
+
+    Das Zertifikat gilt 90 Tage; erneuert wird 30 Tage vor Ablauf. Die beiden
+    Fragen, die hier entschieden werden, sind betrieblich die wichtigeren:
+
+    * **Wie oft wird es versucht, wenn es scheitert?** Bei jedem Long-Poll
+      wären es ein paar tausend Versuche am Tag gegen einen Endpunkt, der eine
+      CA bemüht. Deshalb höchstens einer pro Stunde.
+    * **Bleibt der Agent währenddessen arbeitsfähig?** Ja — das bestehende
+      Zertifikat gilt noch einen Monat. Eine gescheiterte Erneuerung darf den
+      Abrufbetrieb nicht anhalten.
+    """
+
+    def test_a_fresh_certificate_needs_no_renewal(self, tmp_path: Path) -> None:
+        runner = _runner(tmp_path, FakePlatform([]), FakeAd())
+        assert runner.renewal_due() is False
+
+    def test_an_expiring_certificate_is_due(self, tmp_path: Path) -> None:
+        runner = _runner(tmp_path, FakePlatform([]), FakeAd())
+        # Die Attrappen-CA stellt für 90 Tage aus; 61 Tage später sind es 29.
+        soon = dt.datetime.now(dt.UTC) + dt.timedelta(days=61)
+        assert runner.renewal_due(now=soon) is True
+
+    def test_a_failed_attempt_is_not_repeated_immediately(self, tmp_path: Path) -> None:
+        """Sonst klopft der Agent bei jedem Long-Poll erneut an."""
+        runner = _runner(tmp_path, FakePlatform([]), FakeAd())
+        soon = dt.datetime.now(dt.UTC) + dt.timedelta(days=61)
+        runner.last_renewal_attempt = soon
+        assert runner.renewal_due(now=soon + dt.timedelta(minutes=5)) is False
+        assert runner.renewal_due(now=soon + RETRY_AFTER + dt.timedelta(minutes=1)) is True
+
+    @pytest.mark.asyncio
+    async def test_a_failed_renewal_does_not_stop_the_agent(self, tmp_path: Path) -> None:
+        """Das bestehende Zertifikat gilt noch einen Monat.
+
+        Ein Agent, der wegen einer gescheiterten Erneuerung aufhört, Aufträge
+        abzuholen, tauscht ein Problem in vier Wochen gegen einen Ausfall
+        jetzt.
+        """
+        platform = FakePlatform([])
+        ad = FakeAd()
+        runner = _runner(tmp_path, platform, ad)
+        soon = dt.datetime.now(dt.UTC) + dt.timedelta(days=61)
+
+        def refuse(*args: object, **kwargs: object) -> object:
+            raise RenewalError("Plattform nicht erreichbar")
+
+        with monkeypatched(renewal_module="connector_agent.runner", renew=refuse):
+            assert await runner.maybe_renew(now=soon) is False
+        # Der Versuch ist vermerkt, damit er nicht sofort wiederholt wird.
+        assert runner.last_renewal_attempt == soon
+
+    @pytest.mark.asyncio
+    async def test_a_successful_renewal_updates_the_fingerprint(self, tmp_path: Path) -> None:
+        """Der Runner trägt den neuen Fingerprint mit.
+
+        Er steht in ``secrets``, und der Client baut daraus nichts — aber der
+        Fingerprint wandert in ``secrets.json`` und ist die Antwort auf die
+        Frage „mit welchem Schlüssel arbeitet dieser Agent gerade".
+        """
+        runner = _runner(tmp_path, FakePlatform([]), FakeAd())
+        soon = dt.datetime.now(dt.UTC) + dt.timedelta(days=61)
+
+        def succeed(*args: object, **kwargs: object) -> RenewalResult:
+            return RenewalResult(
+                spki_sha256="b" * 64,
+                certificate_not_after=dt.datetime.now(dt.UTC) + dt.timedelta(days=90),
+            )
+
+        with monkeypatched(renewal_module="connector_agent.runner", renew=succeed):
+            assert await runner.maybe_renew(now=soon) is True
+        assert runner.secrets.spki_sha256 == "b" * 64
+
+
+@contextlib.contextmanager
+def monkeypatched(*, renewal_module: str, renew: object) -> Generator[None]:
+    """``renew`` im Runner-Modul austauschen.
+
+    Kein ``monkeypatch``-Fixture, weil diese Tests teils synchron und teils
+    asynchron sind und der Kontextmanager an beiden Stellen gleich aussieht.
+    """
+    import importlib
+
+    module = importlib.import_module(renewal_module)
+    original = module.renew
+    module.renew = renew  # type: ignore[assignment]
+    try:
+        yield
+    finally:
+        module.renew = original  # type: ignore[assignment]

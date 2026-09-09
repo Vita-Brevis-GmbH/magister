@@ -20,16 +20,24 @@ längst ein neues gewählt hat.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 
 import httpx
 
 from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.guardrails import Guardrails, GuardrailViolationError
+from connector_agent.renewal import (
+    RETRY_AFTER,
+    RenewalError,
+    days_until_expiry,
+    is_due,
+    renew,
+)
 from connector_agent.signing import canonical_result_body, sign_result
 from connector_agent.tls import build_context
 
@@ -85,6 +93,10 @@ class Runner:
     agent_version: str = "0.1.0"
     #: Injektionsnaht für Tests; sonst baut der Runner seinen eigenen Client.
     transport: httpx.AsyncBaseTransport | None = None
+    #: Wann zuletzt eine Erneuerung versucht wurde. Begrenzt die Versuche auf
+    #: einen pro ``RETRY_AFTER``; sonst wären es bei jedem Long-Poll einer,
+    #: also ein paar tausend am Tag gegen einen Endpunkt, der eine CA bemüht.
+    last_renewal_attempt: dt.datetime | None = None
 
     def build_client(self) -> httpx.AsyncClient:
         # Client-Zertifikat: die eine Hälfte der Authentisierung. Die andere
@@ -183,19 +195,72 @@ class Runner:
         if resp.status_code != 200:
             logger.warning("Ergebnis für Auftrag %s abgelehnt: HTTP %s", job_id, resp.status_code)
 
+    # -- Zertifikatserneuerung -------------------------------------------
+    def renewal_due(self, *, now: dt.datetime | None = None) -> bool:
+        """Ist eine Erneuerung fällig und der letzte Versuch lang genug her?"""
+        moment = now or dt.datetime.now(dt.UTC)
+        last = self.last_renewal_attempt
+        if last is not None and moment - last < RETRY_AFTER:
+            return False
+        return is_due(self.config.cert_path, now=moment)
+
+    async def maybe_renew(self, *, now: dt.datetime | None = None) -> bool:
+        """Erneuern, wenn fällig. ``True``, wenn ein neues Zertifikat da ist.
+
+        Läuft über ``asyncio.to_thread``: ``renew`` benutzt einen
+        **synchronen** httpx-Client, weil es dieselbe Naht wie ``enroll`` ist
+        und die von der Kommandozeile aus aufgerufen wird. Ihn hier direkt
+        aufzurufen hiesse, die Ereignisschleife für die Dauer eines
+        CA-Aufrufs anzuhalten — und damit auch jeden laufenden Auftrag.
+        """
+        if not self.renewal_due(now=now):
+            return False
+        self.last_renewal_attempt = now or dt.datetime.now(dt.UTC)
+        try:
+            days = days_until_expiry(self.config.cert_path)
+            logger.info("Zertifikat läuft in %.1f Tagen ab — Erneuerung wird versucht.", days)
+        except RenewalError:
+            logger.warning("Zertifikat nicht lesbar — Erneuerung wird versucht.")
+        try:
+            result = await asyncio.to_thread(
+                renew,
+                self.config,
+                self.secrets,
+                agent_version=self.agent_version,
+            )
+        except RenewalError as exc:
+            # Kein Abbruch: das bestehende Zertifikat gilt noch (erneuert wird
+            # 30 Tage vor Ablauf). Der Versuch wiederholt sich stündlich, und
+            # ein Mensch hat einen Monat Zeit.
+            logger.warning("Erneuerung gescheitert, wird wiederholt: %s", exc)
+            return False
+        self.secrets = replace(self.secrets, spki_sha256=result.spki_sha256)
+        return True
+
     async def serve_forever(self, stop: asyncio.Event | None = None) -> None:
         stop = stop or asyncio.Event()
-        async with self.build_client() as client:
-            while not stop.is_set():
-                try:
-                    await self.run_once(client)
-                except PermissionError as exc:
-                    logger.error("%s", exc)
-                    # Lange warten: das behebt ein Mensch in der Konsole.
-                    await _sleep_or_stop(stop, 60.0)
-                except (httpx.HTTPError, OSError) as exc:
-                    logger.warning("Plattform nicht erreichbar: %s", exc)
-                    await _sleep_or_stop(stop, self.config.backoff_seconds)
+        while not stop.is_set():
+            # Der Client trägt das Zertifikat in seinem SSL-Kontext. Nach einer
+            # Erneuerung muss er also neu gebaut werden — deshalb die äussere
+            # Schleife. Ein httpx-Client lässt seinen Kontext nicht
+            # nachträglich austauschen, und ein Neustart des Dienstes wäre die
+            # Alternative gewesen.
+            renewed = False
+            async with self.build_client() as client:
+                while not stop.is_set() and not renewed:
+                    try:
+                        renewed = await self.maybe_renew()
+                        if renewed:
+                            logger.info("Verbindung wird mit dem neuen Zertifikat neu aufgebaut.")
+                            break
+                        await self.run_once(client)
+                    except PermissionError as exc:
+                        logger.error("%s", exc)
+                        # Lange warten: das behebt ein Mensch in der Konsole.
+                        await _sleep_or_stop(stop, 60.0)
+                    except (httpx.HTTPError, OSError) as exc:
+                        logger.warning("Plattform nicht erreichbar: %s", exc)
+                        await _sleep_or_stop(stop, self.config.backoff_seconds)
 
 
 async def _sleep_or_stop(stop: asyncio.Event, seconds: float) -> None:
