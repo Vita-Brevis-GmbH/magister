@@ -145,8 +145,8 @@ async def get_desired_state(
     Nur lesend. Die Konsole schreibt nicht in das Schema des Kunden — sie hat
     dorthin keinen Zugang, und das ist keine Auslassung.
     """
-    await _known_tenant(session, tenant_id)
-    state = await SettingsService(session).desired_state(tenant_id)
+    tenant = await _known_tenant(session, tenant_id)
+    state = await SettingsService(session).desired_state(tenant)
     await session.commit()
     return DesiredStateOut(**state)
 

@@ -14,6 +14,7 @@ from cockpit_api.routers import (
     instances,
     offboarding,
     service_tokens,
+    templates,
     tenants,
     update_requests,
 )
@@ -95,6 +96,7 @@ app.include_router(offboarding.router, prefix="/api")
 # Systemeinstellungen und Rechte-Matrix als Soll-Zustand (ADR-0017). Zwei
 # Router, weil die Vorgaben plattformweit sind und die Abweichungen je Kunde.
 app.include_router(settings_router.platform, prefix="/api")
+app.include_router(templates.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(connector.console, prefix="/api")
 # Der Agentenpfad liegt NICHT unter /api: er kommt über den

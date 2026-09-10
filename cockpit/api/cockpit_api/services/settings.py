@@ -33,6 +33,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.models.settings import PlatformSettings, TenantSettings
+from cockpit_api.models.tenant import Tenant
+from cockpit_api.services.templates import TemplateService
 
 #: Die Politik-Schlüssel, die die Konsole für einen Kunden setzen darf, mit
 #: ihrem erwarteten Typ. Die Namen sind die der Datenebene
@@ -247,22 +249,28 @@ class SettingsService:
         await self._flush_and_load(row)
         return row
 
-    async def desired_state(self, tenant_id: UUID) -> dict[str, Any]:
+    async def desired_state(self, tenant: Tenant) -> dict[str, Any]:
         """Was für diesen Kunden gelten soll — so, wie die Datenebene es holt.
 
         Die Rechte-Matrix wird **ganz** ersetzt, wenn der Kunde eine eigene
         hat, sonst gilt die globale. Eine feldweise gemischte Rechte-Matrix
         wäre eine, die niemand mehr lesen kann.
+
+        Nimmt den Kunden und nicht seine Id: die Vorlagen-Zielgruppe fragt nach
+        seinem Profil (ADR-0018 D5), und ein zweites Laden derselben Zeile wäre
+        eine Abfrage, die nur deshalb existiert, weil die Signatur zu eng war.
         """
         platform = await self.platform()
-        tenant = await self.tenant(tenant_id)
-        overrides = tenant.overrides if tenant else {}
-        rbac = tenant.rbac if tenant and tenant.rbac is not None else platform.rbac
+        overrides_row = await self.tenant(tenant.id)
+        overrides = overrides_row.overrides if overrides_row else {}
+        own_rbac = overrides_row.rbac if overrides_row else None
+        rbac = own_rbac if own_rbac is not None else platform.rbac
         return {
             "settings": effective(platform.defaults, overrides),
             "rbac": rbac or {},
+            "templates": await TemplateService(self.session).desired_templates(tenant),
             "settings_source": "tenant" if overrides else "platform",
-            "rbac_source": "tenant" if (tenant and tenant.rbac is not None) else "platform",
+            "rbac_source": "tenant" if own_rbac is not None else "platform",
         }
 
 

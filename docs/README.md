@@ -79,6 +79,19 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 | [`0003`](adr/0003-vita-brevis-cockpit.md) | Cockpit als separates Ops-Tool |
 | [`0004`](adr/0004-ad-incremental-sync.md) | AD-Diff-Sync via `whenChanged`-Cursor |
 | [`0005`](adr/0005-fachlehrer-separate-table.md) | Fachlehrer als eigene Tabelle (nicht KL-Sub-Rolle) |
+| [`0006`](adr/0006-student-ad-provisioning.md) | Schüler-AD-Provisioning über den CSV-Import |
+| [`0007`](adr/0007-ad-gssapi-service-bind.md) | Optionaler GSSAPI/Kerberos-Service-Bind ans AD |
+| [`0008`](adr/0008-modulare-funktionen.md) | Modulare Funktionen mit Profil-Preset (Company-Readiness) |
+| [`0009`](adr/0009-mail-aliase-templates-namensaenderung.md) | Mail-Aliase, editierbare Vorlagen, geführte Namensänderung |
+| [`0010`](adr/0010-dynamische-rollen-rechte-matrix.md) | Voll dynamische Rollen plus Rechte-Matrix |
+| [`0011`](adr/0011-ad-service-boundary-10-container-split.md) | AD-Service als strikte Grenze, 10-Container-Split |
+| [`0012`](adr/0012-ninjaone-device-connector.md) | NinjaOne-Geräte-Connector (lesen plus Scripts starten) |
+| [`0013`](adr/0013-mandantenfaehigkeit-control-plane.md) | Mandantenfähigkeit: Steuerebene plus Schema je Kunde |
+| [`0014`](adr/0014-ad-connector-agent.md) | AD-Connector-Agent: ausgehend, mTLS mit privater CA |
+| [`0015`](adr/0015-authentisierungs-haertung.md) | Authentisierungs-Härtung: Konsolen-Port, TOTP, kein AD-Login |
+| [`0016`](adr/0016-sicherung-wiederherstellung-export.md) | Sicherung, Wiederherstellung und Export pro Kunde |
+| [`0017`](adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md) | Systemeinstellungen und Rechte gehören der Konsole |
+| [`0018`](adr/0018-globale-vorlagen.md) | Globale Vorlagen der Plattform, eigener Text des Kunden |
 
 (ADRs 0001/0002 wurden vor M4 vergeben.)
 

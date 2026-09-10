@@ -55,6 +55,17 @@ class TenantSettingsUpdate(BaseModel):
     actor: str = Field(min_length=1, max_length=320)
 
 
+class DesiredTemplateOut(BaseModel):
+    """Eine globale Vorlage, wie die Datenebene sie materialisiert (ADR-0018)."""
+
+    key: str
+    language: str
+    subject: str | None
+    body_html: str
+    may_override: bool
+    version: int
+
+
 class DesiredStateOut(BaseModel):
     """Was für diesen Kunden gelten soll — die Sicht der Datenebene.
 
@@ -65,12 +76,18 @@ class DesiredStateOut(BaseModel):
 
     settings: dict[str, Any]
     rbac: dict[str, list[str]]
+    #: Die **vollständige** Liste der Plattformvorlagen für diesen Kunden
+    #: (ADR-0018 D6): was nicht darin steht, wird bei ihm entfernt. Eine leere
+    #: Liste heisst „keine" — „keine Aussage" wäre ein fehlendes Feld, und das
+    #: kann nur eine ältere Konsole liefern.
+    templates: list[DesiredTemplateOut] = []
     settings_source: str
     rbac_source: str
 
 
 __all__ = [
     "DesiredStateOut",
+    "DesiredTemplateOut",
     "PlatformSettingsOut",
     "PlatformSettingsUpdate",
     "TenantSettingsOut",
