@@ -29,6 +29,7 @@ from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 from magister_api.services.rbac import RbacService
+from magister_api.services.reconcile_loop import reconcile_loop
 from magister_api.tenancy.context import (
     console_refresh_loop,
     dispose_tenancy,
@@ -102,9 +103,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Zwischenspeicher, weil jeder selbst auflöst. Anders als der AD-Sync ist
     # das kein exklusiver Vorgang — es ist ein Lesevorgang ohne Nebenwirkung.
     registry_task: asyncio.Task[None] | None = None
+    # Der Abgleich des Soll-Zustands (ADR-0017) hängt an derselben Bedingung
+    # und läuft ebenfalls in jedem Container: er schreibt nur Differenzen, und
+    # zwei Container finden dieselbe Differenz nur einmal.
+    reconcile_task: asyncio.Task[None] | None = None
     if settings.console_registry_url:
         registry_task = asyncio.create_task(
             console_refresh_loop(settings, stop=stop_event), name="console-registry-refresh"
+        )
+        reconcile_task = asyncio.create_task(
+            reconcile_loop(settings, stop=stop_event), name="platform-settings-reconcile"
         )
     if settings.run_scheduler:
         sync_task = asyncio.create_task(
@@ -126,6 +134,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             registry_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await registry_task
+        if reconcile_task is not None:
+            reconcile_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await reconcile_task
         if sync_task is not None:
             sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

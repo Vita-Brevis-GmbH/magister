@@ -304,6 +304,7 @@ class AppSettingsService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        action: str = "app_settings_updated",
     ) -> AppSettingsOut:
         """Apply non-None fields, encrypt secrets only when payload sends them.
 
@@ -408,7 +409,13 @@ class AppSettingsService:
         )
 
         await AuditService(self.session, self._settings).emit(
-            action="app_settings_updated",
+            # ``action`` ist überschreibbar, damit der Kunde im Protokoll
+            # unterscheiden kann, ob ein Mensch im Haus das Formular ausgefüllt
+            # hat oder die Plattform ihren Soll-Zustand materialisiert hat
+            # (ADR-0017 D4). Ein gemeinsamer Name für beides wäre eine
+            # Zeitersparnis beim Schreiben und eine Frage ohne Antwort beim
+            # Lesen.
+            action=action,
             target_kind="app_settings",
             target_id="1",
             actor_upn=actor_upn,
