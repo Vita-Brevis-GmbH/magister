@@ -404,3 +404,121 @@ class TestPrintingUsesTheChain:
         )
         (row,) = await _delivered(db_session)
         assert (row.version, row.body_html) == (1, PLATFORM_BODY)
+
+
+class TestTheHintAndItsAcknowledgement:
+    """Der Hinweis „neue globale Fassung verfügbar" (ADR-0018 D4).
+
+    Zwei Dinge, die ohne Prüfung auseinanderlaufen: der Hinweis darf nicht
+    beim Speichern des eigenen Textes verschwinden (dann hätte niemand die
+    neue Fassung gelesen), und er darf nach dem Quittieren nicht wiederkommen
+    (dann wäre er nach einer Woche Tapete).
+    """
+
+    async def test_without_a_platform_version_there_is_no_hint(
+        self, as_admin: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        await _own_template(db_session)
+        body = (await as_admin.get("/templates")).json()
+        (row,) = body["templates"]
+        assert row["platform_update_available"] is False
+        assert body["platform_templates"] == []
+
+    async def test_a_delivery_raises_the_hint(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template())
+        body = (await as_admin.get("/templates")).json()
+        (row,) = body["templates"]
+        assert row["platform_update_available"] is True
+        # Mit Text: wer entscheiden soll, ob er seine Fassung aufgibt, muss die
+        # neue lesen können.
+        assert body["platform_templates"][0]["body_html"] == PLATFORM_BODY
+
+    async def test_acknowledging_lowers_it(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        own = await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template())
+        response = await as_admin.post(f"/templates/{own.id}/acknowledge")
+        assert response.status_code == 200, response.text
+        assert response.json()["platform_update_available"] is False
+
+        body = (await as_admin.get("/templates")).json()
+        assert body["templates"][0]["platform_version_ack"] == 1
+
+    async def test_the_next_version_raises_it_again(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        own = await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template())
+        await as_admin.post(f"/templates/{own.id}/acknowledge")
+        await _reconcile(db_session, app_settings, _template(version=2, body_html="<p>neu</p>"))
+        body = (await as_admin.get("/templates")).json()
+        assert body["templates"][0]["platform_update_available"] is True
+
+    async def test_saving_the_own_text_does_not_acknowledge(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        """Der Entscheid aus D4, als Prüfung.
+
+        Der bequeme Entwurf hätte die Quittung an das Speichern gehängt. Dann
+        verschwindet der Hinweis, sobald jemand ein Komma in seinem eigenen
+        Text ändert — und niemand hat die neue Fassung gesehen.
+        """
+        await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template())
+        saved = await as_admin.put(
+            "/templates",
+            json={
+                "key": "enrollment",
+                "language": "de",
+                "school_id": None,
+                "subject": "Eigener Betreff",
+                "body_html": OWN_BODY + "<p>Nachtrag</p>",
+                "is_active": True,
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        body = (await as_admin.get("/templates")).json()
+        assert body["templates"][0]["platform_update_available"] is True
+
+    async def test_a_lock_is_visible_on_the_own_row(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        # Der Text bleibt sichtbar — als „liegt bereit, gilt derzeit nicht".
+        # Ein verschwundener Text ist ein Fehlerbild.
+        await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template(may_override=False))
+        body = (await as_admin.get("/templates")).json()
+        (row,) = body["templates"]
+        assert row["superseded_by_platform"] is True
+        assert row["body_html"] == OWN_BODY
+
+    async def test_acknowledging_an_unknown_row_is_404(self, as_admin: AsyncClient) -> None:
+        assert (await as_admin.post("/templates/9999/acknowledge")).status_code == 404
+
+    async def test_acknowledging_without_a_delivery_is_not_an_error(
+        self, as_admin: AsyncClient, db_session: AsyncSession
+    ) -> None:
+        """Der Betreiber kann die Vorlage zurückgezogen haben, während der
+        Hinweis in der Oberfläche noch stand. Das ist kein Fehler des Kunden.
+        """
+        own = await _own_template(db_session)
+        response = await as_admin.post(f"/templates/{own.id}/acknowledge")
+        assert response.status_code == 200
+        assert response.json()["platform_version_ack"] is None
+
+    async def test_the_acknowledgement_is_audited(
+        self, as_admin: AsyncClient, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        own = await _own_template(db_session)
+        await _reconcile(db_session, app_settings, _template())
+        await as_admin.post(f"/templates/{own.id}/acknowledge")
+        stmt = (
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == "document_template_platform_acknowledged")
+        )
+        assert (await db_session.execute(stmt)).scalar_one() == 1

@@ -15,6 +15,8 @@ from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_admin
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
+from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.document_templates import (
     DocumentTemplateListOut,
@@ -24,6 +26,7 @@ from magister_api.schemas.document_templates import (
     DocumentTemplatePreviewRequest,
     DocumentTemplateSave,
     DocumentTemplateStarter,
+    PlatformTemplateOut,
 )
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.document_templates import (
@@ -39,6 +42,25 @@ from magister_api.services.document_templates import (
 router = APIRouter(prefix="/templates", tags=["templates"])
 
 _LANGUAGES = ("de", "fr", "it", "en")
+
+
+def _out(row: DocumentTemplate, platform: PlatformDocumentTemplate | None) -> DocumentTemplateOut:
+    """Die eigene Zeile plus, was die Plattform dazu sagt (ADR-0018 D4).
+
+    Die zwei Wahrheitswerte werden **hier** ausgerechnet und nicht im
+    Frontend: „neuer als quittiert" ist die Regel, und eine Regel, die in
+    zwei Sprachen steht, steht irgendwann in zwei Fassungen da.
+    """
+    out = DocumentTemplateOut.model_validate(row)
+    if platform is None:
+        return out
+    ack = row.platform_version_ack
+    return out.model_copy(
+        update={
+            "platform_update_available": ack is None or ack < platform.version,
+            "superseded_by_platform": not platform.may_override,
+        }
+    )
 
 
 def _meta(profile: str) -> DocumentTemplateMetaOut:
@@ -63,10 +85,40 @@ async def list_templates(
     svc = DocumentTemplateService(session, settings)
     rows = await svc.list_for_admin(school_id=school_id)
     cfg = await AppSettingsService(session, settings).get_module_settings()
+    platform = await svc.platform_state()
     return DocumentTemplateListOut(
-        templates=[DocumentTemplateOut.model_validate(r) for r in rows],
+        templates=[_out(row, platform.get((row.key, row.language))) for row in rows],
         meta=_meta(cfg.instance_profile),
+        platform_templates=[PlatformTemplateOut.model_validate(row) for row in platform.values()],
     )
+
+
+@router.post("/{template_id}/acknowledge", response_model=DocumentTemplateOut)
+async def acknowledge_platform_version(
+    template_id: int,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> DocumentTemplateOut:
+    """„Neue globale Fassung gesehen" (ADR-0018 D4).
+
+    Ein eigener Endpunkt und kein Nebeneffekt des Speicherns: wer seinen Text
+    bearbeitet, hat damit nicht gesagt, dass er den neuen gelesen hat.
+    """
+    svc = DocumentTemplateService(session, settings)
+    ip, request_id = _ip_request_id(request)
+    row = await svc.acknowledge(
+        template_id=template_id,
+        actor_upn=user.upn,
+        actor_object_guid=user.ad_object_guid,
+        ip=ip,
+        request_id=request_id,
+    )
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "template_not_found")
+    platform = await svc.platform_state()
+    return _out(row, platform.get((row.key, row.language)))
 
 
 @router.put("", response_model=DocumentTemplateOut)

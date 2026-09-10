@@ -7,9 +7,10 @@
 > [ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md) (Sicherung,
 > Wiederherstellung, Export) und
 > [ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)
-> (Systemeinstellungen und Rechte in der Konsole).
-> Status (2026-09-10): **Phasen 0, 1, 2, 2a, 2b und 3 stehen.** Offen sind die
-> Anmeldung der Konsole über OIDC (Entscheid E21) und die Phasen 4 bis 6.
+> (Systemeinstellungen und Rechte in der Konsole) und
+> [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen).
+> Status (2026-09-10): **Phasen 0, 1, 2, 2a, 2b, 3 und 4 stehen.** Offen sind
+> die Anmeldung der Konsole über OIDC (Entscheid E21) und die Phasen 5 und 6.
 > Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
 
 ## 1 · Ziel
@@ -600,14 +601,44 @@ der Test nicht bei jeder neuen Fachroute hochgesetzt werden muss. Er schlägt
 fehl, sobald eine System- oder Rechte-Matrix-Route in der gehosteten Fläche
 wieder auftaucht *und* sobald der Filter mehr wegnimmt als die fünf Pfade.
 
-### Phase 4 — Globale Vorlagen
+### Phase 4 — Globale Vorlagen ✅
 
-- Globale Vorlagen mit Version und `tenant_may_override`; Rollout auf alle
-  Kunden, ein Profil oder eine Auswahl.
-- Auflösungskette im Renderer; Hinweis „neue globale Fassung verfügbar" beim
-  Kunden mit eigener Fassung.
-- **Abnahme:** Rollout ist idempotent; ein Kunde mit eigener Fassung bleibt
-  unverändert; Ausfall der Konsole verhindert kein Drucken.
+Referenz: **[ADR-0018](../adr/0018-globale-vorlagen.md)** (2026-09-10).
+
+- ✅ `platform_templates` in der Konsole, mit Fassungsnummer und
+  `may_override`; Zielgruppe **alle**, ein **Profil** oder eine **Auswahl**
+  von Kunden, in der Konsole aufgelöst (D5). Die Fassungsnummer steigt nur bei
+  einer inhaltlichen Änderung — eine Änderung der Zielgruppe bumpt nicht (D4),
+  sonst leuchtete bei jedem Kunden „neue Fassung", weil in der Konsole jemand
+  ein Häkchen verschoben hat.
+- ✅ Die Vorlagen reisen im **Soll-Zustand** (D1): derselbe Kanal wie die
+  Einstellungen, dieselbe Richtung — die Datenebene holt. Materialisiert wird
+  in `platform_document_templates` im Kundenschema; der Renderer liest eine
+  lokale Tabelle und weiss nicht, ob die Konsole läuft.
+- ✅ **Auflösungskette** in einer Funktion
+  (`DocumentTemplateService.resolve_effective`): gesperrte Plattformfassung >
+  eigene Standortfassung > eigene globale Fassung > freigegebene
+  Plattformfassung > eingebaute Vorlage (D3).
+- ✅ Hinweis „neue globale Fassung verfügbar" mit **ausdrücklicher Quittung**
+  (`platform_version_ack`, ein eigener Endpunkt): wer seinen Text bearbeitet,
+  hat damit nicht gesagt, dass er den neuen gelesen hat (D4).
+- ✅ **Abnahme, alle drei erfüllt und geprüft:** der zweite Lauf schreibt
+  nichts (kein neuer `delivered_at`, kein Audit-Ereignis); ein Kunde mit
+  eigener Fassung bleibt unverändert — auch beim Zurückziehen und unter einer
+  Sperre; und gedruckt wird aus der lokalen Tabelle, ohne die Konsole zu
+  fragen.
+
+**Zwei Dinge, die im Plan nicht standen:**
+
+1. **Eine Sperre löscht nichts** (D3). Der eigene Text des Kunden bleibt
+   liegen und gilt wieder, sobald die Sperre aufgehoben wird — die Oberfläche
+   sagt das ausdrücklich, weil ein verschwundener Text ein Fehlerbild ist.
+2. **Was sich nicht rendern lässt, wird nicht ausgeliefert** (D7). Nachträglich
+   aus einem Test: eine Vorlage mit einem Platzhalter, den es nicht gibt, liess
+   den Brief in einer Ausnahme enden — der erste Ort, an dem der Tippfehler
+   aufgefallen wäre, war der Drucker eines Kunden. Der Abgleich rendert deshalb
+   gegen den Beispielkontext und weist ab; die bisherige brauchbare Fassung
+   bleibt in Kraft.
 
 ### Phase 5 — Kundenwahl und Operator-Zugriff
 

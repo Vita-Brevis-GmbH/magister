@@ -8,7 +8,8 @@ import {
   usePreviewDocumentTemplate,
   useSaveDocumentTemplate,
 } from "@/api/hooks";
-import type { DocumentTemplateOut } from "@/api/types";
+import type { DocumentTemplateOut, PlatformTemplateOut } from "@/api/types";
+import { PlatformTemplateNotice } from "@/components/PlatformTemplateNotice";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,14 @@ function DocumentTemplatesPage(): JSX.Element {
       q.data?.templates.find(
         (tpl) => tpl.key === key && tpl.language === language && tpl.school_id === null,
       ),
+    [q.data, key, language],
+  );
+
+  // Was der Betreiber zu genau dieser Vorlage geliefert hat (ADR-0018).
+  // Ohne Standort: eine Plattformvorlage gilt für den ganzen Mandanten.
+  const platform: PlatformTemplateOut | undefined = useMemo(
+    () =>
+      q.data?.platform_templates.find((tpl) => tpl.key === key && tpl.language === language),
     [q.data, key, language],
   );
 
@@ -107,6 +116,8 @@ function DocumentTemplatesPage(): JSX.Element {
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <section className="space-y-4 rounded-md border bg-card p-4">
+            <PlatformTemplateNotice platform={platform} own={existing} />
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="tpl-key">{t("doc_templates.key")}</Label>

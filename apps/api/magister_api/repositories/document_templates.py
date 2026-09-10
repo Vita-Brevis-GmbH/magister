@@ -81,22 +81,14 @@ class DocumentTemplateRepository:
         )
         return list((await self.session.execute(stmt)).scalars().all())
 
-    async def acknowledge_platform_version(
-        self, *, key: str, language: str, school_id: int | None, version: int
-    ) -> DocumentTemplate | None:
-        """Die neue Plattformfassung als gesehen quittieren (ADR-0018 D4).
+    async def touch(self, row: DocumentTemplate) -> None:
+        """Änderungen an einer geladenen Zeile schreiben.
 
-        Nur an der eigenen Zeile des Kunden: quittiert wird „ich habe die
-        neue Fassung angeschaut", und das sagt der, der die eigene pflegt.
-        Gibt es keine eigene Zeile, gibt es auch keinen Hinweis — dann ist
-        nichts zu quittieren.
+        Ohne `updated_at`/`updated_by` anzufassen: eine Quittung ist keine
+        Bearbeitung des Textes, und „zuletzt geändert von" soll nicht auf den
+        zeigen, der nur einen Hinweis weggeklickt hat.
         """
-        row = await self.get_exact(key=key, language=language, school_id=school_id)
-        if row is None:
-            return None
-        row.platform_version_ack = version
         await self.session.flush()
-        return row
 
     async def get(self, template_id: int) -> DocumentTemplate | None:
         return await self.session.get(DocumentTemplate, template_id)

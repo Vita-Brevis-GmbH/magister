@@ -250,6 +250,23 @@ export function useDeleteDocumentTemplate() {
   });
 }
 
+/**
+ * „Neue globale Fassung gesehen" (ADR-0018 D4).
+ *
+ * Ein eigener Aufruf und kein Nebeneffekt des Speicherns: wer seinen Text
+ * bearbeitet, hat damit nicht gesagt, dass er den neuen gelesen hat.
+ */
+export function useAcknowledgePlatformTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplateOut, ApiError, number>({
+    mutationFn: (id) =>
+      apiFetch<DocumentTemplateOut>(`/templates/${id}/acknowledge`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
 export function usePreviewDocumentTemplate() {
   return useMutation<DocumentTemplatePreviewOut, ApiError, DocumentTemplatePreviewRequest>({
     mutationFn: (body) =>

@@ -1311,5 +1311,17 @@
     "settings_desc": "Les paramètres système de cette installation sont gérés de manière centralisée et ne se modifient pas ici.",
     "settings_title": "Géré par Vita Brevis",
     "who": "La gestion est assurée par Vita Brevis dans la console d'exploitation. Les modifications arrivent automatiquement ici et figurent dans votre journal d'audit."
+  },
+  "platform_tpl": {
+    "locked_title": "Imposé par l'exploitant",
+    "locked_desc": "Pour ce modèle, c'est la version de Vita Brevis qui s'applique. Votre propre texte reste enregistré et s'appliquera de nouveau dès que la consigne sera levée — il n'est pas supprimé.",
+    "update_title": "Nouvelle version globale disponible",
+    "update_desc": "Vita Brevis a livré la version {{version}} de ce modèle. Votre version reste en vigueur; vous pouvez lire la nouvelle et en reprendre ce qui vous convient.",
+    "applies_title": "Version de Vita Brevis en vigueur",
+    "applies_desc": "Vous n'avez pas de texte propre pour ce modèle. C'est la version de l'exploitant qui est imprimée; dès que vous enregistrez ici, la vôtre s'applique.",
+    "show": "Afficher la version de l'exploitant",
+    "hide": "Masquer la version de l'exploitant",
+    "acknowledge": "Vu",
+    "acknowledging": "Enregistrement …"
   }
 }

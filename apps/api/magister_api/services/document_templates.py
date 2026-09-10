@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.repositories.document_templates import DocumentTemplateRepository
 
 # The letter templates an operator may override (mirrors letters.ALLOWED_TEMPLATES).
@@ -270,6 +271,50 @@ class DocumentTemplateService:
 
     async def list_for_admin(self, *, school_id: int | None) -> list[DocumentTemplate]:
         return await self.repo.list_for_admin(school_id=school_id)
+
+    async def platform_state(self) -> dict[tuple[str, str], PlatformDocumentTemplate]:
+        """Die gelieferten Fassungen, nach `(key, language)` greifbar."""
+        return {(row.key, row.language): row for row in await self.repo.platform_rows()}
+
+    async def acknowledge(
+        self,
+        *,
+        template_id: int,
+        actor_upn: str | None,
+        actor_object_guid: str | None,
+        ip: str | None,
+        request_id: str,
+    ) -> DocumentTemplate | None:
+        """„Die neue globale Fassung habe ich gesehen" (ADR-0018 D4).
+
+        Quittiert wird die Fassung, die **gerade** geliefert ist — nicht eine
+        vom Aufrufer genannte Nummer. Sonst könnte eine Oberfläche mit einem
+        veralteten Stand eine Fassung quittieren, die noch nicht da ist, und
+        der Hinweis wäre für die nächste echte Lieferung verbraucht.
+        """
+        row = await self.repo.get(template_id)
+        if row is None:
+            return None
+        platform = await self.repo.platform_row(key=row.key, language=row.language)
+        if platform is None:
+            # Nichts zu quittieren. Kein Fehler: es kann sein, dass der
+            # Betreiber die Vorlage gerade zurückgezogen hat, während die
+            # Oberfläche den Hinweis noch anzeigte.
+            return row
+        row.platform_version_ack = platform.version
+        await self.repo.touch(row)
+        await self.audit.emit(
+            action="document_template_platform_acknowledged",
+            target_kind="document_template",
+            target_id=str(row.id),
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            school_id=row.school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"key": row.key, "language": row.language, "version": platform.version},
+        )
+        return row
 
     async def save(
         self,

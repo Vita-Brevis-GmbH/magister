@@ -1308,5 +1308,17 @@
     "settings_desc": "The system settings of this installation are maintained centrally and are not edited here.",
     "settings_title": "Managed by Vita Brevis",
     "who": "It is managed by Vita Brevis in the operations console. Changes arrive here automatically and are recorded in your audit log."
+  },
+  "platform_tpl": {
+    "locked_title": "Set by the operator",
+    "locked_desc": "This template uses the Vita Brevis version. Your own text stays saved and applies again as soon as the requirement is lifted — it has not been deleted.",
+    "update_title": "New global version available",
+    "update_desc": "Vita Brevis delivered version {{version}} of this template. Your own version still applies; you can read the new one and take over what you need.",
+    "applies_title": "Vita Brevis version in effect",
+    "applies_desc": "You have no own text for this template. The operator's version is printed; as soon as you save here, yours applies.",
+    "show": "Show the operator's version",
+    "hide": "Hide the operator's version",
+    "acknowledge": "Seen",
+    "acknowledging": "Saving …"
   }
 }

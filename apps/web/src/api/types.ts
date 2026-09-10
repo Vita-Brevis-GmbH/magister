@@ -594,6 +594,26 @@ export interface DocumentTemplateOut {
   is_active: boolean;
   updated_by: string | null;
   updated_at: string;
+  /** Die Fassung des Betreibers, die zur Kenntnis genommen wurde (ADR-0018 D4). */
+  platform_version_ack: number | null;
+  /** Es gibt eine neuere gelieferte Fassung als die quittierte. */
+  platform_update_available: boolean;
+  /**
+   * Diese eigene Fassung gilt derzeit nicht, weil die Fassung des Betreibers
+   * gesperrt ist. Sie bleibt liegen und wird nicht geloescht (ADR-0018 D3).
+   */
+  superseded_by_platform: boolean;
+}
+
+/** Eine vom Betreiber gelieferte Vorlage, wie der Kunde sie sieht (ADR-0018). */
+export interface PlatformTemplateOut {
+  key: string;
+  language: string;
+  subject: string | null;
+  body_html: string;
+  may_override: boolean;
+  version: number;
+  delivered_at: string;
 }
 
 export interface DocumentTemplateMetaOut {
@@ -607,6 +627,8 @@ export interface DocumentTemplateMetaOut {
 export interface DocumentTemplateListOut {
   templates: DocumentTemplateOut[];
   meta: DocumentTemplateMetaOut;
+  /** Leer auf einer Einzelinstallation: dort gibt es keinen Betreiber ausser dem Kunden. */
+  platform_templates: PlatformTemplateOut[];
 }
 
 export interface DocumentTemplateSave {

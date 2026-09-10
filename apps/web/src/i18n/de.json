@@ -1308,5 +1308,17 @@
     "settings_desc": "Die Systemeinstellungen dieser Installation werden zentral gepflegt und hier nicht bearbeitet.",
     "settings_title": "Von Vita Brevis verwaltet",
     "who": "Verwaltet wird sie von Vita Brevis in der Betriebskonsole. Änderungen kommen automatisch hierher und stehen in Ihrem Audit-Protokoll."
+  },
+  "platform_tpl": {
+    "locked_title": "Vom Betreiber vorgegeben",
+    "locked_desc": "Für diese Vorlage gilt die Fassung von Vita Brevis. Ihr eigener Text bleibt gespeichert und gilt wieder, sobald die Vorgabe aufgehoben wird — er ist nicht gelöscht.",
+    "update_title": "Neue globale Fassung verfügbar",
+    "update_desc": "Vita Brevis hat Fassung {{version}} dieser Vorlage geliefert. Ihre eigene Fassung gilt weiterhin; Sie können die neue lesen und übernehmen, was Sie brauchen.",
+    "applies_title": "Fassung von Vita Brevis in Kraft",
+    "applies_desc": "Sie haben für diese Vorlage keinen eigenen Text. Gedruckt wird die Fassung des Betreibers; sobald Sie hier etwas speichern, gilt Ihre.",
+    "show": "Fassung des Betreibers anzeigen",
+    "hide": "Fassung des Betreibers ausblenden",
+    "acknowledge": "Gesehen",
+    "acknowledging": "Speichere …"
   }
 }
