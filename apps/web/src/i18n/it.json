@@ -1303,5 +1303,13 @@
     "archive": "Archivia",
     "create_failed": "Salvataggio non riuscito.",
     "empty": "Nessun ruolo di accesso."
+  },
+  "managed": {
+    "how": "Se serve una modifica, rivolgetevi al vostro referente presso Vita Brevis. Ciò che vale qui è visibile nel registro di audit alla voce «platform_settings_reconciled».",
+    "roles_desc": "Ciò che un ruolo può fare viene definito centralmente. Chi ha quale ruolo lo decidete voi — nel riquadro sottostante.",
+    "roles_title": "Matrice dei diritti gestita da Vita Brevis",
+    "settings_desc": "Le impostazioni di sistema di questa installazione sono gestite centralmente e non si modificano qui.",
+    "settings_title": "Gestito da Vita Brevis",
+    "who": "La gestione è di Vita Brevis, nella console operativa. Le modifiche arrivano automaticamente qui e sono registrate nel vostro registro di audit."
   }
 }

@@ -6,12 +6,14 @@ import { ApiError } from "@/api/client";
 import {
   useAppSettings,
   useInstanceProfile,
+  usePlatformManaged,
   useTestAdConnection,
   useTriggerAdSync,
   useUpdateAppSettings,
 } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -160,6 +162,7 @@ function AppSettingsPage(): JSX.Element {
   // Read the profile here (page level) and pass it down, so the form component
   // stays free of that extra query — keeps its unit test's fetch assertions valid.
   const profile = useInstanceProfile().data ?? "school";
+  const managed = usePlatformManaged().data ?? false;
 
   return (
     <div className="space-y-6">
@@ -168,7 +171,12 @@ function AppSettingsPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{t("admin.settings.description")}</p>
       </header>
 
-      {settings.isLoading ? (
+      {managed ? (
+        // Der Menüpunkt ist ausgeblendet, aber ein Lesezeichen führt trotzdem
+        // hierher. Dann steht hier, wer es verwaltet — und nicht ein leeres
+        // Formular, das beim Speichern 404 sagt.
+        <ManagedByPlatform area="settings" />
+      ) : settings.isLoading ? (
         <p>{t("common.loading")}</p>
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>

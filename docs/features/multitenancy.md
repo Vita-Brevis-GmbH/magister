@@ -5,9 +5,12 @@
 > (AD-Connector-Agent), [ADR-0015](../adr/0015-authentisierungs-haertung.md)
 > (Authentisierungs-Härtung) und
 > [ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md) (Sicherung,
-> Wiederherstellung, Export).
-> Status: **Planung, nichts implementiert.** Mockup der Oberfläche:
-> `docs/mockups/multitenancy-console/`.
+> Wiederherstellung, Export) und
+> [ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)
+> (Systemeinstellungen und Rechte in der Konsole).
+> Status (2026-09-10): **Phasen 0, 1, 2, 2a, 2b und 3 stehen.** Offen sind die
+> Anmeldung der Konsole über OIDC (Entscheid E21) und die Phasen 4 bis 6.
+> Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
 
 ## 1 · Ziel
 
@@ -156,8 +159,8 @@ Zutun ab.
 
 | Heute | Künftig |
 |---|---|
-| `admin_settings.py` (`/admin/app-settings`) | **Konsole.** Aus der Kunden-API entfernt. |
-| `admin_rbac.py` (`/admin/rbac`) | **Konsole.** Aus der Kunden-API entfernt. |
+| `admin_settings.py` (`/admin/app-settings`) | **Konsole** — die *Politik*. In der gehosteten Betriebsart nicht gemountet; on-prem bleibt sie (ADR-0017 D1/D2). Die vier Geheimnisse bleiben im Kundenschema. |
+| `admin_rbac.py` (`/admin/rbac`) | **Konsole.** In der gehosteten Betriebsart nicht gemountet; on-prem bleibt sie. |
 | `admin_modules.py` | **Konsole** (Freischaltung); `/me/modules` bleibt lesend beim Kunden. |
 | `admin_system.py`, `admin_maintenance.py`, `services/web_tls.py` | **Konsole / Plattform-Betrieb.** |
 | `admin_local_admin.py` | **Entfällt** in gehosteter Betriebsart (kein lokales Notkonto beim Kunden). |
@@ -552,12 +555,44 @@ Kurz:
 - **Die README im Export ist nur auf Deutsch.** Das Manifest selbst ist
   sprachneutral und maschinenlesbar.
 
-### Phase 3 — Systemeinstellungen und Rechte umziehen
+### Phase 3 — Systemeinstellungen und Rechte umziehen ✅
 
-- `tenant_settings` und globale Rechte-Matrix in der Konsole; Reconciler
-  materialisiert ins Kundenschema mit Audit-Ereignis.
-- `/admin/app-settings` und `/admin/rbac` aus der Kunden-API **entfernen**;
-  Frontend-Menüpunkte entfallen.
+Referenz: **[ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)**
+(2026-09-10). Die vier Bullets sind erledigt; die Abweichung vom Plan steht
+darunter.
+
+- ✅ `tenant_settings` und globale Rechte-Matrix in der Konsole
+  (`platform_settings` als Vorgaben-Singleton, `tenant_settings` als
+  Abweichungen je Kunde), plus `GET /api/tenants/{id}/desired-state` als
+  Fläche, die die Datenebene abholt.
+- ✅ **Reconciler** in der Datenebene (`services/reconciler.py` und
+  `reconcile_loop.py`): holt den Soll-Zustand, vergleicht feldweise und
+  schreibt **nur die Differenz**, mit einem kundensichtbaren Audit-Ereignis
+  (`platform_settings_reconciled`) — und ohne Ereignis, wenn sich nichts
+  geändert hat.
+- ✅ `/admin/app-settings` und `/admin/rbac` sind aus der Kunden-API entfernt,
+  sobald eine Konsole regiert: sie werden **nicht gemountet**, nicht mit einer
+  Prüfung davor. Ein Contract-Test prüft beide Betriebsarten.
+- ✅ Frontend: die zwei Menüpunkte entfallen; wer über ein Lesezeichen doch
+  auf der Seite landet, liest, wer sie verwaltet. Bei den Rechten verschwindet
+  **nur die Matrix** — die Rollenzuweisung bleibt beim Kunden (E2).
+- ✅ Plattform-Capabilities (`platform.*`), die keine Kundenrolle halten kann.
+
+**Zwei Abweichungen vom Plan, beide in ADR-0017 begründet:**
+
+1. **Die Geheimnisse ziehen nicht mit um.** Der Plan sagte „Konsole", und der
+   naheliegende Entwurf hätte die vollständige Konfiguration nach oben geholt
+   — samt AD-Bind-Passwort, OIDC-Client-Secret und privatem
+   Webserver-Schlüssel jedes Kunden, an einem Ort. Das ist genau die
+   Eigenschaft, für die ADR-0013 und ADR-0016 überall Aufwand betrieben haben.
+   Die Konsole besitzt deshalb die **Politik**; die vier Geheimnisse bleiben im
+   Kundenschema und werden auf dem Anwendungsserver gesetzt. Preis: das
+   Einrichten eines Kunden ist zweigeteilt.
+2. **On-prem behält beide Flächen.** „Entfernen" gilt für die gehostete
+   Betriebsart. Eine Gemeinde mit einem Server ist ihr eigener Betreiber; ihr
+   die Konfiguration wegzunehmen wäre keine Härtung, sondern ein Ausfall —
+   dieselbe Linie wie ADR-0016 D9. Der Contract-Test prüft deshalb beide
+   Richtungen, sonst wäre die Zweiteilung eine Behauptung.
 - Neue Plattform-Capabilities, die keine Kundenrolle halten kann.
 - **Abnahme:** Ein Contract-Test zählt die Routen der Kunden-API und schlägt
   fehl, sobald eine System- oder Rechte-Route dort wieder auftaucht.

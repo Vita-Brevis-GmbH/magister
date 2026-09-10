@@ -13,6 +13,16 @@ class ModuleOut(BaseModel):
 class ModulesOut(BaseModel):
     profile: str
     modules: list[ModuleOut]
+    #: Ob diese Installation von einer Konsole verwaltet wird (ADR-0017 D1).
+    #:
+    #: Steht hier und nicht in einem eigenen Endpunkt, weil das Frontend diese
+    #: Antwort schon für die Navigation liest: es blendet Menüpunkte nach den
+    #: Modul-Ids aus. „Systemeinstellungen" und „Rechte" sind derselbe Fall —
+    #: nur ist der Grund kein abgeschaltetes Modul, sondern ein Betreiber.
+    #:
+    #: Vorgabe `False`, damit ein älteres Frontend gegen eine neuere API
+    #: dasselbe tut wie bisher.
+    platform_managed: bool = False
 
 
 class AdminModuleOut(BaseModel):

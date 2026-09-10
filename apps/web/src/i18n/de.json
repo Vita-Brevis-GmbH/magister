@@ -1300,5 +1300,13 @@
     "archive": "Archivieren",
     "create_failed": "Speichern fehlgeschlagen.",
     "empty": "Noch keine Zielrollen."
+  },
+  "managed": {
+    "how": "Brauchen Sie eine Änderung, wenden Sie sich an Ihre Ansprechperson bei Vita Brevis. Was hier gilt, sehen Sie im Audit-Protokoll unter „platform_settings_reconciled“.",
+    "roles_desc": "Was eine Rolle darf, wird zentral vorgegeben. Wer welche Rolle hat, bestimmen Sie weiterhin selbst — im Kasten darunter.",
+    "roles_title": "Rechte-Matrix von Vita Brevis verwaltet",
+    "settings_desc": "Die Systemeinstellungen dieser Installation werden zentral gepflegt und hier nicht bearbeitet.",
+    "settings_title": "Von Vita Brevis verwaltet",
+    "who": "Verwaltet wird sie von Vita Brevis in der Betriebskonsole. Änderungen kommen automatisch hierher und stehen in Ihrem Audit-Protokoll."
   }
 }

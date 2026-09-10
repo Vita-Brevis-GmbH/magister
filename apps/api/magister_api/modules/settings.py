@@ -30,3 +30,24 @@ SETTINGS_MODULE = ModuleManifest(
         admin_modules_router,
     ),
 )
+
+#: Die Router, die dem **Betreiber** gehören, sobald es einen gibt
+#: (ADR-0017 D1). Sie werden nicht gemountet, wenn die Datenebene ihre
+#: Mandanten aus einer Konsole holt.
+#:
+#: Diese Liste steht hier und nicht in `main.py`, weil sie zum Wissen über
+#: diese Router gehört: wer einen dazunimmt, sieht die Frage „gehört der dem
+#: Kunden oder dem Betreiber?" an derselben Stelle, an der er ihn einträgt.
+#:
+#: **Nicht gemountet, nicht 403.** Ein Endpunkt, der antwortet „das darfst du
+#: nicht", ist noch da: er kann eine Lücke haben, er steht im OpenAPI-Schema,
+#: und ein späterer Umbau kann die Prüfung verlieren. Was nicht gemountet ist,
+#: kann nichts.
+#:
+#: `admin_roles_router` steht ausdrücklich NICHT hier: das ist die
+#: Rollen*zuweisung* an Personen und bleibt beim Kunden (Entscheid E2). Nur
+#: die Rechte-*Matrix* — was eine Rolle darf — gehört dem Betreiber.
+PLATFORM_OWNED_ROUTERS = (
+    admin_settings_router,
+    admin_rbac_router,
+)

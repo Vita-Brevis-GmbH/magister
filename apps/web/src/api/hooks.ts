@@ -169,6 +169,27 @@ export function useEnabledModules() {
   });
 }
 
+/**
+ * Ob ein Betreiber diese Installation verwaltet (ADR-0017 D1).
+ *
+ * Dieselbe Abfrage wie `useEnabledModules` — gleicher `queryKey`, also keine
+ * zweite Anfrage. Systemeinstellungen und Rechte-Matrix gehören dann der
+ * Konsole, und die Endpunkte dafür sind in der Kunden-API gar nicht gemountet.
+ *
+ * Vorgabe `false`, solange die Antwort noch nicht da ist: der Menüpunkt
+ * erscheint dann kurz und verschwindet wieder. Umgekehrt — erst verstecken,
+ * dann zeigen — wäre für eine Einzelinstallation ein Flackern bei jedem
+ * Seitenaufbau, und die ist der häufigere Fall.
+ */
+export function usePlatformManaged() {
+  return useQuery<ModulesOut, ApiError, boolean>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => data.platform_managed ?? false,
+  });
+}
+
 /** M6 Phase 1: the active instance profile (school/company/neutral). */
 export function useInstanceProfile() {
   return useQuery<ModulesOut, ApiError, string>({

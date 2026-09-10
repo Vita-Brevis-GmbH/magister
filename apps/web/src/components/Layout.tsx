@@ -4,7 +4,13 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useCurrentUser, useEnabledModules, useLogout, useMyPreferences } from "@/api/hooks";
+import {
+  useCurrentUser,
+  useEnabledModules,
+  useLogout,
+  useMyPreferences,
+  usePlatformManaged,
+} from "@/api/hooks";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import i18n from "@/i18n";
@@ -17,6 +23,7 @@ export function Layout() {
   const logout = useLogout();
   const prefs = useMyPreferences();
   const enabledModules = useEnabledModules();
+  const platformManaged = usePlatformManaged();
   const terms = useTerms();
   const qc = useQueryClient();
   // >0 while any query is refetching — drives the spinner on the refresh button.
@@ -58,6 +65,11 @@ export function Layout() {
     "block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground";
 
   const isAdmin = me.data?.is_admin ?? false;
+  // Von der Plattform verwaltet (ADR-0017 D1): Systemeinstellungen und
+  // Rechte-Matrix gehören dann dem Betreiber, und ihre Endpunkte sind in
+  // dieser API nicht gemountet. Ein Menüpunkt dorthin wäre ein Weg auf eine
+  // Seite, die nichts speichern kann.
+  const managedByPlatform = platformManaged.data ?? false;
   const isSchulleitung = me.data?.roles.includes("schulleitung") ?? false;
   const isSmi = me.data?.roles.includes("smi") ?? false;
   const isTeacher = me.data?.kind === "teacher";
@@ -186,7 +198,7 @@ export function Layout() {
                     >
                       {t("nav.audit")}
                     </Link>
-                    {isAdmin ? (
+                    {isAdmin && !managedByPlatform ? (
                       <Link
                         to="/admin/roles"
                         role="menuitem"
@@ -214,7 +226,7 @@ export function Layout() {
                         {t("nav.substitutions")}
                       </Link>
                     ) : null}
-                    {isAdmin ? (
+                    {isAdmin && !managedByPlatform ? (
                       <Link
                         to="/admin/settings"
                         role="menuitem"

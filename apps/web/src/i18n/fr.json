@@ -1303,5 +1303,13 @@
     "archive": "Archiver",
     "create_failed": "Échec de l’enregistrement.",
     "empty": "Aucun rôle d’accès."
+  },
+  "managed": {
+    "how": "Si vous avez besoin d'une modification, adressez-vous à votre interlocuteur chez Vita Brevis. Ce qui s'applique ici est visible dans le journal d'audit sous « platform_settings_reconciled ».",
+    "roles_desc": "Ce qu'un rôle est autorisé à faire est défini de manière centralisée. Qui détient quel rôle reste votre décision — dans l'encadré ci-dessous.",
+    "roles_title": "Matrice des droits gérée par Vita Brevis",
+    "settings_desc": "Les paramètres système de cette installation sont gérés de manière centralisée et ne se modifient pas ici.",
+    "settings_title": "Géré par Vita Brevis",
+    "who": "La gestion est assurée par Vita Brevis dans la console d'exploitation. Les modifications arrivent automatiquement ici et figurent dans votre journal d'audit."
   }
 }

@@ -6,6 +6,7 @@ import { ApiError } from "@/api/client";
 import {
   useCreateRole,
   useDeleteRole,
+  usePlatformManaged,
   useRbacConfig,
   useRevokeRole,
   useRoles,
@@ -15,6 +16,7 @@ import {
   useUsers,
 } from "@/api/hooks";
 import type { RbacRole, RoleAssignmentOut, RoleGrantRequest } from "@/api/types";
+import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,7 @@ function RolesPage(): JSX.Element {
   const terms = useTerms();
   const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const roles = useRoles();
+  const managed = usePlatformManaged().data ?? false;
 
   return (
     <div className="space-y-6">
@@ -73,7 +76,12 @@ function RolesPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{t("admin.roles.description")}</p>
       </header>
 
-      <RightsMatrix />
+      {/*
+        Nur die Rechte-MATRIX gehört dem Betreiber (ADR-0017 D1) — die
+        Rollen-ZUWEISUNG an Personen bleibt beim Kunden (Entscheid E2). Die
+        Seite verschwindet deshalb nicht, sie verliert einen Kasten.
+      */}
+      {managed ? <ManagedByPlatform area="roles" /> : <RightsMatrix />}
 
       <AssignCard />
 

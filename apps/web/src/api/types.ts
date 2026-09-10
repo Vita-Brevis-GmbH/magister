@@ -274,6 +274,13 @@ export interface ModuleOut {
 export interface ModulesOut {
   profile: string;
   modules: ModuleOut[];
+  /**
+   * Ob diese Installation von einer Konsole verwaltet wird (ADR-0017 D1).
+   *
+   * Optional, weil eine ältere API das Feld nicht schickt — dann gilt
+   * `false`, und alles bleibt wie bisher.
+   */
+  platform_managed?: boolean;
 }
 
 /** M6 Phase 1: admin view + update of the module configuration. */

@@ -1300,5 +1300,13 @@
     "archive": "Archive",
     "create_failed": "Saving failed.",
     "empty": "No access roles yet."
+  },
+  "managed": {
+    "how": "If you need a change, contact your Vita Brevis representative. What applies here is visible in the audit log under “platform_settings_reconciled”.",
+    "roles_desc": "What a role may do is defined centrally. Who holds which role is still up to you — in the card below.",
+    "roles_title": "Rights matrix managed by Vita Brevis",
+    "settings_desc": "The system settings of this installation are maintained centrally and are not edited here.",
+    "settings_title": "Managed by Vita Brevis",
+    "who": "It is managed by Vita Brevis in the operations console. Changes arrive here automatically and are recorded in your audit log."
   }
 }

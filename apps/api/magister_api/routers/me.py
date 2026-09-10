@@ -45,6 +45,10 @@ async def my_modules(
             for m in catalog.MODULE_CATALOG
             if m.id in enabled
         ],
+        # Abgeleitet und nicht konfiguriert (ADR-0017 D1): steht eine
+        # Konsolen-URL, ist die Konsole der Betreiber. Dieselbe Bedingung, an
+        # der auch die Router hängen — zwei Wahrheiten wären eine zu viel.
+        platform_managed=bool(settings.console_registry_url),
     )
 
 

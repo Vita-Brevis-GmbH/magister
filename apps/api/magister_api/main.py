@@ -23,6 +23,7 @@ from magister_api.logging_config import configure_logging
 from magister_api.modules import catalog
 from magister_api.modules.enforcement import make_module_guard
 from magister_api.modules.registry import enabled_modules
+from magister_api.modules.settings import PLATFORM_OWNED_ROUTERS
 from magister_api.observability import runtime_snapshot
 from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
@@ -177,13 +178,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # modules get a mount-time guard dependency so a disabled module's routes
     # 404 at request time (Phase 3), not just disappear from the nav; the
     # non-toggleable platform base is always reachable.
+    #
+    # Von der Plattform verwaltet (ADR-0017 D1): steht eine Konsolen-URL, holt
+    # diese Installation ihre Mandanten von dort — dann gehören
+    # Systemeinstellungen und Rechte-Matrix dem Betreiber, und die zwei Router
+    # werden GAR NICHT gemountet. Nicht mit einer Prüfung davor: ein Endpunkt,
+    # der antwortet „das darfst du nicht", ist noch da und kann eine Lücke
+    # haben. Ohne Konsole (Einzelinstallation) bleibt alles wie bisher — dort
+    # ist der Kunde der Betreiber.
+    platform_managed = bool(s.console_registry_url)
+    # Über `id()` und nicht über ein Set: `APIRouter` ist nicht hashbar. Ein
+    # `set(...)` davon wirft `TypeError: unhashable type` — beim Start, also
+    # sofort, aber es kostet zehn Minuten, wenn man es nicht erwartet.
+    skip = {id(r) for r in PLATFORM_OWNED_ROUTERS} if platform_managed else set()
     for module in enabled_modules(s.container_modules):
         meta = catalog.get_meta(module.id)
         guard = (
             [Depends(make_module_guard(module.id))] if meta is not None and meta.toggleable else []
         )
         for router in module.routers:
+            if id(router) in skip:
+                continue
             app.include_router(router, dependencies=guard)
+    if platform_managed:
+        logger.info(
+            "Von der Plattform verwaltet: %d Router der Kunden-API nicht gemountet "
+            "(Systemeinstellungen, Rechte-Matrix). Sie kommen aus der Konsole.",
+            len(PLATFORM_OWNED_ROUTERS),
+        )
 
     # Internal AD-RPC server (ADR-0011). Mounted only in an AD-capable process
     # (no RPC URL configured — None or empty) — the monolith or the dedicated
