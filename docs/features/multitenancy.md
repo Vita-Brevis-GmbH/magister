@@ -593,9 +593,12 @@ darunter.
    die Konfiguration wegzunehmen wäre keine Härtung, sondern ein Ausfall —
    dieselbe Linie wie ADR-0016 D9. Der Contract-Test prüft deshalb beide
    Richtungen, sonst wäre die Zweiteilung eine Behauptung.
-- Neue Plattform-Capabilities, die keine Kundenrolle halten kann.
-- **Abnahme:** Ein Contract-Test zählt die Routen der Kunden-API und schlägt
-  fehl, sobald eine System- oder Rechte-Route dort wieder auftaucht.
+
+**Abnahme (erfüllt):** `tests/unit/test_platform_managed_surface.py` prüft die
+Fläche in beiden Betriebsarten — als Muster über Pfade, nicht als Zählung, damit
+der Test nicht bei jeder neuen Fachroute hochgesetzt werden muss. Er schlägt
+fehl, sobald eine System- oder Rechte-Matrix-Route in der gehosteten Fläche
+wieder auftaucht *und* sobald der Filter mehr wegnimmt als die fünf Pfade.
 
 ### Phase 4 — Globale Vorlagen
 
