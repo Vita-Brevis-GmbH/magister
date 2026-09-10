@@ -361,6 +361,15 @@ EXPORT_TABLES: tuple[ExportTable, ...] = (
         ),
     ),
     ExportTable(
+        table="platform_document_templates",
+        columns=("id", "key", "language", "subject", "may_override", "version", "delivered_at"),
+        description=(
+            "Vorlagen, die Vita Brevis für diese Installation vorgegeben hat (ADR-0018) — "
+            "hier die Kopfdaten. Der Text liegt unter vorlagen/plattform/. Sie stehen im "
+            "Export, weil mit ihnen gedruckt wurde: wer geht, nimmt seine Briefe mit."
+        ),
+    ),
+    ExportTable(
         table="audit_events",
         columns=(
             "id",

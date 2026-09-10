@@ -344,8 +344,10 @@ Weitergabe an den Kunden die Prüfsumme nennen — er kann sie mit
 `sha256sum export.zip` gegenprüfen.
 
 Im Archiv: `MANIFEST.json` (jede Datei, jede Spalte, und was **nicht** drin
-ist und warum), `README.txt`, `daten/*.csv`, `vorlagen/*.html`,
-`PRUEFSUMMEN.sha256`. Die CSV-Dateien haben Semikolon als Trennzeichen und
+ist und warum), `README.txt`, `daten/*.csv`, `vorlagen/*.html` (die selbst
+geschriebenen), `vorlagen/plattform/*.html` (die vom Betreiber vorgegebenen,
+ADR-0018 — der Text, mit dem gedruckt wurde, wenn keine eigene Fassung
+bestand) und `PRUEFSUMMEN.sha256`. Die CSV-Dateien haben Semikolon als Trennzeichen und
 UTF-8 mit BOM — in Excel unter Windows genügt ein Doppelklick.
 
 Nicht enthalten sind Anmeldesitzungen, der Notfallzugang, die Konfiguration

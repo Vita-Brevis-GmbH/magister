@@ -148,6 +148,17 @@ async def _seed(dsn: str) -> None:
                     "'<h1>Guten Tag</h1><p>Ihr neues Passwort lautet …</p>', true, now())"
                 )
             )
+            # Eine Vorlage des Betreibers (ADR-0018): derselbe Schlüssel und
+            # dieselbe Sprache wie oben. Genau der Fall, in dem sich zwei
+            # Dateien den Namen teilen würden.
+            await conn.execute(
+                text(
+                    "INSERT INTO platform_document_templates (key, language, subject, "
+                    "body_html, may_override, version, delivered_at) VALUES "
+                    "('password_letter', 'de', 'Ihr Passwort (Vorgabe)', "
+                    "'<h1>Vorgabe des Betreibers</h1>', true, 4, now())"
+                )
+            )
     finally:
         await engine.dispose()
 
@@ -290,6 +301,15 @@ class TestTheExportIsReadableWithoutMagister:
             assert "PRUEFSUMMEN.sha256" in names
             assert "daten/schools.csv" in names
             assert any(n.startswith("vorlagen/") for n in names)
+            # Beide Fassungen, in getrennten Ordnern. Ohne die Trennung
+            # überschriebe die eine die andere — bei gleichem Schlüssel und
+            # gleicher Sprache heissen sie identisch.
+            assert "vorlagen/password_letter-de.html" in names
+            assert "vorlagen/plattform/password_letter-de.html" in names
+            assert b"Vorgabe des Betreibers" in archive.read(
+                "vorlagen/plattform/password_letter-de.html"
+            )
+            assert "daten/platform_document_templates.csv" in names
 
             manifest = json.loads(archive.read("MANIFEST.json"))
             assert manifest["tenant"]["slug"] == SLUG

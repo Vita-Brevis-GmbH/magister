@@ -161,6 +161,12 @@ async def _read_templates(conn: AsyncConnection, schema: str) -> list[dict[str, 
     Ein mehrere Kilobyte langes HTML in einer CSV-Zelle ist formal korrekt und
     praktisch unbrauchbar — kein Tabellenprogramm zeigt es, und beim
     Zurückschreiben zerlegt es die Datei. Deshalb je Vorlage eine Datei.
+
+    **Auch die Vorlagen des Betreibers** (ADR-0018): sie sind der Text, mit
+    dem dieser Kunde gedruckt hat. Wer geht, soll seine Briefe mitnehmen
+    können — und er kann sie ohnehin lesen, sie stehen in seiner Oberfläche.
+    Ein Export, der nur die selbst geschriebenen enthält, wäre unvollständig
+    an genau der Stelle, an der ein neuer Kunde gar keine eigenen hat.
     """
     # scope-bypass: siehe _read_table.
     stmt = (
@@ -181,6 +187,30 @@ async def _read_templates(conn: AsyncConnection, schema: str) -> list[dict[str, 
                 "key": str(key),
                 "language": str(language),
                 "school_id": None if school_id is None else int(school_id),
+                "origin": "kunde",
+                "content": (body or "").encode("utf-8"),
+            }
+        )
+    # Getrennter Ordner und nicht dieselben Dateinamen: für dasselbe
+    # `key`/`language`-Paar kann es beide Fassungen geben, und eine davon
+    # stillschweigend zu überschreiben wäre der schlechteste Ausgang.
+    platform = (
+        "SELECT id, key, language, version, body_html FROM "
+        f"{_qualified(schema, 'platform_document_templates')} ORDER BY id"
+    )
+    result = await conn.stream(text(platform))
+    async for row in result:
+        template_id, key, language, version, body = row
+        stem = SAFE_FILENAME.sub("_", f"{key}-{language}")
+        files.append(
+            {
+                "path": f"vorlagen/plattform/{stem}.html",
+                "template_id": int(template_id),
+                "key": str(key),
+                "language": str(language),
+                "school_id": None,
+                "origin": "plattform",
+                "version": int(version),
                 "content": (body or "").encode("utf-8"),
             }
         )
@@ -224,7 +254,10 @@ Was hier drin ist
                      verbindliche Auskunft — auch darüber, was NICHT
                      enthalten ist und warum.
   daten/*.csv        Eine Datei je Tabelle.
-  vorlagen/*.html    Der Text jeder Dokumentvorlage als eigene Datei.
+  vorlagen/*.html    Der Text jeder selbst geschriebenen Dokumentvorlage.
+  vorlagen/plattform/ Dieselben Vorlagen, soweit Vita Brevis sie vorgegeben
+                     hat — der Text, mit dem tatsächlich gedruckt wurde,
+                     wenn keine eigene Fassung bestand.
   PRUEFSUMMEN.sha256 SHA-256 je Datei.
 
 Die CSV-Dateien lesen
@@ -346,18 +379,24 @@ async def create_export(
                 archive.writestr(path, content)
                 digest = hashlib.sha256(content).hexdigest()
                 checksums.append((path, digest))
-                files.append(
-                    {
-                        "path": path,
-                        "kind": "document_template",
-                        "template_id": template["template_id"],
-                        "key": template["key"],
-                        "language": template["language"],
-                        "school_id": template["school_id"],
-                        "sha256": digest,
-                        "description": "Text einer Dokumentvorlage (HTML).",
-                    }
-                )
+                entry_meta: dict[str, Any] = {
+                    "path": path,
+                    "kind": "document_template",
+                    "template_id": template["template_id"],
+                    "key": template["key"],
+                    "language": template["language"],
+                    "school_id": template["school_id"],
+                    "origin": template["origin"],
+                    "sha256": digest,
+                    "description": (
+                        "Text einer Dokumentvorlage (HTML), vom Betreiber vorgegeben."
+                        if template["origin"] == "plattform"
+                        else "Text einer Dokumentvorlage (HTML), selbst geschrieben."
+                    ),
+                }
+                if "version" in template:
+                    entry_meta["version"] = template["version"]
+                files.append(entry_meta)
 
             manifest = {
                 "format_version": FORMAT_VERSION,
