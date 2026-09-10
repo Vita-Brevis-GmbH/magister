@@ -25,6 +25,7 @@ from cockpit_api.models.provisioning_job import (
     ProvisioningStep,
 )
 from cockpit_api.models.service_token import ServiceToken
+from cockpit_api.models.settings import PlatformSettings, TenantSettings
 from cockpit_api.models.tenant import (
     SLUG_PATTERN,
     IsolationMode,
@@ -52,6 +53,7 @@ __all__ = [
     "JobState",
     "JobStatus",
     "OffboardingState",
+    "PlatformSettings",
     "ProvisioningJob",
     "ProvisioningStep",
     "RestoreJob",
@@ -62,6 +64,7 @@ __all__ = [
     "TenantBackupPolicy",
     "TenantOffboarding",
     "TenantProfile",
+    "TenantSettings",
     "TenantStatus",
     "UpdateRequest",
     "UpdateRequestStatus",

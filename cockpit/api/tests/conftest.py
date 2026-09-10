@@ -179,6 +179,37 @@ def cockpit_schema(cockpit_database_url: str) -> str:
 
 
 @pytest.fixture
+def console_client(cockpit_schema: str) -> Iterator[TestClient]:
+    """Client mit echter Konsolen-Datenbank — **ohne** Magister-Cluster.
+
+    Für alles, was nur die Konsolen-Datenbank braucht (Einstellungen,
+    Soll-Zustand). ``db_client`` verlangt zusätzlich einen zweiten Cluster für
+    die Bereitstellung; ein Test über Einstellungen wäre damit übersprungen,
+    sobald der nicht da ist — und würde still nichts prüfen.
+    """
+
+    async def _override() -> AsyncIterator[AsyncSession]:
+        engine = create_async_engine(cockpit_schema, poolclass=NullPool)
+        sm = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with sm() as session:
+                yield session
+        finally:
+            await engine.dispose()
+
+    app.dependency_overrides[get_session] = _override
+    headers = {
+        MARKER_HEADER: TEST_MARKER,
+        "Authorization": f"Bearer {settings.bootstrap_token}",
+    }
+    try:
+        with TestClient(app, headers=headers) as c:
+            yield c
+    finally:
+        app.dependency_overrides.pop(get_session, None)
+
+
+@pytest.fixture
 def db_client(cockpit_schema: str, magister_admin_dsn: str) -> Iterator[TestClient]:
     """Client mit echter Konsolen-Datenbank und echtem Magister-Cluster."""
 

@@ -17,6 +17,7 @@ from cockpit_api.routers import (
     tenants,
     update_requests,
 )
+from cockpit_api.routers import settings as settings_router
 from cockpit_api.services.health_poller import health_poller_loop
 from cockpit_api.services.release_poller import release_poller_loop
 
@@ -91,6 +92,10 @@ app.include_router(update_requests.router, prefix="/api")
 app.include_router(tenants.router, prefix="/api")
 app.include_router(backups.router, prefix="/api")
 app.include_router(offboarding.router, prefix="/api")
+# Systemeinstellungen und Rechte-Matrix als Soll-Zustand (ADR-0017). Zwei
+# Router, weil die Vorgaben plattformweit sind und die Abweichungen je Kunde.
+app.include_router(settings_router.platform, prefix="/api")
+app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(connector.console, prefix="/api")
 # Der Agentenpfad liegt NICHT unter /api: er kommt über den
 # Connector-Listener (TCP 46200) und nicht über den Management-Listener.
