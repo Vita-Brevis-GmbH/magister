@@ -110,17 +110,37 @@ Rauschen und macht die echten Einträge unfindbar — das ist keine
 Nachvollziehbarkeit, das ist ihr Gegenteil. Der Vergleich läuft feldweise, das
 Ereignis nennt **alte und neue Werte** der geänderten Felder.
 
-### D5 · Plattform-Capabilities kann keine Kundenrolle halten
+### D5 · Plattform-Capabilities kann keine Kundenrolle halten — auch `admin` nicht
 
 Was nur der Betreiber darf, bekommt eigene Capabilities
 (`platform.settings.manage`, `platform.rbac.manage`, `platform.tenant.manage`,
-`platform.maintenance`). Sie stehen in derselben Aufzählung wie die anderen,
-damit es *eine* Liste gibt — aber der RBAC-Dienst weist ihre Zuweisung an eine
-Kundenrolle ab.
+`platform.maintenance`) in derselben Aufzählung wie die anderen, damit es
+*eine* Liste dotted identifiers gibt.
 
-Die Prüfung liegt im Dienst und nicht in der Oberfläche: sie muss auch für den
-Reconciler gelten, für das CLI und für eine von Hand geschriebene Zeile. Eine
-Regel, die nur das Formular kennt, ist keine Regel.
+**Das allein genügt nicht, und der Grund ist beim Umsetzen aufgefallen.**
+`effective_capabilities` gab einem Admin bisher `frozenset(Capability)`
+zurück — also *alles, was in der Aufzählung steht*. Wären die Plattform-Rechte
+einfach dazugekommen, hätte jeder Kunden-Admin sie damit geschenkt bekommen,
+und dieser Entscheid wäre eine Absicht ohne Wirkung geblieben.
+
+Also ändert sich die Bedeutung des Super-Roles: **`admin` heisst ab hier
+„alles, was ein Kunde haben kann"** und nicht mehr „alles". Ein Kunden-Admin
+ist der Administrator seiner Installation, nicht der Betreiber der Plattform.
+Dass das eine Änderung mit Reichweite ist, hält eine eigene Testdatei fest —
+darunter die Prüfung, dass jede künftige Capability auf einer der zwei Seiten
+landet und keine dritte Kategorie entsteht.
+
+Drei Schichten, weil eine zu wenig ist:
+
+| Schicht | Verhindert |
+|---|---|
+| `RbacService.set_capabilities` wirft `PlatformCapabilityError` | dass die Zuweisung überhaupt geschrieben wird — über Router, Reconciler oder CLI |
+| `effective_capabilities` zieht sie ab | dass eine trotzdem vorhandene Zeile wirkt (von Hand eingefügt, aus einer alten Sicherung eingespielt) |
+| Die Rechte-Matrix der Kunden-API zeigt nur Kunden-Capabilities | eine Reihe Kästchen, die beim Anklicken 403 geben |
+
+Die erste Prüfung liegt im **Dienst** und nicht im Router: sie muss auch für
+den Reconciler gelten, für das CLI und für einen Testaufruf. Eine Regel, die
+nur das Formular kennt, ist keine Regel.
 
 ## Was on-prem passiert: nichts
 

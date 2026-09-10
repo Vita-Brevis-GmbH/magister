@@ -35,7 +35,12 @@ from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
-from magister_api.services.rbac import RbacService, RoleImmutableError, RoleNotFoundError
+from magister_api.services.rbac import (
+    PlatformCapabilityError,
+    RbacService,
+    RoleImmutableError,
+    RoleNotFoundError,
+)
 from magister_api.tenancy.desired_state import DesiredState
 
 logger = logging.getLogger(__name__)
@@ -263,6 +268,19 @@ class Reconciler:
                 # `admin` hält implizit alles, abgeleitete Rollen halten keine
                 # groben Rechte — beides ist eine Invariante der Datenebene und
                 # keine, die die Konsole aufheben darf.
+                result.skipped_roles[role_key] = str(exc)
+                continue
+            except PlatformCapabilityError as exc:
+                # Die Konsole hat versucht, ein Plattform-Recht an eine
+                # Kundenrolle zu geben (ADR-0017 D5). Das ist kein Tippfehler,
+                # den man stillschweigend beheben sollte, sondern ein Befund:
+                # er gehört in den Log und die Rolle bleibt, wie sie war.
+                logger.error(
+                    "Soll-Zustand für %s wollte %s ein Plattform-Recht geben: %s",
+                    tenant_slug,
+                    role_key,
+                    exc,
+                )
                 result.skipped_roles[role_key] = str(exc)
                 continue
             result.changed_roles[role_key] = (before, after)

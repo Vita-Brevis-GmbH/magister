@@ -15,7 +15,12 @@ from fastapi import Depends
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from magister_api.auth.capabilities import ROLE_CAPABILITIES, Capability, RbacMatrix
+from magister_api.auth.capabilities import (
+    PLATFORM_CAPABILITIES,
+    ROLE_CAPABILITIES,
+    Capability,
+    RbacMatrix,
+)
 from magister_api.auth.roles import ROLE_ADMIN, ROLE_KL, ROLE_SCHULLEITUNG, ROLE_SMI
 from magister_api.db import get_session
 from magister_api.models.rbac import Role, RoleCapability
@@ -58,6 +63,16 @@ class RoleImmutableError(RoleError):
 
 class RoleConflictError(RoleError):
     """Duplicate role key."""
+
+
+class PlatformCapabilityError(RoleError):
+    """Ein Plattform-Recht sollte einer Kundenrolle zugewiesen werden.
+
+    Eigener Typ und nicht ``RoleImmutableError``: der Grund ist ein anderer
+    (nicht „diese Rolle darf nicht", sondern „dieses Recht gehört nicht
+    hierher"), und der Aufrufer soll ihn unterscheiden können — der Router
+    macht daraus eine andere Meldung, der Reconciler einen anderen Logeintrag.
+    """
 
 
 class RbacService:
@@ -129,9 +144,19 @@ class RbacService:
     async def set_capabilities(self, key: str, capabilities: list[Capability]) -> Role:
         role = await self._require_role(key)
         if role.is_admin:
-            raise RoleImmutableError("admin holds every capability implicitly")
+            raise RoleImmutableError("admin holds every tenant capability implicitly")
         if role.is_derived:
             raise RoleImmutableError("derived roles hold no coarse capability")
+        # Plattform-Capabilities kann keine Kundenrolle halten (ADR-0017 D5).
+        # Die Prüfung steht HIER und nicht im Router: sie muss auch für den
+        # Reconciler gelten, für ein CLI und für einen Testaufruf. Eine Regel,
+        # die nur das Formular kennt, ist keine Regel.
+        forbidden = sorted(c.value for c in capabilities if c in PLATFORM_CAPABILITIES)
+        if forbidden:
+            raise PlatformCapabilityError(
+                f"Plattform-Rechte lassen sich keiner Kundenrolle zuweisen: "
+                f"{', '.join(forbidden)}. Sie gehören dem Betreiber (ADR-0017 D5)."
+            )
         await self.session.execute(delete(RoleCapability).where(RoleCapability.role_key == key))
         for cap in dict.fromkeys(capabilities):  # de-dup, keep order
             self.session.add(RoleCapability(role_key=key, capability=cap.value))
