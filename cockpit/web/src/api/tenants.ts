@@ -1,7 +1,15 @@
 import { get, post } from "./client";
 
 export type TenantStatus = "provisioning" | "active" | "suspended" | "archived";
-export type TenantProfile = "school" | "municipality" | "demo";
+/**
+ * Dieselben drei Werte wie `cockpit_api.models.tenant.TenantProfile`.
+ *
+ * Hier stand vorher `school | municipality | demo`. Zwei davon gibt es in der
+ * API nicht: „Gemeinde“ und „Demo“ waren im Formular wählbar und die Anlage
+ * endete in einem 422. Aufgefallen beim Bauen der Vorlagen-Zielgruppe, die
+ * dieselbe Liste braucht — und dabei die falsche mitgenommen hätte.
+ */
+export type TenantProfile = "school" | "company" | "neutral";
 export type IsolationMode = "schema" | "database" | "cluster";
 
 export interface Tenant {
@@ -30,7 +38,7 @@ export interface Tenant {
  *
  * `ok` und nicht `status`: die API schreibt einen Wahrheitswert
  * (`services/provisioning.py::_entry`). Ein `status: string` wäre die
- * naheliegende Annahme und würde in der Anzeige lautlos zu „undefined".
+ * naheliegende Annahme und würde in der Anzeige lautlos zu „undefined“.
  */
 export interface ProvisioningStep {
   step: string;

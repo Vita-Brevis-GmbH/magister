@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 /**
  * Navigation über den Hash — kein Router als Abhängigkeit.
  *
- * Die Konsole hat vier Ansichten und wird von zwei Personen benutzt. Ein
+ * Die Konsole hat fünf Ansichten und wird von zwei Personen benutzt. Ein
  * Router (TanStack, wie in `apps/web`) bringt Datenlader, Suchparameter-Typen
  * und verschachtelte Layouts mit; nichts davon wird hier gebraucht, und jede
  * Abhängigkeit ist eine, die aktualisiert werden muss.
@@ -19,6 +19,7 @@ import { useEffect, useState } from "react";
 
 export type Route =
   | { view: "instances" }
+  | { view: "templates" }
   | { view: "tenants" }
   | { view: "tenant"; id: string; tab: TenantTab };
 
@@ -44,6 +45,7 @@ export function parseHash(hash: string): Route {
   }
   if (parts[0] === "tenants") return { view: "tenants" };
   if (parts[0] === "instances") return { view: "instances" };
+  if (parts[0] === "templates") return { view: "templates" };
   // Vorgabe: die Kundenliste. Die Konsole ist für Kunden da; die Instanzen
   // sind der ältere Zweck und stehen jetzt daneben.
   return { view: "tenants" };
@@ -63,6 +65,8 @@ export function href(route: Route): string {
   switch (route.view) {
     case "instances":
       return "#/instances";
+    case "templates":
+      return "#/templates";
     case "tenants":
       return "#/tenants";
     case "tenant":

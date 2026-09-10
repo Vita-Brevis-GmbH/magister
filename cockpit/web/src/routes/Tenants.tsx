@@ -161,8 +161,8 @@ function NewTenantForm({ onDone }: { onDone: () => void }) {
             className="w-full rounded border px-2 py-1"
           >
             <option value="school">Schule</option>
-            <option value="municipality">Gemeinde</option>
-            <option value="demo">Demo</option>
+            <option value="company">Firma</option>
+            <option value="neutral">Neutral</option>
           </select>
         </label>
         <label className="block">

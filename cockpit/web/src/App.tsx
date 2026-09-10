@@ -3,6 +3,7 @@ import { useState } from "react";
 
 import { href, useRoute } from "./lib/nav";
 import { Instances } from "./routes/Instances";
+import { Templates } from "./routes/Templates";
 import { TenantDetail } from "./routes/TenantDetail";
 import { Tenants } from "./routes/Tenants";
 
@@ -78,6 +79,11 @@ export function App() {
               label="Instanzen"
               active={route.view === "instances"}
             />
+            <NavLink
+              to={href({ view: "templates" })}
+              label="Vorlagen"
+              active={route.view === "templates"}
+            />
           </nav>
         </div>
         <TokenBox />
@@ -85,6 +91,7 @@ export function App() {
 
       {route.view === "tenants" && <Tenants />}
       {route.view === "instances" && <Instances />}
+      {route.view === "templates" && <Templates />}
       {route.view === "tenant" && <TenantDetail tenantId={route.id} tab={route.tab} />}
     </div>
   );
