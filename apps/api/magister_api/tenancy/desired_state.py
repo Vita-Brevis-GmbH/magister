@@ -24,6 +24,18 @@ class DesiredStateUnavailableError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class DesiredTemplate:
+    """Eine globale Vorlage, wie die Konsole sie liefert (ADR-0018)."""
+
+    key: str
+    language: str
+    subject: str | None
+    body_html: str
+    may_override: bool
+    version: int
+
+
+@dataclass(frozen=True)
 class DesiredState:
     """Was für einen Kunden gelten soll."""
 
@@ -33,12 +45,26 @@ class DesiredState:
     #: „Vorgabe: keine Rechte" entscheidet, ob ein leeres Dokument eine ganze
     #: Installation entrechtet.
     rbac: dict[str, list[str]] = field(default_factory=dict)
+    #: `None` heisst **keine Aussage** (eine Konsole, die das Feld nicht
+    #: kennt); eine Liste ist **vollständig** und `[]` heisst „keine
+    #: Plattformvorlagen" (ADR-0018 D6).
+    #:
+    #: Anders als bei `rbac`, wo eine leere Matrix „keine Vorgabe" heisst — und
+    #: der Unterschied ist nicht Inkonsequenz, sondern der Zweck: eine Vorlage
+    #: muss **zurückgezogen** werden können, eine Rechte-Matrix nicht. Wäre
+    #: `[]` hier „keine Aussage", gäbe es keinen Weg, eine ausgelieferte
+    #: Vorlage wieder zu entfernen.
+    templates: tuple[DesiredTemplate, ...] | None = None
     settings_source: str = "platform"
     rbac_source: str = "platform"
 
     @property
     def has_rbac(self) -> bool:
         return bool(self.rbac)
+
+    @property
+    def has_templates(self) -> bool:
+        return self.templates is not None
 
 
 def parse_desired_state(payload: object) -> DesiredState:
@@ -67,9 +93,62 @@ def parse_desired_state(payload: object) -> DesiredState:
     return DesiredState(
         settings=dict(raw_settings),
         rbac=rbac,
+        templates=_parse_templates(payload),
         settings_source=str(payload.get("settings_source") or "platform"),
         rbac_source=str(payload.get("rbac_source") or "platform"),
     )
+
+
+def _parse_templates(payload: dict[str, Any]) -> tuple[DesiredTemplate, ...] | None:
+    """Die Vorlagen aus der Antwort — oder `None`, wenn keine drinstehen.
+
+    `None` und `()` sind hier **nicht** dasselbe (ADR-0018 D6): fehlt der
+    Schlüssel, hat die Konsole nichts über Vorlagen gesagt und es wird nichts
+    angefasst; steht er als leere Liste da, ist die Aussage „keine" und der
+    Abgleich räumt auf. Eine Konsole vor ADR-0018 liefert den Schlüssel nicht —
+    und darf deshalb nicht als „alle Vorlagen entfernen" gelesen werden.
+    """
+    raw = payload.get("templates")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise DesiredStateUnavailableError("'templates' ist keine Liste.")
+    parsed: list[DesiredTemplate] = []
+    for index, entry in enumerate(raw):
+        if not isinstance(entry, dict):
+            raise DesiredStateUnavailableError(f"Vorlage {index} ist kein Objekt.")
+        try:
+            key = str(entry["key"])
+            language = str(entry["language"])
+            body_html = str(entry["body_html"])
+            version = int(entry["version"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise DesiredStateUnavailableError(
+                f"Vorlage {index} hat nicht die erwartete Form: {exc}"
+            ) from exc
+        if version < 1:
+            # Die Fassungsnummer wird gegen eine quittierte verglichen. Eine 0
+            # wäre von „noch nie quittiert" nicht zu unterscheiden.
+            raise DesiredStateUnavailableError(f"Vorlage {key}/{language} hat Fassung {version}.")
+        subject = entry.get("subject")
+        parsed.append(
+            DesiredTemplate(
+                key=key,
+                language=language,
+                subject=None if subject is None else str(subject),
+                body_html=body_html,
+                may_override=bool(entry.get("may_override", True)),
+                version=version,
+            )
+        )
+    duplicates = len(parsed) - len({(t.key, t.language) for t in parsed})
+    if duplicates:
+        # Zwei Fassungen für dasselbe Paar: welche gilt, wäre Zufall der
+        # Reihenfolge. Das ist keine Konfiguration, sondern ein Fehler.
+        raise DesiredStateUnavailableError(
+            f"{duplicates} doppelte Vorlage(n) im Soll-Zustand (gleicher Schlüssel und Sprache)."
+        )
+    return tuple(parsed)
 
 
 async def fetch_desired_state(
@@ -112,6 +191,7 @@ async def fetch_desired_state(
 
 __all__ = [
     "DesiredState",
+    "DesiredTemplate",
     "DesiredStateUnavailableError",
     "fetch_desired_state",
     "parse_desired_state",

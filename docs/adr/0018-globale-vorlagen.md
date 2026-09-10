@@ -129,6 +129,26 @@ und aus demselben Grund: eine Konsole, die nach einem Fehler ein leeres
 Dokument liefert, darf nicht alle Kunden leerräumen. Der Unterschied liegt in
 `null` gegen `[]`, und er ist im Abholer geprüft, nicht im Aufrufer geregelt.
 
+### D7 · Was sich nicht rendern lässt, wird nicht ausgeliefert
+
+Der Abgleich rendert jede gelieferte Vorlage gegen den Beispielkontext, bevor
+er sie materialisiert. Was scheitert, wird **abgewiesen**: nicht geschrieben,
+im Log als Fehler benannt, und eine bereits vorhandene brauchbare Fassung
+bleibt stehen.
+
+Nachträglich hinzugekommen, aus einem Test: der erste Entwurf materialisierte
+alles, und eine Vorlage mit einem Platzhalter, den es nicht gibt, liess den
+Brief in einer Ausnahme enden. Der erste Ort, an dem der Tippfehler aufgefallen
+wäre, war damit der **Drucker eines Kunden**. Die Konsole kann die Prüfung
+nicht übernehmen — sie kennt den Kontext eines Briefes nicht —, also gehört sie
+in den Abgleich. Es ist dieselbe Prüfung, die `DocumentTemplateService.save()`
+für die eigene Fassung des Kunden schon macht.
+
+**Kein Audit-Ereignis für eine Abweisung.** Der Befund gehört dem Betreiber,
+und die Konsole liefert die kaputte Vorlage bei jedem Lauf wieder — ein
+Ereignis daraus stünde alle fünf Minuten im Protokoll des Kunden, für einen
+Fehler, den er nicht beheben kann.
+
 ## Folgen
 
 **Gut:**
@@ -140,6 +160,8 @@ Dokument liefert, darf nicht alle Kunden leerräumen. Der Unterschied liegt in
   liegen blieb.
 - Der Abgleich ist idempotent: derselbe Soll-Zustand schreibt beim zweiten Lauf
   nichts und protokolliert nichts.
+- Eine unbrauchbare Vorlage kostet den Kunden nichts: sie kommt nicht an, und
+  gedruckt wird mit dem letzten guten Stand.
 
 **Preis:**
 

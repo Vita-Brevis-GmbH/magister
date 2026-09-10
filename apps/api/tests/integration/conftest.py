@@ -131,6 +131,7 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             "TRUNCATE import_staged_rows, import_jobs, class_memberships, "
             "class_teacher_roles, subject_teacher_roles, classes, "
             "department_memberships, manager_roles, departments, document_templates, "
+            "platform_document_templates, "
             "audit_events, sessions, role_assignments, role_capabilities, roles, "
             "ad_user_cache, schools, "
             "local_admins, app_settings, user_preferences RESTART IDENTITY CASCADE"

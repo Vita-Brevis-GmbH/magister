@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.base import utcnow
 from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.platform_template import PlatformDocumentTemplate
 
 
 class DocumentTemplateRepository:
@@ -54,6 +55,48 @@ class DocumentTemplateRepository:
             .order_by(DocumentTemplate.key, DocumentTemplate.language, DocumentTemplate.school_id)
         )
         return list((await self.session.execute(stmt)).scalars().all())
+
+    async def platform_row(self, *, key: str, language: str) -> PlatformDocumentTemplate | None:
+        """Die vom Betreiber gelieferte Fassung, wenn es eine gibt (ADR-0018).
+
+        Ohne `school_id`: eine Plattformvorlage gilt für den ganzen Mandanten.
+
+        `# scope-bypass: Plattformvorlagen sind Betreiber-Konfiguration ohne
+        Personendaten und ohne Schul-Scope; die Mandantentrennung leistet der
+        ``search_path``.`
+        """
+        stmt = select(PlatformDocumentTemplate).where(
+            PlatformDocumentTemplate.key == key,
+            PlatformDocumentTemplate.language == language,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def platform_rows(self) -> list[PlatformDocumentTemplate]:
+        """Alle gelieferten Fassungen — für die Übersicht und den Hinweis.
+
+        `# scope-bypass: siehe `platform_row`.`
+        """
+        stmt = select(PlatformDocumentTemplate).order_by(
+            PlatformDocumentTemplate.key, PlatformDocumentTemplate.language
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def acknowledge_platform_version(
+        self, *, key: str, language: str, school_id: int | None, version: int
+    ) -> DocumentTemplate | None:
+        """Die neue Plattformfassung als gesehen quittieren (ADR-0018 D4).
+
+        Nur an der eigenen Zeile des Kunden: quittiert wird „ich habe die
+        neue Fassung angeschaut", und das sagt der, der die eigene pflegt.
+        Gibt es keine eigene Zeile, gibt es auch keinen Hinweis — dann ist
+        nichts zu quittieren.
+        """
+        row = await self.get_exact(key=key, language=language, school_id=school_id)
+        if row is None:
+            return None
+        row.platform_version_ack = version
+        await self.session.flush()
+        return row
 
     async def get(self, template_id: int) -> DocumentTemplate | None:
         return await self.session.get(DocumentTemplate, template_id)

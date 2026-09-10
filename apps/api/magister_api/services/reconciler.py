@@ -26,22 +26,29 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.auth.capabilities import Capability
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
+from magister_api.models.base import utcnow
+from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.document_templates import (
+    DocumentTemplateService,
+    TemplateRenderError,
+    sample_context,
+)
 from magister_api.services.rbac import (
     PlatformCapabilityError,
     RbacService,
     RoleImmutableError,
     RoleNotFoundError,
 )
-from magister_api.tenancy.desired_state import DesiredState
+from magister_api.tenancy.desired_state import DesiredState, DesiredTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -98,10 +105,23 @@ class ReconcileResult:
     unknown_keys: list[str] = field(default_factory=list)
     unknown_capabilities: list[str] = field(default_factory=list)
     skipped_roles: dict[str, str] = field(default_factory=dict)
+    #: „key/language" der Vorlagen, die neu hereinkamen, sich geändert haben
+    #: oder verschwunden sind. Drei Listen und nicht eine Zahl: im Audit des
+    #: Kunden soll stehen, *was* sich geändert hat.
+    added_templates: list[str] = field(default_factory=list)
+    updated_templates: list[str] = field(default_factory=list)
+    removed_templates: list[str] = field(default_factory=list)
+    #: Vorlagen, die sich nicht rendern liessen und deshalb **nicht**
+    #: materialisiert wurden: {key/language: Grund}.
+    rejected_templates: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def changed_templates(self) -> bool:
+        return bool(self.added_templates or self.updated_templates or self.removed_templates)
 
     @property
     def touched(self) -> bool:
-        return bool(self.changed_settings or self.changed_roles)
+        return bool(self.changed_settings or self.changed_roles or self.changed_templates)
 
 
 #: Listenfelder, deren **Reihenfolge Bedeutung hat**. `ad_dcs` ist die
@@ -195,14 +215,174 @@ class Reconciler:
                 desired.rbac, result, tenant_slug=tenant_slug, dry_run=dry_run
             )
 
+        if desired.templates is not None:
+            await self._reconcile_templates(
+                desired.templates, result, tenant_slug=tenant_slug, dry_run=dry_run
+            )
+
         if result.touched:
             logger.info(
-                "Soll-Zustand für %s materialisiert: %d Einstellung(en), %d Rolle(n)",
+                "Soll-Zustand für %s materialisiert: %d Einstellung(en), %d Rolle(n), "
+                "%d Vorlage(n)",
                 tenant_slug,
                 len(result.changed_settings),
                 len(result.changed_roles),
+                len(result.added_templates)
+                + len(result.updated_templates)
+                + len(result.removed_templates),
             )
         return result
+
+    async def _reconcile_templates(
+        self,
+        desired: tuple[DesiredTemplate, ...],
+        result: ReconcileResult,
+        *,
+        tenant_slug: str,
+        dry_run: bool,
+    ) -> None:
+        """Die Plattformvorlagen abgleichen (ADR-0018 D1, D6).
+
+        Geschrieben wird **nur** in `platform_document_templates`. Die eigenen
+        Vorlagen des Kunden (`document_templates`) werden hier nicht gelesen
+        und nicht angefasst — das ist der Sinn der zweiten Tabelle (D2), und
+        deshalb kann ein Rollout einen gewachsenen Elternbrief nicht
+        überfahren.
+
+        Die gelieferte Liste ist vollständig: was nicht darin steht,
+        verschwindet. Dass „nichts geliefert" von „keine Vorlagen" zu
+        unterscheiden ist, hat der Abholer bereits entschieden — hier kommt
+        eine Liste an oder diese Methode wird nicht gerufen.
+
+        `# scope-bypass: Plattformvorlagen gelten für den ganzen Mandanten und
+        tragen keine Personendaten. Die Mandantentrennung leistet der
+        ``search_path`` dieser Sitzung.`
+        """
+        rows = (await self.session.execute(select(PlatformDocumentTemplate))).scalars().all()
+        have = {(row.key, row.language): row for row in rows}
+        want = {(t.key, t.language): t for t in desired}
+
+        for pair, template in want.items():
+            label = f"{pair[0]}/{pair[1]}"
+            row = have.get(pair)
+            if not self._renderable(template, label, result, tenant_slug=tenant_slug):
+                continue
+            if row is None:
+                result.added_templates.append(label)
+                if not dry_run:
+                    self.session.add(
+                        PlatformDocumentTemplate(
+                            key=template.key,
+                            language=template.language,
+                            subject=template.subject,
+                            body_html=template.body_html,
+                            may_override=template.may_override,
+                            version=template.version,
+                        )
+                    )
+                continue
+            unchanged = (
+                row.version == template.version
+                and row.subject == template.subject
+                and row.body_html == template.body_html
+                and row.may_override == template.may_override
+            )
+            if unchanged:
+                # Der Normalfall. Kein Schreiben, kein Audit-Ereignis, kein
+                # neuer `delivered_at` — sonst sähe die Oberfläche bei jedem
+                # Lauf eine „neue" Lieferung.
+                continue
+            result.updated_templates.append(label)
+            if dry_run:
+                continue
+            row.subject = template.subject
+            row.body_html = template.body_html
+            row.may_override = template.may_override
+            row.version = template.version
+            row.delivered_at = utcnow()
+
+        gone = sorted(set(have) - set(want))
+        # Eine abgewiesene Vorlage gilt nicht als „nicht geliefert": sie steht
+        # im Soll-Zustand, sie ist nur unbrauchbar. Ihre bisherige, brauchbare
+        # Fassung bleibt deshalb stehen, statt mit ihr zu verschwinden.
+        for pair in gone:
+            result.removed_templates.append(f"{pair[0]}/{pair[1]}")
+            if not dry_run:
+                await self.session.execute(
+                    delete(PlatformDocumentTemplate).where(
+                        PlatformDocumentTemplate.key == pair[0],
+                        PlatformDocumentTemplate.language == pair[1],
+                    )
+                )
+
+        if result.changed_templates and not dry_run:
+            await AuditService(self.session, self.settings).emit(
+                action="platform_templates_reconciled",
+                target_kind="document_template",
+                target_id="platform",
+                actor_upn=RECONCILER_ACTOR,
+                actor_object_guid=None,
+                school_id=None,
+                ip=None,
+                request_id=f"reconcile:{tenant_slug}",
+                payload={
+                    "added": sorted(result.added_templates),
+                    "updated": sorted(result.updated_templates),
+                    "removed": sorted(result.removed_templates),
+                },
+            )
+
+    def _renderable(
+        self,
+        template: DesiredTemplate,
+        label: str,
+        result: ReconcileResult,
+        *,
+        tenant_slug: str,
+    ) -> bool:
+        """Prüft, ob sich die Vorlage überhaupt rendern lässt.
+
+        Die Konsole kann das nicht: sie kennt den Kontext eines Briefes nicht.
+        Ohne diese Prüfung wäre der erste Ort, an dem ein Tippfehler in einem
+        Platzhalter auffällt, der **Drucker eines Kunden** — und zwar als
+        Fehlerseite statt als Brief. Es ist derselbe Grund, aus dem
+        `DocumentTemplateService.save()` beim Speichern rendert.
+
+        Eine abgewiesene Vorlage wird nicht materialisiert; eine bereits
+        vorhandene, brauchbare Fassung bleibt stehen. Der Betrieb geht mit dem
+        letzten guten Stand weiter — dieselbe Zusage wie beim Ausfall der
+        Konsole.
+
+        **Kein Audit-Ereignis.** Der Befund gehört dem Betreiber, nicht dem
+        Kunden, und die Konsole liefert die kaputte Vorlage bei jedem Lauf
+        wieder: ein Ereignis daraus wäre alle fünf Minuten dasselbe im
+        Protokoll des Kunden. Deshalb ERROR in den Log.
+        """
+        try:
+            DocumentTemplateService.render_body(template.body_html, sample_context())
+        except TemplateRenderError as exc:
+            result.rejected_templates[label] = str(exc)
+            logger.error(
+                "Plattformvorlage %s für %s liess sich nicht rendern und wurde nicht "
+                "übernommen: %s. Der bisherige Stand bleibt in Kraft.",
+                label,
+                tenant_slug,
+                exc,
+            )
+            return False
+        if template.subject:
+            try:
+                DocumentTemplateService.render_body(template.subject, sample_context())
+            except TemplateRenderError as exc:
+                result.rejected_templates[label] = f"Betreff: {exc}"
+                logger.error(
+                    "Betreff der Plattformvorlage %s für %s liess sich nicht rendern: %s",
+                    label,
+                    tenant_slug,
+                    exc,
+                )
+                return False
+        return True
 
     async def _apply_settings(self, diff: dict[str, tuple[Any, Any]], *, tenant_slug: str) -> None:
         """Nur die geänderten Felder schreiben.

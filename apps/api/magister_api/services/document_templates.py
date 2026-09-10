@@ -146,9 +146,25 @@ class UnknownTemplateKeyError(ValueError):
 
 
 @dataclass(frozen=True)
-class RenderedTemplate:
+class ResolvedTemplate:
+    """Welche Fassung für einen Brief gilt — das Ergebnis der Kette (ADR-0018 D3).
+
+    `origin` und `locked` gehören ins Ergebnis und nicht in den Aufrufer: wer
+    einen Brief erzeugt, soll im Audit oder in der Vorschau sagen können,
+    *welche* Fassung gedruckt wurde. Ohne das Feld wäre „warum steht da ein
+    anderer Text als in meinem Editor?" eine Frage, die nur die Datenbank
+    beantwortet.
+    """
+
     subject: str | None
     body_html: str
+    #: "platform" oder "tenant".
+    origin: str
+    #: Die Plattformfassung, wenn eine gilt; sonst `None`.
+    version: int | None = None
+    #: Die Plattformfassung gilt, **weil** sie gesperrt ist — die eigene
+    #: Fassung des Kunden liegt daneben und wurde übergangen.
+    locked: bool = False
 
 
 def _sandbox() -> SandboxedEnvironment:
@@ -206,7 +222,51 @@ class DocumentTemplateService:
     async def resolve(
         self, *, key: str, language: str, school_id: int | None
     ) -> DocumentTemplate | None:
+        """Nur die eigene Fassung des Kunden — Standort vor global.
+
+        Für die Bearbeitungsfläche. Wer einen Brief **druckt**, nimmt
+        `resolve_effective`: dort entscheidet die vollständige Kette.
+        """
         return await self.repo.resolve(key=key, language=language, school_id=school_id)
+
+    async def resolve_effective(
+        self, *, key: str, language: str, school_id: int | None
+    ) -> ResolvedTemplate | None:
+        """Die Kette aus ADR-0018 D3, an **einer** Stelle.
+
+        1. Plattformfassung, wenn sie gesperrt ist (`may_override = False`)
+        2. eigene Fassung für diesen Standort
+        3. eigene globale Fassung
+        4. Plattformfassung
+        5. `None` — der Aufrufer nimmt die eingebaute Vorlage
+
+        Absichtlich eine Funktion und nicht drei Bedingungen in drei
+        Aufrufern: die Reihenfolge *ist* der Entscheid. Verstreut wäre sie
+        beim nächsten Umbau an zwei von drei Stellen richtig.
+        """
+        platform = await self.repo.platform_row(key=key, language=language)
+        if platform is not None and not platform.may_override:
+            # Der Kunde hat vielleicht eine eigene Fassung. Sie bleibt liegen
+            # (ADR-0018 D3) — gelöscht wird sie nicht, denn eine Sperre kann
+            # zurückgenommen werden.
+            return ResolvedTemplate(
+                subject=platform.subject,
+                body_html=platform.body_html,
+                origin="platform",
+                version=platform.version,
+                locked=True,
+            )
+        own = await self.repo.resolve(key=key, language=language, school_id=school_id)
+        if own is not None:
+            return ResolvedTemplate(subject=own.subject, body_html=own.body_html, origin="tenant")
+        if platform is not None:
+            return ResolvedTemplate(
+                subject=platform.subject,
+                body_html=platform.body_html,
+                origin="platform",
+                version=platform.version,
+            )
+        return None
 
     async def list_for_admin(self, *, school_id: int | None) -> list[DocumentTemplate]:
         return await self.repo.list_for_admin(school_id=school_id)
@@ -286,7 +346,7 @@ __all__ = [
     "STARTER_TEMPLATES",
     "COMPANY_STARTER_TEMPLATES",
     "DocumentTemplateService",
-    "RenderedTemplate",
+    "ResolvedTemplate",
     "TemplateRenderError",
     "UnknownTemplateKeyError",
     "sample_context",

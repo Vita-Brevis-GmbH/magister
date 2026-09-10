@@ -95,7 +95,7 @@ def tenant_data(magister_admin_dsn: str) -> Iterator[dict[str, int]]:
     for schema, rows in ((SCHEMA, 12), (NACHBAR, 3)):
         ddl += [
             f"CREATE TABLE {schema}.alembic_version (version_num varchar(32) primary key)",
-            f"INSERT INTO {schema}.alembic_version VALUES ('0044_local_admin_totp')",
+            f"INSERT INTO {schema}.alembic_version VALUES ('0045_platform_document_templates')",
             f"CREATE TABLE {schema}.schools (id serial primary key, name text)",
             f"CREATE TABLE {schema}.classes (id serial primary key, name text)",
             f"CREATE TABLE {schema}.sessions (id text primary key)",
@@ -200,12 +200,12 @@ class TestBackupAndVerify:
             identity_file=identity,
             slug=SLUG,
             schema_name=SCHEMA,
-            expected_schema_version="0044_local_admin_totp",
+            expected_schema_version="0045_platform_document_templates",
             expected_checksum=artifact.checksum_sha256,
             reference_row_counts={"schools": 12},
         )
         assert result.ok, result.detail
-        assert "Alembic-Version 0044_local_admin_totp" in result.detail
+        assert "Alembic-Version 0045_platform_document_templates" in result.detail
         assert "Audit-Payloads verschlüsselt" in result.detail
 
     async def test_the_neighbour_tenant_never_notices(
