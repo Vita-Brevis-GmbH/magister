@@ -7,6 +7,7 @@ Drei Schlüssel-Klassen in Magister:
 | `MAGISTER_AUDIT_KEY` | `pgcrypto`-Verschlüsselung der Audit-Payloads | Jährlich oder bei Kompromittierung |
 | OIDC-Client-Secret (Entra) | Auth gegen Entra ID | Halbjährlich |
 | AD-Bind-Passwort | LDAPS-Bind des Service-Accounts | Jährlich |
+| Operator-Signierschlüssel (ADR-0019) | Signiert die Einlösescheine für einen Operator-Zugriff | Nur bei Kompromittierung oder Personalwechsel |
 
 ---
 
@@ -76,6 +77,40 @@ docker compose restart api
 # Smoke: manueller AD-Sync triggern
 curl -sf -X POST -H "Cookie: session=..." https://<host>/api/admin/ad-sync | jq .
 ```
+
+---
+
+## 4. Operator-Signierschlüssel wechseln (ADR-0019)
+
+Ein Ed25519-Paar: die **Konsole** hält den privaten Teil
+(`COCKPIT_OPERATOR_SIGNING_KEY`, ein Dateipfad), jede **Datenebene** den
+öffentlichen (`MAGISTER_OPERATOR_PUBLIC_KEY`, der PEM-Text selbst).
+
+```bash
+# Neues Paar (auf dem Konsolen-Server, als root)
+umask 077
+openssl genpkey -algorithm ed25519 -out /etc/magister/operator-signing.pem.new
+openssl pkey -in /etc/magister/operator-signing.pem.new -pubout
+```
+
+Reihenfolge, und sie ist nicht beliebig: **erst** den öffentlichen Schlüssel
+bei allen Kunden austauschen, **dann** den privaten in der Konsole. Umgekehrt
+stellt die Konsole Scheine aus, die niemand einlösen kann — und das merkt man
+im Support-Fall, also zum schlechtesten Zeitpunkt.
+
+Kein Re-Encryption, keine Migration, kein Datenverlust: ein Einlöseschein ist
+sechzig Sekunden gültig. Was während des Wechsels unterwegs ist, wird
+abgewiesen; ein neuer Schein löst das.
+
+**Wenn der private Schlüssel verloren geht:** kein Operator-Zugriff mehr, bis
+ein neues Paar verteilt ist. Kein Datenverlust — aber ein Handgriff, und
+deshalb gehört der Schlüssel in die Sicherung des Konsolen-Servers
+(`/etc/magister/`, siehe `disaster-recovery.md`).
+
+**Wenn er in falsche Hände gerät:** der Inhaber kann Zugriffe auf jeden Kunden
+ausstellen. Sie sind lesend und stehen in jedem Kundenprotokoll (ADR-0019 D1,
+D6) — aber der Wechsel ist sofort fällig, und die Zugriffslisten der Kunden
+sind danach durchzusehen.
 
 ---
 
