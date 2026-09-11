@@ -18,6 +18,7 @@ from cockpit_api.models.connector import (
 )
 from cockpit_api.models.instance import Instance, InstanceChannel
 from cockpit_api.models.offboarding import OffboardingState, TenantOffboarding
+from cockpit_api.models.operator_access import OperatorAccessGrant
 from cockpit_api.models.provisioning_job import (
     STEP_ORDER,
     JobStatus,
@@ -58,6 +59,7 @@ __all__ = [
     "JobState",
     "JobStatus",
     "OffboardingState",
+    "OperatorAccessGrant",
     "PlatformSettings",
     "PlatformTemplate",
     "PlatformTemplateTenant",

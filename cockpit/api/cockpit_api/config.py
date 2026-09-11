@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # Agent angemeldet werden.
     connector_ca_cert: str = Field(default="")
     connector_ca_key: str = Field(default="")
+    # --- Operator-Zugriff (ADR-0019) --------------------------------------
+    # Pfad zum PRIVATEN Ed25519-Schlüssel, mit dem Operator-Assertions
+    # signiert werden. Ein Pfad und keine Variable mit dem Schlüssel darin:
+    # dieselbe Bauart wie beim CA-Intermediate. Die Datenebene hält nur den
+    # öffentlichen Teil (MAGISTER_OPERATOR_PUBLIC_KEY) und prüft offline —
+    # eine stehende Konsole verhindert damit keinen Zugriff auf einen Kunden,
+    # der gerade ein Problem hat.
+    #
+    # Ohne diesen Wert kann die Konsole alles ausser Operator-Zugriffe.
+    operator_signing_key: str = Field(default="")
     # Header, unter dem der Reverse Proxy das verifizierte Client-Zertifikat
     # weitergibt. Caddy: {http.request.tls.client.certificate_pem}.
     connector_client_cert_header: str = Field(default="x-connector-client-cert")
