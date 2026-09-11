@@ -27,9 +27,9 @@ export function TenantOperatorAccess({ tenantId }: { tenantId: string }) {
     retry: false,
   });
 
-  const [operator, setOperator] = useState(
-    () => sessionStorage.getItem("cockpit_actor") ?? "",
-  );
+  // Wer zugreift, stand hier als Eingabefeld und ist mit ADR-0020 D3
+  // verschwunden: der Name reist signiert mit und landet im Protokoll des
+  // Kunden. Selbst eingetippt wäre er eine Behauptung.
   const [reason, setReason] = useState("");
   const [ticket, setTicket] = useState("");
   const [opened, setOpened] = useState<OperatorAccessOpened | null>(null);
@@ -37,12 +37,10 @@ export function TenantOperatorAccess({ tenantId }: { tenantId: string }) {
   const openM = useMutation({
     mutationFn: () =>
       openOperatorAccess(tenantId, {
-        operator,
         reason,
         ticket: ticket.trim() || null,
       }),
     onSuccess: (out) => {
-      sessionStorage.setItem("cockpit_actor", operator);
       setOpened(out);
       setReason("");
       setTicket("");
@@ -62,15 +60,6 @@ export function TenantOperatorAccess({ tenantId }: { tenantId: string }) {
 
         {openM.isError && <ErrorBox error={openM.error} />}
 
-        <label className="block">
-          <span className="mb-1 block text-slate-600">Wer greift zu</span>
-          <input
-            value={operator}
-            onChange={(e) => setOperator(e.target.value)}
-            placeholder="vorname.nachname@vitabrevis.ch"
-            className="w-full rounded border px-2 py-1"
-          />
-        </label>
         <label className="block">
           <span className="mb-1 block text-slate-600">
             Grund (steht im Protokoll des Kunden, mindestens 10 Zeichen)
@@ -95,7 +84,7 @@ export function TenantOperatorAccess({ tenantId }: { tenantId: string }) {
         <button
           type="button"
           onClick={() => openM.mutate()}
-          disabled={openM.isPending || reason.trim().length < 10 || !operator.trim()}
+          disabled={openM.isPending || reason.trim().length < 10}
           className="rounded bg-slate-900 px-3 py-1 text-white disabled:opacity-50"
         >
           {openM.isPending ? "Stelle aus…" : "Zugriff öffnen"}

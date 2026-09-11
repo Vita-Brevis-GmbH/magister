@@ -21,7 +21,6 @@ export interface OperatorAccessOpened extends Pick<OperatorAccessGrant, "jti"> {
 }
 
 export interface OperatorAccessRequest {
-  operator: string;
   reason: string;
   ticket?: string | null;
 }

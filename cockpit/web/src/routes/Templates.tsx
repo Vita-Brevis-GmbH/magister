@@ -58,11 +58,10 @@ export function Templates() {
   const tenantsQ = useQuery({ queryKey: ["tenants"], queryFn: listTenants, retry: false });
 
   const [chosen, setChosen] = useState<{ key: string; language: string } | null>(null);
-  // Wer speichert, ist eine Eigenschaft der Sitzung und nicht der Vorlage.
-  // Stand vorher im Formular — und war nach jedem Speichern leer, weil das
-  // Formular neu aufgebaut wird. Wer zwei Vorlagen pflegt, tippt seine Adresse
-  // sonst zweimal. `sessionStorage` wie beim Token: weg, wenn der Tab zugeht.
-  const [actor, setActor] = useState(() => sessionStorage.getItem("cockpit_actor") ?? "");
+  // Wer speichert, stand hier einmal als Eingabefeld. Es ist mit ADR-0020 D3
+  // verschwunden: der Name kommt aus der angemeldeten Sitzung. Ein Feld, in
+  // das man seinen eigenen Namen tippt, ist keine Auskunft, sondern eine
+  // Behauptung — und es war die einzige Angabe im Protokoll.
   // Zählt hoch, wenn eine Vorlage entfernt wurde: dann muss das Formular leer
   // sein, und ein Neuaufbau ist der ehrlichste Weg dorthin.
   const [nonce, setNonce] = useState(0);
@@ -191,8 +190,8 @@ export function Templates() {
 
               Ausdrücklich **nicht** bei jeder neuen Fassung: der erste Entwurf
               hatte `updated_at` im Schlüssel, und damit war nach jedem
-              Speichern das Formular neu — die Erfolgsmeldung weg und das Feld
-              „Wer speichert“ leer. Der geltende Stand steht in der Zeile
+              Speichern das Formular neu — mit ihm die Erfolgsmeldung weg und
+              der halb getippte Text. Der geltende Stand steht in der Zeile
               darüber; das Formular zeigt, was der Betreiber gerade tippt.
             */}
             <TemplateForm
@@ -202,11 +201,6 @@ export function Templates() {
               existing={existing}
               tenants={tenantsQ.data ?? []}
               tenantsError={tenantsQ.isError ? tenantsQ.error : null}
-              actor={actor}
-              onActorChange={(value) => {
-                setActor(value);
-                sessionStorage.setItem("cockpit_actor", value);
-              }}
               onSaved={() => void qc.invalidateQueries({ queryKey: ["platform-templates"] })}
             />
 
@@ -239,8 +233,6 @@ function TemplateForm({
   existing,
   tenants,
   tenantsError,
-  actor,
-  onActorChange,
   onSaved,
 }: {
   templateKey: string;
@@ -248,8 +240,6 @@ function TemplateForm({
   existing: PlatformTemplate | undefined;
   tenants: Tenant[];
   tenantsError: unknown;
-  actor: string;
-  onActorChange: (value: string) => void;
   onSaved: () => void;
 }) {
   const [subject, setSubject] = useState(existing?.subject ?? "");
@@ -273,7 +263,6 @@ function TemplateForm({
         // Auswahl würde beim Zurückschalten stillschweigend wieder gelten.
         tenant_ids: audience === "selection" ? selection : [],
         is_active: isActive,
-        actor,
       }),
     onSuccess: onSaved,
   });
@@ -378,21 +367,11 @@ function TemplateForm({
         <span>Ausgeliefert (ausgeschaltet verschwindet sie beim Kunden)</span>
       </label>
 
-      <label className="block">
-        <span className="mb-1 block text-slate-600">Wer speichert (fürs Protokoll)</span>
-        <input
-          value={actor}
-          onChange={(e) => onActorChange(e.target.value)}
-          placeholder="vorname.nachname@vitabrevis.ch"
-          className="w-full rounded border px-2 py-1"
-        />
-      </label>
-
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => saveM.mutate()}
-          disabled={saveM.isPending || !body.trim() || !actor.trim() || !templateKey}
+          disabled={saveM.isPending || !body.trim() || !templateKey}
           className="rounded bg-slate-900 px-3 py-1 text-white disabled:opacity-50"
         >
           {saveM.isPending ? "Speichere…" : "Speichern"}

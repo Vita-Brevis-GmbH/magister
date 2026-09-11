@@ -38,7 +38,6 @@ export interface PlatformTemplateSave {
   /** `null` = Auswahl nicht anfassen, `[]` = Auswahl leeren. */
   tenant_ids: string[] | null;
   is_active: boolean;
-  actor: string;
 }
 
 export function listPlatformTemplates(): Promise<PlatformTemplateList> {

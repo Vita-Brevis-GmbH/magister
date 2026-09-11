@@ -1,6 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { logout, whoami } from "./api/consoleAuth";
+import { ConsoleLogin } from "./components/ConsoleLogin";
 import { href, useRoute } from "./lib/nav";
 import { Instances } from "./routes/Instances";
 import { Templates } from "./routes/Templates";
@@ -8,17 +10,34 @@ import { TenantDetail } from "./routes/TenantDetail";
 import { Tenants } from "./routes/Tenants";
 
 /**
- * Der Token-Kasten.
+ * Der Notzugang.
  *
- * Bis zur Anmeldung über OIDC mit Hardware-Schlüssel (Entscheid E21) ist der
- * Bootstrap-Token der einzige Zugang. Er liegt in `sessionStorage` und nicht
- * in `localStorage`: damit ist er weg, wenn der Tab zugeht, und überlebt kein
- * Wochenende auf einem Bildschirm im Büro.
+ * Seit ADR-0020 ist der reguläre Weg Zertifikat plus zweiter Faktor. Der
+ * Bootstrap-Token bleibt trotzdem: er ist der einzige Weg in eine frisch
+ * ausgerollte Konsole, in der noch kein Operator eingetragen ist — und in eine
+ * Entwicklungsumgebung, die keine Client-Zertifikate prüft.
+ *
+ * Er liegt in `sessionStorage` und nicht in `localStorage`: damit ist er weg,
+ * wenn der Tab zugeht, und überlebt kein Wochenende auf einem Bildschirm im
+ * Büro. Im Protokoll heisst er `bootstrap-token` und nicht wie eine Person.
  */
-function TokenBox() {
+function BootstrapTokenBox() {
   const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [value, setValue] = useState(sessionStorage.getItem("cockpit_token") ?? "");
   const [saved, setSaved] = useState(false);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="text-xs text-slate-500 underline"
+      >
+        Notzugang mit Bootstrap-Token
+      </button>
+    );
+  }
 
   return (
     <form
@@ -60,8 +79,64 @@ function NavLink({ to, label, active }: { to: string; label: string; active: boo
   );
 }
 
+/** Wer angemeldet ist — und der Weg heraus. */
+function Identity({ upn, name }: { upn: string | null; name: string | null }) {
+  const qc = useQueryClient();
+  const logoutM = useMutation({
+    mutationFn: logout,
+    // `resetQueries` und nicht `invalidateQueries`: nach dem Abmelden sollen
+    // die Antworten weg sein und nicht neu geholt werden. Sonst stünden die
+    // Kundendaten der letzten Ansicht noch im Speicher des Browsers, während
+    // die Anmeldemaske darüber liegt.
+    onSettled: () => qc.resetQueries(),
+  });
+
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span className="text-slate-600" title={upn ?? undefined}>
+        {name ?? upn}
+      </span>
+      <button
+        type="button"
+        onClick={() => logoutM.mutate()}
+        disabled={logoutM.isPending}
+        className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+      >
+        Abmelden
+      </button>
+    </div>
+  );
+}
+
 export function App() {
   const route = useRoute();
+  // `retry: false`: die Frage „welcher Schritt fehlt“ hat immer eine Antwort;
+  // wenn sie scheitert, ist die Konsole nicht erreichbar, und ein zweiter
+  // Versuch macht die Anmeldemaske nur langsamer.
+  const whoQ = useQuery({ queryKey: ["whoami"], queryFn: whoami, retry: false });
+
+  const who = whoQ.data;
+  const signedIn = who?.stage === "authenticated";
+  // Der Notzugang: ein gesetzter Token trägt auch ohne Sitzung. Getrennt
+  // ausgewiesen, damit niemand ihn für eine Anmeldung hält.
+  const viaToken = !signedIn && Boolean(sessionStorage.getItem("cockpit_token"));
+
+  if (whoQ.isPending) {
+    return <p className="p-6 text-sm text-slate-500">Einen Moment…</p>;
+  }
+
+  if (!signedIn && !viaToken) {
+    return (
+      <div>
+        <ConsoleLogin
+          who={who ?? { stage: "unknown_certificate", upn: null, name: null, expires_at: null }}
+        />
+        <div className="mx-auto max-w-xl px-6 pb-6">
+          <BootstrapTokenBox />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl p-6">
@@ -86,8 +161,16 @@ export function App() {
             />
           </nav>
         </div>
-        <TokenBox />
+        {signedIn && who ? <Identity upn={who.upn} name={who.name} /> : <BootstrapTokenBox />}
       </header>
+
+      {viaToken && (
+        <p className="mb-4 rounded border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Notzugang mit Bootstrap-Token. Was jetzt geschieht, steht im Protokoll des
+          Kunden als <code className="font-mono">bootstrap-token</code> — ohne Namen.
+          Für die tägliche Arbeit ist das der falsche Weg.
+        </p>
+      )}
 
       {route.view === "tenants" && <Tenants />}
       {route.view === "instances" && <Instances />}
