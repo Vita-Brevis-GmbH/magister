@@ -13,6 +13,12 @@
 #                                 listener; the api refuses to start then.
 #   COCKPIT_HOSTNAME            — the name on the console certificate.
 #   COCKPIT_BOOTSTRAP_TOKEN     — break-glass API token.
+#   COCKPIT_SECRET_KEY          — pgcrypto key for the operators' TOTP
+#                                 secrets (ADR-0020 D2).
+#                                 Generate with: openssl rand -base64 48
+#
+# Before the first start: build the console UI, otherwise the listener answers
+# 404 on everything but /api/* — `cd cockpit/web && pnpm install && pnpm build`.
 services:
   postgres:
     image: postgres:16
@@ -40,6 +46,17 @@ services:
       COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required and must differ from COCKPIT_MANAGEMENT_MARKER}
       COCKPIT_CONNECTOR_CA_CERT: /certs/connector-int.pem
       COCKPIT_CONNECTOR_CA_KEY: /certs/connector-int-key.pem
+      # ADR-0019: der private Ed25519-Schlüssel, mit dem Einlösescheine
+      # signiert werden. Ohne ihn gibt es die Ausstellroute nicht — die
+      # Konsole läuft, kann aber keinen Operator-Zugriff öffnen.
+      COCKPIT_OPERATOR_SIGNING_KEY: /certs/operator-signing.pem
+      # ADR-0020 D2: damit ist das TOTP-Geheimnis der Operatoren in der
+      # Konsolen-Datenbank verschlüsselt (pgcrypto). Pflicht, und nicht mit
+      # einem Vorgabewert: ein voreingestellter Schlüssel wäre einer, der auf
+      # jeder Installation derselbe ist. Ohne ihn ist keine Anmeldung ausser
+      # dem Bootstrap-Token möglich. Gehört in die Sicherung
+      # (docs/runbooks/key-rotation.md §5).
+      COCKPIT_SECRET_KEY: ${COCKPIT_SECRET_KEY:?COCKPIT_SECRET_KEY is required — openssl rand -base64 48}
     depends_on: [postgres]
     # Deliberately no `ports:` — everything goes through caddy below.
     healthcheck:
@@ -69,6 +86,11 @@ services:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
       - caddy-data:/data
+      # Die gebaute Konsolen-Oberfläche (`cd cockpit/web && pnpm build`).
+      # Als Verzeichnis und nicht als Image-Schicht: die Oberfläche ändert
+      # sich öfter als der Listener, und ein Neubau von Caddy dafür wäre
+      # Aufwand ohne Grund.
+      - ../web/dist:/srv/console:ro
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |

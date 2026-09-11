@@ -55,14 +55,30 @@ https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
 	handle /api/* {
 		reverse_proxy api:8000 {
 			header_up X-Magister-Management {$COCKPIT_MANAGEMENT_MARKER}
+			# Das geprüfte Client-Zertifikat, damit die Anwendung weiss, WER
+			# anklopft (ADR-0020 D1). Sie bildet daraus den SPKI-Fingerprint
+			# und findet damit die Operator-Zeile.
+			#
+			# `certificate_der_base64` und NICHT `certificate_pem`: ein PEM
+			# enthält Zeilenumbrüche, Gos `net/http` weist einen solchen
+			# Header-Wert ab, und Caddy antwortet mit 502. Im
+			# Connector-Block unten steht dieselbe Zeile aus demselben Grund —
+			# dort wurde es einmal bezahlt.
+			#
+			# `header_up` ERSETZT einen vom Client gesetzten Wert, ein von
+			# aussen eingeschmuggelter Header kommt also nicht durch.
+			header_up X-Console-Client-Cert {http.request.tls.client.certificate_der_base64}
 		}
 	}
 
-	# The console SPA comes with the console UI (ADR-0013, Phase 2). Until then
-	# this listener answers nothing but the API — deliberately no route to a
-	# service that does not exist yet.
+	# Die Konsolen-Oberfläche (ADR-0013 Phase 2, steht seit 2026-09). Sie
+	# liegt als statische Dateien im Image und wird von hier ausgeliefert —
+	# dieselbe Herkunft wie die API, damit der Sitzungs-Cookie erststellig
+	# bleibt.
 	handle {
-		respond "not found" 404
+		root * /srv/console
+		try_files {path} /index.html
+		file_server
 	}
 }
 
