@@ -113,6 +113,13 @@ def effective_capabilities(user: AuthenticatedUser, matrix: RbacMatrix) -> froze
     implicitly — not the platform ones (ADR-0017 D5). Ein Kunden-Admin ist der
     Administrator seiner Installation und nicht der Betreiber der Plattform.
     """
+    if user.operator is not None:
+        # Ein Operator-Zugriff (ADR-0019) kommt an jede Leseroute wie ein
+        # Kunden-Admin. Dass daraus kein Schreiben wird, leistet die
+        # Methodenregel in ``operator_guard`` — und nicht eine kleinere
+        # Capability-Menge, die bei jedem neuen Lese-Endpunkt nachgezogen
+        # werden müsste.
+        return TENANT_CAPABILITIES
     if user.is_admin or matrix.holds_admin(user.roles):
         return TENANT_CAPABILITIES
     caps: set[Capability] = set()

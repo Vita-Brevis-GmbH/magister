@@ -22,6 +22,7 @@ from magister_api.db import dispose_engine, get_sessionmaker, init_engine
 from magister_api.logging_config import configure_logging
 from magister_api.modules import catalog
 from magister_api.modules.enforcement import make_module_guard
+from magister_api.modules.platform import OPERATOR_ROUTERS
 from magister_api.modules.registry import enabled_modules
 from magister_api.modules.settings import PLATFORM_OWNED_ROUTERS
 from magister_api.observability import runtime_snapshot
@@ -191,6 +192,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # `set(...)` davon wirft `TypeError: unhashable type` — beim Start, also
     # sofort, aber es kostet zehn Minuten, wenn man es nicht erwartet.
     skip = {id(r) for r in PLATFORM_OWNED_ROUTERS} if platform_managed else set()
+    if not s.operator_public_key.strip():
+        # Kein hinterlegter Schlüssel heisst: kein Operator-Zugriff, und die
+        # Fläche existiert nicht (ADR-0019 D3).
+        skip |= {id(r) for r in OPERATOR_ROUTERS}
     for module in enabled_modules(s.container_modules):
         meta = catalog.get_meta(module.id)
         guard = (

@@ -80,6 +80,19 @@ class Settings(BaseSettings):
     # nichts am Betrieb — der letzte gute Stand bleibt gültig.
     console_registry_interval_s: int = Field(default=300, ge=30)
 
+    # --- Operator-Zugriff (ADR-0019) --------------------------------------
+    # ÖFFENTLICHER Ed25519-Schlüssel (PEM), gegen den ein Einlöseschein der
+    # Konsole geprüft wird. Kein Geheimnis — deshalb als Wert und nicht als
+    # Pfad, und deshalb geht die Prüfung ohne Rückfrage bei der Konsole.
+    #
+    # Leer heisst: es gibt die Einlöseroute **nicht** (nicht 403, gar nicht
+    # da — dieselbe Linie wie ADR-0017 D1). Eine Einzelinstallation hat keinen
+    # Betreiber ausser dem Kunden selbst.
+    operator_public_key: str = Field(default="")
+    # Wie lange eine Operator-Sitzung gilt. Kürzer als die eines Benutzers:
+    # ein Support-Fall dauert eine Stunde, ein Arbeitstag nicht.
+    operator_session_minutes: int = Field(default=60, ge=5, le=480)
+
     # AD über den Connector-Agenten (ADR-0014). Eingeschaltet, sobald eine
     # Konsolen-URL steht und der Kunde eine console_id in der Registry hat —
     # kein eigener Schalter, sondern eine Folge der Konfiguration.

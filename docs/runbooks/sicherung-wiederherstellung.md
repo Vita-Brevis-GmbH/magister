@@ -194,7 +194,7 @@ python -m cockpit_api.cli.verify_backup \
   --dump /mnt/magister-backup/musterstadt/musterstadt-20260909T031500Z-daily.dump.age \
   --identity /etc/magister/backup-identity.txt \
   --slug musterstadt --schema t_musterstadt \
-  --expected-schema-version 0045_platform_document_templates \
+  --expected-schema-version 0046_operator_access \
   --checksum <sha256 aus der Konsole> \
   --console https://10.0.0.5:4444 --backup-id <uuid>
 ```

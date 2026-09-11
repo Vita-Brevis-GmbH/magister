@@ -29,7 +29,7 @@ from magister_api.db import get_session
 from magister_api.models.base import utcnow
 from magister_api.repositories.auth import SessionRepository
 from magister_api.repositories.local_admin import LocalAdminRepository
-from magister_api.schemas.auth import CurrentUserOut
+from magister_api.schemas.auth import CurrentUserOut, OperatorBannerOut
 from magister_api.schemas.local_admin import (
     LocalEnrollConfirmOut,
     LocalLoginRequest,
@@ -201,6 +201,19 @@ async def logout(
     auth_service = AuthService(session, settings)
     request_id = getattr(request.state, "request_id", "")
     client_ip = getattr(request.state, "client_ip", None)
+    if user.operator is not None and user.operator.jti is not None:
+        # Den Zugriff als **beendet** vermerken, bevor die Sitzung weg ist
+        # (ADR-0019 D6). Ein beendeter und ein abgelaufener Zugriff sind für
+        # den Kunden nicht dasselbe, und nach dem Löschen der Sitzung wüsste
+        # niemand mehr, welcher Zugriff gemeint war.
+        from magister_api.services.operator_access import OperatorAccessService
+
+        await OperatorAccessService(session, settings).end(
+            jti=user.operator.jti,
+            ip=client_ip,
+            request_id=request_id,
+            actor_upn=user.operator.upn,
+        )
     await auth_service.logout(
         session_id=cookie,
         actor_upn=user.upn,
@@ -216,6 +229,7 @@ async def logout(
 @router.get("/me", response_model=CurrentUserOut)
 async def me(
     user: AuthenticatedUser = Depends(get_current_user),
+    settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> CurrentUserOut:
     # Enrich with the cached name fields so the UI can greet by display name
@@ -223,7 +237,13 @@ async def me(
     # authenticated user looking up their own row.
     from magister_api.models.auth import AdUserCache
 
-    cache = await session.get(AdUserCache, user.ad_object_guid)
+    cache = await session.get(AdUserCache, user.ad_object_guid) if user.ad_object_guid else None
+    # Der laufende Operator-Zugriff, für den Hinweisbalken (ADR-0019 D6). Eine
+    # Abfrage für jeden Benutzer, nicht nur für Admins: eine Transparenz, die
+    # nur derjenige sieht, der den Zugriff ohnehin bewilligt hätte, ist keine.
+    from magister_api.services.operator_access import OperatorAccessService
+
+    active = await OperatorAccessService(session, settings).active()
     return CurrentUserOut(
         ad_object_guid=user.ad_object_guid,
         upn=user.upn,
@@ -237,6 +257,15 @@ async def me(
         # expires_at is Optional on the session model but always set for an
         # authenticated user by the time this response is built.
         expires_at=user.expires_at,  # type: ignore[arg-type]
+        is_operator=user.operator is not None,
+        operator_active=None
+        if active is None
+        else OperatorBannerOut(
+            operator=active.operator_upn,
+            reason=active.reason,
+            ticket=active.ticket,
+            until=active.expires_at,
+        ),
     )
 
 
