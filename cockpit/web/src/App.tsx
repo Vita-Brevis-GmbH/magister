@@ -4,6 +4,7 @@ import { useState } from "react";
 import { logout, whoami } from "./api/consoleAuth";
 import { ConsoleLogin } from "./components/ConsoleLogin";
 import { href, useRoute } from "./lib/nav";
+import { Fleet } from "./routes/Fleet";
 import { Instances } from "./routes/Instances";
 import { Templates } from "./routes/Templates";
 import { TenantDetail } from "./routes/TenantDetail";
@@ -47,7 +48,7 @@ function BootstrapTokenBox({ onSet }: { onSet: (token: string) => void }) {
         sessionStorage.setItem("cockpit_token", value);
         setSaved(true);
         // `onSet` und nicht nur `invalidateQueries`: der Abruf liefert
-        // dieselbe Antwort wie vorher („unbekanntes Zertifikat"), React Query
+        // dieselbe Antwort wie vorher („unbekanntes Zertifikat“), React Query
         // sieht unveraenderte Daten, und ohne Zustandsaenderung baut App sich
         // nicht neu auf. Gemessen: der Token war gesetzt, und die
         // Anmeldemaske blieb stehen.
@@ -103,7 +104,7 @@ function Identity({
     // Kundendaten der letzten Ansicht noch im Speicher des Browsers, während
     // die Anmeldemaske darüber liegt.
     onSettled: () => {
-      // Auch den Notzugang wegwerfen: „Abmelden" soll draussen heissen. Ein
+      // Auch den Notzugang wegwerfen: „Abmelden“ soll draussen heissen. Ein
       // liegengebliebener Token haette die Anwendung gleich wieder geoeffnet
       // — unter dem Namen `bootstrap-token`.
       onLoggedOut();
@@ -188,6 +189,11 @@ export function App() {
               label="Vorlagen"
               active={route.view === "templates"}
             />
+            <NavLink
+              to={href({ view: "fleet" })}
+              label="Flotte"
+              active={route.view === "fleet"}
+            />
           </nav>
         </div>
         {signedIn && who ? (
@@ -224,6 +230,7 @@ export function App() {
       {route.view === "tenants" && <Tenants />}
       {route.view === "instances" && <Instances />}
       {route.view === "templates" && <Templates />}
+      {route.view === "fleet" && <Fleet />}
       {route.view === "tenant" && <TenantDetail tenantId={route.id} tab={route.tab} />}
     </div>
   );

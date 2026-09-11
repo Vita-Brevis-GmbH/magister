@@ -13,6 +13,7 @@ import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 import { ProvisioningLog } from "../components/ProvisioningLog";
 import { SecretOnce } from "../components/SecretOnce";
+import { TenantLimitsSection, TenantRelocateSection } from "../components/TenantLoad";
 import { go, href, type TenantTab } from "../lib/nav";
 import { TenantBackups } from "./TenantBackups";
 import { TenantConnector } from "./TenantConnector";
@@ -40,7 +41,18 @@ function Facts({ tenant }: { tenant: Tenant }) {
     // (ADR-0013 D4) — die Datenebene löst ihn aus ihrem eigenen
     // Geheimnisspeicher auf.
     ["DSN-Verweis", tenant.dsn_ref],
-    ["Schema-Stand", tenant.schema_version ?? "unbekannt"],
+    // Gemeldet oder erwartet — der Unterschied muss dastehen. Bis die
+    // Datenebene meldet (ADR-0021 D2), ist `schema_version` die Erwartung der
+    // Konsole; wer sie für eine Messung hält, hält einen nicht migrierten
+    // Kunden für migriert.
+    [
+      "Schema-Stand",
+      tenant.schema_version_reported_at
+        ? `${tenant.schema_version ?? "unbekannt"} · gemeldet ${new Date(
+            tenant.schema_version_reported_at,
+          ).toLocaleString()}`
+        : `${tenant.schema_version ?? "unbekannt"} · erwartet, nie gemeldet`,
+    ],
     ["Schlüssel-Id", tenant.audit_key_id ?? "—"],
     ["Angelegt", new Date(tenant.created_at).toLocaleString()],
   ];
@@ -191,6 +203,8 @@ function Overview({ tenantId }: { tenantId: string }) {
         )}
       </section>
 
+      <TenantLimitsSection tenant={tenant} />
+
       <section className="rounded border bg-white p-4">
         <h2 className="mb-2 font-semibold">Rollenpasswort drehen</h2>
         <p className="mb-2 text-xs text-slate-500">
@@ -208,6 +222,8 @@ function Overview({ tenantId }: { tenantId: string }) {
         </button>
         {rotateM.isError && <div className="mt-3"><ErrorBox error={rotateM.error} /></div>}
       </section>
+
+      <TenantRelocateSection tenant={tenant} />
     </div>
   );
 }

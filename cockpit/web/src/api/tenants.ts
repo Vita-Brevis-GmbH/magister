@@ -1,4 +1,4 @@
-import { get, post } from "./client";
+import { get, post, put } from "./client";
 
 export type TenantStatus = "provisioning" | "active" | "suspended" | "archived";
 /**
@@ -25,6 +25,19 @@ export interface Tenant {
   schema_name: string;
   db_role: string;
   schema_version: string | null;
+  /**
+   * Wann die Datenebene den Stand gemeldet hat (ADR-0021 D2).
+   *
+   * `null` heisst: `schema_version` ist die **Erwartung** der Konsole aus
+   * `COCKPIT_EXPECTED_SCHEMA_VERSION` und keine Messung. Der Unterschied ist
+   * der ganze Zweck des Feldes — ohne ihn liest man eine Erwartung als
+   * Tatsache und hält einen Kunden für migriert, der es nicht ist.
+   */
+  schema_version_reported_at: string | null;
+  /** Lastgrenzen an der Mandantenrolle (ADR-0021 D3). */
+  statement_timeout_ms: number;
+  idle_in_transaction_ms: number;
+  connection_limit: number;
   /** Nur die **Id** des Kundenschlüssels — nie der Schlüssel selbst. */
   audit_key_id: string | null;
   suspended_at: string | null;
@@ -111,4 +124,39 @@ export function unsuspendTenant(id: string): Promise<Tenant> {
 
 export function rotateRolePassword(id: string): Promise<TenantProvisionResult> {
   return post(`/api/tenants/${id}/rotate-role-password`);
+}
+
+/**
+ * Die drei Lastgrenzen — alle drei, immer (ADR-0021 D3).
+ *
+ * Kein `Partial`: die API verlangt alle drei Werte. Ein weggelassenes Feld
+ * hiesse dort „unverändert“ und im Formular „leer“, und genau dieser
+ * Unterschied ist der Fehler, der eine Grenze auf 0 setzt.
+ */
+export interface TenantLimits {
+  statement_timeout_ms: number;
+  idle_in_transaction_ms: number;
+  connection_limit: number;
+  reason: string;
+}
+
+export function updateTenantLimits(id: string, body: TenantLimits): Promise<Tenant> {
+  return put(`/api/tenants/${id}/limits`, body);
+}
+
+export interface TenantRelocate {
+  dsn_ref: string;
+  isolation_mode: IsolationMode;
+  reason: string;
+}
+
+/**
+ * Den Verweis auf die Ablage umstellen — der letzte Schritt eines Umzugs
+ * (ADR-0021 D5), nicht der Umzug selbst.
+ *
+ * Die API nimmt das nur bei **gesperrtem** Kunden an; sonst antwortet sie mit
+ * 409. Der Ablauf steht in `docs/runbooks/betrieb-im-grossen.md`.
+ */
+export function relocateTenant(id: string, body: TenantRelocate): Promise<Tenant> {
+  return post(`/api/tenants/${id}/relocate`, body);
 }
