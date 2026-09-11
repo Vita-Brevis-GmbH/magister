@@ -39,6 +39,16 @@ class Settings(BaseSettings):
     # Agent angemeldet werden.
     connector_ca_cert: str = Field(default="")
     connector_ca_key: str = Field(default="")
+    # --- Konsolen-Anmeldung (ADR-0020) ------------------------------------
+    # Schlüssel, mit dem das TOTP-Geheimnis eines Operators in der Datenbank
+    # verschlüsselt wird (pgcrypto, wie in der Datenebene). Ohne ihn ist kein
+    # zweiter Faktor prüfbar — er gehört in die Sicherung und in die
+    # Schlüsselrotation.
+    secret_key: str = Field(default="")
+    # Wie lange eine Konsolen-Sitzung gilt. Kürzer als ein Arbeitstag: die
+    # Konsole ist ein Werkzeug, das man aufmacht und wieder zumacht.
+    console_session_minutes: int = Field(default=240, ge=15, le=960)
+
     # --- Operator-Zugriff (ADR-0019) --------------------------------------
     # Pfad zum PRIVATEN Ed25519-Schlüssel, mit dem Operator-Assertions
     # signiert werden. Ein Pfad und keine Variable mit dem Schlüssel darin:
