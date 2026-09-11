@@ -18,6 +18,7 @@ dependencies = [
   "cryptography>=42",
   # API-Key des Agenten wird als argon2id-Hash abgelegt, nie im Klartext.
   "argon2-cffi>=23.1",
+  "pyotp>=2.9",
 ]
 
 [project.optional-dependencies]

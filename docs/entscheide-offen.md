@@ -9,8 +9,10 @@ Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 > **Am 2026-09-09 entschieden: E17 = B, E18 = C (in zwei Schritten),
 > E19 = B, E20 = A** — jeweils der Empfehlung folgend. Die vier Abschnitte
 > unten bleiben stehen, weil sie die Begründung tragen; was daraus folgt,
-> steht unter jedem als *Entschieden*. Offen ist nur noch **E21**, und das ist
-> keine Wahl zwischen Optionen, sondern ein Vorgang im Entra-Verzeichnis.
+> steht unter jedem als *Entschieden*. Auch **E21** ist entschieden — anders
+> als dort beschrieben: die Konsolen-Anmeldung kommt ohne Entra
+> ([ADR-0020](adr/0020-konsolen-anmeldung.md), 2026-09-11). Der Abschnitt
+> unten bleibt als Begründung stehen, warum.
 
 ---
 
@@ -159,6 +161,16 @@ kann jetzt terminiert werden.**
 ---
 
 ## E21 · Entra-App-Registrierung für die Konsolen-Anmeldung
+
+> **Entschieden am 11. September 2026 — und zwar dagegen.** Die Konsole erkennt
+> Personen am Client-Zertifikat und bestätigt sie mit TOTP; beides lokal, ohne
+> fremden Dienst ([ADR-0020](adr/0020-konsolen-anmeldung.md)). Der Grund ist
+> derselbe wie beim Operator-Zugriff: in die Konsole geht man, wenn etwas
+> kaputt ist, und eine Anmeldung, die einen fremden Dienst braucht, ist dann
+> nicht verfügbar. Entra bleibt die richtige Antwort, sobald das
+> Betreiber-Team über eine Handvoll Personen hinauswächst.
+>
+> Was unten steht, war die Planung. Sie ist nicht mehr zu tun.
 
 **Was zur Wahl steht.** Die Konsole hat heute nur den Bootstrap-Token. Für die
 Anmeldung mit Hardware-Schlüssel braucht sie eine App-Registrierung in **Ihrem**
