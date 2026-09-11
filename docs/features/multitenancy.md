@@ -856,15 +856,13 @@ der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selb
 
 | E16 | Darf ein Kunden-Admin mehrere Kunden bedienen? | **Innerhalb eines Kunden ja, mandantenübergreifend nein.** Ein Mandant ist ein Schulträger; die Schulen darin sind Standorte, und ein Kunden-Admin ohne `school_id` ist schon heute für alle zuständig — der Gemeinde-IT-Fall braucht also gar keine Änderung. Für zwei *getrennte* Kunden bleibt es bei zwei Anmeldungen: die Sitzungen liegen im Kundenschema, und eine Sitzung über beide bräuchte einen Rollenwechsel in der Datenbank — genau den Ausbruch, den Phase 1 geschlossen hat. Bequemlichkeit kommt als **Umschalter in der Oberfläche** (ein Klick, Redirect plus SSO), nicht als gemeinsame Sitzung. Siehe Abschnitt 9. |
 
-### Ein Punkt bleibt offen
+### Kein Punkt bleibt offen
 
-- **E15 · Monatliche Kopie mit längerer Frist?** Die 10 Tage aus E14 decken
-  keinen Fehler ab, der erst nach zwei Wochen auffällt — bei Schulen ein
-  realistisches Muster (etwas fällt am Quartalsende auf) — und keinen
-  Verschlüsselungstrojaner, der wochenlang im Netz sass, bevor er zuschlug.
-  *Vorschlag:* zusätzlich zwölf monatliche Kopien. Das sind pro Kunde zwölf
-  Dateien, kostet kaum Platz, und `tenant_backup_policy` hält die zwei Fristen
-  ohnehin getrennt. Der tägliche Zyklus bleibt bei 10 Tagen.
+Hier stand E15 als letzte offene Frage (monatliche Kopie mit längerer Frist?).
+Sie ist am 2026-09-09 mit **ja** entschieden und am selben Tag gebaut — zwölf
+Monatskopien, der tägliche Zyklus bleibt bei 10 Tagen (Abschnitt 7, Phase 2b).
+Und E21 (Konsolen-Anmeldung über Entra ID) ist am 2026-09-11 entschieden, und
+zwar **dagegen**: ADR-0020 macht es lokal. Damit sind E1 bis E21 beantwortet.
 
 Die beiden Verfahren, die vorher hier offen standen, sind jetzt ausgeschrieben:
 
