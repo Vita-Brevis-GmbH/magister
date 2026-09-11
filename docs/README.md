@@ -92,6 +92,7 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 | [`0016`](adr/0016-sicherung-wiederherstellung-export.md) | Sicherung, Wiederherstellung und Export pro Kunde |
 | [`0017`](adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md) | Systemeinstellungen und Rechte gehören der Konsole |
 | [`0018`](adr/0018-globale-vorlagen.md) | Globale Vorlagen der Plattform, eigener Text des Kunden |
+| [`0019`](adr/0019-operator-zugriff.md) | Operator-Zugriff: lesend, befristet, für den Kunden sichtbar |
 
 (ADRs 0001/0002 wurden vor M4 vergeben.)
 
