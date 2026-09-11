@@ -38,10 +38,16 @@ from magister_api.tenancy.version import HEAD_REVISION
 logger = logging.getLogger(__name__)
 
 #: Pfade, die ohne Mandanten beantwortet werden. Bewusst kurz: das sind die
-#: beiden internen Sonden, die auch bei einem kaputten Registry-Eintrag noch
+#: internen Sonden, die auch bei einem kaputten Registry-Eintrag noch
 #: antworten müssen, damit ein Orchestrierer den Container nicht endlos neu
 #: startet, während er nur eine Zeile Konfiguration braucht.
-TENANT_FREE_PATHS: frozenset[str] = frozenset({"/healthz", "/runtime"})
+#:
+#: `/healthz/stack` steht hier, weil es sonst **genau dann** schweigt, wenn es
+#: gebraucht wird: ein Mandant mit abweichendem Schemastand oder fehlendem
+#: Schlüssel bekommt von dieser Middleware ein `503 maintenance`, und die
+#: Sonde dahinter käme nie zum Zug. Sie löst den Mandanten selbst auf und
+#: verlangt einen eigenen Token.
+TENANT_FREE_PATHS: frozenset[str] = frozenset({"/healthz", "/runtime", "/healthz/stack"})
 
 
 def resolve_host(request: Request) -> str | None:

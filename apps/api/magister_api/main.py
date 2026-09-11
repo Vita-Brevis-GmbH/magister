@@ -32,6 +32,7 @@ from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
 from magister_api.services.rbac import RbacService
 from magister_api.services.reconcile_loop import reconcile_loop
+from magister_api.services.stack_health import require_health_token, stack_health
 from magister_api.tenancy.context import (
     console_refresh_loop,
     dispose_tenancy,
@@ -41,7 +42,7 @@ from magister_api.tenancy.context import (
     refresh_from_console,
 )
 from magister_api.tenancy.keys import attach_keys, resolve_tenant_keys
-from magister_api.tenancy.middleware import make_tenant_middleware
+from magister_api.tenancy.middleware import make_tenant_middleware, resolve_host
 from magister_api.tenancy.registry import Tenant
 from magister_api.tenancy.scope import apply_tenant_scope
 
@@ -272,6 +273,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/healthz", tags=["meta"])
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    @app.get("/healthz/stack", tags=["meta"], dependencies=[Depends(require_health_token)])
+    async def healthz_stack(request: Request) -> JSONResponse:
+        """Tiefe Prüfung der Seite, die unter diesem Hostnamen antwortet.
+
+        Für die Überwachung des Betreibers (PRTG), nicht für einen
+        Orchestrierer: sie fragt Registry, Zustand, Schemastand,
+        Kundenschlüssel, Datenbank und Alter des AD-Abgleichs. `status` ist
+        0/1/2 wie bei `fleet_check` (ADR-0021 D6).
+
+        Immer **HTTP 200**, sobald der Token stimmt. Der Zustand steht im
+        Rumpf: ein Sensor, der schon am Statuscode scheitert, liest die
+        Begründung nicht mehr — und genau sie ist der Zweck dieser Route.
+
+        Sie läuft **vor** der Mandanten-Middleware (`TENANT_FREE_PATHS`) und
+        löst den Mandanten selbst auf. Dahinter käme sie nie zum Zug: ein
+        Kunde mit abweichendem Schemastand bekommt dort ein `503 maintenance`,
+        und dann schwiege die Sonde genau in dem Fall, für den es sie gibt.
+        """
+        health = await stack_health(resolve_host(request), settings=s, registry=get_registry())
+        return JSONResponse(content=health.as_dict(version=__version__))
 
     @app.get("/runtime", tags=["meta"])
     async def runtime() -> dict[str, object]:

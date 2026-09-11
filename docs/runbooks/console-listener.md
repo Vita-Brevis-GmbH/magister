@@ -39,6 +39,21 @@ Drei Dateien müssen in `cockpit/deploy/certs/` liegen, bevor der Stack startet
 | `console.pem` | Serverzertifikat für `console.magister.ch` (Kette) | interne CA oder öffentliches Zertifikat |
 | `console-key.pem` | privater Schlüssel dazu, `0600` | ebd. |
 
+### 2.1a · Namen und ein Wildcard, das nicht so weit reicht, wie es aussieht
+
+Festgelegt (2026-09-11): Kundenseiten und Konsole liegen unter
+`<kunde>.mgmt.vitabrevis.ch` beziehungsweise `console.mgmt.vitabrevis.ch`, der
+Connector-Endpunkt öffentlich unter `connect.vitabrevis.ch`.
+
+**Ein Wildcard-Zertifikat gilt für genau eine Ebene.** `*.vitabrevis.ch` deckt
+`connect.vitabrevis.ch` ab — aber **nicht** `thun.mgmt.vitabrevis.ch` und auch
+nicht `console.mgmt.vitabrevis.ch`. Dafür braucht es `*.mgmt.vitabrevis.ch`,
+als zweites Wildcard oder als SAN im selben Zertifikat.
+
+Das ist kein Detail, das sich später nachziehen lässt: fehlt es, scheitert
+jede Kundenseite am TLS-Handshake, und zwar für alle gleichzeitig. Beim
+Bestellen mitbestellen.
+
 `platform-ca.pem` ist der **Trust Pool für Client-Zertifikate** — nur wer ein
 von dieser Kette signiertes Zertifikat vorweist, kommt durch den Handshake.
 Deshalb dort ausschliesslich die Operator-Kette hinterlegen, nie ein
@@ -48,7 +63,7 @@ Deshalb dort ausschliesslich die Operator-Kette hinterlegen, nie ein
 
 ```bash
 COCKPIT_BIND_ADDRESS=10.0.0.5          # die Management-Adresse. NICHT 0.0.0.0.
-COCKPIT_HOSTNAME=console.magister.ch   # Name auf console.pem
+COCKPIT_HOSTNAME=console.mgmt.vitabrevis.ch  # Name auf console.pem
 COCKPIT_MANAGEMENT_MARKER=$(openssl rand -hex 32)
 COCKPIT_BOOTSTRAP_TOKEN=$(openssl rand -hex 32)
 ```

@@ -255,6 +255,18 @@ class Settings(BaseSettings):
     #: sie deshalb für seine eigene Transaktion an (`SET LOCAL`, endet mit
     #: ihr). Kleiner als 60 000 wird sie nie gesetzt.
     ad_sync_transaction_idle_ms: int = Field(default=900_000, ge=60_000)
+    #: Token für die tiefe Gesundheitsprüfung (`/healthz/stack`).
+    #:
+    #: Ohne Token gibt es die Route **nicht** (404). Sie sagt, welcher Kunde
+    #: auf welchem Schemastand steht und warum eine Seite gerade Wartung
+    #: meldet — das ist Betriebsauskunft und gehört nicht in das offene Netz,
+    #: auch wenn nichts davon eine Personenangabe ist.
+    #:
+    #: Gehört in den Kopf `X-Magister-Health` der Überwachung. Als
+    #: Abfrageparameter geht es auch (PRTG kann nicht in jedem Sensortyp
+    #: Kopfzeilen setzen), aber dann steht es in den Zugriffsprotokollen des
+    #: Reverse-Proxy — der Kopf ist der richtige Weg.
+    health_token: SecretStr | None = Field(default=None)
     # Safety guardrail for the full-sync "missing user" marker: never flag more
     # than this fraction of the cache (and never more than an absolute floor)
     # in one run — a too-narrow search base would otherwise flag everyone.

@@ -22,7 +22,7 @@
 	admin off
 }
 
-https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
+https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444 {
 	tls /certs/console.pem /certs/console-key.pem {
 		# Operator certificates only. `require_and_verify` means the handshake
 		# fails without one — a browser or a scanner gets nothing to talk to.
@@ -106,7 +106,7 @@ https://{$COCKPIT_HOSTNAME:console.magister.ch}:4444 {
 # No port 443 fallback (decision E11): the firewall opening is a hard
 # onboarding requirement, and a fallback would quietly hide a closed port until
 # the day it matters.
-https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.magister.ch}:46200 {
+https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.vitabrevis.ch}:46200 {
 	tls /certs/connector.pem /certs/connector-key.pem {
 		client_auth {
 			# `verify_if_given`, NOT `require_and_verify` — and this is not a

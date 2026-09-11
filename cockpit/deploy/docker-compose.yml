@@ -78,8 +78,8 @@ services:
       # Bindung. Kein Rückfall auf 443 (E11).
       - "0.0.0.0:46200:46200"
     environment:
-      COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.magister.ch}
-      COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-connect.magister.ch}
+      COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.mgmt.vitabrevis.ch}
+      COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-connect.vitabrevis.ch}
       COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required}
       COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required}
     volumes:

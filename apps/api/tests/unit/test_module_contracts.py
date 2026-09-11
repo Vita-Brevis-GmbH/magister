@@ -40,6 +40,11 @@ _AUTH_MARKER = "get_current_user"
 # The internal AD-RPC surface (ADR-0011) is session-less by design; it is guarded
 # by the shared-secret dependency instead of the user-session auth.
 _SECRET_AUTH_MARKER = "require_rpc_secret"
+# Die tiefe Gesundheitssonde (`/healthz/stack`) ist ebenfalls sitzungslos und
+# ebenfalls nicht offen: sie hängt an einem Token aus der Umgebung. Ohne
+# diesen Marker landete sie auf der Liste „bewusst öffentlich" — und das wäre
+# eine Zeile, die etwas Falsches behauptet.
+_HEALTH_AUTH_MARKER = "require_health_token"
 _GUARD_MARKER = "make_module_guard.<locals>._guard"
 
 
@@ -96,7 +101,7 @@ def test_every_own_route_is_authenticated_or_explicitly_public() -> None:
         for key in _route_keys(route):
             if key in PUBLIC_ROUTES:
                 continue
-            if _AUTH_MARKER not in markers and _SECRET_AUTH_MARKER not in markers:
+            if not markers & {_AUTH_MARKER, _SECRET_AUTH_MARKER, _HEALTH_AUTH_MARKER}:
                 offenders.append(key)
     assert offenders == [], f"unauthenticated routes not on the public allowlist: {offenders}"
 

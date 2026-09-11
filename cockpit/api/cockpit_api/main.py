@@ -13,6 +13,7 @@ from cockpit_api.routers import (
     connector,
     console_auth,
     fleet,
+    health,
     instances,
     offboarding,
     operator_access,
@@ -85,11 +86,6 @@ async def _security_headers(
     return response
 
 
-@app.get("/api/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
 app.include_router(instances.router, prefix="/api")
 app.include_router(service_tokens.router, prefix="/api")
 app.include_router(update_requests.router, prefix="/api")
@@ -102,6 +98,7 @@ app.include_router(settings_router.platform, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(operator_access.router, prefix="/api")
 app.include_router(fleet.router, prefix="/api")
+app.include_router(health.router, prefix="/api")
 app.include_router(console_auth.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(connector.console, prefix="/api")
