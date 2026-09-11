@@ -30,6 +30,7 @@ from magister_api.auth.current_user import get_current_user, get_optional_user
 from magister_api.auth.operator_guard import OPERATOR_ALLOWED_PATHS, SAFE_METHODS
 from magister_api.config import Settings
 from magister_api.main import create_app
+from tests.unit._routes import api_routes
 
 #: Schreibende Routen **ohne** Sitzung — und warum das jeweils in Ordnung ist.
 #: Wer hier etwas einträgt, schreibt den Grund dazu.
@@ -80,15 +81,31 @@ def _calls(dependant: Any) -> Iterator[Any]:
 
 
 def _write_routes(app: FastAPI) -> list[tuple[str, frozenset[str], Any]]:
+    """Jede Route mit einer schreibenden Methode.
+
+    Über `api_routes` und nicht über `app.routes`: seit FastAPI 0.141 liegen
+    eingebundene Router dort als `_IncludedRouter` ohne `path`, und dieser Test
+    hätte nach einem Upgrade **nichts** mehr gefunden — und wäre grün
+    geblieben. Der Helfer steigt hinein und hat eine Untergrenze.
+    """
     out: list[tuple[str, frozenset[str], Any]] = []
-    for route in app.routes:
-        methods = frozenset(getattr(route, "methods", set()) or set()) - SAFE_METHODS
+    for route in api_routes(app):
+        methods = route.methods - SAFE_METHODS
         if methods:
-            out.append((route.path, methods, getattr(route, "dependant", None)))
+            out.append((route.path, methods, route.dependant))
     return out
 
 
 class TestEveryWriteRouteIsCovered:
+    def test_the_enumeration_finds_something(self, app: FastAPI) -> None:
+        """Die Prüfung, die diesen Test vor sich selbst schützt.
+
+        Ein Contract-Test über „alle Routen" ist wertlos, wenn die Aufzählung
+        leer ist. Zwanzig schreibende Routen sind für diese Anwendung
+        konservativ tief.
+        """
+        assert len(_write_routes(app)) >= 20
+
     def test_no_uncovered_write_route(self, app: FastAPI) -> None:
         uncovered: list[str] = []
         for path, methods, dependant in _write_routes(app):

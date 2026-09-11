@@ -24,6 +24,7 @@ from fastapi import FastAPI
 
 from magister_api.config import Settings
 from magister_api.main import create_app
+from tests.unit._routes import paths
 
 #: Pfade, die es in der gehosteten Betriebsart **nicht** geben darf.
 #: Systemkonfiguration und die Rechte-Matrix gehören dem Betreiber
@@ -57,7 +58,14 @@ BASE = dict(
 
 
 def _paths(app: FastAPI) -> set[str]:
-    return {route.path for route in app.routes if hasattr(route, "path")}
+    """Alle Pfade — über den Helfer, nicht über `app.routes`.
+
+    Der erste Entwurf las `app.routes` direkt. Das geht in FastAPI 0.136 und
+    **nicht** in 0.141: dort steht dort ein `_IncludedRouter` ohne `path`, und
+    dieser Test hätte nach einem Upgrade nichts mehr geprüft. Die Konsole läuft
+    schon auf 0.141; aufgefallen ist es dort.
+    """
+    return paths(app)
 
 
 @pytest.fixture(scope="module")
