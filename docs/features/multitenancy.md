@@ -8,9 +8,10 @@
 > Wiederherstellung, Export) und
 > [ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)
 > (Systemeinstellungen und Rechte in der Konsole) und
-> [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen).
-> Status (2026-09-10): **Phasen 0, 1, 2, 2a, 2b, 3 und 4 stehen.** Offen sind
-> die Anmeldung der Konsole über OIDC (Entscheid E21) und die Phasen 5 und 6.
+> [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen) und
+> [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff).
+> Status (2026-09-11): **Phasen 0, 1, 2, 2a, 2b, 3, 4 und 5 stehen.** Offen
+> sind die Anmeldung der Konsole über OIDC (Entscheid E21) und Phase 6.
 > Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
 
 ## 1 · Ziel
@@ -640,13 +641,46 @@ Referenz: **[ADR-0018](../adr/0018-globale-vorlagen.md)** (2026-09-10).
    gegen den Beispielkontext und weist ab; die bisherige brauchbare Fassung
    bleibt in Kraft.
 
-### Phase 5 — Kundenwahl und Operator-Zugriff
+### Phase 5 — Operator-Zugriff ✅
 
-- Kundenwahl nach dem Login, Grund/Ticket pflichtig.
-- Assertion → befristete Kunden-Session; Hinweisbalken auf beiden Seiten;
-  kundensichtbare Zugriffsliste.
-- **Abnahme:** Eine abgelaufene oder zweimal eingelöste Assertion wird
-  abgewiesen; jeder Zugriff steht im Kunden-Audit.
+Referenz: **[ADR-0019](../adr/0019-operator-zugriff.md)** (2026-09-11).
+
+- ✅ Die Konsole stellt je Kunde einen **Einlöseschein** aus (Reiter
+  „Zugriff“): Ed25519-signiert, sechzig Sekunden gültig, Grund oder
+  Ticketnummer pflichtig (mindestens zehn Zeichen). Kein Algorithmus-Feld im
+  Dokument — das Verfahren steht im Präfix und im Code (D2).
+- ✅ Die Kunden-API tauscht ihn gegen eine Sitzung von sechzig Minuten, ohne
+  gleitende Verlängerung. Geprüft wird **offline** gegen einen hinterlegten
+  öffentlichen Schlüssel (D3); ohne Schlüssel gibt es die Einlöseroute nicht.
+- ✅ **Einmal einlösbar** über den Primärschlüssel auf `jti` — dieselbe
+  Tabelle ist die Zugriffsliste des Kunden (D4). Damit bleibt ein `jti` für
+  immer verbraucht, statt mit einem Nonce-Verfall wieder einlösbar zu werden.
+- ✅ **Lesend**, erzwungen über die HTTP-Methode (D1): alles ausser
+  `GET`/`HEAD`/`OPTIONS` wird abgewiesen, dazu die einzige Leseroute, die ein
+  Klartext-Passwort zeigt (`/classes/{id}/password-list`). Eine Ausnahme in
+  die andere Richtung: den eigenen Zugriff beenden.
+- ✅ **Sichtbar**: Hinweisbalken für **jeden** angemeldeten Benutzer, eine
+  Liste über den Balken und über `/me`, zwei Audit-Ereignisse
+  (`operator_access_started`, `operator_access_ended`).
+- ✅ Der Operator ist **kein** Benutzer des Kunden: keine Zeile in
+  `ad_user_cache`, keine Rollenzuweisung, nichts, was nach dem Ablauf bleibt
+  (D5).
+- ✅ **Abnahme, beides geprüft:** eine abgelaufene und eine zweimal eingelöste
+  Assertion werden abgewiesen; jeder Zugriff steht mit seinem Grund im Audit
+  des Kunden. Dazu ein Contract-Test, der **jede** schreibende Route der
+  Anwendung durchgeht und für jede eine Sitzungsabhängigkeit verlangt — sonst
+  wäre „eine Prüfung für alle Routen“ eine Behauptung.
+
+**Was der Plan nicht vorsah:**
+
+1. **Ein Operator-Zugriff ist lesend** (D1). Der Plan sagte nichts über die
+   Rechte. Der Entwurf davor war eine Ausschlussliste, und beim Aufschreiben
+   kam heraus, wie lang sie ist: sechs Dienste geben ein Klartext-Passwort
+   heraus. Mit der Methodenregel fallen fünf von selbst weg.
+2. **Die Kundenwahl entfällt.** Sie war als eigener Schritt „nach dem Login“
+   geplant; sie ist jetzt der Reiter „Zugriff“ am Kunden, den man ohnehin
+   offen hat. Ein zweites Auswahlfeld für etwas, das im Kontext schon
+   entschieden ist, wäre ein Klick ohne Inhalt.
 
 ### Phase 6 — Betrieb im Grossen
 

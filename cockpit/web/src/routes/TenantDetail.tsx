@@ -16,12 +16,14 @@ import { SecretOnce } from "../components/SecretOnce";
 import { go, href, type TenantTab } from "../lib/nav";
 import { TenantBackups } from "./TenantBackups";
 import { TenantConnector } from "./TenantConnector";
+import { TenantOperatorAccess } from "./TenantOperatorAccess";
 import { TenantOffboarding } from "./TenantOffboarding";
 
 const TABS: { id: TenantTab; label: string }[] = [
   { id: "uebersicht", label: "Übersicht" },
   { id: "sicherungen", label: "Sicherungen" },
   { id: "connector", label: "AD-Connector" },
+  { id: "zugriff", label: "Zugriff" },
   { id: "offboarding", label: "Kündigung" },
 ];
 
@@ -253,6 +255,7 @@ export function TenantDetail({ tenantId, tab }: { tenantId: string; tab: TenantT
       {tab === "uebersicht" && <Overview tenantId={tenantId} />}
       {tab === "sicherungen" && <TenantBackups tenantId={tenantId} />}
       {tab === "connector" && <TenantConnector tenantId={tenantId} />}
+      {tab === "zugriff" && <TenantOperatorAccess tenantId={tenantId} />}
       {tab === "offboarding" && (
         <TenantOffboarding tenantId={tenantId} tenantSlug={tenant?.slug ?? ""} />
       )}

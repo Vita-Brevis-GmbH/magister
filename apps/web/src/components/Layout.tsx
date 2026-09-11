@@ -66,6 +66,16 @@ export function Layout() {
     "block rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-foreground";
 
   const isAdmin = me.data?.is_admin ?? false;
+  // Ein Operator-Zugriff (ADR-0019) sieht dieselben **Lese**-Flächen wie ein
+  // Admin des Kunden — deshalb dieselben Menüpunkte. Der erste Entwurf liess
+  // ihn ohne: er hat keine Rollen, und das Menü hängt an Rollen. Im Browser
+  // stand dann eine fast leere Navigation, und die Seiten waren nur über die
+  // Adresszeile erreichbar.
+  //
+  // Ein Menüpunkt ist hier keine Erlaubnis: schreiben kann ein Operator
+  // nichts, das hält die Methodenregel in der API.
+  const isOperator = me.data?.is_operator ?? false;
+  const navAsAdmin = isAdmin || isOperator;
   // Von der Plattform verwaltet (ADR-0017 D1): Systemeinstellungen und
   // Rechte-Matrix gehören dann dem Betreiber, und ihre Endpunkte sind in
   // dieser API nicht gemountet. Ein Menüpunkt dorthin wäre ein Weg auf eine
@@ -75,7 +85,7 @@ export function Layout() {
   const isSmi = me.data?.roles.includes("smi") ?? false;
   const isTeacher = me.data?.kind === "teacher";
   // Anyone with a management capability can open the Einstellungen menu.
-  const canManage = isAdmin || isSchulleitung || isSmi;
+  const canManage = navAsAdmin || isSchulleitung || isSmi;
   // M6 #5: gate each nav entry by its fine-grained fachfunction module.
   // School-side modules default visible while loading (they are on in the
   // school profile, the historical default); departments defaults hidden
@@ -126,7 +136,7 @@ export function Layout() {
                 {t("nav.my_students")}
               </Link>
             ) : null}
-            {(isAdmin || isSmi) && hasDevices ? (
+            {(navAsAdmin || isSmi) && hasDevices ? (
               <Link
                 to="/devices"
                 activeProps={{ className: navActive }}
@@ -181,7 +191,7 @@ export function Layout() {
                     role="menu"
                     className="absolute right-0 top-full z-50 mt-1 w-56 rounded-md border bg-card p-1 shadow-md"
                   >
-                    {isAdmin ? (
+                    {navAsAdmin ? (
                       <Link
                         to="/admin/schools"
                         role="menuitem"
@@ -199,7 +209,7 @@ export function Layout() {
                     >
                       {t("nav.audit")}
                     </Link>
-                    {isAdmin && !managedByPlatform ? (
+                    {navAsAdmin && !managedByPlatform ? (
                       <Link
                         to="/admin/roles"
                         role="menuitem"
@@ -227,7 +237,7 @@ export function Layout() {
                         {t("nav.substitutions")}
                       </Link>
                     ) : null}
-                    {isAdmin && !managedByPlatform ? (
+                    {navAsAdmin && !managedByPlatform ? (
                       <Link
                         to="/admin/settings"
                         role="menuitem"
@@ -237,7 +247,7 @@ export function Layout() {
                         {t("nav.system_settings")}
                       </Link>
                     ) : null}
-                    {isAdmin ? (
+                    {navAsAdmin ? (
                       <Link
                         to="/admin/modules"
                         role="menuitem"
@@ -247,7 +257,7 @@ export function Layout() {
                         {t("nav.modules")}
                       </Link>
                     ) : null}
-                    {isAdmin && hasTemplates ? (
+                    {navAsAdmin && hasTemplates ? (
                       <Link
                         to="/admin/document-templates"
                         role="menuitem"
@@ -257,7 +267,7 @@ export function Layout() {
                         {t("nav.document_templates")}
                       </Link>
                     ) : null}
-                    {isAdmin ? (
+                    {navAsAdmin ? (
                       <Link
                         to="/admin/system"
                         role="menuitem"

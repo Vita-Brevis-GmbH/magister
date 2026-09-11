@@ -23,12 +23,18 @@ export type Route =
   | { view: "tenants" }
   | { view: "tenant"; id: string; tab: TenantTab };
 
-export type TenantTab = "uebersicht" | "sicherungen" | "connector" | "offboarding";
+export type TenantTab =
+  | "uebersicht"
+  | "sicherungen"
+  | "connector"
+  | "zugriff"
+  | "offboarding";
 
 const TENANT_TABS: readonly TenantTab[] = [
   "uebersicht",
   "sicherungen",
   "connector",
+  "zugriff",
   "offboarding",
 ];
 

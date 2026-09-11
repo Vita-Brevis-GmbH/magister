@@ -49,6 +49,10 @@ die wird ausdrücklich gesperrt:
 |---|---|
 | `GET /classes/{id}/password-list` | PDF mit den gespeicherten Passwörtern einer Klasse. Der Kunde darf das drucken; der Betreiber hat dort nichts zu suchen. |
 
+**Eine Ausnahme in die andere Richtung:** `POST /auth/logout`. Sie erweitert
+nichts — sie erlaubt, früher aufzuhören, und setzt beim Kunden sichtbar
+`ended_at`. Ohne sie müsste ein Operator warten, bis die Stunde um ist.
+
 **Der Preis, ausdrücklich:** eine lesende `POST`-Route ist mitgesperrt — die
 Vorlagen-Vorschau etwa. Das ist der Preis einer Regel ohne Ausnahmeliste, und
 er ist niedriger als der einer Liste mit sechs Einträgen, von denen einer
