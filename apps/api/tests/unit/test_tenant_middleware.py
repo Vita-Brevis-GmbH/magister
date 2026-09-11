@@ -14,8 +14,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 
+from magister_api.config import CONCURRENCY_HEADROOM, Settings
 from magister_api.tenancy.keys import ENV_AUDIT_KEY, MIN_KEY_LENGTH
-from magister_api.tenancy.middleware import make_tenant_middleware
+from magister_api.tenancy.middleware import ConcurrencyGate, make_tenant_middleware
 from magister_api.tenancy.registry import Tenant, TenantRegistry, TenantStatus
 from magister_api.tenancy.version import HEAD_REVISION
 
@@ -45,7 +46,12 @@ def _tenant(slug: str, **over: object) -> Tenant:
     return Tenant(**base)  # type: ignore[arg-type]
 
 
-def _app(registry: TenantRegistry) -> TestClient:
+def _app(
+    registry: TenantRegistry,
+    *,
+    gate: ConcurrencyGate | None = None,
+    explode: bool = False,
+) -> TestClient:
     app = FastAPI()
 
     @app.get("/whoami")
@@ -57,7 +63,13 @@ def _app(registry: TenantRegistry) -> TestClient:
     async def healthz() -> dict[str, str]:
         return {"status": "ok"}
 
-    app.middleware("http")(make_tenant_middleware(lambda: registry))
+    if explode:
+        # Eine Route, die fliegt — für die Frage, ob ihr Platz zurückkommt.
+        @app.get("/boom")
+        async def boom() -> dict[str, str]:
+            raise RuntimeError("kaputt")
+
+    app.middleware("http")(make_tenant_middleware(lambda: registry, gate=gate))
     return TestClient(app)
 
 
@@ -194,3 +206,133 @@ def _extract(text: str, name: str) -> str | None:
                 return None
             return value.strip("\"'")
     return None
+
+
+class TestTheConcurrencyCeiling:
+    """ADR-0021 D3: ein Kunde kann den Prozess nicht für alle belegen."""
+
+    def test_over_the_ceiling_this_tenant_gets_503(self) -> None:
+        """Und der Grund steht im Rumpf, nicht nur im Statuscode."""
+        registry = TenantRegistry([_tenant("alpha"), _tenant("beta")])
+        gate = ConcurrencyGate(limit=1)
+        # Ein Platz ist belegt — als wäre gerade eine Anfrage in der Luft.
+        assert gate.try_enter("alpha")
+        client = _app(registry, gate=gate)
+        response = client.get("/whoami", headers={"host": "alpha.magister.ch"})
+        assert response.status_code == 503
+        assert response.json()["detail"] == "too_busy"
+        assert response.headers["Retry-After"] == "2"
+
+    def test_the_ceiling_is_per_tenant(self) -> None:
+        """Der eigentliche Punkt: der Nachbar merkt nichts davon."""
+        registry = TenantRegistry([_tenant("alpha"), _tenant("beta")])
+        gate = ConcurrencyGate(limit=1)
+        assert gate.try_enter("alpha")
+        client = _app(registry, gate=gate)
+        assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 503
+        ok = client.get("/whoami", headers={"host": "beta.magister.ch"})
+        assert ok.status_code == 200
+        assert ok.json() == {"slug": "beta"}
+
+    def test_a_place_is_released_after_the_request(self) -> None:
+        registry = TenantRegistry([_tenant("alpha")])
+        gate = ConcurrencyGate(limit=1)
+        client = _app(registry, gate=gate)
+        for _ in range(3):
+            assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 200
+        assert gate.in_flight("alpha") == 0
+
+    def test_a_failing_route_releases_its_place(self) -> None:
+        """Sonst schrumpft die Decke mit jedem Fehler, bis der Kunde draussen ist.
+
+        Das ist der Grund für das `finally` — und der Fehler, den man ohne
+        diesen Test erst nach dem fünften 500 bemerkt.
+        """
+        registry = TenantRegistry([_tenant("alpha")])
+        gate = ConcurrencyGate(limit=2)
+        client = _app(registry, gate=gate, explode=True)
+        for _ in range(3):
+            with pytest.raises(RuntimeError):
+                client.get("/boom", headers={"host": "alpha.magister.ch"})
+        assert gate.in_flight("alpha") == 0
+        assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 200
+
+    def test_a_404_does_not_take_a_place(self) -> None:
+        """Ein unbekannter Hostname soll keine Decke verbrauchen.
+
+        Sonst wäre eine Sonde, die tausend fremde Hostnamen durchprobiert, ein
+        Weg, die Decke eines Kunden zu füllen.
+        """
+        registry = TenantRegistry([_tenant("alpha")])
+        gate = ConcurrencyGate(limit=1)
+        client = _app(registry, gate=gate)
+        assert client.get("/whoami", headers={"host": "fremd.magister.ch"}).status_code == 404
+        assert gate.in_flight("alpha") == 0
+        assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 200
+
+    def test_a_maintenance_answer_does_not_take_a_place(self) -> None:
+        registry = TenantRegistry([_tenant("alpha", status=TenantStatus.SUSPENDED)])
+        gate = ConcurrencyGate(limit=1)
+        client = _app(registry, gate=gate)
+        assert client.get("/whoami", headers={"host": "alpha.magister.ch"}).status_code == 503
+        assert gate.in_flight("alpha") == 0
+
+    def test_the_probes_are_not_counted(self) -> None:
+        """`/healthz` läuft ohne Mandanten und damit ohne Decke.
+
+        Eine Sonde, die am Limit eines Kunden scheitert, würde einen gesunden
+        Prozess als krank melden.
+        """
+        registry = TenantRegistry([_tenant("alpha")])
+        gate = ConcurrencyGate(limit=1)
+        assert gate.try_enter("alpha")
+        client = _app(registry, gate=gate)
+        assert client.get("/healthz", headers={"host": "alpha.magister.ch"}).status_code == 200
+
+
+class TestTheGateItself:
+    def test_the_limit_is_never_zero(self) -> None:
+        """Eine Decke von 0 wäre eine geschlossene Installation."""
+        assert ConcurrencyGate(limit=0).limit == 1
+        assert ConcurrencyGate(limit=-5).limit == 1
+
+    def test_counting_up_and_down(self) -> None:
+        gate = ConcurrencyGate(limit=2)
+        assert gate.try_enter("alpha")
+        assert gate.try_enter("alpha")
+        assert not gate.try_enter("alpha")
+        gate.leave("alpha")
+        assert gate.in_flight("alpha") == 1
+        assert gate.try_enter("alpha")
+        gate.leave("alpha")
+        gate.leave("alpha")
+        assert gate.in_flight("alpha") == 0
+
+    def test_leaving_more_often_than_entering_does_not_go_negative(self) -> None:
+        """Sonst wäre ein Zählfehler ein Kunde mit unbegrenzter Decke."""
+        gate = ConcurrencyGate(limit=1)
+        gate.leave("alpha")
+        gate.leave("alpha")
+        assert gate.in_flight("alpha") == 0
+        assert gate.try_enter("alpha")
+        assert not gate.try_enter("alpha")
+
+    def test_the_derived_limit_follows_the_pool(self) -> None:
+        """Zwei Zahlen, die zusammengehören, sind eine Zahl und eine Ableitung."""
+        settings = Settings(
+            audit_key="a" * 40,  # type: ignore[arg-type]
+            session_secret="b" * 40,  # type: ignore[arg-type]
+            csrf_secret="c" * 40,  # type: ignore[arg-type]
+            tenant_pool_size=4,
+            tenant_max_overflow=6,
+        )
+        assert settings.tenant_concurrency_limit() == 4 + 6 + CONCURRENCY_HEADROOM
+
+    def test_an_explicit_limit_wins(self) -> None:
+        settings = Settings(
+            audit_key="a" * 40,  # type: ignore[arg-type]
+            session_secret="b" * 40,  # type: ignore[arg-type]
+            csrf_secret="c" * 40,  # type: ignore[arg-type]
+            tenant_max_concurrent=3,
+        )
+        assert settings.tenant_concurrency_limit() == 3

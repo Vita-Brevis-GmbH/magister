@@ -64,6 +64,10 @@ class TenantOut(BaseModel):
     #: Wann die Datenebene den Stand gemeldet hat. `None` heisst: `schema_version`
     #: ist eine Erwartung und keine Messung (ADR-0021 D2).
     schema_version_reported_at: datetime | None = None
+    #: Lastgrenzen an der Mandantenrolle (ADR-0021 D3).
+    statement_timeout_ms: int = 30_000
+    idle_in_transaction_ms: int = 60_000
+    connection_limit: int = 40
     #: Nur die **Id** des Kundenschlüssels, nie der Schlüssel. Sie steht hier,
     #: damit die Konsole zeigen kann, welcher Schlüssel für diesen Kunden gilt —
     #: und weil jede Sicherung sie vermerkt (ADR-0016 D2).
@@ -72,6 +76,55 @@ class TenantOut(BaseModel):
     suspended_reason: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class TenantLimitsUpdate(BaseModel):
+    """Die drei Lastgrenzen ändern (ADR-0021 D3).
+
+    Alle drei sind Pflicht: eine Teiländerung wäre ein Formular, in dem
+    weggelassene Felder etwas anderes heissen als leere. Wer eine Grenze
+    behalten will, schickt ihren aktuellen Wert mit.
+
+    Die Untergrenzen sind nicht Bürokratie. `statement_timeout` unter einer
+    Sekunde bricht normale Abfragen ab; eine Verbindungsgrenze unter zehn
+    liegt unter Pool plus Overflow eines einzigen Prozesses und sperrt den
+    Kunden im Normalbetrieb aus. Und es gibt **kein** unbegrenzt: `-1` wäre
+    der Zustand, den D3 beendet.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    statement_timeout_ms: int = Field(ge=1_000, le=3_600_000)
+    idle_in_transaction_ms: int = Field(ge=1_000, le=3_600_000)
+    connection_limit: int = Field(ge=10, le=1_000)
+    #: Warum — steht im Protokoll der Konsole. Eine Grenze zu heben ist eine
+    #: Entscheidung und kein Handgriff.
+    reason: str = Field(min_length=5, max_length=500)
+
+
+class TenantRelocate(BaseModel):
+    """Einen Kunden auf eine andere Datenbank oder einen anderen Cluster zeigen
+    lassen (ADR-0021 D5).
+
+    Das ist **das einzige neue Können** für den Umzug. Kein Assistent: ein
+    Knopf „umziehen“ müsste zwei Cluster, ein Wartungsfenster, eine Prüfung
+    und einen Rückweg in sich tragen — und wäre der Knopf, der ein halb
+    umgezogenes Schema hinterlässt. Der Ablauf steht in
+    `docs/runbooks/betrieb-im-grossen.md`.
+
+    `dsn_ref` ist ein **Verweis** und kein DSN (ADR-0013 D2). Was dahinter
+    steht, hinterlegt die Datenebene in ihrem Geheimnisspeicher
+    (`MAGISTER_TENANT_DSN_<REF>`) — die Konsole erfährt es nicht und soll es
+    nicht erfahren.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Kleinbuchstaben, Zahlen, Unterstrich: daraus wird ein Name einer
+    #: Umgebungsvariablen. Dieselbe Form wie der Slug.
+    dsn_ref: str = Field(min_length=2, max_length=64, pattern=r"^[a-z][a-z0-9_]{1,63}$")
+    isolation_mode: IsolationMode
+    reason: str = Field(min_length=5, max_length=500)
 
 
 class SchemaVersionReport(BaseModel):

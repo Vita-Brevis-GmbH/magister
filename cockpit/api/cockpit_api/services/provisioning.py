@@ -44,7 +44,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncConnection,
+    AsyncEngine,
+    AsyncSession,
+    create_async_engine,
+)
 
 from cockpit_api.config import settings
 from cockpit_api.models import (
@@ -208,11 +213,51 @@ class TenantProvisioner:
             # Bind-Parameter, weil CREATE/ALTER ROLE keine annehmen — daher der
             # Verifier anstelle des Passworts.
             await conn.exec_driver_sql(f"{verb} ROLE {role} LOGIN PASSWORD '{verifier}'")
+            await self._apply_limits(conn, tenant)
         return StepOutcome(
             ProvisioningStep.create_role,
-            f"Rolle {tenant.db_role} {'aktualisiert' if exists else 'angelegt'}",
+            f"Rolle {tenant.db_role} {'aktualisiert' if exists else 'angelegt'}, "
+            f"Grenzen gesetzt ({_limits_text(tenant)})",
             secret=password,
         )
+
+    async def _apply_limits(self, conn: AsyncConnection, tenant: Tenant) -> None:
+        """Lastgrenzen an die Mandantenrolle hängen (ADR-0021 D3).
+
+        An der **Rolle** und nicht im Anfragepfad: eine Rollen-Einstellung
+        gilt auch für den Codepfad, den jemand vergisst, für das CLI, für den
+        Abgleich und für eine Wiederherstellung. Was an der Rolle hängt, kann
+        die Anwendung nicht aus Versehen weglassen.
+
+        Die Verbindungsgrenze ist die eigentliche Zusage: ohne sie nimmt der
+        erste Kunde, der viele Verbindungen aufbaut, den anderen ihre weg, bis
+        `max_connections` erschöpft ist und **alle** ausfallen. Mit ihr fällt
+        genau der eine aus, der sie reisst.
+
+        Literale statt Bind-Parameter: `ALTER ROLE` nimmt keine an. Die Werte
+        sind Ganzzahlen aus der eigenen Datenbank und werden vorher als solche
+        geprüft — ein Wert, der keine ist, wäre ein Programmierfehler und kein
+        Eingabewert.
+        """
+        role = _ident(tenant.db_role, field="db_role")
+        statement_ms = int(tenant.statement_timeout_ms)
+        idle_ms = int(tenant.idle_in_transaction_ms)
+        connections = int(tenant.connection_limit)
+        await conn.exec_driver_sql(f"ALTER ROLE {role} SET statement_timeout = '{statement_ms}ms'")
+        await conn.exec_driver_sql(
+            f"ALTER ROLE {role} SET idle_in_transaction_session_timeout = '{idle_ms}ms'"
+        )
+        await conn.exec_driver_sql(f"ALTER ROLE {role} CONNECTION LIMIT {connections}")
+        logger.info(
+            "Grenzen für %s gesetzt: %s",
+            tenant.slug,
+            _limits_text(tenant),
+        )
+
+    async def apply_limits(self, tenant: Tenant) -> None:
+        """Grenzen neu setzen, ohne Bereitstellung. Für die Änderung im Betrieb."""
+        async with self._engine.begin() as conn:
+            await self._apply_limits(conn, tenant)
 
     # -- Schritt 2 --------------------------------------------------------
     async def create_schema(self, tenant: Tenant) -> StepOutcome:
@@ -293,6 +338,15 @@ class TenantProvisioner:
             await conn.exec_driver_sql(f"ALTER ROLE {role} PASSWORD '{verifier}'")
         logger.info("Passwort der Mandantenrolle für %s gedreht", tenant.slug)
         return password
+
+
+def _limits_text(tenant: Tenant) -> str:
+    """Die drei Grenzen in einer Zeile — fürs Protokoll und für die Antwort."""
+    return (
+        f"statement_timeout={tenant.statement_timeout_ms}ms, "
+        f"idle_in_transaction={tenant.idle_in_transaction_ms}ms, "
+        f"Verbindungen={tenant.connection_limit}"
+    )
 
 
 def _tenant_dsn(admin_dsn: str, role: str, password: str) -> str:

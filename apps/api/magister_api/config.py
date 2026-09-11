@@ -33,6 +33,12 @@ REMOVED_ENV_VARS: dict[str, str] = {
 
 _TRUTHY = frozenset({"1", "true", "yes", "on", "y", "t"})
 
+#: Spielraum über Pool + Overflow für die Nebenläufigkeits-Decke je Mandant
+#: (ADR-0021 D3). Klein und absichtlich nicht konfigurierbar: es ist der
+#: Abstand zwischen „alle Verbindungen belegt“ (normal, Millisekunden) und
+#: „dieser Kunde belegt den Prozess“ (der Fall, den die Decke abfängt).
+CONCURRENCY_HEADROOM = 8
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -68,6 +74,16 @@ class Settings(BaseSettings):
     # eigenen Pool. Bei vielen Mandanten gehört ein PgBouncer davor.
     tenant_pool_size: int = Field(default=2, ge=1)
     tenant_max_overflow: int = Field(default=3, ge=0)
+    # Decke für gleichzeitige Anfragen JE MANDANT und je Prozess (ADR-0021 D3).
+    # Darüber gibt es 503 mit `Retry-After` statt einer Warteschlange, die den
+    # Prozess für alle anderen Kunden belegt.
+    #
+    # ``0`` heisst **abgeleitet**: Pool + Overflow + Spielraum. Bewusst
+    # abgeleitet und nicht eine zweite Zahl — eine Decke unter der Poolgrösse
+    # verschenkt Verbindungen, eine weit darüber lässt Anfragen auf eine
+    # Verbindung warten, die es nicht gibt. Wer sie doch von Hand setzen will,
+    # kann es; dann gilt genau dieser Wert.
+    tenant_max_concurrent: int = Field(default=0, ge=0)
     # Registry von der Konsole (ADR-0013 D2/D4). Leer heisst: Registry aus
     # MAGISTER_TENANTS bzw. aus database_url. Die Konsole liefert absichtlich
     # keine DSNs, nur Verweise — der DSN je Kunde steht in
@@ -128,6 +144,17 @@ class Settings(BaseSettings):
             "then re-encrypted with the new key)."
         ),
     )
+
+    def tenant_concurrency_limit(self) -> int:
+        """Wirksame Decke je Mandant und Prozess (ADR-0021 D3).
+
+        Der Spielraum über dem Pool ist Absicht: eine Anfrage, die gerade
+        keine Verbindung hat, ist normal (sie wartet Millisekunden), und die
+        Decke soll den Ausnahmefall abfangen und nicht den Alltag.
+        """
+        if self.tenant_max_concurrent:
+            return self.tenant_max_concurrent
+        return self.tenant_pool_size + self.tenant_max_overflow + CONCURRENCY_HEADROOM
 
     def app_secrets_key(self) -> str:
         """Key for the app_settings secret columns; falls back to audit_key."""

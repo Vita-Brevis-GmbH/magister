@@ -190,9 +190,7 @@ async def run_ad_sync_loop(
                 # bis zu einem Intervall für einen Kunden, der gerade
                 # dazugekommen ist und noch gar keine Daten hat.
                 if not known:
-                    due = _initial_due(
-                        loop.time(), tenants, base_settings.ad_sync_interval_minutes
-                    )
+                    due = _initial_due(loop.time(), tenants, base_settings.ad_sync_interval_minutes)
                 else:
                     due = {t.slug: due.get(t.slug, loop.time()) for t in tenants}
                 known = current

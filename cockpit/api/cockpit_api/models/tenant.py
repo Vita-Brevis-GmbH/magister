@@ -19,7 +19,7 @@ import re
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, func
+from sqlalchemy import DateTime, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -104,6 +104,32 @@ class Tenant(Base):
     schema_version_reported_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
     )
+    # --- Lastgrenzen an der Mandantenrolle (ADR-0021 D3) ------------------
+    # Gesetzt bei der Bereitstellung per `ALTER ROLE`, änderbar im Betrieb.
+    # Sie stehen hier, damit die Konsole zeigen kann, was gilt — die Wahrheit
+    # ist die Rolle in Postgres, und diese Spalten sind das, was die Konsole
+    # dort hingeschrieben hat.
+    #
+    #: Nach dieser Zeit bricht Postgres eine Abfrage ab. 30 Sekunden ist
+    #: gross gewählt: eine Auswertung über ein Schulschema darf dauern, eine
+    #: entgleiste Abfrage nicht ewig.
+    statement_timeout_ms: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=30_000, server_default="30000"
+    )
+    #: Eine offene Transaktion, in der nichts passiert, hält Sperren und
+    #: blockiert Migrationen. Eine Minute ist reichlich für alles, was die
+    #: Anwendung tut.
+    idle_in_transaction_ms: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=60_000, server_default="60000"
+    )
+    #: Obergrenze für gleichzeitige Verbindungen dieser Rolle. Muss über
+    #: Pool + Overflow mal Prozesse liegen (Datenebene: 2+3 je Prozess), sonst
+    #: sperrt sie den Kunden im Normalbetrieb aus. 40 trägt acht Prozesse.
+    #: `-1` wäre unbegrenzt — und damit keine Grenze.
+    connection_limit: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=40, server_default="40"
+    )
+
     #: Id des Kundenschlüssels (ADR-0016 D2, D8). Ein **Verweis**, nie der
     #: Schlüssel selbst: der liegt in der Umgebung des Anwendungsservers. Jede
     #: Sicherung vermerkt diese Id, und wer wiederherstellt, sucht damit den

@@ -33,6 +33,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.tenancy.scope import quote_identifier
+
 logger = logging.getLogger(__name__)
 
 
@@ -59,14 +61,15 @@ async def read_schema_head(session: AsyncSession, schema_name: str) -> str | Non
     seine eigene (ADR-0013 D7), eine gemeinsame würde die Migration eines
     Kunden wie die von allen aussehen lassen.
 
-    `None` heisst nicht „Fehler", sondern „nie über Alembic migriert": eine
+    `None` heisst nicht „Fehler“, sondern „nie über Alembic migriert“: eine
     Testumgebung, die ihr Schema mit `create_all` baut, hat die Tabelle nicht.
     Der Aufrufer meldet dann nichts, statt eine Unwahrheit zu melden.
 
-    Das Schema kommt aus der Registry und ist dort schon geprüft; hier steht
-    es als Bind-Parameter und nicht im Statement-Text, obwohl `to_regclass`
-    einen Text erwartet — damit ein Wert aus einer manipulierten Registry
-    nicht in SQL landet.
+    Der Schemaname geht in SQL, und deshalb zweimal geprüft: die Existenz über
+    `to_regclass` mit **Bind-Parameter** (ein Name, den es nicht gibt, endet
+    hier und nicht im nächsten Statement), und die Form über
+    `quote_identifier` — dieselbe Prüfung wie in der Sitzungs-Einrichtung.
+    Zwei Prüfungen an derselben Stelle sind billiger als eine Lücke.
     """
     exists = (
         await session.execute(
@@ -75,13 +78,9 @@ async def read_schema_head(session: AsyncSession, schema_name: str) -> str | Non
     ).scalar()
     if exists is None:
         return None
-    row = (
-        await session.execute(
-            text(  # noqa: S608 — der Name ist oben über to_regclass geprüft
-                f'SELECT version_num FROM "{schema_name}".alembic_version LIMIT 1'
-            )
-        )
-    ).scalar_one_or_none()
+    quoted = quote_identifier(schema_name, field="schema_name")
+    stmt = f"SELECT version_num FROM {quoted}.alembic_version LIMIT 1"  # noqa: S608
+    row = (await session.execute(text(stmt))).scalar_one_or_none()
     return str(row) if row else None
 
 

@@ -58,6 +58,80 @@ def resolve_host(request: Request) -> str | None:
     return request.headers.get("host")
 
 
+class ConcurrencyGate:
+    """Decke für gleichzeitige Anfragen je Mandant (ADR-0021 D3).
+
+    Ein Zähler je Mandant, je Prozess. Über der Decke gibt es **sofort** 503
+    mit ``Retry-After`` und keine Warteschlange: die Decke liegt über Pool
+    plus Overflow, wer sie reisst, hat also schon mehr in der Luft, als die
+    Datenbank für ihn bedienen kann. Eine Warteschlange hielte an dieser
+    Stelle nur Worker-Slots belegt — und zwar die, mit denen die **anderen**
+    Kunden bedient werden.
+
+    Ein eigener Zähler und keine ``asyncio.Semaphore``: eine Semaphore, die
+    nicht warten darf, ist nur ein Zähler mit einem privaten Attribut, das man
+    dann anfassen müsste. Ein Rennen gibt es nicht — zwischen Prüfung und
+    Erhöhung liegt kein ``await``, in einer Event-Loop also kein
+    Umschaltpunkt.
+
+    Bewusst eine Nebenläufigkeits-Decke und keine Anfragen-pro-Minute-Grenze:
+    was einen geteilten Prozess lähmt, ist Belegung und nicht Häufigkeit. Und
+    bewusst je Prozess: prozessübergreifend bräuchte es gemeinsamen Zustand
+    (Redis), und das wäre eine Abhängigkeit mehr im Anfragepfad. Bei mehreren
+    Containern ist die wirksame Grenze ein Vielfaches davon — das gehört
+    gesagt und steht in ADR-0021 unter „Preis".
+    """
+
+    def __init__(self, limit: int) -> None:
+        self._limit = max(1, limit)
+        self._in_flight: dict[str, int] = {}
+
+    @property
+    def limit(self) -> int:
+        return self._limit
+
+    def in_flight(self, slug: str) -> int:
+        return self._in_flight.get(slug, 0)
+
+    def try_enter(self, slug: str) -> bool:
+        """Platz belegen. ``False``, wenn die Decke erreicht ist."""
+        current = self._in_flight.get(slug, 0)
+        if current >= self._limit:
+            return False
+        self._in_flight[slug] = current + 1
+        return True
+
+    def leave(self, slug: str) -> None:
+        """Platz freigeben. Muss auch bei einer Ausnahme laufen."""
+        current = self._in_flight.get(slug, 0) - 1
+        if current > 0:
+            self._in_flight[slug] = current
+        else:
+            # Auf 0 den Eintrag entfernen: bei vielen Kunden bleibt die
+            # Zuordnung sonst als Sammlung von Nullen liegen.
+            self._in_flight.pop(slug, None)
+
+
+def _too_busy(tenant: Tenant, limit: int) -> JSONResponse:
+    """503 für einen Kunden, der die Decke reisst — nur für ihn.
+
+    ``warning`` und nicht ``error``: es ist ein Schutz, der greift, und keine
+    Störung. Aber sichtbar, denn wenn es regelmässig passiert, ist entweder
+    die Decke zu niedrig oder dieser Kunde braucht eine eigene Datenbank
+    (ADR-0021 D5).
+    """
+    logger.warning(
+        "Mandant %s über der Nebenläufigkeits-Decke (%d) — 503 für ihn, nicht für andere.",
+        tenant.slug,
+        limit,
+    )
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "too_busy"},
+        headers={"Retry-After": "2"},
+    )
+
+
 def _maintenance(tenant: Tenant, reason: str) -> JSONResponse:
     logger.warning(
         "Mandant %s wird mit 503 bedient: %s (Schema-Stand %r, Code-Kopf %r)",
@@ -109,9 +183,29 @@ def has_tenant_key(
 
 def make_tenant_middleware(
     read_registry: Callable[[], TenantRegistry] = get_registry,
+    gate: ConcurrencyGate | None = None,
 ) -> Callable[[Request, Callable[[Request], Awaitable[Response]]], Awaitable[Response]]:
     """Middleware bauen. ``read_registry`` wird pro Anfrage aufgerufen, damit
-    ein Test die Registry austauschen kann, ohne die Anwendung neu zu bauen."""
+    ein Test die Registry austauschen kann, ohne die Anwendung neu zu bauen.
+
+    ``gate`` ist die Nebenläufigkeits-Decke je Mandant (ADR-0021 D3). ``None``
+    heisst: aus den Einstellungen bauen, beim ersten Aufruf — die Decke lebt
+    dann so lange wie die Anwendung. Ein Test kann eine eigene mit kleinem
+    Wert übergeben, ohne die Einstellungen zu verbiegen.
+    """
+    holder: dict[str, ConcurrencyGate] = {} if gate is None else {"gate": gate}
+
+    def _gate_for(settings: Settings) -> ConcurrencyGate:
+        existing = holder.get("gate")
+        if existing is None:
+            existing = ConcurrencyGate(settings.tenant_concurrency_limit())
+            holder["gate"] = existing
+            logger.info(
+                "Nebenläufigkeits-Decke je Mandant: %d gleichzeitige Anfragen "
+                "in diesem Prozess (ADR-0021 D3).",
+                existing.limit,
+            )
+        return existing
 
     async def resolve(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
@@ -139,7 +233,19 @@ def make_tenant_middleware(
         if not keyed:
             return _maintenance(tenant, key_reason)
 
-        setattr(request.state, REQUEST_STATE_ATTR, tenant)
-        return await call_next(request)
+        # Die Decke zuletzt: erst wenn klar ist, dass dieser Kunde überhaupt
+        # bedient wird, lohnt es sich, ihm einen Platz zu geben — und ein 404
+        # oder eine Wartungsantwort soll keinen Platz belegen.
+        limiter = _gate_for(settings)
+        if not limiter.try_enter(tenant.slug):
+            return _too_busy(tenant, limiter.limit)
+        try:
+            setattr(request.state, REQUEST_STATE_ATTR, tenant)
+            return await call_next(request)
+        finally:
+            # `finally` und nicht nach dem `return`: eine Ausnahme aus einer
+            # Route darf keinen Platz einbehalten, sonst schrumpft die Decke
+            # mit jedem Fehler, bis der Kunde ausgesperrt ist.
+            limiter.leave(tenant.slug)
 
     return resolve

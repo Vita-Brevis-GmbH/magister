@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.auth import Caller, require_bootstrap_token, require_person
 from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.models import (
@@ -31,9 +31,11 @@ from cockpit_api.schemas.tenant import (
     ProvisioningJobOut,
     SchemaVersionReport,
     TenantCreate,
+    TenantLimitsUpdate,
     TenantOut,
     TenantProvisionResult,
     TenantRegistryEntry,
+    TenantRelocate,
     TenantSuspend,
 )
 from cockpit_api.services.provisioning import (
@@ -350,4 +352,122 @@ async def report_schema_version(
             )
     await session.commit()
     await session.refresh(tenant)
+    return tenant
+
+
+@router.put("/{tenant_id}/limits", response_model=TenantOut)
+async def update_limits(
+    tenant_id: UUID,
+    body: TenantLimitsUpdate,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> Tenant:
+    """Die drei Lastgrenzen setzen — in der Zeile **und** an der Rolle (ADR-0021 D3).
+
+    Beides oder keines: eine Zeile, die eine Grenze behauptet, die in Postgres
+    nicht gilt, ist schlechter als keine Angabe. Scheitert das `ALTER ROLE`
+    (kein Verwaltungszugang, Rolle noch nicht angelegt), wird die Änderung
+    **nicht** gespeichert und die Antwort sagt warum.
+
+    `require_person`: eine Grenze zu heben ist eine Entscheidung, und sie
+    gehört zu einem Namen (ADR-0020 D4).
+    """
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
+    # Slug und Vorwerte JETZT lesen. Nach einem `rollback()` sind die
+    # Attribute abgelaufen, und der nächste Zugriff wäre ein Nachladen —
+    # also IO, mitten in einem synchronen Logger-Aufruf. Das endet in einem
+    # `MissingGreenlet` und damit in einem 500 statt der ehrlichen Antwort.
+    slug = tenant.slug
+    previous = (
+        tenant.statement_timeout_ms,
+        tenant.idle_in_transaction_ms,
+        tenant.connection_limit,
+    )
+    tenant.statement_timeout_ms = body.statement_timeout_ms
+    tenant.idle_in_transaction_ms = body.idle_in_transaction_ms
+    tenant.connection_limit = body.connection_limit
+    # `admin_engine()` MIT im try: ohne Verwaltungszugang wirft schon der
+    # Aufbau, und das ist derselbe Fall — die Grenze liess sich nicht setzen.
+    # Stand er aussen, käme ein 500 statt eines 503 mit Begründung.
+    try:
+        engine = admin_engine()
+        try:
+            await TenantProvisioner(engine).apply_limits(tenant)
+        finally:
+            await engine.dispose()
+    except Exception as exc:
+        await session.rollback()
+        logger.warning("Grenzen für %s nicht gesetzt: %s", slug, exc)
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Die Grenzen liessen sich in der Datenbank nicht setzen; nichts geändert.",
+        ) from exc
+    await session.commit()
+    await session.refresh(tenant)
+    logger.info(
+        "Grenzen für %s geändert von %s auf (%d, %d, %d) durch %s: %s",
+        slug,
+        previous,
+        body.statement_timeout_ms,
+        body.idle_in_transaction_ms,
+        body.connection_limit,
+        caller.actor,
+        body.reason,
+    )
+    return tenant
+
+
+@router.post("/{tenant_id}/relocate", response_model=TenantOut)
+async def relocate_tenant(
+    tenant_id: UUID,
+    body: TenantRelocate,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> Tenant:
+    """Den Verweis auf die Ablage ändern — der Umzug in einem Schritt (ADR-0021 D5).
+
+    **Nur bei gesperrtem Kunden.** Ein Umzug ist ein Wartungsfenster: Sperren,
+    sichern, im Ziel einspielen, umstellen, prüfen, entsperren. Würde diese
+    Route auch einen aktiven Kunden umstellen, zeigte die Registry auf eine
+    Datenbank, in der die Daten noch nicht sind — und die Datenebene bediente
+    ihn aus einem halb gefüllten Schema.
+
+    Der **gemeldete Schemastand wird gelöscht**, nicht übernommen: er war eine
+    Messung an der alten Ablage. Die nächste Meldung der Datenebene
+    (ADR-0021 D2) ist damit der Beleg, dass der Umzug angekommen ist — bis
+    dahin steht in der Konsole ehrlich „nie gemeldet“.
+    """
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
+    if tenant.status is not TenantStatus.suspended:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Ein Umzug verlangt einen gesperrten Kunden. Erst sperren, dann "
+            "sichern, dann umstellen (ADR-0021 D5).",
+        )
+    previous_ref = tenant.dsn_ref
+    previous_mode = tenant.isolation_mode
+    if body.dsn_ref == previous_ref and body.isolation_mode is previous_mode:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Verweis und Stufe sind unverändert.")
+    tenant.dsn_ref = body.dsn_ref
+    tenant.isolation_mode = body.isolation_mode
+    tenant.schema_version = None
+    tenant.schema_version_reported_at = None
+    slug = tenant.slug
+    await session.commit()
+    await session.refresh(tenant)
+    logger.warning(
+        "Kunde %s umgezogen: Verweis %s -> %s, Stufe %s -> %s, durch %s: %s. "
+        "Der gemeldete Schemastand ist gelöscht; die Datenebene muss ihn neu melden.",
+        slug,
+        previous_ref,
+        body.dsn_ref,
+        previous_mode.value,
+        body.isolation_mode.value,
+        caller.actor,
+        body.reason,
+    )
     return tenant
