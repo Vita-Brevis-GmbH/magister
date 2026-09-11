@@ -114,6 +114,52 @@ sind danach durchzusehen.
 
 ---
 
+## 5. `COCKPIT_SECRET_KEY` wechseln (ADR-0020 D2)
+
+Damit ist das TOTP-Geheimnis jedes Konsolen-Operators in der
+Konsolen-Datenbank verschlüsselt (pgcrypto, wie `MAGISTER_AUDIT_KEY` in der
+Datenebene).
+
+**Ehrlich zuerst:** anders als bei den vier Schlüsseln oben gibt es hier
+**keinen** Weg ohne Zutun der Personen. Der alte Wert entschlüsselt die
+Geheimnisse, der neue nicht — und ein Re-Encryption-Lauf bräuchte beide
+Schlüssel gleichzeitig auf dem Server, also genau das, was vermieden werden
+soll. Der Wechsel heisst deshalb: **jeder Operator richtet seinen zweiten
+Faktor neu ein.** Bei zwei Personen ist das ein Termin, keine Migration.
+
+```bash
+# 1. Neuen Wert erzeugen und in die .env der Konsole
+openssl rand -base64 48
+
+# 2. Die Geheimnisse aller Operatoren leeren — sie sind mit dem alten Wert
+#    verschlüsselt und nach dem Wechsel unbrauchbar. Ohne diesen Schritt
+#    scheitert jede Anmeldung an einem Entschlüsselungsfehler statt an einem
+#    ehrlichen „richte neu ein“.
+docker compose exec postgres psql -U cockpit -d cockpit -c \
+  "UPDATE console_operators SET totp_secret_enc = NULL, totp_confirmed_at = NULL,
+          totp_last_step = NULL, recovery_codes = '[]'"
+
+# 3. Konsole neu starten, dann melden sich beide Operatoren an und richten
+#    den zweiten Faktor neu ein (Runbook konsolen-operator.md, Abschnitt 4).
+docker compose restart api
+```
+
+Solange niemand wieder eingerichtet ist, führt der Weg herein über den
+Bootstrap-Token. Den also **vor** dem Wechsel zur Hand haben.
+
+**Wenn er verloren geht:** kein Operator kommt mehr über den zweiten Faktor
+herein; dieselbe Behandlung wie oben, plus Bootstrap-Token als Einstieg.
+Deshalb gehört er in die Sicherung des Konsolen-Servers — ohne ihn ist eine
+wiederhergestellte Konsole eine Konsole ohne Anmeldung.
+
+**Wenn er in falsche Hände gerät:** er allein nützt nichts. Ein TOTP-Geheimnis
+daraus braucht zusätzlich Lesezugriff auf die Konsolen-Datenbank, und eine
+Anmeldung zusätzlich ein gültiges Client-Zertifikat und Netzzugang auf die
+interne Adresse. Fällig ist der Wechsel trotzdem — zusammen mit dem Durchsehen,
+wie er abgeflossen ist.
+
+---
+
 ## Audit-Trail
 
 Jede Key-Rotation ist meldepflichtig:

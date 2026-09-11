@@ -107,22 +107,45 @@ auf, dass er dort versehentlich freigegeben wurde.
 | `curl: (35)`/`(58)` mit Zertifikat | Zertifikat nicht von `platform-ca.pem` signiert oder abgelaufen | Kette prüfen: `openssl verify -CAfile platform-ca.pem operator.pem` |
 | Browser fragt nicht nach dem Zertifikat | `.p12` nicht im Zertifikatsspeicher, oder falscher Host im SNI | Import prüfen; Caddy erzwingt bei aktivem Client-Auth strikte SNI-Host-Prüfung, der Name muss exakt `COCKPIT_HOSTNAME` sein |
 
-## 5 · Was noch fehlt
+## 5 · Die Oberfläche und der zweite Faktor
 
-- **Konsolen-UI** (Phase 2): heute liegt hinter dem Listener nur die Cockpit-API.
-  Nicht-API-Pfade antworten bewusst mit 404, statt auf einen nicht existierenden
-  Web-Container zu proxen.
+Seit ADR-0020 liefert dieser Listener **auch die Konsolen-Oberfläche** aus:
+Nicht-API-Pfade gehen nach `/srv/console` (`try_files {path} /index.html`).
+Dieselbe Herkunft wie die API, damit der Sitzungs-Cookie erststellig bleibt.
+Das Verzeichnis kommt als Mount aus `cockpit/web/dist` — die Oberfläche ändert
+sich öfter als der Listener, und ein Neubau des Caddy-Images dafür wäre Aufwand
+ohne Grund. Vor dem ersten Start also `cd cockpit/web && pnpm build`; ohne
+`dist` antwortet der Listener mit 404 auf alles ausser `/api/*`.
+
+Der API-Block gibt zusätzlich das geprüfte Client-Zertifikat weiter:
+`header_up X-Console-Client-Cert {http.request.tls.client.certificate_der_base64}`.
+Damit erkennt die Anwendung die **Person** (SPKI-Fingerprint → Zeile in
+`console_operators`, ADR-0020 D1) und nicht nur, dass irgendein gültiges
+Zertifikat vorlag. `certificate_pem` wäre an dieser Stelle falsch: ein PEM
+enthält Zeilenumbrüche, Gos `net/http` weist einen solchen Header-Wert ab, und
+Caddy antwortet mit 502.
+
+Der zweite Faktor der Person ist **TOTP**, lokal und ohne fremden Dienst
+(ADR-0020 D2) — nicht Conditional Access in Entra ID, wie ADR-0013 D2 vorsah.
+Das Client-Zertifikat bindet weiterhin das Gerät und ersetzt keinen zweiten
+Faktor. Operator anlegen, widerrufen, Faktor verloren:
+[konsolen-operator.md](konsolen-operator.md).
+
+## 6 · Was noch fehlt
+
 - **Verschiebung an den Plattform-Rand:** langfristig gehört die Sperre auf
   Fortigate/WAF-Ebene, nicht in die Applikation. Der Listener bleibt trotzdem —
   eine Applikation, die sich selbst nicht öffentlich stellen kann, ist einen
   Fehlklick in der Firewall wert.
-- **WebAuthn/Hardware-Key** für Operatoren: kommt über Conditional Access in
-  Entra ID (ADR-0013 D2), nicht über diesen Listener. Das Client-Zertifikat
-  ersetzt keinen zweiten Faktor der Person — es bindet das Gerät.
+- **WebAuthn** statt TOTP: derselbe Platz im Code, ein anderer Faktor. Fällig,
+  sobald das Betreiber-Team über eine Handvoll Personen hinauswächst — TOTP ist
+  nicht phishing-resistent (ADR-0020 D2).
 
 ## Querverweise
 
 - [ADR-0015](../adr/0015-authentisierungs-haertung.md) — Entscheid D1
 - [ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md) — Entscheid D3 (Listener-Aufteilung 443 / 4444 / 46200)
+- [ADR-0020](../adr/0020-konsolen-anmeldung.md) — Zertifikat als Identität, TOTP als zweiter Faktor
 - [Runbook Plattform-CA](platform-ca.md) — Ausstellung der Operator-Zertifikate
+- [Runbook Konsolen-Operator](konsolen-operator.md) — Zeile anlegen, erstes Anmelden, Widerruf
 - `cockpit/deploy/caddy/README.md` — Dateien und Marker aus Betriebssicht

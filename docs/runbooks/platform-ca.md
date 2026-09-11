@@ -236,9 +236,11 @@ die einmal am Tag aktualisiert wird, wäre langsamer und fehleranfälliger als
 eine Zeile in der Registry.
 
 - **Agent-Zertifikat:** in der Konsole widerrufen → nächste Anfrage 401.
-- **Operator-Zertifikat:** in der Konsole widerrufen → nächster Handshake
-  scheitert an der Anwendungsprüfung (Caddy prüft die Kette, die Anwendung den
-  Fingerprint).
+- **Operator-Zertifikat:** die Zeile in `console_operators` abschalten
+  (`add_operator --upn … --disable`, siehe
+  [konsolen-operator.md](konsolen-operator.md) Abschnitt 5) → der nächste
+  Handshake scheitert an der Anwendungsprüfung (Caddy prüft die Kette, die
+  Anwendung den Fingerprint). Keine Oberfläche dafür: ADR-0020 D5.
 
 ## 6 · Wenn etwas verloren geht
 

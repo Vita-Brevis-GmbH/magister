@@ -9,9 +9,11 @@
 > [ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)
 > (Systemeinstellungen und Rechte in der Konsole) und
 > [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen) und
-> [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff).
-> Status (2026-09-11): **Phasen 0, 1, 2, 2a, 2b, 3, 4 und 5 stehen.** Offen
-> sind die Anmeldung der Konsole über OIDC (Entscheid E21) und Phase 6.
+> [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff) und
+> [ADR-0020](../adr/0020-konsolen-anmeldung.md) (Konsolen-Anmeldung).
+> Status (2026-09-11): **Phasen 0, 1, 2, 2a, 2b, 3, 4, 5 und 5a stehen.**
+> Offen ist Phase 6. Entscheid E21 (Konsolen-Anmeldung über Entra ID) ist
+> **gegenstandslos** — ADR-0020 entscheidet anders.
 > Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
 
 ## 1 · Ziel
@@ -286,7 +288,7 @@ gemessen, nicht überlegt:
    pro Kunde, ein Pool pro Kunde. Siehe die Korrektur in ADR-0013 D1.
 2. **Migrieren als Superuser macht das Schema für den Kunden unbenutzbar.**
    Die Tabellen gehören dann dem Superuser, und die Mandantenrolle bekommt
-   beim ersten Query „permission denied for table". Der Runner migriert
+   beim ersten Query „permission denied for table“. Der Runner migriert
    deshalb mit der Anmelderolle des Kunden.
 3. **Das Erweiterungsschema muss auf dem `search_path` stehen**, sonst findet
    der Audit-Dienst `pgp_sym_encrypt` nicht — aber als *zweiter* Eintrag und
@@ -322,13 +324,17 @@ gemessen, nicht überlegt:
   abgebrochener Auftrag lässt den Kunden auf `provisioning`, das Protokoll
   nennt den Schritt und `next_step` zeigt, wo es weitergeht. 56 Tests im
   Cockpit, davon der komplette Auftrag samt Alembic gegen echtes Postgres.
-- ⏳ **Offen: Anmeldung via OIDC mit Hardware-Schlüssel** (ADR-0013 D2). Braucht
-  eine App-Registrierung im Entra-Tenant von Vita Brevis (Client-ID, Secret,
-  Redirect-URI) — deshalb nicht mitgebaut, sondern als eigener Schritt. Bis
-  dahin gilt die bestehende Anmeldung (Bootstrap-Token bzw. Service-Token)
-  hinter dem Konsolen-Listener mit Client-Zertifikat.
-- ⏳ **Offen: die Oberfläche.** Die Endpunkte stehen, das Mockup steht; die
-  React-Seiten fehlen.
+- ✅ **Anmeldung** — aber anders als hier geplant: **nicht** OIDC mit
+  Hardware-Schlüssel (ADR-0013 D2, Entscheid E21), sondern Client-Zertifikat
+  plus lokales TOTP. Siehe Phase 5a und
+  [ADR-0020](../adr/0020-konsolen-anmeldung.md). Der Grund in einem Satz: in
+  die Konsole geht man, wenn etwas kaputt ist, und eine Anmeldung, die einen
+  fremden Dienst braucht, ist dann nicht verfügbar.
+- ✅ **Die Oberfläche** steht: Kundenliste und -Detail mit den Reitern
+  Übersicht, Sicherungen, AD-Connector, Zugriff und Kündigung, dazu Instanzen
+  und Vorlagen. Ausgeliefert wird sie vom Konsolen-Listener selbst
+  (`cockpit/deploy/caddy/Caddyfile`, `/srv/console`) — dieselbe Herkunft wie
+  die API, damit der Sitzungs-Cookie erststellig bleibt.
 
 **Zwei Fallstricke, die beim Bauen aufgefallen sind** — beide gemessen:
 
@@ -416,7 +422,7 @@ Passwort-Reset. Referenz: ADR-0014.
 
   Zweiter Fund am Rand: die Liste geschützter Gruppen wurde von einer
   Konfiguration **ersetzt** statt ergänzt. Wer eine eigene Gruppe eintrug,
-  verlor damit still den Schutz für „Domänen-Admins". Sie ist jetzt eine
+  verlor damit still den Schutz für „Domänen-Admins“. Sie ist jetzt eine
   Untergrenze.
 - ✅ **Automatische Zertifikatserneuerung.** Das Agentenzertifikat gilt 90
   Tage; ohne Erneuerung hätte jeder ausgelieferte Agent nach drei Monaten
@@ -456,14 +462,14 @@ Passwort-Reset. Referenz: ADR-0014.
   Geheimnis ausser dem Einmal-Token; ein widerrufener Agent kommt bei der
   nächsten Anfrage nicht mehr durch. **Noch offen** (braucht den Agenten): der
   Passwort-Reset über den Agenten, das 503-Banner bei stehendem Agenten, und
-  „Agent stoppen beendet jeden Plattformzugriff auf das AD".
+  „Agent stoppen beendet jeden Plattformzugriff auf das AD“.
 
 ### Phase 2b — Sicherung, Wiederherstellung, Export ✅
 
 Ebenfalls Voraussetzung für den ersten gehosteten Kunden: ohne Restore-Weg pro
 Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
 
-- **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt".
+- **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt“.
 - **Logische Sicherung pro Kunde** (`pg_dump --schema=t_<slug>`), mit `age`
   verschlüsselt, auf einen Share geschrieben, den das tägliche
   Unternehmens-Backup mitnimmt (E13). Magister schreibt, löscht aber nicht — ein
@@ -538,7 +544,7 @@ Kurz:
 - ~~Cluster-PITR~~ — **entschieden (E17 = B) und gebaut am 2026-09-09.**
   pgBackRest, Repository auf dem Backup-Host, TLS statt SSH zwischen den zwei
   Maschinen, Sicherung wird von der Repository-Seite angestossen. Der Weg auf
-  „gestern 14:37" ist gegen ein echtes Postgres 16 belegt: Tabelle gelöscht,
+  „gestern 14:37“ ist gegen ein echtes Postgres 16 belegt: Tabelle gelöscht,
   auf einen Zeitpunkt davor zurückgeholt, 500 von 510 Zeilen zurück — die zehn
   nach dem Zielzeitpunkt eingefügten korrekt nicht.
 
@@ -582,7 +588,7 @@ darunter.
 
 **Zwei Abweichungen vom Plan, beide in ADR-0017 begründet:**
 
-1. **Die Geheimnisse ziehen nicht mit um.** Der Plan sagte „Konsole", und der
+1. **Die Geheimnisse ziehen nicht mit um.** Der Plan sagte „Konsole“, und der
    naheliegende Entwurf hätte die vollständige Konfiguration nach oben geholt
    — samt AD-Bind-Passwort, OIDC-Client-Secret und privatem
    Webserver-Schlüssel jedes Kunden, an einem Ort. Das ist genau die
@@ -590,7 +596,7 @@ darunter.
    Die Konsole besitzt deshalb die **Politik**; die vier Geheimnisse bleiben im
    Kundenschema und werden auf dem Anwendungsserver gesetzt. Preis: das
    Einrichten eines Kunden ist zweigeteilt.
-2. **On-prem behält beide Flächen.** „Entfernen" gilt für die gehostete
+2. **On-prem behält beide Flächen.** „Entfernen“ gilt für die gehostete
    Betriebsart. Eine Gemeinde mit einem Server ist ihr eigener Betreiber; ihr
    die Konfiguration wegzunehmen wäre keine Härtung, sondern ein Ausfall —
    dieselbe Linie wie ADR-0016 D9. Der Contract-Test prüft deshalb beide
@@ -610,7 +616,7 @@ Referenz: **[ADR-0018](../adr/0018-globale-vorlagen.md)** (2026-09-10).
   `may_override`; Zielgruppe **alle**, ein **Profil** oder eine **Auswahl**
   von Kunden, in der Konsole aufgelöst (D5). Die Fassungsnummer steigt nur bei
   einer inhaltlichen Änderung — eine Änderung der Zielgruppe bumpt nicht (D4),
-  sonst leuchtete bei jedem Kunden „neue Fassung", weil in der Konsole jemand
+  sonst leuchtete bei jedem Kunden „neue Fassung“, weil in der Konsole jemand
   ein Häkchen verschoben hat.
 - ✅ Die Vorlagen reisen im **Soll-Zustand** (D1): derselbe Kanal wie die
   Einstellungen, dieselbe Richtung — die Datenebene holt. Materialisiert wird
@@ -620,7 +626,7 @@ Referenz: **[ADR-0018](../adr/0018-globale-vorlagen.md)** (2026-09-10).
   (`DocumentTemplateService.resolve_effective`): gesperrte Plattformfassung >
   eigene Standortfassung > eigene globale Fassung > freigegebene
   Plattformfassung > eingebaute Vorlage (D3).
-- ✅ Hinweis „neue globale Fassung verfügbar" mit **ausdrücklicher Quittung**
+- ✅ Hinweis „neue globale Fassung verfügbar“ mit **ausdrücklicher Quittung**
   (`platform_version_ack`, ein eigener Endpunkt): wer seinen Text bearbeitet,
   hat damit nicht gesagt, dass er den neuen gelesen hat (D4).
 - ✅ **Abnahme, alle drei erfüllt und geprüft:** der zweite Lauf schreibt
@@ -681,6 +687,71 @@ Referenz: **[ADR-0019](../adr/0019-operator-zugriff.md)** (2026-09-11).
    geplant; sie ist jetzt der Reiter „Zugriff“ am Kunden, den man ohnehin
    offen hat. Ein zweites Auswahlfeld für etwas, das im Kontext schon
    entschieden ist, wäre ein Klick ohne Inhalt.
+
+### Phase 5a — Die Konsole erkennt Personen ✅
+
+Referenz: **[ADR-0020](../adr/0020-konsolen-anmeldung.md)** (2026-09-11).
+Betriebsanleitung: **[konsolen-operator.md](../runbooks/konsolen-operator.md)**.
+
+Diese Phase stand nicht im Plan. Sie ist beim Bauen von Phase 5 fällig
+geworden: der Name des Operators reist signiert mit und landet im Audit des
+Kunden — und kam aus dem Anfragekörper. Damit war die Auskunft „wer hat
+zugesehen" eine Behauptung des Aufrufers.
+
+- ✅ **Identität ist der öffentliche Schlüssel, nicht der Name** (D1): Caddy
+  gibt das geprüfte Client-Zertifikat als DER-base64 weiter
+  (`X-Console-Client-Cert`), die Konsole bildet den SPKI-Fingerprint und findet
+  damit die Zeile in `console_operators`. Nicht über den `CN` — ein Name im
+  Zertifikat ist eine Zeichenkette, ein Fingerprint gehört zum Schlüsselpaar.
+- ✅ **TOTP als zweiter Faktor, lokal** (D2): RFC 6238, Geheimnis
+  pgcrypto-verschlüsselt (`COCKPIT_SECRET_KEY`), letzter Zeitschritt
+  gespeichert (ein Code gilt **einmal**), zehn Wiederherstellungscodes als
+  argon2id-Hashes, Sperre nach fünf Fehlversuchen. Dieselbe Mechanik wie beim
+  lokalen Notkonto der Datenebene (ADR-0015 D2), bewusst nicht eine neue.
+- ✅ **`actor` wird abgeleitet** (D3): die drei Schemata haben das Feld
+  verloren, und zwar mit `extra="forbid"` — ein alter Aufrufer bekommt einen
+  Fehler statt eines stillen Nicht-Effekts, sonst glaubte er, sein Name sei
+  angekommen, während im Kundenprotokoll ein anderer steht.
+- ✅ **Drei Arten von Aufrufern** (D4): Person (Sitzung), Dienst
+  (Service-Token, darf nur was kein `actor` braucht — der Runner holt
+  Update-Aufträge ab), Notzugang (Bootstrap-Token, im Protokoll als
+  `bootstrap-token`). Ein Dienst-Token kann die Rechte-Matrix eines Kunden
+  nicht mehr ändern und keinen Operator-Zugriff ausstellen.
+- ✅ **Anlegen ist ein CLI-Befehl und keine Oberfläche** (D5):
+  `python -m cockpit_api.cli.add_operator`. Er legt an, ersetzt ein Zertifikat
+  (der zweite Faktor bleibt), schaltet ab (`--disable`, ohne Zertifikat — wer
+  widerrufen wird, hat es unter Umständen gerade verloren) und weist ein
+  Zertifikat ab, das schon einer anderen Person gehört. Den zweiten Faktor
+  fasst er **nicht** an.
+- ✅ **Anmeldeseite** statt Token-Kasten: sie fragt nicht, wer man ist — das
+  steht fest, bevor sie lädt. Einrichten mit QR-Code (serverseitig als
+  `data:`-URI, damit keine QR-Bibliothek ins Bündel und keine CSP-Lockerung
+  nötig ist), Code, Sitzung, Abmelden. Der Bootstrap-Token steht darunter als
+  „Notzugang“.
+- ✅ **Abnahme gegen einen echten Handschlag:** Caddy mit
+  `require_and_verify` gegen eine Test-CA, Chromium mit Client-Zertifikat. Ohne
+  Zertifikat scheitert der Handshake (kein HTTP-Status, `000`); mit einem
+  fremden Zertifikat steht „Kein gültiges Client-Zertifikat“ und **keine**
+  Auskunft darüber, welche Zertifikate es gibt; mit dem eingetragenen läuft
+  Einrichten → falscher Code abgewiesen → richtiger Code → Sitzung übersteht
+  ein Neuladen → Abmelden. Danach stand in `platform_templates.updated_by` die
+  angemeldete Person und in der Zugriffsliste des Kunden derselbe Name — beide
+  von der Anwendung eingetragen, nicht getippt. Dazu 16 Tests im Cockpit.
+
+**Ehrlich zur Reichweite:** TOTP ist **nicht** phishing-resistent. Was das
+trägt, sind die Schichten davor — interne Adresse und ein gültiges
+Client-Zertifikat. Wächst das Betreiber-Team, ist WebAuthn der nächste Schritt:
+dieselbe Stelle im Code, ein anderer Faktor.
+
+**Was der Plan nicht vorsah:**
+
+1. **Entra ID fällt weg** (Entscheid E21). Der Plan sah OIDC mit
+   Conditional Access vor. Verworfen an diesem Punkt, nicht für immer: siehe
+   ADR-0020 D2.
+2. **Der Konsolen-Listener lieferte die Oberfläche gar nicht aus.** Er
+   antwortete auf alles ausser `/api/*` mit 404 — die gebaute SPA lag im
+   Repository und nirgends sonst. Beim Prüfen der Anmeldung aufgefallen,
+   nicht beim Lesen des Caddyfiles.
 
 ### Phase 6 — Betrieb im Grossen
 
@@ -754,10 +825,10 @@ Referenz: **[ADR-0019](../adr/0019-operator-zugriff.md)** (2026-09-11).
 | Konsolen-Listener aus Versehen auf `0.0.0.0` gebunden. | Bindung an die interne Adresse ist die Massnahme; dazu Client-Zertifikat und Marker-Riegel als zweite und dritte Schicht, plus ein Start-Check, der eine Bindung auf `0.0.0.0` ablehnt. |
 | Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Bewusst ohne Rückfallebene (E11): die Freigabe von `TCP 46200` ist harte Onboarding-Voraussetzung und muss vor dem Termin bestätigt sein; der Agent meldet beim ersten Start klar, wenn der Port zu ist. |
 | Befristete MFA-Aufhebung wird zur Gewohnheit. | 24-Stunden-Automatik ohne Verlängerungsknopf, Grund/Ticket verpflichtend, Warnbalken in der Oberfläche, Ereignis im Kunden-Audit. |
-| Sicherung vorhanden, aber nicht wiederherstellbar. | Wöchentliche Prüf-Wiederherstellung mit Prüfabfragen; „zuletzt geprüft" pro Kunde in der Konsole; ein nie geprüfter Dump gilt als nicht vorhanden. |
+| Sicherung vorhanden, aber nicht wiederherstellbar. | Wöchentliche Prüf-Wiederherstellung mit Prüfabfragen; „zuletzt geprüft“ pro Kunde in der Konsole; ein nie geprüfter Dump gilt als nicht vorhanden. |
 | Dump wiederhergestellt, aber Kundenschlüssel fehlt — Audit-Payloads unlesbar. | Schlüssel in getrenntem Tresor mit eigener Sicherung, Schlüssel-Id im Dump vermerkt, Entschlüsselbarkeit ist Teil der wöchentlichen Prüfung. |
 | Angreifer mit Serverzugang löscht die Sicherungen mit. | Magister hat auf dem Share Schreibrecht ohne Löschrecht, das Aufräumen läuft unter eigenem Konto, und der Anwendungsserver kennt nur den öffentlichen Backup-Schlüssel. Die letzte Instanz ist die Kopie des Tages-Backups — dessen Unveränderlichkeit trägt damit die Garantie (E13). |
-| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Ablauf der Aufbewahrungsfrist des Tages-Backups — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg". |
+| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Ablauf der Aufbewahrungsfrist des Tages-Backups — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg“. |
 | Wildcard-Zertifikat `*.magister.ch` kompromittiert. | Betrifft alle Kunden-Subdomains zugleich. Privater Schlüssel nur auf dem Reverse-Proxy, kurze Laufzeit, automatische Erneuerung, Zertifikatstransparenz überwachen. |
 | Operator setzt TOTP und Passwort zurück und übernimmt den Notzugang. | Liegt in der Natur eines Break-Glass-Kontos. Abgesichert durch: Reset zeigt nie ein Geheimnis, Passwort-Reset ist eine getrennte Handlung, beide Ereignisse stehen im Audit des Kunden und in dessen Zugriffsliste. |
 
@@ -867,7 +938,7 @@ dann bliebe, wenn die Technik es hergäbe.
 
 **Ein Umschalter in der Oberfläche, ohne gemeinsame Sitzung.** Eine
 Entra-Identität, in beiden Kunden berechtigt. Nach der Anmeldung bei Kunde A
-zeigt die Oberfläche „Sie sind auch für B berechtigt → wechseln"; der Klick ist
+zeigt die Oberfläche „Sie sind auch für B berechtigt → wechseln“; der Klick ist
 ein Redirect auf die Subdomain von B und dort eine Anmeldung über Entra — die
 in der Regel ohne erneute Eingabe durchläuft, weil Entra die Sitzung schon hat.
 
@@ -876,10 +947,10 @@ Kunde behält seine eigene Sitzung, seine eigene Datenbankrolle, sein eigenes
 Audit. Und in den Audit-Ereignissen beider Kunden steht sauber getrennt, was
 diese Person wo getan hat.
 
-Was dafür fehlt: die Liste „welche Identität darf in welchen Kunden". Sie gehört
+Was dafür fehlt: die Liste „welche Identität darf in welchen Kunden“. Sie gehört
 in die **Konsole** (Control Plane) und in kein Kundenschema — sonst wüsste
 Kunde A, für wen Kunde B Berechtigungen vergeben hat. Der Registry-Feed liefert
-sie dann pro Kunde gefiltert mit: „diese Identität hat auch bei X ein Konto".
+sie dann pro Kunde gefiltert mit: „diese Identität hat auch bei X ein Konto“.
 
 Aufwand: klein, aber nicht null (Konsolen-Tabelle, ein Feld im Feed, eine
 Kachel in der Oberfläche). Eingeplant für Phase 3, wenn die Konsolen-Oberfläche
