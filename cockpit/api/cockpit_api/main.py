@@ -12,6 +12,7 @@ from cockpit_api.routers import (
     backups,
     connector,
     console_auth,
+    fleet,
     instances,
     offboarding,
     operator_access,
@@ -100,6 +101,7 @@ app.include_router(offboarding.router, prefix="/api")
 app.include_router(settings_router.platform, prefix="/api")
 app.include_router(templates.router, prefix="/api")
 app.include_router(operator_access.router, prefix="/api")
+app.include_router(fleet.router, prefix="/api")
 app.include_router(console_auth.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(connector.console, prefix="/api")
