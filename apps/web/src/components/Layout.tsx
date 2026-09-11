@@ -11,6 +11,7 @@ import {
   useMyPreferences,
   usePlatformManaged,
 } from "@/api/hooks";
+import { OperatorAccessBanner } from "@/components/OperatorAccessBanner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import i18n from "@/i18n";
@@ -304,6 +305,7 @@ export function Layout() {
           </div>
         </div>
       </header>
+      <OperatorAccessBanner me={me.data} />
       <main className="container mx-auto px-4 py-6">
         <Outlet />
       </main>

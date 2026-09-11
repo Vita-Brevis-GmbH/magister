@@ -50,8 +50,7 @@ function DocumentTemplatesPage(): JSX.Element {
   // Was der Betreiber zu genau dieser Vorlage geliefert hat (ADR-0018).
   // Ohne Standort: eine Plattformvorlage gilt für den ganzen Mandanten.
   const platform: PlatformTemplateOut | undefined = useMemo(
-    () =>
-      q.data?.platform_templates.find((tpl) => tpl.key === key && tpl.language === language),
+    () => q.data?.platform_templates.find((tpl) => tpl.key === key && tpl.language === language),
     [q.data, key, language],
   );
 

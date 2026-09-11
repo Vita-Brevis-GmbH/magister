@@ -55,9 +55,7 @@ describe("PlatformTemplateNotice", () => {
   it("zeigt nichts, wenn der Betreiber nichts geliefert hat", () => {
     // Der Fall der Einzelinstallation: dort gibt es keinen Betreiber ausser
     // dem Kunden, und ein Kasten „nichts geliefert“ wäre nur Rauschen.
-    const { container } = withClient(
-      <PlatformTemplateNotice platform={undefined} own={own} />,
-    );
+    const { container } = withClient(<PlatformTemplateNotice platform={undefined} own={own} />);
     expect(container).toBeEmptyDOMElement();
   });
 

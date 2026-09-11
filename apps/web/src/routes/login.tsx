@@ -120,10 +120,7 @@ export function LocalLoginForm(): JSX.Element {
   switch (step.kind) {
     case "totp":
       return (
-        <LocalTotpForm
-          challenge={step.challenge}
-          onRestart={() => setStep({ kind: "password" })}
-        />
+        <LocalTotpForm challenge={step.challenge} onRestart={() => setStep({ kind: "password" })} />
       );
     case "enroll":
       return (

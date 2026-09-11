@@ -1,6 +1,15 @@
 /** Typed views of the backend's Pydantic response schemas. */
 
+/** Der laufende Operator-Zugriff — fuer den Hinweisbalken (ADR-0019 D6). */
+export interface OperatorBanner {
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  until: string;
+}
+
 export interface CurrentUserOut {
+  /** Leer bei einer Operator-Sitzung: sie gehoert zu keinem AD-Objekt. */
   ad_object_guid: string;
   upn: string;
   given_name: string | null;
@@ -12,6 +21,22 @@ export interface CurrentUserOut {
   school_scope: number[];
   roles: string[];
   expires_at: string;
+  /** Diese Sitzung ist selbst ein Operator-Zugriff. */
+  is_operator: boolean;
+  /** Gesetzt, solange ein Zugriff laeuft — fuer alle Benutzer. */
+  operator_active: OperatorBanner | null;
+}
+
+/** Ein Zugriff in der Liste, die der Kunde sieht (ADR-0019 D6). */
+export interface OperatorAccessOut {
+  jti: string;
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  started_at: string;
+  expires_at: string;
+  /** `null` heisst: laeuft noch oder ist abgelaufen. */
+  ended_at: string | null;
 }
 
 export interface AuthCapabilities {

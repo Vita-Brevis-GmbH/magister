@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -51,6 +51,21 @@ function MePage(): JSX.Element {
       </Card>
 
       <PreferencesCard />
+
+      {/* Der Weg zur Zugriffsliste für **jeden** Benutzer (ADR-0019 D6). Die
+          Einstellungen sind für einen Lehrer nicht erreichbar; diese Seite
+          schon — sie hängt am eigenen Namen oben rechts. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("operator.list_title")}</CardTitle>
+          <CardDescription>{t("operator.me_card")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Link to="/operator-accesses" className="text-sm underline">
+            {t("operator.me_card_link")}
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }

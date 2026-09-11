@@ -93,6 +93,7 @@ import type {
   DocumentTemplatePreviewOut,
   DocumentTemplatePreviewRequest,
   DocumentTemplateSave,
+  OperatorAccessOut,
   RenameApplyRequest,
   RenamePreviewOut,
   RenamePreviewRequest,
@@ -132,6 +133,7 @@ export const queryKeys = {
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
   documentTemplates: ["admin-document-templates"] as const,
+  operatorAccesses: ["operator-accesses"] as const,
   departments: ["departments"] as const,
   department: (id: number) => ["departments", id] as const,
   departmentMembers: (id: number) => ["departments", id, "members"] as const,
@@ -264,6 +266,22 @@ export function useAcknowledgePlatformTemplate() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
+  });
+}
+
+// --- Operator-Zugriff (ADR-0019) ---------------------------------------
+
+/**
+ * Die Zugriffe von Vita Brevis auf diese Installation.
+ *
+ * Jeder angemeldete Benutzer darf sie sehen — nicht nur Admins. Eine
+ * Transparenz, die nur derjenige sieht, der den Zugriff ohnehin bewilligt
+ * haette, ist keine.
+ */
+export function useOperatorAccesses() {
+  return useQuery<OperatorAccessOut[]>({
+    queryKey: queryKeys.operatorAccesses,
+    queryFn: () => apiFetch<OperatorAccessOut[]>("/operator/accesses"),
   });
 }
 

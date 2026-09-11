@@ -76,9 +76,7 @@ export function PlatformTemplateNotice({
           </Button>
         ) : null}
       </div>
-      {ack.isError ? (
-        <p className="text-destructive">{t("errors.generic")}</p>
-      ) : null}
+      {ack.isError ? <p className="text-destructive">{t("errors.generic")}</p> : null}
       {open ? (
         <div className="space-y-1 rounded bg-background/70 p-2">
           {platform.subject ? (
