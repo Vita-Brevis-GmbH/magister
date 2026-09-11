@@ -88,7 +88,22 @@ class Tenant(Base):
     #: Alembic-Revision, auf der das Kundenschema steht. Weicht sie von der
     #: Kopf-Version des Codes ab, bedient die Datenebene diesen Kunden mit
     #: 503 Wartung (ADR-0013 D7).
+    #:
+    #: Bis ADR-0021 stand hier, was die Konsole **erwartet** hat
+    #: (`COCKPIT_EXPECTED_SCHEMA_VERSION`), gesetzt beim Aktivieren. Seither
+    #: überschreibt die Datenebene den Wert nach jeder Migration mit dem, was
+    #: sie in `alembic_version` **gelesen** hat. Der Unterschied ist nicht
+    #: akademisch: die Versions-Schranke fährt nach dieser Spalte, und eine
+    #: Erwartung, die nicht eingetroffen ist, hält einen gesunden Kunden
+    #: zurück oder lässt einen hinterherhängenden durch.
     schema_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    #: Wann die Datenebene den Stand zuletzt gemeldet hat. `None` heisst **nie
+    #: gemeldet** — dann ist `schema_version` nur eine Erwartung, und die
+    #: Konsole soll das sagen können, statt einen Wert wie eine Messung
+    #: auszugeben.
+    schema_version_reported_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
     #: Id des Kundenschlüssels (ADR-0016 D2, D8). Ein **Verweis**, nie der
     #: Schlüssel selbst: der liegt in der Umgebung des Anwendungsservers. Jede
     #: Sicherung vermerkt diese Id, und wer wiederherstellt, sucht damit den

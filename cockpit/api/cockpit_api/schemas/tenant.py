@@ -61,6 +61,9 @@ class TenantOut(BaseModel):
     schema_name: str
     db_role: str
     schema_version: str | None
+    #: Wann die Datenebene den Stand gemeldet hat. `None` heisst: `schema_version`
+    #: ist eine Erwartung und keine Messung (ADR-0021 D2).
+    schema_version_reported_at: datetime | None = None
     #: Nur die **Id** des Kundenschlüssels, nie der Schlüssel. Sie steht hier,
     #: damit die Konsole zeigen kann, welcher Schlüssel für diesen Kunden gilt —
     #: und weil jede Sicherung sie vermerkt (ADR-0016 D2).
@@ -69,6 +72,21 @@ class TenantOut(BaseModel):
     suspended_reason: str | None
     created_at: datetime
     updated_at: datetime
+
+
+class SchemaVersionReport(BaseModel):
+    """Was die Datenebene nach einer Migration meldet (ADR-0021 D2).
+
+    `extra="forbid"`, damit ein erweiterter Melder nicht glaubt, ein neues
+    Feld sei angekommen. Und bewusst nur diese eine Angabe: die Meldung ist
+    der einzige Rückkanal, und sie soll keine Sammelstelle für alles werden,
+    was die Datenebene über sich erzählen könnte.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Die Revision, die in `alembic_version` des Kundenschemas steht.
+    head_revision: str = Field(min_length=1, max_length=64)
 
 
 class ProvisioningJobOut(BaseModel):

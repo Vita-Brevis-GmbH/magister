@@ -29,6 +29,7 @@ from cockpit_api.models import (
 )
 from cockpit_api.schemas.tenant import (
     ProvisioningJobOut,
+    SchemaVersionReport,
     TenantCreate,
     TenantOut,
     TenantProvisionResult,
@@ -297,3 +298,56 @@ async def _commit_and_serialize(
     await session.refresh(tenant)
     await session.refresh(job)
     return _result(tenant, job, secrets)
+
+
+@router.post("/{tenant_id}/schema-version", response_model=TenantOut)
+async def report_schema_version(
+    tenant_id: UUID,
+    body: SchemaVersionReport,
+    session: AsyncSession = Depends(get_session),
+) -> Tenant:
+    """Den echten Schemastand annehmen (ADR-0021 D2).
+
+    Der einzige Rückkanal von der Datenebene in die Konsole. Er existiert,
+    weil die Konsole diese Angabe nicht selbst beschaffen kann: sie hat keinen
+    Datenbankzugang zum Kunden, und `schema_version` trug bis hierher nur
+    ihre eigene **Erwartung** aus `COCKPIT_EXPECTED_SCHEMA_VERSION`. Nach
+    dieser Meldung trägt sie eine Messung.
+
+    Kein `require_person`: es meldet ein Dienst, und der ist keine Person
+    (ADR-0020 D4). Was hier ankommt, ist auch kein `actor` — nur eine
+    Revision.
+
+    Idempotent: dieselbe Revision zweimal gemeldet aktualisiert nur den
+    Zeitstempel. Ein Protokoll-Eintrag entsteht nur bei einer **Änderung**,
+    damit ein Fünf-Minuten-Melder nicht das Log füllt.
+    """
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
+    previous = tenant.schema_version
+    tenant.schema_version = body.head_revision
+    tenant.schema_version_reported_at = datetime.now(UTC)
+    if previous != body.head_revision:
+        logger.info(
+            "Kunde %s meldet Schemastand %s (vorher %s).",
+            tenant.slug,
+            body.head_revision,
+            previous or "unbekannt",
+        )
+        if settings.expected_schema_version and (
+            body.head_revision != settings.expected_schema_version
+        ):
+            # Sichtbar machen, nicht abweisen: die Meldung ist eine Messung,
+            # und eine Messung, die nicht zur Erwartung passt, ist eine
+            # Auskunft und kein Fehler. Wer sie abwiese, hätte statt der
+            # Abweichung wieder nur die Erwartung in der Spalte.
+            logger.warning(
+                "Kunde %s steht auf %s, erwartet ist %s — Abweichung.",
+                tenant.slug,
+                body.head_revision,
+                settings.expected_schema_version,
+            )
+    await session.commit()
+    await session.refresh(tenant)
+    return tenant

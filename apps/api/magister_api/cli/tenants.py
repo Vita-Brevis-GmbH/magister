@@ -27,6 +27,7 @@ Reihenfolge, pro Mandant:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import os
 import re
@@ -39,8 +40,9 @@ from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
+from magister_api.cli._migration_record import read_head, record_migration
 from magister_api.cli._pipe import PipeError, Stage, run_pipe
-from magister_api.config import get_settings
+from magister_api.config import Settings, get_settings
 from magister_api.tenancy.context import build_registry
 from magister_api.tenancy.registry import Tenant, TenantConfigError
 from magister_api.tenancy.version import HEAD_REVISION
@@ -64,6 +66,11 @@ class StepResult:
     action: str
     ok: bool
     detail: str = ""
+    #: Beim Dump der Dateiname der Rückfahrkarte. Ein eigenes Feld und nicht
+    #: der erste Teil von ``detail``: den liest sonst jemand mit ``split(" ")``
+    #: auseinander, und dann hängt das Protokoll des Kunden an einer
+    #: Formulierung fürs Terminal.
+    artifact: str | None = None
 
 
 def _out(msg: str) -> None:
@@ -197,7 +204,11 @@ def dump_tenant(tenant: Tenant, dump_dir: Path, *, recipient: str | None = None)
     digest = _sha256(partial)
     partial.replace(target)
     return StepResult(
-        tenant.slug, "dump", True, f"{target.name} ({size} Bytes, sha256 {digest[:12]}…)"
+        tenant.slug,
+        "dump",
+        True,
+        f"{target.name} ({size} Bytes, sha256 {digest[:12]}…)",
+        artifact=target.name,
     )
 
 
@@ -284,9 +295,11 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     ordered = [canary, *[t for t in tenants if t.slug != canary.slug]]
     _out(f"Kanarienvogel: {canary.slug}. Danach {len(ordered) - 1} weitere.")
 
+    single_tenant = len(registry.tenants) == 1
     results: list[StepResult] = []
     for index, tenant in enumerate(ordered):
         _out(f"\n--- {tenant.slug} ({index + 1}/{len(ordered)}) ---")
+        dump_name: str | None = None
         if dump_dir is not None:
             step = dump_tenant(tenant, dump_dir, recipient=args.recipient or None)
             results.append(step)
@@ -296,11 +309,18 @@ def cmd_migrate(args: argparse.Namespace) -> int:
                 if _stop_after_failure(index, args.keep_going):
                     break
                 continue
+            dump_name = step.artifact
+        # Vorher-Stand VOR der Migration, sonst ist er hinterher nicht mehr
+        # feststellbar. Scheitert das Lesen, steht im Protokoll „unbekannt";
+        # das ist kein Grund, nicht zu migrieren.
+        before = asyncio.run(read_head(tenant, settings))
         step = migrate_tenant(tenant, extension_schema=settings.extension_schema)
         results.append(step)
         _out(f"  Migration: {'ok' if step.ok else 'FEHLER'}  {step.detail}")
         if not step.ok and _stop_after_failure(index, args.keep_going):
             break
+        if step.ok:
+            _record(tenant, settings, before=before, dump=dump_name, single=single_tenant)
         if index == 0 and len(ordered) > 1 and args.canary_only:
             _out("\n--canary-only: hier ist Schluss. Nach der Prüfung ohne Flag erneut starten.")
             break
@@ -311,6 +331,27 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     for r in failed:
         _out(f"  FEHLER {r.tenant}/{r.action}: {r.detail}")
     return 1 if failed else 0
+
+
+def _record(
+    tenant: Tenant, settings: Settings, *, before: str | None, dump: str | None, single: bool
+) -> None:
+    """Ereignis und Standmeldung — und was davon nicht geklappt hat.
+
+    Kein Rückgabewert und kein `StepResult`: das hier ist **kein** Schritt,
+    der den Lauf zum Scheitern bringen kann. Die Migration ist gelaufen; was
+    hier fehlschlägt, ist eine fehlende Notiz und kein fehlendes Schema.
+    """
+    outcome = asyncio.run(
+        record_migration(tenant, settings, before=before, dump=dump, single_tenant=single)
+    )
+    stand = outcome.head or "unbekannt"
+    marks = []
+    marks.append("Protokoll ok" if outcome.audited else "ohne Protokoll")
+    marks.append("gemeldet" if outcome.reported else "nicht gemeldet")
+    _out(f"  Stand:     {stand}  ({', '.join(marks)})")
+    for note in outcome.notes:
+        _out(f"    Hinweis: {note}")
 
 
 def _stop_after_failure(index: int, keep_going: bool) -> bool:
