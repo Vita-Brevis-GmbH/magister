@@ -13,15 +13,17 @@ from __future__ import annotations
 import pytest
 
 from magister_api.tenancy.desired_state import (
+    DesiredState,
     DesiredStateUnavailableError,
+    DesiredTemplate,
     parse_desired_state,
 )
 
-BASE = {"settings": {}, "rbac": {}}
+BASE: dict[str, object] = {"settings": {}, "rbac": {}}
 
 
-def _one(**over: object) -> dict[str, object]:
-    entry = {
+def _entry(**over: object) -> dict[str, object]:
+    entry: dict[str, object] = {
         "key": "enrollment",
         "language": "de",
         "subject": "Eintritt",
@@ -30,7 +32,18 @@ def _one(**over: object) -> dict[str, object]:
         "version": 3,
     }
     entry.update(over)
-    return dict(BASE, templates=[entry])
+    return entry
+
+
+def _one(**over: object) -> dict[str, object]:
+    return dict(BASE, templates=[_entry(**over)])
+
+
+def _only(state: DesiredState) -> DesiredTemplate:
+    """Die eine erwartete Vorlage — mit der Erwartung als Prüfung."""
+    rows = state.templates
+    assert rows is not None and len(rows) == 1
+    return rows[0]
 
 
 class TestNoStatementIsNotAnEmptyList:
@@ -58,7 +71,7 @@ class TestNoStatementIsNotAnEmptyList:
 
 class TestShape:
     def test_a_complete_entry_comes_through(self) -> None:
-        (row,) = parse_desired_state(_one()).templates or ()
+        row = _only(parse_desired_state(_one()))
         assert (row.key, row.language, row.version, row.may_override) == (
             "enrollment",
             "de",
@@ -67,8 +80,7 @@ class TestShape:
         )
 
     def test_a_missing_subject_is_allowed(self) -> None:
-        (row,) = parse_desired_state(_one(subject=None)).templates or ()
-        assert row.subject is None
+        assert _only(parse_desired_state(_one(subject=None))).subject is None
 
     def test_may_override_defaults_to_true(self) -> None:
         """Die Vorgabe ist „überschreibbar", nicht „gesperrt".
@@ -77,10 +89,9 @@ class TestShape:
         Fall, in dem ein Feldname-Tippfehler in der Konsole dem Kunden
         stillschweigend seine Vorlage abschaltet.
         """
-        entry = _one()["templates"][0]  # type: ignore[index]
-        del entry["may_override"]  # type: ignore[union-attr]
-        (row,) = parse_desired_state(dict(BASE, templates=[entry])).templates or ()
-        assert row.may_override is True
+        entry = _entry()
+        del entry["may_override"]
+        assert _only(parse_desired_state(dict(BASE, templates=[entry]))).may_override is True
 
     @pytest.mark.parametrize("bad", ["nicht-eine-liste", 5, {"key": "x"}])
     def test_templates_must_be_a_list(self, bad: object) -> None:
@@ -111,9 +122,7 @@ class TestShape:
         einen Unique-Index, und der eine Eintrag würde den anderen still
         gewinnen lassen.
         """
-        both = dict(
-            BASE, templates=[_one()["templates"][0], _one(subject="anders")["templates"][0]]
-        )  # type: ignore[index]
+        both = dict(BASE, templates=[_entry(), _entry(subject="anders")])
         with pytest.raises(DesiredStateUnavailableError) as exc:
             parse_desired_state(both)
         assert "doppelte" in str(exc.value)

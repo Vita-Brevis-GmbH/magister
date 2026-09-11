@@ -39,6 +39,12 @@ def _user(*roles: str, is_admin: bool = False) -> AuthenticatedUser:
 
 EMPTY_MATRIX = RbacMatrix(role_caps={}, admin_roles=frozenset({"admin"}))
 
+# Sortiert, damit die Testnamen stabil sind. Als eigene Variable mit Typ und
+# nicht direkt im `parametrize`: dort erwartet pytest `Iterable[object]`, und
+# dieser Erwartungstyp wandert in das `sorted` hinein — der Schlüssel bekäme
+# ein `object` und `c.value` wäre kein bekanntes Attribut mehr.
+PLATFORM_SORTED: list[Capability] = sorted(PLATFORM_CAPABILITIES, key=lambda c: c.value)
+
 
 class TestTheSplitIsComplete:
     def test_the_two_sets_do_not_overlap(self) -> None:
@@ -75,7 +81,7 @@ class TestTheCustomerAdminDoesNotHoldThem:
         held = effective_capabilities(_user("admin", is_admin=True), EMPTY_MATRIX)
         assert not (held & PLATFORM_CAPABILITIES)
 
-    @pytest.mark.parametrize("cap", sorted(PLATFORM_CAPABILITIES, key=lambda c: c.value))
+    @pytest.mark.parametrize("cap", PLATFORM_SORTED)
     def test_has_capability_says_no_to_an_admin(self, cap: Capability) -> None:
         # Über `has_capability`, weil der frühere Kurzschluss dort sass:
         # `if user.is_admin: return True` hätte jedes Plattform-Recht gewährt,
