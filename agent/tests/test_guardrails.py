@@ -54,6 +54,27 @@ class TestDnComparison:
         assert not dn_is_within(LEHRER, frozenset())
 
 
+def _platform_connector_methods() -> set[str]:
+    """Die Connector-Allowlist aus der Quelle der Datenebene lesen.
+
+    Zwei Blöcke, nicht einer: seit ADR-0022 D1 ist die Menge des Connectors
+    die RPC-Menge **plus** ``search_users``. Der Abgleich gehört nicht auf den
+    RPC-Weg — dort läuft er im AD-Container selbst (ADR-0011) —, und genau
+    diese Unterscheidung muss hier mitgelesen werden, sonst prüft der Test die
+    falsche Menge.
+    """
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[2] / "apps" / "api" / "magister_api" / "ad" / "rpc.py"
+    text = source.read_text(encoding="utf-8")
+    methods: set[str] = set()
+    names = ("ALLOWED_METHODS", "CONNECTOR_EXTRA_METHODS")
+    for name in (f"{n}: frozenset[str] = frozenset(" for n in names):
+        block = text.split(name, 1)[1].split(")", 1)[0]
+        methods |= {line.strip().strip('",') for line in block.splitlines() if '"' in line}
+    return methods
+
+
 class TestMethodAllowlist:
     def test_the_allowlist_matches_the_platform(self) -> None:
         """Agent und Plattform müssen dieselbe Methodenmenge kennen.
@@ -62,15 +83,7 @@ class TestMethodAllowlist:
         Prüfzeit nicht voraussetzen, deshalb wird die Quelle gelesen. Driftet
         eine Seite, nimmt die Plattform Aufträge an, die der Agent ablehnt.
         """
-        from pathlib import Path
-
-        source = (
-            Path(__file__).resolve().parents[2] / "apps" / "api" / "magister_api" / "ad" / "rpc.py"
-        )
-        text = source.read_text(encoding="utf-8")
-        block = text.split("ALLOWED_METHODS: frozenset[str] = frozenset(", 1)[1].split(")", 1)[0]
-        platform = {line.strip().strip('",') for line in block.splitlines() if '"' in line}
-        assert platform == set(ALLOWED_METHODS)
+        assert _platform_connector_methods() == set(ALLOWED_METHODS)
 
     @pytest.mark.parametrize(
         "method", ["ldap_search", "run_powershell", "authenticate", "", "__class__"]

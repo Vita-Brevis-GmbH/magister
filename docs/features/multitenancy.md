@@ -11,7 +11,9 @@
 > [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen) und
 > [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff) und
 > [ADR-0020](../adr/0020-konsolen-anmeldung.md) (Konsolen-Anmeldung) und
-> [ADR-0021](../adr/0021-betrieb-im-grossen.md) (Betrieb im Grossen).
+> [ADR-0021](../adr/0021-betrieb-im-grossen.md) (Betrieb im Grossen) und
+> [ADR-0022](../adr/0022-ad-abgleich-ueber-den-connector.md) (AD-Abgleich über
+> den Connector).
 > Status (2026-09-11): **alle Phasen stehen** — 0, 1, 2, 2a, 2b, 3, 4, 5, 5a
 > und 6. Entscheid E21 (Konsolen-Anmeldung über Entra ID) ist
 > **gegenstandslos** — ADR-0020 entscheidet anders.
@@ -451,10 +453,15 @@ Passwort-Reset. Referenz: ADR-0014.
   fügte die Brief-Vorlagen ein zweites Mal hinzu, was hatchling abweist. Über
   den Entwicklungsweg (`uv sync`, editable) entsteht kein Rad, deshalb ist es
   nie aufgefallen — das Paket war nie installierbar.
+- ✅ **Der Abgleich läuft über den Agenten** (ADR-0022, 2026-09-11). Er tat es
+  nicht: `search_users` stand auf keiner Allowlist, der Rücken erbte den
+  direkten Körper, und die Plattform griff beim Abgleich eines gehosteten
+  Kunden selbst per LDAP ins Kundennetz — die eine Verbindung, die es nach
+  ADR-0014 nicht geben darf. Sie scheiterte am Netz, nicht an einer Prüfung;
+  die Zusage hielt also aus Versehen.
 - ⏳ **Offen: Signaturen** (Code-Signing-Zertifikat auf einem HSM für das MSI,
   GPG-Schlüssel für ein `apt`-Repository), Paket-Download in der Konsole,
-  automatische Updates (E10, braucht das Repository), AD-Sync als Push über
-  den Agenten.
+  automatische Updates (E10, braucht das Repository).
 - ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
   CLI).
 - **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem

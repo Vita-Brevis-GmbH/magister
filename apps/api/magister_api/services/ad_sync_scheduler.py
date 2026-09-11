@@ -20,6 +20,8 @@ Jetzt dasselbe Muster wie beim Abgleich des Soll-Zustands
 * **Das Intervall aus den wirksamen Einstellungen dieses Kunden**, nicht aus
   einer globalen Zahl. Ein Kunde mit 15 Minuten und einer mit 60 sind zwei
   Fahrpläne, kein Kompromiss.
+* **Inkrementell**, sobald ein Cursor steht (ADR-0022 D3); ein voller Lauf
+  im Takt von `ad_full_sync_hours`, weil `whenChanged` keine Löschungen zeigt.
 * **Versetzte Startzeiten**, deterministisch über die Reihenfolge in der
   Registry: Kunde *i* von *n* startet bei *i·Intervall/n*. Nicht zufällig —
   ein Zufallsversatz ist im Log nicht nachvollziehbar, und die Frage „warum
@@ -46,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.factory import build_ad_client
 from magister_api.auth.effective_settings import load_effective_settings
 from magister_api.config import Settings
 from magister_api.services.ad_sync import AdSyncService
@@ -68,6 +71,13 @@ TICK_SECONDS = 5.0
 #: `read_registry` in der Auflösungs-Middleware.
 SessionFactoryFor = Callable[[Tenant], async_sessionmaker[AsyncSession]]
 
+#: Typ der AD-Fabrik: Prozess-Einstellungen, wirksame Einstellungen des Kunden,
+#: der Kunde. Genau die Signatur von `ad.factory.build_ad_client` — die Schleife
+#: entscheidet **nicht** selbst, welcher Rücken gilt (ADR-0022 D2). Sie tat es
+#: einmal, und zwar anders als der Anfragepfad: bei einem gehosteten Kunden nahm
+#: sie LDAP statt des Agenten.
+AdClientFactory = Callable[[Settings, Settings, Tenant], AdClient]
+
 
 def _ad_configured(settings: Settings) -> bool:
     """True, wenn ein Abgleich überhaupt versucht werden kann.
@@ -87,10 +97,12 @@ def _default_session_factory(tenant: Tenant) -> async_sessionmaker[AsyncSession]
 
 async def _run_tick(
     session: AsyncSession,
+    base_settings: Settings,
     settings: Settings,
-    client_factory: Callable[[Settings], AdClient],
+    tenant: Tenant,
+    client_factory: AdClientFactory,
 ) -> None:
-    ad = client_factory(settings)
+    ad = client_factory(base_settings, settings, tenant)
     try:
         # request_id ist VARCHAR(36); actor_upn markiert die Herkunft schon.
         await AdSyncService(session, settings, ad).sync_all(
@@ -98,6 +110,15 @@ async def _run_tick(
             actor_object_guid=None,
             ip=None,
             request_id=uuid.uuid4().hex,
+            # Der wiederkehrende Lauf ist inkrementell (ADR-0022 D3). Der
+            # Dienst hebt selbst auf einen vollen Lauf an, wenn kein Cursor
+            # steht oder der letzte volle zu alt ist — die Entscheidung
+            # braucht den Zustand aus der Datenbank und gehört deshalb dorthin.
+            #
+            # Vorher stand hier nichts, also die Vorgabe `full`: das ganze
+            # Verzeichnis, alle fünfzehn Minuten. Bei einem gehosteten Kunden
+            # hiesse das jedes Mal durch die Auftragswarteschlange.
+            mode="incremental",
         )
     finally:
         await ad.aclose()
@@ -107,7 +128,7 @@ async def sync_tenant(
     base_settings: Settings,
     tenant: Tenant,
     *,
-    client_factory: Callable[[Settings], AdClient] = AdClient,
+    client_factory: AdClientFactory = build_ad_client,
     session_factory: SessionFactoryFor = _default_session_factory,
     single_tenant: bool,
 ) -> int:
@@ -138,7 +159,7 @@ async def sync_tenant(
             await session.rollback()
             return interval
         try:
-            await _run_tick(session, settings, client_factory)
+            await _run_tick(session, base_settings, settings, tenant, client_factory)
         except AdUnavailableError as exc:
             logger.warning(
                 "Geplanter AD-Abgleich für %s: AD nicht erreichbar (%s)", tenant.slug, exc
@@ -166,7 +187,7 @@ async def run_ad_sync_loop(
     base_settings: Settings,
     *,
     stop_event: asyncio.Event,
-    client_factory: Callable[[Settings], AdClient] = AdClient,
+    client_factory: AdClientFactory = build_ad_client,
     read_registry: Callable[[], TenantRegistry] = get_registry,
     session_factory: SessionFactoryFor = _default_session_factory,
 ) -> None:
@@ -230,6 +251,7 @@ async def run_ad_sync_loop(
 
 __all__ = [
     "SCHEDULER_ACTOR_UPN",
+    "AdClientFactory",
     "TICK_SECONDS",
     "run_ad_sync_loop",
     "sync_tenant",

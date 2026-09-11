@@ -79,6 +79,8 @@ services:
       MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
       MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
       MAGISTER_AD_SYNC_INTERVAL_MINUTES: ${MAGISTER_AD_SYNC_INTERVAL_MINUTES:-15}
+      MAGISTER_AD_FULL_SYNC_HOURS: ${MAGISTER_AD_FULL_SYNC_HOURS:-24}
+      MAGISTER_AD_SYNC_TRANSACTION_IDLE_MS: ${MAGISTER_AD_SYNC_TRANSACTION_IDLE_MS:-900000}
       # Shared with Caddy: the API materializes tls.pem/tls.key + a Caddy `tls`
       # snippet here from the imported webserver cert (or a self-signed fallback).
       MAGISTER_WEB_CERT_DIR: /certs

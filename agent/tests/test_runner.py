@@ -13,10 +13,11 @@ import datetime as dt
 import json
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import httpx
 import pytest
+from magister_api.ad.client import AdUserRecord
 
 from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.guardrails import Guardrails
@@ -49,6 +50,39 @@ class FakeAd:
 
     async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
         self.calls.append(("modify_password", {"user_dn": user_dn, "force_change": force_change}))
+
+    async def search_users(
+        self,
+        *,
+        search_base: str | None = None,
+        attributes: list[str] | None = None,
+        changed_since: dt.datetime | None = None,
+    ) -> list[AdUserRecord]:
+        self.calls.append(
+            ("search_users", {"search_base": search_base, "changed_since": changed_since})
+        )
+        return [
+            AdUserRecord(
+                ad_object_guid="11111111-1111-1111-1111-111111111111",
+                upn="dora@example.ch",
+                sam_account_name="dora",
+                given_name="Dora",
+                surname="D.",
+                display_name="Dora D.",
+                mail="dora@example.ch",
+                enabled=True,
+                kind="student",
+                password_never_expires=False,
+                ms_ds_consistency_guid=None,
+                distinguished_name=f"CN=Dora,OU=Schueler,{SCHULE}",
+                street_address=None,
+                locality=None,
+                postal_code=None,
+                country=None,
+                when_changed=dt.datetime(2026, 9, 11, 8, 0, tzinfo=dt.UTC),
+                groups=("CN=Schueler,OU=Gruppen",),
+            )
+        ]
 
 
 class FakePlatform:
@@ -326,3 +360,106 @@ def monkeypatched(*, renewal_module: str, renew: object) -> Generator[None]:
         yield
     finally:
         module.renew = original  # type: ignore[assignment]
+
+
+class TestTheDirectoryRead:
+    """Der Abgleich über den Agenten (ADR-0022).
+
+    Zwei Übersetzungen, die es vorher nicht gab: die Nutzlast kommt als JSON
+    an (also `changed_since` als Text) und das Ergebnis ist eine Liste von
+    Dataclasses (also nichts, was `json.dumps` nimmt). Beide Richtungen sind
+    hier festgehalten — ohne sie scheitert der Auftrag beim Signieren, mit
+    einer Meldung, die nach einem Transportfehler aussieht.
+    """
+
+    async def test_the_cursor_arrives_as_a_timestamp(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-s1",
+                    "method": "search_users",
+                    "payload": {
+                        "search_base": SCHULE,
+                        "attributes": [],
+                        "changed_since": "2026-09-10T06:30:00+00:00",
+                    },
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        method, args = ad.calls[0]
+        assert method == "search_users"
+        # Nicht die Zeichenkette: sonst baute `search_users` einen LDAP-Filter
+        # aus dem Wort "None" — also jedes Mal einen Vollabgleich.
+        assert args["changed_since"] == dt.datetime(2026, 9, 10, 6, 30, tzinfo=dt.UTC)
+
+    async def test_a_full_run_has_no_cursor(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-s2",
+                    "method": "search_users",
+                    "payload": {"search_base": SCHULE, "attributes": [], "changed_since": None},
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        assert ad.calls[0][1]["changed_since"] is None
+
+    async def test_records_go_back_as_json_and_the_signature_holds(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-s3",
+                    "method": "search_users",
+                    "payload": {"search_base": SCHULE, "attributes": [], "changed_since": None},
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        entry = platform.results[0]
+        assert entry["ok"] is True
+        records = cast(list[dict[str, Any]], entry["result"])
+        assert len(records) == 1
+        record = records[0]
+        assert record["upn"] == "dora@example.ch"
+        # Zeitstempel als ISO-Text, Tupel als Liste — sonst ist es kein JSON.
+        assert record["when_changed"] == "2026-09-11T08:00:00+00:00"
+        assert record["groups"] == ["CN=Schueler,OU=Gruppen"]
+        assert _signature_is_valid(entry)
+
+    async def test_a_search_base_outside_the_allowed_ous_is_refused(self, tmp_path: Path) -> None:
+        """`search_base` ist ein DN und unterliegt derselben Grenze wie jeder andere.
+
+        Ohne diese Prüfung liesse sich über einen Auftrag das ganze
+        Verzeichnis auslesen — auch die Teile, für die der Kunde den Agenten
+        nie freigegeben hat.
+        """
+        ad = FakeAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-s4",
+                    "method": "search_users",
+                    "payload": {
+                        "search_base": "OU=Andere,DC=fremd,DC=local",
+                        "attributes": [],
+                        "changed_since": None,
+                    },
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        assert ad.calls == [], "der Auftrag hat das Verzeichnis erreicht"
+        assert platform.results[0]["ok"] is False

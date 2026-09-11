@@ -30,7 +30,7 @@ from cockpit_api.config import settings
 from cockpit_api.management_guard import MARKER_HEADER
 from cockpit_api.services import connector as svc
 from cockpit_api.services.connector import sign_result
-from cockpit_api.services.connector_queue import ALLOWED_METHODS
+from cockpit_api.services.connector_queue import ALLOWED_METHODS, SEARCH_JOB_TTL
 
 pytestmark = pytest.mark.usefixtures("cockpit_schema")
 
@@ -167,6 +167,27 @@ def _auth(agent: dict[str, Any], agent_headers: dict[str, str]) -> dict[str, str
     }
 
 
+def _platform_connector_methods() -> set[str]:
+    """Die Connector-Allowlist aus der Quelle der Datenebene lesen.
+
+    Zwei Blöcke, nicht einer: seit ADR-0022 D1 ist die Menge des Connectors
+    die RPC-Menge **plus** ``search_users``. Der Abgleich gehört nicht auf den
+    RPC-Weg — dort läuft er im AD-Container selbst (ADR-0011) —, und genau
+    diese Unterscheidung muss hier mitgelesen werden, sonst prüft der Test die
+    falsche Menge.
+    """
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[3] / "apps" / "api" / "magister_api" / "ad" / "rpc.py"
+    text = source.read_text(encoding="utf-8")
+    methods: set[str] = set()
+    names = ("ALLOWED_METHODS", "CONNECTOR_EXTRA_METHODS")
+    for name in (f"{n}: frozenset[str] = frozenset(" for n in names):
+        block = text.split(name, 1)[1].split(")", 1)[0]
+        methods |= {line.strip().strip('",') for line in block.splitlines() if '"' in line}
+    return methods
+
+
 class TestAllowlistParity:
     def test_the_allowlist_matches_the_data_plane(self) -> None:
         """Konsole und Datenebene müssen dieselbe Methodenmenge kennen.
@@ -176,12 +197,7 @@ class TestAllowlistParity:
         Änderung auf einer Seite muss hier auffallen — sonst nimmt die Konsole
         einen Auftrag an, den der Agent dann ablehnt, oder umgekehrt.
         """
-        source = (
-            Path(__file__).resolve().parents[3] / "apps" / "api" / "magister_api" / "ad" / "rpc.py"
-        )
-        text = source.read_text(encoding="utf-8")
-        block = text.split("ALLOWED_METHODS: frozenset[str] = frozenset(", 1)[1].split(")", 1)[0]
-        data_plane = {line.strip().strip('",') for line in block.splitlines() if '"' in line}
+        data_plane = _platform_connector_methods()
         assert data_plane == set(ALLOWED_METHODS), (
             "Allowlist von Konsole und Datenebene weichen ab: "
             f"nur Datenebene {data_plane - set(ALLOWED_METHODS)}, "
@@ -419,6 +435,63 @@ class TestJobFlow:
         for method in ("ldap_search", "run_powershell", "authenticate", ""):
             resp = db_client.post(f"/api/tenants/{tenant_id}/jobs", json={"method": method})
             assert resp.status_code in (400, 422), f"{method!r} wurde angenommen"
+
+    def test_the_directory_read_is_allowed_and_gets_a_longer_deadline(
+        self, db_client: TestClient
+    ) -> None:
+        """Der Abgleich über den Agenten (ADR-0022 D1).
+
+        Zwei Dinge in einem Test, weil sie zusammengehören: die Methode muss
+        angenommen werden, und sie braucht eine andere Frist. Mit den
+        üblichen 90 Sekunden wäre der Auftrag verfallen, während der Agent
+        noch liest — und die Datenebene bekäme „Agent nicht verfügbar" für
+        einen Agenten, der gerade arbeitet.
+        """
+        tenant_id = _tenant(db_client, "abgleich")
+        _activate(db_client, tenant_id)
+
+        created = db_client.post(
+            f"/api/tenants/{tenant_id}/jobs",
+            json={
+                "method": "search_users",
+                "payload": {
+                    "search_base": "DC=schule,DC=local",
+                    "attributes": [],
+                    "changed_since": None,
+                },
+            },
+        )
+        assert created.status_code == 201, created.text
+
+        short = db_client.post(f"/api/tenants/{tenant_id}/jobs", json={"method": "find_user_dn"})
+        assert short.status_code == 201
+
+        search_expiry = dt.datetime.fromisoformat(created.json()["expires_at"])
+        short_expiry = dt.datetime.fromisoformat(short.json()["expires_at"])
+        assert search_expiry - short_expiry >= dt.timedelta(minutes=8)
+
+    def test_the_search_deadline_outlasts_the_data_planes_patience(self) -> None:
+        """Die Konsole muss länger warten als die Datenebene fragt.
+
+        Andernfalls verfällt der Auftrag, während die Datenebene noch pollt —
+        und der Abgleich schlüge fehl, obwohl niemand einen Fehler gemacht
+        hat. Die Zahl der Gegenseite steht in
+        ``magister_api/ad/connector_client.py``.
+        """
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parents[3]
+            / "apps"
+            / "api"
+            / "magister_api"
+            / "ad"
+            / "connector_client.py"
+        )
+        text = source.read_text(encoding="utf-8")
+        line = next(ln for ln in text.splitlines() if ln.startswith("SEARCH_TIMEOUT_S"))
+        data_plane_wait = float(line.split("=", 1)[1].strip())
+        assert SEARCH_JOB_TTL.total_seconds() > data_plane_wait
 
     def test_a_job_runs_from_enqueue_to_result(
         self, db_client: TestClient, agent_headers: dict[str, str]

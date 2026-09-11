@@ -202,7 +202,7 @@ async def test_loop_populates_cache_and_audits(
         run_ad_sync_loop(
             base,
             stop_event=stop,
-            client_factory=lambda _s: seeded_mock_client,
+            client_factory=lambda _b, _s, _t: seeded_mock_client,
             read_registry=lambda: registry,
             session_factory=lambda _t: sm,
         )
@@ -266,7 +266,7 @@ async def test_every_tenant_is_synced_not_just_the_first(
         run_ad_sync_loop(
             base,
             stop_event=stop,
-            client_factory=lambda _s: seeded_mock_client,
+            client_factory=lambda _b, _s, _t: seeded_mock_client,
             read_registry=lambda: registry,
             session_factory=_factory,
         )
@@ -309,7 +309,7 @@ async def test_one_broken_tenant_does_not_stop_the_others(
         run_ad_sync_loop(
             base,
             stop_event=stop,
-            client_factory=lambda _s: seeded_mock_client,
+            client_factory=lambda _b, _s, _t: seeded_mock_client,
             read_registry=lambda: registry,
             session_factory=_factory,
         )
@@ -338,7 +338,7 @@ async def test_loop_skips_when_ad_unconfigured(
     registry = TenantRegistry([_sole_tenant(database_url)])
     stop = asyncio.Event()
 
-    def _explode(_s: Settings) -> AdClient:
+    def _explode(_b: Settings, _s: Settings, _t: Tenant) -> AdClient:
         raise AssertionError("AD-Client gebaut, obwohl AD nicht konfiguriert ist")
 
     task = asyncio.create_task(
@@ -395,7 +395,7 @@ async def test_a_tenant_that_appears_later_is_due_at_once(
         run_ad_sync_loop(
             base,
             stop_event=stop,
-            client_factory=lambda _s: seeded_mock_client,
+            client_factory=lambda _b, _s, _t: seeded_mock_client,
             read_registry=lambda: state["registry"],
             session_factory=_factory,
         )

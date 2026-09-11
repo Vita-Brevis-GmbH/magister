@@ -21,6 +21,7 @@ from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.remote_base import RemoteAdClient
 from magister_api.ad.rpc import (
     ALLOWED_METHODS,
+    CONNECTOR_METHODS,
     RPC_PATH,
     SECRET_HEADER,
     ad_user_record_from_jsonable,
@@ -126,6 +127,45 @@ def test_sync_methods_are_not_on_the_rpc_surface() -> None:
     # The recurring AD reads run only in the ad container, never over RPC.
     for name in ("search_users", "search_groups", "search_computers"):
         assert name not in ALLOWED_METHODS
+
+
+# --- contract: der Connector kann eine Methode mehr (ADR-0022 D1) ----------------
+
+
+def test_the_connector_surface_is_the_rpc_surface_plus_the_sync() -> None:
+    """Eine Menge mehr, und zwar genau eine Methode mehr.
+
+    Getrennte Mengen, weil die beiden Transporte verschieden liegen: über RPC
+    läuft der Abgleich **im** AD-Container (ADR-0011), über den Connector muss
+    er über den Agenten laufen, weil nur er ins Verzeichnis kommt (ADR-0014).
+    """
+    assert CONNECTOR_METHODS == ALLOWED_METHODS | {"search_users"}
+    assert "search_users" not in ALLOWED_METHODS
+
+
+def test_only_the_connector_overrides_the_sync() -> None:
+    """Der RPC-Rücken erbt `search_users` weiter von `AdClient` — mit Absicht.
+
+    Ein geerbter Körper scheitert dort laut, statt still in ein Verzeichnis zu
+    greifen, das dieser Container nicht hat. Der Connector-Rücken muss ihn
+    dagegen überschreiben, sonst griffe die Plattform beim Abgleich eines
+    gehosteten Kunden selbst per LDAP ins Kundennetz.
+    """
+    owner_connector = next(
+        klass for klass in AdConnectorClient.__mro__ if "search_users" in klass.__dict__
+    )
+    assert owner_connector is AdConnectorClient
+
+    owner_rpc = next(klass for klass in AdRpcClient.__mro__ if "search_users" in klass.__dict__)
+    assert owner_rpc is AdClient
+
+
+def test_the_connector_sync_keeps_the_signature_of_the_direct_one() -> None:
+    # Sonst ruft die Fachschicht beim gehosteten Kunden mit Argumenten auf,
+    # die dieser Rücken nicht kennt — und das fiele erst im Betrieb auf.
+    parent = _param_shape(AdClient.search_users)
+    child = _param_shape(AdConnectorClient.search_users)
+    assert child == parent
 
 
 def test_directory_password_authentication_is_not_on_the_rpc_surface() -> None:

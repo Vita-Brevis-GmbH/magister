@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, classify_sync_failure
+from magister_api.ad.factory import build_ad_client
 from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.effective_settings import get_effective_settings
@@ -36,22 +37,14 @@ def get_ad_client(
 
     Cached per-request per app.state, mirroring ``get_oidc_client``: the
     overlay dep returns the same Settings instance until app_settings.version
-    bumps, so this small identity-keyed cache is enough.
+    bumps, so this small identity-keyed cache is enough. The cache key also
+    carries the tenant: two tenants in one process must not share a client
+    that carries the other's console id.
 
-    Three backends behind one interface, in this order of precedence:
-
-    1. ``MAGISTER_AD_RPC_URL`` set → ``AdRpcClient``. The strict AD boundary of
-       ADR-0011: this process holds no directory credentials and forwards to
-       the AD container in the same network.
-    2. ``MAGISTER_AD_CONNECTOR_ENABLED`` and a tenant with a console id →
-       ``AdConnectorClient``. The hosted case (ADR-0014): the platform never
-       opens a connection into the customer's network, the agent calls out.
-    3. Otherwise ``AdClient``, talking to AD directly.
-
-    No caller in the domain code knows the difference — that is the whole point
-    of the third backend. The cache is per-request per app.state, keyed on the
-    identity of the overlaid settings, and now also on the tenant: two tenants
-    in one process must not share a client that carries the other's console id.
+    **Welcher** Rücken es wird, entscheidet ``ad.factory.build_ad_client`` —
+    dieselbe Stelle, die auch die wiederkehrende Schleife fragt (ADR-0022 D2).
+    Hier stand die Auswahl früher selbst, und die Schleife hatte eine zweite,
+    ältere Kopie davon, die den Connector nicht kannte.
     """
     base: Settings = request.app.state.settings
     tenant = tenant_from_request(request)
@@ -61,40 +54,9 @@ def get_ad_client(
     )
     if cached is not None and cached[0] == cache_key:
         return cached[1]
-    client: AdClient
-    if base.ad_rpc_url and base.ad_rpc_secret is not None:
-        # Imported lazily so the direct-AD path carries no httpx-client import.
-        from magister_api.ad.rpc_client import AdRpcClient
-
-        client = AdRpcClient(
-            eff, base_url=base.ad_rpc_url, secret=base.ad_rpc_secret.get_secret_value()
-        )
-    elif base.ad_connector_enabled and base.console_registry_url and tenant.console_id:
-        from magister_api.ad.connector_client import AdConnectorClient
-
-        client = AdConnectorClient(
-            eff,
-            console_url=_console_base(base.console_registry_url),
-            token=base.console_registry_token.get_secret_value(),
-            tenant_id=tenant.console_id,
-            management_marker=base.console_management_marker.get_secret_value(),
-        )
-    else:
-        client = AdClient(eff)
+    client = build_ad_client(base, eff, tenant)
     request.app.state._ad_client_cache = (cache_key, client)
     return client
-
-
-def _console_base(registry_url: str) -> str:
-    """Basis-URL der Konsole aus der Registry-URL ableiten.
-
-    Eine Einstellung weniger, die auseinanderlaufen kann: die Registry-URL
-    steht ohnehin schon da, und beide Pfade liegen auf derselben Konsole.
-    """
-    marker = "/api/tenants/registry"
-    if registry_url.endswith(marker):
-        return registry_url[: -len(marker)]
-    return registry_url.rstrip("/")
 
 
 @router.post("/sync", response_model=AdSyncResultOut, status_code=status.HTTP_200_OK)

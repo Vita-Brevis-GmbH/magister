@@ -57,6 +57,10 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "add_user_to_groups",
         "remove_user_from_groups",
         "create_user",
+        # Der Abgleich (ADR-0022 D1). Einzige Methode mit einer Antwort in
+        # Megabyte statt in Bytes — deshalb hat sie ihre eigene Frist, siehe
+        # `ttl_for`.
+        "search_users",
     }
 )
 
@@ -66,8 +70,24 @@ PASSWORD_BEARING_METHODS: frozenset[str] = frozenset(
     {"modify_password", "probe_bind_as_user", "create_user"}
 )
 
-#: Standard-Lebensdauer eines Auftrags.
+#: Standard-Lebensdauer eines Auftrags. Bemessen an einem Menschen, der vor
+#: einem Formular wartet: danach hat er längst neu geklickt, und ein spät
+#: ausgeführter Auftrag richtet mehr an, als er nützt.
 JOB_TTL = timedelta(seconds=90)
+
+#: Lebensdauer eines Abgleichs (ADR-0022 D1). Auf ihn wartet kein Mensch,
+#: sondern eine Schleife; der Agent liest je nach Verzeichnis Minuten. Muss
+#: über der Wartezeit der Datenebene liegen (dort 480 s) — sonst verfällt der
+#: Auftrag, während sie noch fragt.
+SEARCH_JOB_TTL = timedelta(minutes=10)
+
+#: Welche Frist für welche Methode gilt.
+JOB_TTL_BY_METHOD: dict[str, timedelta] = {"search_users": SEARCH_JOB_TTL}
+
+
+def ttl_for(method: str) -> timedelta:
+    """Frist dieser Methode — die Vorgabe, wenn sie keine eigene hat."""
+    return JOB_TTL_BY_METHOD.get(method, JOB_TTL)
 
 
 class MethodNotAllowedError(RuntimeError):
@@ -84,7 +104,7 @@ async def enqueue(
     *,
     method: str,
     payload: dict[str, Any] | None = None,
-    ttl: timedelta = JOB_TTL,
+    ttl: timedelta | None = None,
 ) -> ConnectorJob:
     if method not in ALLOWED_METHODS:
         # Verweigerung schon hier, nicht erst im Agenten: die erste Grenze
@@ -98,7 +118,10 @@ async def enqueue(
         tenant_id=tenant.id,
         method=method,
         payload=payload,
-        expires_at=datetime.now(UTC) + ttl,
+        # `ttl_for` und kein fester Vorgabewert im Kopf der Signatur: die
+        # Frist hängt an der Methode, und ein Aufrufer, der sie nicht angibt,
+        # soll die richtige bekommen und nicht die häufigste.
+        expires_at=datetime.now(UTC) + (ttl if ttl is not None else ttl_for(method)),
     )
     session.add(job)
     await session.flush()

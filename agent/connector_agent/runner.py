@@ -53,6 +53,45 @@ _POSITIONAL_FIRST: dict[str, str] = {
 }
 
 
+def _decode_search_users(payload: dict[str, Any]) -> dict[str, Any]:
+    """`changed_since` von ISO-8601 zurück in ein `datetime`.
+
+    Ein Auftrag reist als JSON; JSON kennt keinen Zeitstempel. Ohne diese
+    Umkehr bekäme `search_users` eine Zeichenkette und baute daraus einen
+    LDAP-Filter aus dem Wort „None" — also einen Vollabgleich, jedes Mal.
+    """
+    decoded = dict(payload)
+    raw = decoded.get("changed_since")
+    decoded["changed_since"] = dt.datetime.fromisoformat(raw) if isinstance(raw, str) else None
+    return decoded
+
+
+#: Nutzlasten, die vor dem Aufruf zurückübersetzt werden müssen.
+_PAYLOAD_DECODERS: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+    "search_users": _decode_search_users,
+}
+
+
+def _encode_user_records(result: Any) -> Any:
+    """`AdUserRecord`-Liste in JSON-taugliche Form (ADR-0022 D4).
+
+    Die Umwandlung ist die, die es für den RPC-Weg schon gibt — zwei Kodierer
+    für dasselbe Format wären zwei Stände. Ohne sie scheiterte der Auftrag
+    beim Signieren statt beim Kodieren, und die Meldung hiesse „nicht
+    serialisierbar" statt „Abgleich".
+    """
+    from magister_api.ad.rpc import ad_user_record_to_jsonable
+
+    records = cast(list[Any], result)
+    return [ad_user_record_to_jsonable(record) for record in records]
+
+
+#: Ergebnisse, die vor dem Zurückschicken übersetzt werden müssen.
+_RESULT_ENCODERS: dict[str, Callable[[Any], Any]] = {
+    "search_users": _encode_user_records,
+}
+
+
 #: Form einer AD-Operation: async, beliebige Argumente, beliebiges Ergebnis.
 #: Genauer geht nicht, weil die siebzehn Methoden verschiedene Signaturen
 #: haben — die Prüfung der Argumente macht die Gegenseite (``AdClient``), die
@@ -81,6 +120,9 @@ class AdExecutor:
         positional = _POSITIONAL_FIRST.get(method)
         if positional is not None:
             return await fn(payload[positional])
+        decoder = _PAYLOAD_DECODERS.get(method)
+        if decoder is not None:
+            payload = decoder(payload)
         return await fn(**payload)
 
 
@@ -168,7 +210,9 @@ class Runner:
             logger.warning("Auftrag %s (%s) gescheitert: %s", job_id, method, exc)
             await self._report(client, job_id, ok=False, result=None, error=type(exc).__name__)
             return
-        await self._report(client, job_id, ok=True, result=_jsonable(result), error=None)
+        encoder = _RESULT_ENCODERS.get(method)
+        encoded = encoder(result) if encoder is not None else result
+        await self._report(client, job_id, ok=True, result=_jsonable(encoded), error=None)
         logger.info("Auftrag %s (%s) ausgeführt", job_id, method)
 
     async def _report(

@@ -55,6 +55,10 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "add_user_to_groups",
         "remove_user_from_groups",
         "create_user",
+        # Der Abgleich über den Agenten (ADR-0022 D1). Die einzige Methode,
+        # die viel zurückgibt — die Grenzen unten gelten für sie genauso:
+        # `search_base` ist ein DN und muss in einer erlaubten OU liegen.
+        "search_users",
     }
 )
 
@@ -114,7 +118,7 @@ PROTECTED_ATTRIBUTES: frozenset[str] = frozenset(
 
 #: Schlüssel in einer Nutzlast, die einen DN tragen. Alles hier wird gegen die
 #: OU-Allowlist geprüft.
-_DN_KEYS: frozenset[str] = frozenset({"user_dn", "ou_dn"})
+_DN_KEYS: frozenset[str] = frozenset({"user_dn", "ou_dn", "search_base"})
 
 #: Schlüssel, die eine Liste von Gruppen-DNs tragen.
 _GROUP_LIST_KEYS: frozenset[str] = frozenset({"group_dns"})

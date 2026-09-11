@@ -26,12 +26,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any
+from collections.abc import Sequence
+from datetime import datetime
+from typing import Any, cast
 
 import httpx
 
+from magister_api.ad.client import DEFAULT_USER_ATTRIBUTES, AdUserRecord
 from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.remote_base import RemoteAdClient
+from magister_api.ad.rpc import ad_user_record_from_jsonable
 from magister_api.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -48,6 +52,17 @@ POLL_INTERVAL_S = 0.5
 
 #: Zeitüberschreitung einer einzelnen HTTP-Anfrage an die Konsole.
 HTTP_TIMEOUT_S = 10.0
+
+#: Wartezeit für den Abgleich (ADR-0022 D1). Ein Verzeichnislauf ist kein
+#: Mensch vor einem Formular: der Agent liest je nach Grösse Minuten. Muss
+#: unter der Frist liegen, die die Konsole diesem Auftrag gibt (dort 10
+#: Minuten) — sonst wartet die Datenebene auf etwas, das schon verfallen ist.
+SEARCH_TIMEOUT_S = 480.0
+
+#: Obergrenze der Antwort eines Abgleichs. Darüber wird **abgewiesen** und
+#: nicht abgeschnitten: ein halber Abgleich sieht aus wie ein ganzer und
+#: behandelt am Ende Konten als verschwunden, die es noch gibt.
+MAX_SEARCH_RECORDS = 50_000
 
 
 class AdConnectorClient(RemoteAdClient):
@@ -106,9 +121,21 @@ class AdConnectorClient(RemoteAdClient):
             raise AdUnavailableError("connector_enqueue_failed")
         return job_id
 
+    def _timeout_for(self, method: str) -> float:
+        """Wartezeit für diese Methode.
+
+        Alles ausser dem Abgleich ist eine Operation, auf die ein Mensch
+        wartet; dafür ist eine Minute grosszügig. Der Abgleich ist ein Lauf
+        über das ganze Verzeichnis und braucht seine eigene Zahl.
+        """
+        if method == "search_users":
+            return max(self._timeout_s, SEARCH_TIMEOUT_S)
+        return self._timeout_s
+
     async def _await_result(self, job_id: str, method: str) -> Any:
         url = f"{self._base}/api/tenants/{self._tenant_id}/jobs/{job_id}"
-        deadline = time.monotonic() + self._timeout_s
+        timeout_s = self._timeout_for(method)
+        deadline = time.monotonic() + timeout_s
         while True:
             try:
                 resp = await self._http.get(url)
@@ -142,11 +169,63 @@ class AdConnectorClient(RemoteAdClient):
                     "Auf Connector-Auftrag %s (%s) wurde %.0fs gewartet, Zustand %s",
                     job_id,
                     method,
-                    self._timeout_s,
+                    timeout_s,
                     state or "unbekannt",
                 )
                 raise AdUnavailableError("connector_timeout")
             await asyncio.sleep(POLL_INTERVAL_S)
+
+    # -- Abgleich ---------------------------------------------------------
+    async def search_users(
+        self,
+        *,
+        search_base: str | None = None,
+        attributes: Sequence[str] = DEFAULT_USER_ATTRIBUTES,
+        changed_since: datetime | None = None,
+    ) -> list[AdUserRecord]:
+        """Das Verzeichnis lesen — über den Agenten (ADR-0022 D1).
+
+        Die einzige Methode, die **nur** dieser Rücken anbietet. Der
+        RPC-Rücken erbt absichtlich weiter den direkten Körper: im
+        Container-Split läuft der Abgleich im AD-Container selbst, und ein
+        Aufruf von aussen soll dort laut scheitern (ADR-0011).
+
+        Ohne diese Überschreibung erbte der Connector-Rücken denselben
+        direkten Körper — und die Plattform griffe beim Abgleich eines
+        gehosteten Kunden per LDAP in sein Netz. Genau die Verbindung, die es
+        nach ADR-0014 nicht geben darf.
+        """
+        base = search_base or self._settings.ad_users_search_base
+        if not base:
+            raise AdUnavailableError("MAGISTER_AD_USERS_SEARCH_BASE is not configured")
+        raw = await self._call(
+            "search_users",
+            {
+                "search_base": base,
+                "attributes": list(attributes),
+                # ISO-8601 und kein Zeitstempel: der Auftrag geht als JSON
+                # durch die Konsole, und der Agent baut daraus wieder ein
+                # `datetime`.
+                "changed_since": changed_since.isoformat() if changed_since else None,
+            },
+        )
+        if not isinstance(raw, list):
+            raise AdUnavailableError("connector_search_malformed")
+        records = cast(list[Any], raw)
+        if len(records) > MAX_SEARCH_RECORDS:
+            # Ehrlich abweisen statt kürzen. Der nächste Schritt steht in der
+            # Meldung, weil sie im Protokoll des Kunden landet.
+            raise AdUnavailableError(
+                f"connector_search_too_large: {len(records)} Konten über der Grenze von "
+                f"{MAX_SEARCH_RECORDS}. Suchbasis enger fassen oder inkrementell abgleichen."
+            )
+        try:
+            return [ad_user_record_from_jsonable(item) for item in records]
+        except (TypeError, ValueError, KeyError) as exc:
+            # Ein Agent mit anderem Stand schickt ein Feld zu viel oder zu
+            # wenig. Das ist ein Ausfall dieses Rückens, kein Programmfehler
+            # der Fachschicht — dieselbe Ausnahme wie ein Netzproblem.
+            raise AdUnavailableError("connector_search_malformed") from exc
 
 
 __all__ = ["AdConnectorClient"]

@@ -49,6 +49,28 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
     }
 )
 
+#: Was **zusätzlich** über den Connector geht (ADR-0022 D1).
+#:
+#: Getrennt von ``ALLOWED_METHODS`` und nicht dort hineingeschrieben: die
+#: beiden Transporte haben denselben Zweck, aber nicht dieselbe Lage. Im
+#: Container-Split (ADR-0011) läuft der Abgleich **im** AD-Container; eine
+#: Suche über RPC wäre ein Aufruf, den es dort nicht geben soll, und ein
+#: geerbter Körper scheitert laut statt still ins Leere zu greifen.
+#:
+#: Beim Connector ist es umgekehrt: der Agent ist der einzige Prozess mit
+#: AD-Zugang (ADR-0014), also muss der Abgleich über ihn laufen oder gar
+#: nicht. Ohne diesen Eintrag holte die Plattform das Verzeichnis eines
+#: gehosteten Kunden direkt per LDAP — die Verbindung, die es nicht geben darf.
+CONNECTOR_EXTRA_METHODS: frozenset[str] = frozenset(
+    {
+        "search_users",
+    }
+)
+
+#: Die Allowlist des Connector-Kanals. Die Konsole führt dieselbe Menge
+#: wörtlich; ein Test hält die beiden zusammen.
+CONNECTOR_METHODS: frozenset[str] = ALLOWED_METHODS | CONNECTOR_EXTRA_METHODS
+
 
 def ad_user_record_to_jsonable(rec: AdUserRecord) -> dict[str, Any]:
     """Flatten an :class:`AdUserRecord` to JSON-safe primitives."""

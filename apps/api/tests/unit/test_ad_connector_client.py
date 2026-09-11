@@ -9,14 +9,21 @@ bestehenden 503-Banner greifen ohne Änderung.
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
 import pytest
 from pydantic import SecretStr
 
-from magister_api.ad.connector_client import AdConnectorClient
+from magister_api.ad.client import AdUserRecord
+from magister_api.ad.connector_client import (
+    MAX_SEARCH_RECORDS,
+    SEARCH_TIMEOUT_S,
+    AdConnectorClient,
+)
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.rpc import ad_user_record_to_jsonable
 from magister_api.config import Settings
 
 pytestmark = pytest.mark.asyncio
@@ -214,12 +221,146 @@ class TestConsoleUrlDerivation:
 
     def test_the_console_base_comes_from_the_registry_url(self) -> None:
         """Eine Einstellung weniger, die auseinanderlaufen kann."""
-        from magister_api.routers.admin_sync import _console_base
+        from magister_api.ad.factory import console_base
 
         assert (
-            _console_base("https://console.magister.ch:4444/api/tenants/registry")
+            console_base("https://console.magister.ch:4444/api/tenants/registry")
             == "https://console.magister.ch:4444"
         )
         assert (
-            _console_base("https://console.magister.ch:4444/") == "https://console.magister.ch:4444"
+            console_base("https://console.magister.ch:4444/") == "https://console.magister.ch:4444"
         )
+
+
+class TestTheSyncRunsOverTheAgent:
+    """Der Abgleich über den Connector (ADR-0022 D1).
+
+    Ohne diese Überschreibung erbte der Rücken den direkten Körper und die
+    Plattform griffe beim Abgleich per LDAP ins Kundennetz — die eine
+    Verbindung, die es nach ADR-0014 nicht geben darf. Der Fehler wäre nicht
+    aufgefallen: er sieht aus wie ein unerreichbarer Domänencontroller.
+    """
+
+    def _record_json(self, guid: str = "22222222-2222-2222-2222-222222222222") -> dict[str, Any]:
+        """Ein Datensatz, wie der Agent ihn schickt.
+
+        Gebaut aus dem **echten** Datensatz über denselben Kodierer, den der
+        Agent benutzt — von Hand geschriebenes JSON wäre ein zweiter Stand des
+        Formats und würde eine neue Spalte nicht bemerken.
+        """
+        return ad_user_record_to_jsonable(
+            AdUserRecord(
+                ad_object_guid=guid,
+                upn="dora@example.ch",
+                sam_account_name="dora",
+                given_name="Dora",
+                surname="D.",
+                display_name="Dora D.",
+                mail="dora@example.ch",
+                enabled=True,
+                kind="student",
+                password_never_expires=False,
+                ms_ds_consistency_guid=None,
+                distinguished_name="CN=Dora,OU=Students,DC=schule,DC=local",
+                street_address=None,
+                locality=None,
+                postal_code=None,
+                country=None,
+                when_changed=datetime(2026, 9, 11, 8, 0, tzinfo=UTC),
+                groups=("CN=Schueler,DC=schule,DC=local",),
+            )
+        )
+
+    async def test_records_come_back_as_records(self) -> None:
+        console = _Console()
+        console.states = [{"state": "done", "result": [self._record_json()]}]
+        client = console.client()
+        try:
+            found = await client.search_users(search_base="DC=schule,DC=local")
+        finally:
+            await client.aclose()
+        assert len(found) == 1
+        # Kein JSON mehr, sondern das, womit die Fachschicht rechnet.
+        assert found[0].upn == "dora@example.ch"
+        assert found[0].when_changed is not None and found[0].when_changed.year == 2026
+        assert found[0].groups == ("CN=Schueler,DC=schule,DC=local",)
+
+    async def test_the_cursor_travels_as_iso_text(self) -> None:
+        """JSON kennt keinen Zeitstempel; der Agent baut ihn zurück."""
+        console = _Console()
+        console.states = [{"state": "done", "result": []}]
+        client = console.client()
+        since = datetime(2026, 9, 10, 6, 30, tzinfo=UTC)
+        try:
+            await client.search_users(search_base="DC=schule,DC=local", changed_since=since)
+        finally:
+            await client.aclose()
+        payload = console.enqueued[0]["payload"]
+        assert console.enqueued[0]["method"] == "search_users"
+        assert payload["changed_since"] == since.isoformat()
+        assert payload["search_base"] == "DC=schule,DC=local"
+
+    async def test_a_full_run_sends_no_cursor(self) -> None:
+        console = _Console()
+        console.states = [{"state": "done", "result": []}]
+        client = console.client()
+        try:
+            await client.search_users(search_base="DC=schule,DC=local")
+        finally:
+            await client.aclose()
+        assert console.enqueued[0]["payload"]["changed_since"] is None
+
+    async def test_too_many_records_are_refused_not_truncated(self) -> None:
+        """Ein halber Abgleich sieht aus wie ein ganzer — und ist schlimmer."""
+        console = _Console()
+        console.states = [
+            {"state": "done", "result": [self._record_json()] * (MAX_SEARCH_RECORDS + 1)}
+        ]
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError, match="connector_search_too_large"):
+                await client.search_users(search_base="DC=schule,DC=local")
+        finally:
+            await client.aclose()
+
+    async def test_a_strange_answer_is_an_outage_not_a_crash(self) -> None:
+        console = _Console()
+        console.states = [{"state": "done", "result": [{"upn": "nur ein feld"}]}]
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError, match="connector_search_malformed"):
+                await client.search_users(search_base="DC=schule,DC=local")
+        finally:
+            await client.aclose()
+
+    async def test_a_non_list_answer_is_an_outage(self) -> None:
+        console = _Console()
+        console.states = [{"state": "done", "result": "ups"}]
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError, match="connector_search_malformed"):
+                await client.search_users(search_base="DC=schule,DC=local")
+        finally:
+            await client.aclose()
+
+    async def test_without_a_search_base_nothing_is_enqueued(self) -> None:
+        """Dieselbe Ausnahme wie beim direkten Rücken, und ohne Auftrag."""
+        console = _Console()
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError, match="SEARCH_BASE"):
+                await client.search_users()
+        finally:
+            await client.aclose()
+        assert console.enqueued == []
+
+    @pytest.mark.filterwarnings("ignore::pytest.PytestWarning")
+    def test_the_sync_waits_longer_than_a_person_would(self) -> None:
+        """Die Frist des Abgleichs ist nicht die eines Formulars."""
+        client = _Console().client(timeout_s=60.0)
+        assert client._timeout_for("search_users") == SEARCH_TIMEOUT_S
+        assert client._timeout_for("find_user_dn") == 60.0
+        # Und sie bleibt unter der Frist, die die Konsole dem Auftrag gibt
+        # (dort 10 Minuten) — sonst wartet die Datenebene auf etwas, das
+        # schon verfallen ist.
+        assert SEARCH_TIMEOUT_S < 600.0

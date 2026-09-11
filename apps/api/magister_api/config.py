@@ -234,6 +234,27 @@ class Settings(BaseSettings):
         ),
     )
     ad_sync_interval_minutes: int = Field(default=15)
+    #: Wie alt der letzte **volle** Abgleich werden darf, bevor der nächste
+    #: geplante Lauf wieder ein voller ist (ADR-0022 D3).
+    #:
+    #: Der wiederkehrende Lauf ist inkrementell — `whenChanged` liefert genau
+    #: die Änderungen. Er ist aber **löschblind**: ein gelöschtes Konto hat
+    #: keinen Änderungszeitpunkt mehr und bliebe für immer im Cache, also auch
+    #: in der Klassenliste. Deshalb regelmässig ein voller Lauf.
+    #:
+    #: 24 Stunden, nicht eine Woche: wer gestern ausgetreten ist, soll heute
+    #: nicht mehr in einer Liste stehen, aus der jemand ein Passwort setzt.
+    #: `0` heisst „jeder Lauf voll" — der Rückweg auf das Verhalten vor
+    #: ADR-0022.
+    ad_full_sync_hours: int = Field(default=24, ge=0)
+    #: Leerlauf-Grenze der Transaktion **während** ein Verzeichnislauf läuft.
+    #:
+    #: ADR-0021 D3 setzt `idle_in_transaction_session_timeout` an der
+    #: Mandantenrolle auf 60 Sekunden — richtig für eine Anfrage, zu knapp für
+    #: einen Abgleich, der über den Agenten Minuten dauert. Der Abgleich hebt
+    #: sie deshalb für seine eigene Transaktion an (`SET LOCAL`, endet mit
+    #: ihr). Kleiner als 60 000 wird sie nie gesetzt.
+    ad_sync_transaction_idle_ms: int = Field(default=900_000, ge=60_000)
     # Safety guardrail for the full-sync "missing user" marker: never flag more
     # than this fraction of the cache (and never more than an absolute floor)
     # in one run — a too-narrow search base would otherwise flag everyone.
