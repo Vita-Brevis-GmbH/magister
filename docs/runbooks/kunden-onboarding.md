@@ -136,6 +136,10 @@ migrieren:
 
 ```bash
 cd apps/api
+# Der Dump geht verschlüsselt auf die Platte; ohne Empfänger kein Dump und
+# damit keine Migration (ADR-0021 D1). Derselbe öffentliche Schlüssel wie
+# COCKPIT_BACKUP_AGE_RECIPIENT.
+export MAGISTER_BACKUP_AGE_RECIPIENT=age1…
 uv run ../../scripts/magister-cli tenants migrate \
     --dump-dir /srv/backup/magister/pre-migration --only <slug>
 ```

@@ -116,6 +116,12 @@ danach ist der Dump aus 2.1 der Rückweg.
 ```bash
 cd apps/api
 
+# Der Vor-Migrations-Dump wird verschlüsselt (ADR-0021 D1). Ohne gültigen
+# öffentlichen age-Schlüssel bricht der Runner ab, bevor er einen Kunden
+# anfasst — und schreibt keinen Klartext-Dump. Derselbe Wert wie
+# COCKPIT_BACKUP_AGE_RECIPIENT; der private Teil liegt auf dem Backup-Host.
+export MAGISTER_BACKUP_AGE_RECIPIENT=age1…
+
 # Was steht in der Registry, und wer hängt hinterher?
 uv run ../../scripts/magister-cli tenants list
 
@@ -130,9 +136,11 @@ uv run ../../scripts/magister-cli tenants migrate \
 
 Der Runner macht pro Kunde drei Dinge in dieser Reihenfolge:
 
-1. **Dump ziehen** (`pg_dump --schema`). Die Rückfahrkarte aus ADR-0016 D6.
-   Schlägt der Dump fehl, wird dieser Kunde **nicht** migriert. Überspringen
-   geht nur mit `--no-dump`, und das sagt es laut.
+1. **Dump ziehen, verschlüsselt** (`pg_dump --schema | age -r …`). Die
+   Rückfahrkarte aus ADR-0016 D6. Schlägt der Dump fehl, wird dieser Kunde
+   **nicht** migriert. Überspringen geht nur mit `--no-dump`, und das sagt es
+   laut. Die Datei heisst `<slug>-<zeit>-pre-migration.dump.age` — ohne
+   privaten Schlüssel ist sie nicht lesbar, und der liegt nicht hier.
 2. **Kanarienvogel zuerst.** Scheitert er, bleiben alle übrigen unangetastet —
    `--keep-going` gilt für ihn ausdrücklich nicht.
 3. **Migrieren mit der Anmelderolle des Kunden**, damit die neuen Tabellen ihm
@@ -147,7 +155,8 @@ zwischen den beiden Schritten beide Codestände auf beiden Schemastände laufen.
 | Kunde hängt eine Revision zurück | Er wird mit 503 bedient. `tenants migrate --only <slug>`. |
 | Runner bricht beim dritten von zwanzig ab | Die ersten zwei sind migriert, die restlichen siebzehn unangetastet. Ursache beheben, Runner erneut starten — die bereits migrierten meldet er als „schon auf dem Kopfstand". |
 | `pg_dump` fehlt im Container | Der Runner sagt es und migriert nicht. `postgresql-client` nachinstallieren, nicht `--no-dump` nehmen. |
-| Migration im Kundenschema gescheitert | Dump aus dem `--dump-dir` zurückspielen, und zwar **in ein neues Schema**, nie über die Produktion (ADR-0016 D7). |
+| Migration im Kundenschema gescheitert | Dump aus dem `--dump-dir` zurückspielen, und zwar **in ein neues Schema**, nie über die Produktion (ADR-0016 D7). Er ist age-verschlüsselt: `age -d -i <identity> <datei> \| pg_restore …`, also auf dem Backup-Host, wo der private Schlüssel liegt. |
+| `age` fehlt oder der Empfänger ist nicht gesetzt | Der Runner bricht ab, bevor er einen Kunden anfasst, und schreibt **keinen** unverschlüsselten Dump. `age` nachinstallieren beziehungsweise `MAGISTER_BACKUP_AGE_RECIPIENT` setzen. |
 
 ## 5 · Was noch fehlt
 

@@ -5,9 +5,17 @@ Aufruf über ``scripts/magister-cli tenants <aktion>``.
 Der Migrations-Runner läuft die Registry ab und macht drei Dinge in dieser
 Reihenfolge, pro Mandant:
 
-1. **Dump ziehen.** Die Rückfahrkarte (ADR-0016 D6). Ohne sie ist eine
-   fehlgeschlagene Migration ein Datenverlust und keine Unannehmlichkeit.
-   Überspringen geht nur mit ``--no-dump`` — ausdrücklich, nicht versehentlich.
+1. **Dump ziehen, verschlüsselt.** Die Rückfahrkarte (ADR-0016 D6). Ohne sie
+   ist eine fehlgeschlagene Migration ein Datenverlust und keine
+   Unannehmlichkeit. Überspringen geht nur mit ``--no-dump`` — ausdrücklich,
+   nicht versehentlich.
+
+   Verschlüsselt heisst: ``pg_dump | age -r <öffentlicher Schlüssel>`` als
+   Kette ohne Zwischendatei, genau wie in der Konsole (ADR-0016 D2). Bis
+   ADR-0021 stand hier ein nacktes ``pg_dump --file=…`` — ein Klartext-Dump
+   eines Schulschemas auf der Platte, gegen die eigene harte Regel und in
+   Code, der im Onboarding-Runbook steht. Ohne ``age`` oder ohne Empfänger
+   scheitert der Schritt jetzt, statt Klartext zu hinterlassen.
 2. **Kanarienvogel zuerst.** Ein Mandant migriert allein; erst wenn der steht,
    laufen die übrigen. Ein Fehler trifft dann einen Kunden, nicht alle.
 3. **Migrieren mit der eigenen Anmelderolle des Mandanten.** Das ist keine
@@ -19,7 +27,9 @@ Reihenfolge, pro Mandant:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -29,12 +39,23 @@ from pathlib import Path
 
 from sqlalchemy.engine import make_url
 
+from magister_api.cli._pipe import PipeError, Stage, run_pipe
 from magister_api.config import get_settings
 from magister_api.tenancy.context import build_registry
 from magister_api.tenancy.registry import Tenant, TenantConfigError
 from magister_api.tenancy.version import HEAD_REVISION
 
 API_DIR = Path(__file__).resolve().parents[2]
+
+#: Öffentlicher age-Schlüssel: ``age1`` plus Bech32. Dasselbe Muster wie in
+#: der Konsole — ein leerer oder falsch geformter Empfänger wäre der Weg zu
+#: einem unverschlüsselten Dump, und das ist ein Abbruch und keine Warnung.
+RECIPIENT_PATTERN = re.compile(r"^age1[0-9a-z]{58}$")
+
+#: Umgebungsvariable mit dem Empfänger. Nur der **öffentliche** Schlüssel: mit
+#: ihm lässt sich schreiben und nichts lesen. Wer den Anwendungsserver
+#: übernimmt, bekommt damit keinen alten Dump auf.
+RECIPIENT_ENV = "MAGISTER_BACKUP_AGE_RECIPIENT"
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,34 +100,105 @@ def _libpq_env(dsn: str) -> dict[str, str]:
     return env
 
 
-def dump_tenant(tenant: Tenant, dump_dir: Path) -> StepResult:
-    """``pg_dump --schema`` des Mandantenschemas vor der Migration."""
-    if shutil.which("pg_dump") is None:
-        return StepResult(tenant.slug, "dump", False, "pg_dump ist nicht installiert")
-    dump_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    target = dump_dir / f"{tenant.slug}-{stamp}-pre-migration.dump"
-    cmd = [
-        "pg_dump",
-        "--format=custom",
-        "--no-owner",
-        f"--schema={tenant.schema_name}",
-        f"--file={target}",
-    ]
-    proc = subprocess.run(  # noqa: S603 — feste Argumentliste, keine Shell
-        cmd, env=_libpq_env(tenant.dsn), capture_output=True, text=True, check=False
-    )
-    if proc.returncode != 0:
-        # stderr von pg_dump kann den Verbindungsstring enthalten, aber kein
-        # Passwort (das kommt aus der Umgebung) — letzte Zeile genügt.
-        detail = (proc.stderr or "").strip().splitlines()
-        return StepResult(
-            tenant.slug, "dump", False, detail[-1] if detail else "pg_dump fehlgeschlagen"
+def check_recipient(value: str | None) -> str:
+    """Empfänger prüfen. Kein gültiger Schlüssel heisst: kein Dump.
+
+    Absichtlich ein Abbruch und keine Warnung mit Rückfall auf Klartext. Auf
+    einem Share ist ein Dump für mehr Personen und Systeme erreichbar als in
+    der Datenbank, und ein Schulschema enthält Namen, Klassen und Geburtsdaten
+    von Minderjährigen.
+    """
+    candidate = (value or "").strip()
+    if not RECIPIENT_PATTERN.match(candidate):
+        raise PipeError(
+            f"{RECIPIENT_ENV} ist kein gültiger öffentlicher age-Schlüssel "
+            "(erwartet 'age1…'). Ohne ihn würde der Vor-Migrations-Dump "
+            "unverschlüsselt auf der Platte liegen — das wird nicht gemacht. "
+            "Der Wert ist derselbe wie COCKPIT_BACKUP_AGE_RECIPIENT."
         )
-    size = target.stat().st_size
+    return candidate
+
+
+def dump_path(dump_dir: Path, slug: str, when: datetime) -> Path:
+    """Ablagepfad. ``.age`` am Ende, damit man am Namen sieht, was es ist."""
+    stamp = when.strftime("%Y%m%dT%H%M%SZ")
+    return dump_dir / f"{slug}-{stamp}-pre-migration.dump.age"
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def dump_tenant(tenant: Tenant, dump_dir: Path, *, recipient: str | None = None) -> StepResult:
+    """Verschlüsselter ``pg_dump --schema`` des Mandantenschemas.
+
+    ``pg_dump | age -r …`` als Kette ohne Zwischendatei: eine
+    unverschlüsselte Zwischendatei wäre genau das, was die Verschlüsselung
+    verhindern soll — und sie läge auch dann da, wenn der Prozess mittendrin
+    abbricht.
+
+    Geschrieben wird unter einem Arbeitsnamen und erst am Ende umbenannt.
+    Sonst liegt bei einem Abbruch eine halbe Datei da, die aussieht wie ein
+    Dump. Die Prüfsumme geht über die **verschlüsselte** Datei — damit lässt
+    sich später feststellen, ob sie unverändert ist, ohne sie zu entschlüsseln.
+    """
+    # Absolute Pfade: dieses Werkzeug läuft auch aus einem Wartungsfenster
+    # heraus, in dem PATH nicht der einer Anmeldesitzung ist.
+    pg_dump_bin = shutil.which("pg_dump")
+    age_bin = shutil.which("age")
+    if pg_dump_bin is None:
+        return StepResult(tenant.slug, "dump", False, "pg_dump ist nicht installiert")
+    if age_bin is None:
+        return StepResult(
+            tenant.slug,
+            "dump",
+            False,
+            "age ist nicht installiert. Ohne age gibt es keinen verschlüsselten "
+            "Dump, und ein unverschlüsselter wird nicht geschrieben.",
+        )
+    try:
+        target_recipient = check_recipient(
+            recipient if recipient is not None else os.environ.get(RECIPIENT_ENV)
+        )
+    except PipeError as exc:
+        return StepResult(tenant.slug, "dump", False, str(exc))
+
+    dump_dir.mkdir(parents=True, exist_ok=True)
+    target = dump_path(dump_dir, tenant.slug, datetime.now(UTC))
+    partial = target.with_suffix(target.suffix + ".partial")
+    try:
+        run_pipe(
+            Stage(
+                argv=(
+                    pg_dump_bin,
+                    "--format=custom",
+                    "--no-owner",
+                    "--no-privileges",
+                    f"--schema={tenant.schema_name}",
+                ),
+                env=_libpq_env(tenant.dsn),
+                label="pg_dump",
+            ),
+            Stage(argv=(age_bin, "-r", target_recipient), label="age"),
+            stdout_path=partial,
+        )
+    except PipeError as exc:
+        partial.unlink(missing_ok=True)
+        return StepResult(tenant.slug, "dump", False, str(exc))
+
+    size = partial.stat().st_size
     if size == 0:
-        return StepResult(tenant.slug, "dump", False, f"{target.name} ist leer")
-    return StepResult(tenant.slug, "dump", True, f"{target.name} ({size} Bytes)")
+        partial.unlink(missing_ok=True)
+        return StepResult(tenant.slug, "dump", False, "der Dump ist leer")
+    digest = _sha256(partial)
+    partial.replace(target)
+    return StepResult(
+        tenant.slug, "dump", True, f"{target.name} ({size} Bytes, sha256 {digest[:12]}…)"
+    )
 
 
 def migrate_tenant(tenant: Tenant, *, extension_schema: str) -> StepResult:
@@ -174,6 +266,15 @@ def cmd_migrate(args: argparse.Namespace) -> int:
             _out("--dump-dir fehlt. Entweder ein Zielverzeichnis angeben oder --no-dump.")
             return 2
         dump_dir = Path(args.dump_dir)
+        # Vorab und nicht beim ersten Kunden: ein fehlender Empfänger ist ein
+        # Konfigurationsfehler, und der soll auffallen, bevor irgendetwas
+        # angefasst wurde. Sonst scheitert der Kanarienvogel an etwas, das
+        # nichts mit der Migration zu tun hat.
+        try:
+            check_recipient(args.recipient or os.environ.get(RECIPIENT_ENV))
+        except PipeError as exc:
+            _out(str(exc))
+            return 2
 
     try:
         canary = _pick_canary(tenants, args.canary)
@@ -187,7 +288,7 @@ def cmd_migrate(args: argparse.Namespace) -> int:
     for index, tenant in enumerate(ordered):
         _out(f"\n--- {tenant.slug} ({index + 1}/{len(ordered)}) ---")
         if dump_dir is not None:
-            step = dump_tenant(tenant, dump_dir)
+            step = dump_tenant(tenant, dump_dir, recipient=args.recipient or None)
             results.append(step)
             _out(f"  Dump:     {'ok' if step.ok else 'FEHLER'}  {step.detail}")
             if not step.ok:
@@ -257,6 +358,11 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[
         "migrate", help="alembic upgrade head pro Mandant, mit Dump und Kanarienvogel"
     )
     migrate.add_argument("--dump-dir", help="Zielverzeichnis für die Vor-Migrations-Dumps")
+    migrate.add_argument(
+        "--recipient",
+        default=None,
+        help=f"öffentlicher age-Schlüssel für die Dumps; sonst aus ${RECIPIENT_ENV}",
+    )
     migrate.add_argument(
         "--no-dump",
         action="store_true",

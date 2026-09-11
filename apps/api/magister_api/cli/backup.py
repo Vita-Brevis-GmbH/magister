@@ -32,8 +32,6 @@ import logging
 import os
 import re
 import shutil
-import subprocess
-import tempfile
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -41,6 +39,8 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
+
+from magister_api.cli._pipe import PipeError, Stage, run_pipe
 
 logger = logging.getLogger("magister.backup")
 
@@ -114,61 +114,33 @@ def _decrypt_and_restore(*, dump: Path, identity: Path, database: str, admin_dsn
     """``age -d | pg_restore`` als Kette ohne Zwischendatei.
 
     Ohne Zwischendatei, weil ein entschlüsselter Dump auf der Platte genau das
-    ist, was die Verschlüsselung verhindern soll. Und mit einer echten Pipe
-    plus ``stderr`` in temporäre Dateien: eine Kette, bei der der Elternprozess
-    auf den zweiten Prozess wartet, verklemmt, sobald der erste mehr als einen
-    Pipe-Puffer (64 KiB) auf stderr schreibt.
+    ist, was die Verschlüsselung verhindern soll. Die Mechanik der Kette
+    (beide Pipe-Enden schliessen, ``stderr`` in Dateien, absolute Pfade) steht
+    in ``cli/_pipe.py`` und nicht hier: sie wird auch für ``pg_dump | age``
+    beim Vor-Migrations-Dump gebraucht, und zweimal dieselben drei Fallen zu
+    umgehen ist einmal zu viel.
     """
-    # Absolute Pfade statt Namen: dieses Werkzeug läuft im Cron, und dort ist
-    # PATH ein anderer als in einer Anmeldesitzung. Ein "age: command not
-    # found" um 03:15 sieht aus wie ein kaputtes Backup und ist eine fehlende
-    # Zeile in der crontab.
     age_bin = shutil.which("age")
     restore_bin = shutil.which("pg_restore")
     if age_bin is None or restore_bin is None:  # pragma: no cover - _preflight prüft das
         raise BackupVerifyError("age oder pg_restore ist nicht installiert.")
-    env = libpq_env(admin_dsn)
-    with tempfile.TemporaryFile() as dec_err, tempfile.TemporaryFile() as res_err:
-        read_fd, write_fd = os.pipe()
-        first: subprocess.Popen[bytes] | None = None
-        try:
-            first = subprocess.Popen(  # noqa: S603
-                [age_bin, "-d", "-i", str(identity), str(dump)],
-                stdin=subprocess.DEVNULL,
-                stdout=write_fd,
-                stderr=dec_err,
-            )
-            second = subprocess.Popen(  # noqa: S603
-                [
+    try:
+        run_pipe(
+            Stage(argv=(age_bin, "-d", "-i", str(identity), str(dump)), label="age -d"),
+            Stage(
+                argv=(
                     restore_bin,
                     "--no-owner",
                     "--no-privileges",
                     "--exit-on-error",
                     f"--dbname={database}",
-                ],
-                env=env,
-                stdin=read_fd,
-                stdout=subprocess.DEVNULL,
-                stderr=res_err,
-            )
-        except Exception:
-            if first is not None:
-                first.kill()
-                first.wait()
-            raise
-        finally:
-            # BEIDE Enden schliessen: sonst bekommt pg_restore kein EOF.
-            os.close(write_fd)
-            os.close(read_fd)
-
-        rc_second = second.wait()
-        rc_first = first.wait()
-        if rc_first != 0 or rc_second != 0:
-            handle = dec_err if rc_first != 0 else res_err
-            handle.seek(0)
-            lines = handle.read().decode("utf-8", "replace").strip().splitlines()
-            tool = "age -d" if rc_first != 0 else "pg_restore"
-            raise BackupVerifyError(f"{tool}: {lines[-1] if lines else 'ohne Meldung'}")
+                ),
+                env=libpq_env(admin_dsn),
+                label="pg_restore",
+            ),
+        )
+    except PipeError as exc:
+        raise BackupVerifyError(str(exc)) from exc
 
 
 async def _create_database(admin_dsn: str, name: str) -> None:
