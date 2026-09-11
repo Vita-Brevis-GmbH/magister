@@ -59,6 +59,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # `env_file` ZUSÄTZLICH zur Liste unten, und nicht statt ihr.
+    #
+    # Der Grund sind die vier Werte JE KUNDE im gehosteten Betrieb
+    # (`MAGISTER_TENANT_DSN_<REF>` und Verwandte, ADR-0013 D4 / ADR-0016 D8):
+    # ihre Namen stehen erst fest, wenn es den Kunden gibt, also kann eine
+    # feste Liste sie nicht aufzählen. Ohne diese Zeile wären sie in der
+    # `.env` gesetzt und im Container nicht vorhanden — der Kunde würde mit
+    # Wartung bedient, und die Suche ginge in die Datenbank statt in die
+    # Compose-Datei.
+    #
+    # Die ausdrückliche Liste bleibt: sie erzwingt die Pflichtwerte (`:?`)
+    # beim Start statt bei der ersten Anfrage.
+    env_file:
+      # `required: false`, damit ein Stack ohne `.env` (alle Werte aus der
+      # Umgebung) startet statt mit „env file not found" abzubrechen.
+      - path: .env
+        required: false
     environment:
       MAGISTER_ENVIRONMENT: production
       MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}

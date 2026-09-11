@@ -4,7 +4,8 @@
 > ([ADR-0015](../adr/0015-authentisierungs-haertung.md) D1). Der Kunden-Zugang
 > auf 443 bleibt öffentlich und ist mit MFA geschützt; das Management liegt auf
 > einem eigenen Port, gebunden an eine interne Adresse.
-> Status: **Listener gebaut und verifiziert, Konsolen-UI folgt in Phase 2.**
+> Status: **Listener gebaut und verifiziert; die Konsolen-Oberfläche liegt
+> seit ADR-0020 dahinter und wird von Caddy aus `cockpit/web/dist` ausgeliefert.**
 
 ## 1 · Drei Schichten
 

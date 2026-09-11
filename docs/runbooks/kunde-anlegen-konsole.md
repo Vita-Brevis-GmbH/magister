@@ -3,7 +3,7 @@
 > Der Bereitstellungs-Auftrag der Konsole
 > ([ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md) D2): fünf
 > Schritte, wiederaufnehmbar, nie halb angelegt.
-> Status: **API fertig und gegen echtes Postgres geprüft; Oberfläche folgt.**
+> Status: **API und Oberfläche stehen, beide gegen echtes Postgres geprüft.**
 
 ## 1 · Voraussetzungen der Konsole
 

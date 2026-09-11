@@ -57,7 +57,39 @@ services:
       # dem Bootstrap-Token möglich. Gehört in die Sicherung
       # (docs/runbooks/key-rotation.md §5).
       COCKPIT_SECRET_KEY: ${COCKPIT_SECRET_KEY:?COCKPIT_SECRET_KEY is required — openssl rand -base64 48}
+      # --- Bereitstellung (ADR-0013 D2) ---------------------------------
+      # Ohne diese drei kann die Konsole zwar starten und Kunden erfassen,
+      # aber keinen einzigen bereitstellen: Rolle, Schema und Migration
+      # brauchen einen Verwaltungszugang zum Magister-Cluster und das
+      # Alembic-Verzeichnis der Datenebene. Der Fehler zeigt sich sonst erst
+      # beim ersten Kunden, mitten im Termin.
+      COCKPIT_TENANT_ADMIN_DSN: ${COCKPIT_TENANT_ADMIN_DSN:-}
+      COCKPIT_MAGISTER_API_DIR: ${COCKPIT_MAGISTER_API_DIR:-/opt/magister/apps/api}
+      COCKPIT_TENANT_EXTENSION_SCHEMA: ${COCKPIT_TENANT_EXTENSION_SCHEMA:-public}
+      # Die Revision, die ein frisch bereitgestelltes Schema tragen soll, und
+      # der Wert, gegen den eine Meldung der Datenebene geprüft wird
+      # (ADR-0021 D2). Leer heisst: keine Erwartung, jede Meldung wird
+      # angenommen.
+      COCKPIT_EXPECTED_SCHEMA_VERSION: ${COCKPIT_EXPECTED_SCHEMA_VERSION:-}
+      # --- Sicherung und Export (ADR-0016) -------------------------------
+      # Ohne Empfänger gibt es keine verschlüsselte Sicherung — und eine
+      # unverschlüsselte darf es nicht geben. Der Pfad muss unten als Volume
+      # eingehängt sein.
+      COCKPIT_BACKUP_SHARE_ROOT: ${COCKPIT_BACKUP_SHARE_ROOT:-}
+      COCKPIT_BACKUP_AGE_RECIPIENT: ${COCKPIT_BACKUP_AGE_RECIPIENT:-}
+      COCKPIT_EXPORT_ROOT: ${COCKPIT_EXPORT_ROOT:-}
     depends_on: [postgres]
+    volumes:
+      # Die Zertifikate der Connector-CA (ADR-0014) liest die API selbst —
+      # sie stellt damit Agentenzertifikate aus. Ohne dieses Volume zeigt
+      # COCKPIT_CONNECTOR_CA_CERT auf eine Datei, die es im Container nicht
+      # gibt, und die erste Anmeldung eines Agenten scheitert.
+      - ./certs:/certs:ro
+      # Sicherungen und Exporte. Beide Pfade müssen im Container dieselben
+      # sein wie in den Einstellungen oben; ein leerer Wert heisst „nicht
+      # eingerichtet" und die zugehörige Funktion sagt das auch.
+      - ${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}:${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}
+      - ${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}:${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}
     # Deliberately no `ports:` — everything goes through caddy below.
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]
