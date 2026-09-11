@@ -6,10 +6,15 @@ middleware put on the request. That is why ``get_session`` takes a ``Request``
 — and why every router could stay untouched: they all depend on
 ``Depends(get_session)`` and never on the engine.
 
-``init_engine``/``get_sessionmaker`` remain for the processes that have no
-request to resolve from: the startup seeds, the AD-sync scheduler and the CLI.
-Those run against ``database_url`` and are single-tenant by nature; the
-per-tenant fan-out for them comes with the console in Phase 2.
+``init_engine``/``get_sessionmaker`` bleiben für das, was gar keinen Mandanten
+hat: die Prozess-Engine selbst und CLI-Werkzeuge, die eine Installation und
+nicht einen Kunden anfassen.
+
+**Was hier NICHT mehr hängt:** die Erst-Seeds und der AD-Abgleich. Bis
+ADR-0021 D4 nahmen beide diese Prozess-Engine und damit ``public`` — bei einem
+Kunden dasselbe Schema, bei zwei das falsche. Der Hinweis „der Fan-out kommt
+mit der Konsole in Phase 2“ stand an dieser Stelle und ist liegen geblieben;
+jetzt holen sich beide ihre Sitzung aus ``tenancy.context.get_engines()``.
 """
 
 from __future__ import annotations

@@ -805,6 +805,11 @@ dieselbe Stelle im Code, ein anderer Faktor.
 - **Niemals** einen Kunden-Dump unverschlüsselt schreiben oder ablegen.
 - **Niemals** Kundenschlüssel und Dump in derselben Ablage sichern.
 - **Immer** vor einer Migration pro Kunde einen Dump ziehen.
+- **Immer** jeden Hintergrundlauf, der Kundendaten anfasst, über die Registry
+  fahren — eine Sitzung je Kunde, ein eigenes `try` je Kunde. Die
+  Prozess-Engine (`get_sessionmaker()`) gehört keinem Kunden; wer sie in einer
+  Schleife benutzt, arbeitet bei mehreren Kunden am falschen Schema
+  (ADR-0021 D4).
 
 ## 9 · Risiken
 

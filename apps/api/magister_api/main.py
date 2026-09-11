@@ -18,7 +18,7 @@ from magister_api import __version__
 from magister_api.audit.middleware import AuditContextMiddleware
 from magister_api.auth.csrf import CsrfMiddleware
 from magister_api.config import Settings, get_settings
-from magister_api.db import dispose_engine, get_sessionmaker, init_engine
+from magister_api.db import dispose_engine, init_engine
 from magister_api.logging_config import configure_logging
 from magister_api.modules import catalog
 from magister_api.modules.enforcement import make_module_guard
@@ -35,13 +35,63 @@ from magister_api.services.reconcile_loop import reconcile_loop
 from magister_api.tenancy.context import (
     console_refresh_loop,
     dispose_tenancy,
+    get_engines,
     get_registry,
     init_tenancy,
     refresh_from_console,
 )
+from magister_api.tenancy.keys import attach_keys, resolve_tenant_keys
 from magister_api.tenancy.middleware import make_tenant_middleware
+from magister_api.tenancy.registry import Tenant
+from magister_api.tenancy.scope import apply_tenant_scope
 
 logger = logging.getLogger(__name__)
+
+
+async def _run_seeds(settings: Settings, tenant: Tenant) -> None:
+    """Erst-Seeds für **einen** Mandanten, in dessen Schema.
+
+    Wird nur bei genau einem Mandanten aufgerufen; die Begründung steht am
+    Aufrufort im Lebenszyklus.
+    """
+    sm = get_engines().sessionmaker_for(tenant)
+    async with sm() as seed_session:
+        # Schlüssel und Scope wie im Anfragepfad: `app_settings` hat
+        # verschlüsselte Spalten, und ohne `search_path` schreiben die Seeds
+        # in das falsche Schema.
+        attach_keys(
+            seed_session,
+            resolve_tenant_keys(
+                tenant.slug,
+                fallback_audit_key=settings.audit_key.get_secret_value(),
+                fallback_audit_key_id=settings.audit_key_id,
+                fallback_secrets_key=settings.app_secrets_key(),
+                single_tenant=True,
+            ),
+        )
+        await apply_tenant_scope(seed_session, tenant, extension_schema=settings.extension_schema)
+        await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
+        # RBAC-Rollen und Standard-Rechte-Matrix (ADR-0010). Idempotent: füllt
+        # nur eine leere Installation.
+        await RbacService(seed_session).seed_defaults_if_empty()
+        app_settings_svc = AppSettingsService(seed_session, settings)
+        await app_settings_svc.seed_from_env_if_empty(settings)
+        # Das Zertifikat des Webservers materialisieren (eigenes oder
+        # selbstsigniert), damit der Reverse Proxy sein Snippet hat, bevor er
+        # (neu) startet. Ohne MAGISTER_WEB_CERT_DIR ein No-op (Entwicklung,
+        # Tests). Nicht fatal, aber LAUT: scheitert es still (etwa ein
+        # root-eigenes /certs, in das die API nicht schreiben darf), bekommt
+        # Caddy nie sein `import /certs/tls.caddy` und startet nicht.
+        try:
+            await app_settings_svc.materialize_web_tls()
+        except Exception:
+            logger.exception(
+                "Snippet für das Webserver-Zertifikat konnte nicht in %s "
+                "geschrieben werden; der Reverse Proxy startet unter Umständen "
+                "nicht, bis das behoben ist (ist das Verzeichnis für den "
+                "API-Benutzer beschreibbar?).",
+                settings.web_cert_dir,
+            )
 
 
 @asynccontextmanager
@@ -68,31 +118,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "Konsole" if settings.console_registry_url else "Umgebung",
     )
 
-    # First-run seeds. Both are idempotent and short-circuit when the
-    # respective rows are already populated.
-    sm = get_sessionmaker()
-    async with sm() as seed_session:
-        await LocalAdminService(seed_session).seed_from_env_if_empty(settings)
-        # RBAC roles + default capability matrix (ADR-0010). Idempotent: only
-        # populates an empty install, so behaviour matches the former static map.
-        await RbacService(seed_session).seed_defaults_if_empty()
-        app_settings_svc = AppSettingsService(seed_session, settings)
-        await app_settings_svc.seed_from_env_if_empty(settings)
-        # Materialize the webserver cert (custom or self-signed fallback) so the
-        # reverse proxy has a snippet to import before it (re)starts. No-op when
-        # MAGISTER_WEB_CERT_DIR is unset (dev/tests). Non-fatal, but LOUD: if this
-        # silently fails (e.g. a root-owned /certs volume the non-root API can't
-        # write), Caddy never gets its `import /certs/tls.caddy` snippet and won't
-        # start — so the failure must be visible in the API logs, not swallowed.
-        try:
-            await app_settings_svc.materialize_web_tls()
-        except Exception:
-            logger.exception(
-                "Failed to materialize webserver TLS snippet into %s; "
-                "the reverse proxy may not start until this is resolved "
-                "(check that the cert dir is writable by the API user).",
-                settings.web_cert_dir,
-            )
+    # First-run seeds. Idempotent: sie füllen nur eine leere Installation.
+    #
+    # **Im Schema des Mandanten und nicht im `public` des Prozesses**
+    # (ADR-0021 D4, dieselbe Ursache wie beim AD-Abgleich). `get_sessionmaker()`
+    # hängt an `MAGISTER_DATABASE_URL`, und dort liegen bei einer gehosteten
+    # Installation gar keine Magister-Tabellen mehr — nur die Erweiterungen.
+    # Die Seeds hätten in eine leere `public` geschrieben und den Start
+    # abgebrochen: eine frische gehostete Installation wäre nicht hochgekommen.
+    #
+    # Ab zwei Mandanten werden sie **übersprungen**. Was sie setzen, kommt dort
+    # aus der Konsole (Einstellungen und Rechte-Matrix, ADR-0017) oder aus der
+    # Bereitstellung — und ein Notkonto aus einer prozessweiten
+    # Umgebungsvariable wäre bei zwanzig Kunden zwanzigmal dasselbe Passwort.
+    if len(registry.tenants) == 1:
+        await _run_seeds(settings, registry.tenants[0])
+    else:
+        logger.info(
+            "Erst-Seeds übersprungen: %d Mandanten. Einstellungen und Rechte "
+            "kommen aus der Konsole, das Schema aus der Bereitstellung.",
+            len(registry.tenants),
+        )
 
     # Periodic AD sync (interval from app_settings, GUI-editable at runtime).
     # The recurring AD *read* must run in exactly ONE container: the single
@@ -118,7 +164,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
     if settings.run_scheduler:
         sync_task = asyncio.create_task(
-            run_ad_sync_loop(settings, sm, stop_event=stop_event),
+            run_ad_sync_loop(settings, stop_event=stop_event),
             name="ad-sync-scheduler",
         )
         logger.info("AD-sync scheduler started (this container owns the AD read loop)")
