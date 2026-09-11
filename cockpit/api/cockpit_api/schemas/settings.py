@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 
 class PlatformSettingsOut(BaseModel):
@@ -25,11 +25,19 @@ class PlatformSettingsOut(BaseModel):
 
 
 class PlatformSettingsUpdate(BaseModel):
-    """Nur Gesetztes wird geändert; `null` heisst „nicht angefasst"."""
+    """Nur Gesetztes wird geändert; `null` heisst „nicht angefasst".
+
+    `extra="forbid"`: hier stand bis ADR-0020 ein Feld `actor`. Würde ein
+    unbekanntes Feld stillschweigend ignoriert, glaubte ein alter Aufrufer,
+    sein Name sei angekommen — und im Protokoll stünde ein anderer. Ein
+    Tippfehler im Feldnamen ist aus demselben Grund besser ein 422 als ein
+    stiller Nicht-Effekt.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     defaults: dict[str, Any] | None = None
     rbac: dict[str, list[str]] | None = None
-    actor: str = Field(min_length=1, max_length=320)
 
 
 class TenantSettingsOut(BaseModel):
@@ -46,13 +54,15 @@ class TenantSettingsOut(BaseModel):
 
 
 class TenantSettingsUpdate(BaseModel):
+    #: Siehe `PlatformSettingsUpdate`: unbekannte Felder sind ein Fehler.
+    model_config = ConfigDict(extra="forbid")
+
     overrides: dict[str, Any] | None = None
     rbac: dict[str, list[str]] | None = None
     #: Setzt die eigene Rechte-Matrix zurück, sodass wieder die globale gilt.
     #: Ausdrücklich und nicht über `rbac: null` — `null` heisst „nicht
     #: angefasst", und ohne diesen Unterschied gäbe es keinen Weg zurück.
     clear_rbac: bool = False
-    actor: str = Field(min_length=1, max_length=320)
 
 
 class DesiredTemplateOut(BaseModel):

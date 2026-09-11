@@ -10,7 +10,19 @@ from cockpit_api.services.operator_access import MIN_REASON_LENGTH
 
 
 class OperatorAccessRequest(BaseModel):
-    operator: str = Field(min_length=3, max_length=320)
+    """Was der Betreiber angibt — **nicht** wer er ist.
+
+    Das Feld `operator` stand hier und ist mit ADR-0020 D3 verschwunden: der
+    Name reist signiert mit und landet im Audit des Kunden. Solange der
+    Aufrufer ihn selbst setzt, ist die Auskunft „wer hat zugesehen" eine
+    Behauptung. Er kommt jetzt aus der angemeldeten Sitzung.
+    """
+
+    #: Ein mitgeschicktes `operator` ist ein Fehler und kein stiller
+    #: Nicht-Effekt: ein alter Aufrufer glaubte sonst, sein Name sei
+    #: angekommen, und im Audit des Kunden stünde ein anderer.
+    model_config = ConfigDict(extra="forbid")
+
     #: Die Mindestlänge steht auch im Dienst — dort ist sie die Autorität
     #: (sie muss für ein CLI gelten). Hier, damit die Oberfläche den Fehler
     #: bekommt, bevor der Zugriff ausgestellt wird.

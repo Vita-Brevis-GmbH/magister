@@ -165,7 +165,7 @@ def company_tenant(cockpit_schema: str, cockpit_database_url: str) -> str:
 
 
 def _save(client: TestClient, key: str, language: str, **body: Any) -> Any:
-    payload: dict[str, Any] = {"body_html": BODY, "actor": "ops"}
+    payload: dict[str, Any] = {"body_html": BODY}
     payload.update(body)
     return client.put(f"/api/platform/templates/{key}/{language}", json=payload)
 

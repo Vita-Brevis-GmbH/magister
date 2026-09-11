@@ -167,7 +167,6 @@ def signing_key(tmp_path: Path) -> Any:
 
 def _open(client: TestClient, tenant_id: str, **over: Any) -> Any:
     body: dict[str, Any] = {
-        "operator": "matthias.hadorn@vitabrevis.ch",
         "reason": "Ticket 4711: Klassenlehrerin sieht die Klasse 4a nicht.",
     }
     body.update(over)
@@ -192,9 +191,34 @@ class TestIssuing:
         body = _open(console_client, tenant_row).json()
         payload = _decode(body["assertion"])
         assert payload["tenant"] == SLUG
-        assert payload["operator"] == "matthias.hadorn@vitabrevis.ch"
+        # Der Name kommt aus der **Sitzung** (ADR-0020 D3). Der Testclient
+        # benutzt den Bootstrap-Token, und der heisst im Protokoll so.
+        assert payload["operator"] == "bootstrap-token"
         assert "4711" in payload["reason"]
         assert payload["jti"] == body["jti"]
+
+    def test_a_name_in_the_body_is_refused(
+        self, console_client: TestClient, tenant_row: str, signing_key: Any
+    ) -> None:
+        """Der Kern von ADR-0020 D3, als Regressionsschutz.
+
+        Vorher stand der Name des Operators im Anfragekörper — wer den Token
+        hatte, schrieb jeden Namen in das Audit des Kunden, auch den des
+        Kollegen.
+
+        Und ausdrücklich **422** statt „wird ignoriert": ein alter Aufrufer
+        soll nicht glauben, sein Name sei angekommen, während im Protokoll des
+        Kunden ein anderer steht. Wer das Feld wieder einführt, bricht diesen
+        Test.
+        """
+        response = console_client.post(
+            f"/api/tenants/{tenant_row}/operator-access",
+            json={
+                "operator": "jemand.anderes@vitabrevis.ch",
+                "reason": "Ticket 4711: Klassenlehrerin sieht die Klasse 4a nicht.",
+            },
+        )
+        assert response.status_code == 422, response.text
 
     def test_it_is_signed_by_the_configured_key(
         self, console_client: TestClient, tenant_row: str, signing_key: Any

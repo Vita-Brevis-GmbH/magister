@@ -21,7 +21,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.db import get_session
 from cockpit_api.models import Tenant
 from cockpit_api.models.settings import TenantSettings
@@ -36,13 +36,22 @@ from cockpit_api.services.settings import SettingsError, SettingsService
 
 logger = logging.getLogger(__name__)
 
+# Am Router ein **Boden** (`require_identity`), an den schreibenden Routen eine
+# **Erhöhung** (`require_person`, ADR-0020 D4). Der erste Entwurf nahm den
+# Boden weg und setzte die Erhöhung nur an die zwei PUTs — damit waren die
+# GET-Flächen unauthentisiert, darunter der Soll-Zustand, den die Datenebene
+# abholt. Ein Boden am Router ist keine Redundanz, sondern der Unterschied
+# zwischen „vergessen" und „offen".
+#
+# Warum der Soll-Zustand keine Person verlangt: die Datenebene holt ihn mit
+# einem Dienst-Token, und sie ist keine.
 platform = APIRouter(
-    prefix="/platform", tags=["settings"], dependencies=[Depends(require_bootstrap_token)]
+    prefix="/platform", tags=["settings"], dependencies=[Depends(require_identity)]
 )
 tenant_scoped = APIRouter(
     prefix="/tenants/{tenant_id}",
     tags=["settings"],
-    dependencies=[Depends(require_bootstrap_token)],
+    dependencies=[Depends(require_identity)],
 )
 
 
@@ -88,15 +97,16 @@ async def get_platform_settings(
 @platform.put("/settings", response_model=PlatformSettingsOut)
 async def put_platform_settings(
     body: PlatformSettingsUpdate,
+    caller: Caller = Depends(require_person),
     session: AsyncSession = Depends(get_session),
 ) -> PlatformSettingsOut:
     svc = SettingsService(session)
     try:
-        row = await svc.set_platform(defaults=body.defaults, rbac=body.rbac, actor=body.actor)
+        row = await svc.set_platform(defaults=body.defaults, rbac=body.rbac, actor=caller.actor)
     except SettingsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     await session.commit()
-    logger.info("Plattform-Vorgaben geändert von %s", body.actor)
+    logger.info("Plattform-Vorgaben geändert von %s", caller.actor)
     return PlatformSettingsOut.model_validate(row)
 
 
@@ -114,6 +124,7 @@ async def get_tenant_settings(
 async def put_tenant_settings(
     tenant_id: UUID,
     body: TenantSettingsUpdate,
+    caller: Caller = Depends(require_person),
     session: AsyncSession = Depends(get_session),
 ) -> TenantSettingsOut:
     tenant = await _known_tenant(session, tenant_id)
@@ -124,14 +135,14 @@ async def put_tenant_settings(
             overrides=body.overrides,
             rbac=body.rbac,
             clear_rbac=body.clear_rbac,
-            actor=body.actor,
+            actor=caller.actor,
         )
     except SettingsError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     await session.commit()
     # Der Name des Kunden im Protokoll, nicht nur die Id: wer den Log liest,
     # soll nicht erst eine Tabelle befragen müssen.
-    logger.info("Einstellungen von %s geändert von %s", tenant.slug, body.actor)
+    logger.info("Einstellungen von %s geändert von %s", tenant.slug, caller.actor)
     return _tenant_out(row, tenant_id)
 
 

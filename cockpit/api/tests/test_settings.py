@@ -190,11 +190,15 @@ class TestPlatformDefaults:
         response = _put(
             console_client,
             "/api/platform/settings",
-            {"defaults": {"ad_sync_interval_minutes": 60}, "actor": "ops@vitabrevis.ch"},
+            {"defaults": {"ad_sync_interval_minutes": 60}},
         )
         assert response.status_code == 200, response.text
         assert response.json()["defaults"] == {"ad_sync_interval_minutes": 60}
-        assert response.json()["updated_by"] == "ops@vitabrevis.ch"
+        # `bootstrap-token` und nicht „ops@vitabrevis.ch": seit ADR-0020 D3
+        # kommt der Name aus der **Sitzung** und nicht aus dem Anfragekörper.
+        # Der Testclient benutzt den Bootstrap-Token, und der heisst im
+        # Protokoll so, damit er auffällt.
+        assert response.json()["updated_by"] == "bootstrap-token"
 
     def test_a_secret_is_refused_with_422(
         self, console_client: TestClient, cockpit_schema: str
@@ -202,7 +206,7 @@ class TestPlatformDefaults:
         response = _put(
             console_client,
             "/api/platform/settings",
-            {"defaults": {"ad_bind_password": "hunter2"}, "actor": "ops"},
+            {"defaults": {"ad_bind_password": "hunter2"}},
         )
         assert response.status_code == 422
         # Die Meldung muss sagen, wohin es stattdessen gehört.
@@ -233,13 +237,12 @@ class TestTenantOverrides:
             "/api/platform/settings",
             {
                 "defaults": {"ad_sync_interval_minutes": 60, "instance_profile": "school"},
-                "actor": "ops",
             },
         )
         _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"overrides": {"ad_sync_interval_minutes": 15}, "actor": "ops"},
+            {"overrides": {"ad_sync_interval_minutes": 15}},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
         assert state["settings"] == {
@@ -254,7 +257,7 @@ class TestTenantOverrides:
         _put(
             console_client,
             "/api/platform/settings",
-            {"rbac": {"kl": ["user.read"]}, "actor": "ops"},
+            {"rbac": {"kl": ["user.read"]}},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
         assert state["rbac"] == {"kl": ["user.read"]}
@@ -263,7 +266,7 @@ class TestTenantOverrides:
         _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"rbac": {"kl": ["user.read", "class.read"]}, "actor": "ops"},
+            {"rbac": {"kl": ["user.read", "class.read"]}},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
         assert state["rbac"] == {"kl": ["user.read", "class.read"]}
@@ -278,13 +281,11 @@ class TestTenantOverrides:
         liesse sich eine eigene Matrix nie wieder aufgeben — und niemand
         merkt es, bis jemand es versucht.
         """
-        _put(
-            console_client, "/api/platform/settings", {"rbac": {"kl": ["user.read"]}, "actor": "o"}
-        )
+        _put(console_client, "/api/platform/settings", {"rbac": {"kl": ["user.read"]}})
         _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"rbac": {"kl": []}, "actor": "o"},
+            {"rbac": {"kl": []}},
         )
         assert (
             console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()["rbac_source"]
@@ -293,7 +294,7 @@ class TestTenantOverrides:
         _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"clear_rbac": True, "actor": "o"},
+            {"clear_rbac": True},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
         assert state["rbac_source"] == "platform"
@@ -307,13 +308,11 @@ class TestTenantOverrides:
         Der Unterschied steht in der Migration als `nullable=True` und muss
         über die ganze Kette halten, sonst ist er Zierrat.
         """
-        _put(
-            console_client, "/api/platform/settings", {"rbac": {"kl": ["user.read"]}, "actor": "o"}
-        )
+        _put(console_client, "/api/platform/settings", {"rbac": {"kl": ["user.read"]}})
         _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"rbac": {}, "actor": "o"},
+            {"rbac": {}},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
         assert state["rbac"] == {}
@@ -325,6 +324,6 @@ class TestTenantOverrides:
         response = _put(
             console_client,
             f"/api/tenants/{tenant_row}/settings",
-            {"overrides": {"oidc_client_secret": "x"}, "actor": "ops"},
+            {"overrides": {"oidc_client_secret": "x"}},
         )
         assert response.status_code == 422

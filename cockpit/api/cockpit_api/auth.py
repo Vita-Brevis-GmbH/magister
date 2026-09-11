@@ -84,7 +84,10 @@ async def _token_caller(token: str, session: AsyncSession) -> Caller | None:
     if row is None or row.revoked or row.expires_at < datetime.now(UTC):
         return None
     row.last_used_at = datetime.now(UTC)
-    return Caller(kind=CallerKind.service, actor=f"service:{row.name}")
+    # `description` und nicht `name`: die Spalte heisst so, und ein `row.name`
+    # wäre erst beim ersten Dienst-Aufruf aufgefallen — mit einem
+    # AttributeError statt einer Antwort.
+    return Caller(kind=CallerKind.service, actor=f"service:{row.description}")
 
 
 async def require_identity(

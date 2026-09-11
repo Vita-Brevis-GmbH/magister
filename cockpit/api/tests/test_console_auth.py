@@ -353,3 +353,51 @@ class TestTheTotpPolicyMatchesTheDataPlane:
         assert theirs["DRIFT_STEPS"] == totp.DRIFT_STEPS
         assert theirs["RECOVERY_CODE_COUNT"] == totp.RECOVERY_CODE_COUNT
         assert theirs["_RECOVERY_ALPHABET"] == totp._RECOVERY_ALPHABET
+
+
+class TestOnlyAPersonWritesToACustomerLog:
+    """ADR-0020 D4 — ein Dienst-Token kommt an die drei Flächen nicht.
+
+    Was einen Namen in das Protokoll eines Kunden schreibt, soll nicht von
+    einem Token ausgehen, das in einem Container liegt und keinen Menschen
+    kennt. Der Runner holt Update-Aufträge ab und braucht keine davon.
+    """
+
+    @pytest.fixture
+    def service_token(self, console_client: TestClient, cockpit_schema: str) -> Iterator[str]:
+        created = console_client.post(
+            "/api/service-tokens",
+            json={"description": "runner-test", "ttl_days": 1},
+        )
+        assert created.status_code in (200, 201), created.text
+        token = created.json()["token"]
+        yield token
+
+    def _as_service(self, client: TestClient, token: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {token}"}
+
+    def test_settings_refuse_a_service_token(
+        self, console_client: TestClient, service_token: str
+    ) -> None:
+        response = console_client.put(
+            "/api/platform/settings",
+            json={"defaults": {"ad_sync_interval_minutes": 60}},
+            headers=self._as_service(console_client, service_token),
+        )
+        assert response.status_code == 403
+        assert "Person" in response.json()["detail"]
+
+    def test_reading_still_works_for_a_service_token(
+        self, console_client: TestClient, service_token: str
+    ) -> None:
+        """Die Gegenprobe: der Boden am Router lässt Dienste lesen.
+
+        Die Datenebene holt den Soll-Zustand mit genau so einem Token ab. Wäre
+        `require_person` am Router statt an den Schreibrouten, stünde sie
+        draussen.
+        """
+        response = console_client.get(
+            "/api/platform/settings",
+            headers=self._as_service(console_client, service_token),
+        )
+        assert response.status_code == 200, response.text

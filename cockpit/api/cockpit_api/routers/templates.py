@@ -15,7 +15,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.db import get_session
 from cockpit_api.models.template import PlatformTemplate
 from cockpit_api.schemas.templates import (
@@ -32,10 +32,11 @@ from cockpit_api.services.templates import (
 
 logger = logging.getLogger(__name__)
 
+# Boden am Router, Erhöhung an den schreibenden Routen (ADR-0020 D4).
 router = APIRouter(
     prefix="/platform/templates",
     tags=["templates"],
-    dependencies=[Depends(require_bootstrap_token)],
+    dependencies=[Depends(require_identity)],
 )
 
 
@@ -62,6 +63,7 @@ async def put_template(
     key: str,
     language: str,
     body: PlatformTemplateSave,
+    caller: Caller = Depends(require_person),
     session: AsyncSession = Depends(get_session),
 ) -> PlatformTemplateOut:
     svc = TemplateService(session)
@@ -76,7 +78,7 @@ async def put_template(
             audience_profile=body.audience_profile,
             tenant_ids=body.tenant_ids,
             is_active=body.is_active,
-            actor=body.actor,
+            actor=caller.actor,
         )
     except TemplateError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
@@ -86,7 +88,7 @@ async def put_template(
         "Globale Vorlage %s/%s gespeichert von %s (Fassung %d, %s)",
         key,
         language,
-        body.actor,
+        caller.actor,
         row.version,
         "gesperrt" if not row.may_override else "überschreibbar",
     )
@@ -97,6 +99,7 @@ async def put_template(
 async def delete_template(
     key: str,
     language: str,
+    caller: Caller = Depends(require_person),
     session: AsyncSession = Depends(get_session),
 ) -> None:
     """Die Vorlage ganz entfernen.

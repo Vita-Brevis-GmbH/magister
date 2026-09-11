@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.models import Tenant
@@ -28,10 +28,13 @@ from cockpit_api.services.operator_access import OperatorAccessError, OperatorAc
 
 logger = logging.getLogger(__name__)
 
+# Boden am Router, Erhöhung beim Ausstellen (ADR-0020 D4). Der Name des
+# Operators reist signiert mit und landet im Audit des Kunden — er kommt
+# deshalb aus der Sitzung und nicht aus dem Anfragekörper.
 router = APIRouter(
     prefix="/tenants/{tenant_id}",
     tags=["operator-access"],
-    dependencies=[Depends(require_bootstrap_token)],
+    dependencies=[Depends(require_identity)],
 )
 
 
@@ -46,6 +49,7 @@ async def _known_tenant(session: AsyncSession, tenant_id: UUID) -> Tenant:
 async def open_operator_access(
     tenant_id: UUID,
     body: OperatorAccessRequest,
+    caller: Caller = Depends(require_person),
     session: AsyncSession = Depends(get_session),
 ) -> OperatorAccessOut:
     tenant = await _known_tenant(session, tenant_id)
@@ -53,7 +57,7 @@ async def open_operator_access(
     try:
         assertion, grant = await svc.issue(
             tenant,
-            operator=body.operator,
+            operator=caller.actor,
             reason=body.reason,
             ticket=body.ticket,
             signing_key_path=settings.operator_signing_key,
@@ -65,7 +69,7 @@ async def open_operator_access(
     logger.info(
         "Operator-Zugriff auf %s ausgestellt für %s (Ticket %s): %s",
         tenant.slug,
-        body.operator,
+        caller.actor,
         grant.ticket or "—",
         grant.reason,
     )

@@ -32,6 +32,10 @@ class PlatformTemplateOut(BaseModel):
 
 
 class PlatformTemplateSave(BaseModel):
+    #: Unbekannte Felder sind ein Fehler (siehe ADR-0020 D3):
+    #: `actor` stand hier und ist weg.
+    model_config = ConfigDict(extra="forbid")
+
     subject: str | None = Field(default=None, max_length=512)
     body_html: str
     may_override: bool = True
@@ -42,7 +46,6 @@ class PlatformTemplateSave(BaseModel):
     #: ohne ihn gäbe es keinen Weg zurück.
     tenant_ids: list[UUID] | None = None
     is_active: bool = True
-    actor: str = Field(min_length=1, max_length=320)
 
 
 class PlatformTemplateListOut(BaseModel):
