@@ -241,6 +241,18 @@ class TestThePlanMatchesTheRealSchema:
             + " — eintragen und dabei entscheiden, ob sie Kundendaten enthalten."
         )
 
+    async def test_the_operator_log_goes_out_without_the_session_fragment(self) -> None:
+        """Der Zugriffs-Nachweis gehört dem Kunden — das Zugangsmittel nicht.
+
+        `session_ref` sind die ersten Zeichen einer Session-Id. Allein
+        unbrauchbar, und trotzdem nichts, was in eine Datei gehört, die der
+        Kunde weitergibt.
+        """
+        (entry,) = [e for e in EXPORT_TABLES if e.table == "operator_accesses"]
+        assert "reason" in entry.columns
+        assert "operator_upn" in entry.columns
+        assert "session_ref" not in entry.columns
+
     async def test_no_exported_column_is_forbidden(self) -> None:
         offenders = [
             f"{entry.table}.{column}"

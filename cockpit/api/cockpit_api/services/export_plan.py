@@ -361,6 +361,27 @@ EXPORT_TABLES: tuple[ExportTable, ...] = (
         ),
     ),
     ExportTable(
+        table="operator_accesses",
+        columns=(
+            "jti",
+            "operator_upn",
+            "reason",
+            "ticket",
+            "started_at",
+            "expires_at",
+            "ended_at",
+            "ip",
+        ),
+        description=(
+            "Zugriffe von Vita Brevis auf diese Installation (ADR-0019): wer, wann, "
+            "wie lange und warum. Sie stehen im Export, weil sie dem Kunden gehören — "
+            "es ist sein Protokoll darüber, wer von aussen zugesehen hat. "
+            "`session_ref` ist absichtlich NICHT dabei: das ist der Anfang einer "
+            "Session-Id und damit ein Stück Zugangsmittel."
+        ),
+        order_by="started_at",
+    ),
+    ExportTable(
         table="platform_document_templates",
         columns=("id", "key", "language", "subject", "may_override", "version", "delivered_at"),
         description=(
