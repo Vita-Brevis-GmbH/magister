@@ -21,7 +21,7 @@ import { Tenants } from "./routes/Tenants";
  * wenn der Tab zugeht, und überlebt kein Wochenende auf einem Bildschirm im
  * Büro. Im Protokoll heisst er `bootstrap-token` und nicht wie eine Person.
  */
-function BootstrapTokenBox() {
+function BootstrapTokenBox({ onSet }: { onSet: (token: string) => void }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(sessionStorage.getItem("cockpit_token") ?? "");
@@ -46,6 +46,12 @@ function BootstrapTokenBox() {
         e.preventDefault();
         sessionStorage.setItem("cockpit_token", value);
         setSaved(true);
+        // `onSet` und nicht nur `invalidateQueries`: der Abruf liefert
+        // dieselbe Antwort wie vorher („unbekanntes Zertifikat"), React Query
+        // sieht unveraenderte Daten, und ohne Zustandsaenderung baut App sich
+        // nicht neu auf. Gemessen: der Token war gesetzt, und die
+        // Anmeldemaske blieb stehen.
+        onSet(value);
         void qc.invalidateQueries();
       }}
     >
@@ -80,7 +86,15 @@ function NavLink({ to, label, active }: { to: string; label: string; active: boo
 }
 
 /** Wer angemeldet ist — und der Weg heraus. */
-function Identity({ upn, name }: { upn: string | null; name: string | null }) {
+function Identity({
+  upn,
+  name,
+  onLoggedOut,
+}: {
+  upn: string | null;
+  name: string | null;
+  onLoggedOut: () => void;
+}) {
   const qc = useQueryClient();
   const logoutM = useMutation({
     mutationFn: logout,
@@ -88,7 +102,13 @@ function Identity({ upn, name }: { upn: string | null; name: string | null }) {
     // die Antworten weg sein und nicht neu geholt werden. Sonst stünden die
     // Kundendaten der letzten Ansicht noch im Speicher des Browsers, während
     // die Anmeldemaske darüber liegt.
-    onSettled: () => qc.resetQueries(),
+    onSettled: () => {
+      // Auch den Notzugang wegwerfen: „Abmelden" soll draussen heissen. Ein
+      // liegengebliebener Token haette die Anwendung gleich wieder geoeffnet
+      // — unter dem Namen `bootstrap-token`.
+      onLoggedOut();
+      return qc.resetQueries();
+    },
   });
 
   return (
@@ -115,11 +135,20 @@ export function App() {
   // Versuch macht die Anmeldemaske nur langsamer.
   const whoQ = useQuery({ queryKey: ["whoami"], queryFn: whoami, retry: false });
 
+  // Der Notzugang: ein gesetzter Token trägt auch ohne Sitzung. Als Zustand
+  // und nicht als Blick in den `sessionStorage` beim Zeichnen — sonst merkt
+  // die Ansicht nicht, dass gerade einer gesetzt wurde.
+  const [token, setToken] = useState(() => sessionStorage.getItem("cockpit_token") ?? "");
+
+  function forgetToken(): void {
+    sessionStorage.removeItem("cockpit_token");
+    setToken("");
+  }
+
   const who = whoQ.data;
   const signedIn = who?.stage === "authenticated";
-  // Der Notzugang: ein gesetzter Token trägt auch ohne Sitzung. Getrennt
-  // ausgewiesen, damit niemand ihn für eine Anmeldung hält.
-  const viaToken = !signedIn && Boolean(sessionStorage.getItem("cockpit_token"));
+  // Getrennt ausgewiesen, damit niemand den Notzugang für eine Anmeldung hält.
+  const viaToken = !signedIn && token !== "";
 
   if (whoQ.isPending) {
     return <p className="p-6 text-sm text-slate-500">Einen Moment…</p>;
@@ -132,7 +161,7 @@ export function App() {
           who={who ?? { stage: "unknown_certificate", upn: null, name: null, expires_at: null }}
         />
         <div className="mx-auto max-w-xl px-6 pb-6">
-          <BootstrapTokenBox />
+          <BootstrapTokenBox onSet={setToken} />
         </div>
       </div>
     );
@@ -161,15 +190,35 @@ export function App() {
             />
           </nav>
         </div>
-        {signedIn && who ? <Identity upn={who.upn} name={who.name} /> : <BootstrapTokenBox />}
+        {signedIn && who ? (
+          <Identity upn={who.upn} name={who.name} onLoggedOut={forgetToken} />
+        ) : (
+          <BootstrapTokenBox onSet={setToken} />
+        )}
       </header>
 
       {viaToken && (
-        <p className="mb-4 rounded border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Notzugang mit Bootstrap-Token. Was jetzt geschieht, steht im Protokoll des
-          Kunden als <code className="font-mono">bootstrap-token</code> — ohne Namen.
-          Für die tägliche Arbeit ist das der falsche Weg.
-        </p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-amber-400 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p>
+            Notzugang mit Bootstrap-Token. Was jetzt geschieht, steht im Protokoll des
+            Kunden als <code className="font-mono">bootstrap-token</code> — ohne Namen.
+            Für die tägliche Arbeit ist das der falsche Weg.
+          </p>
+          {/*
+            Der Weg zurück zur Anmeldemaske. Ohne ihn gibt es keinen: ein
+            gesetzter Token trägt die Anwendung, und die Maske erscheint erst
+            wieder, wenn der Tab zugeht. Wer auf einer frischen Konsole den
+            Token setzt und dann seinen zweiten Faktor einrichten will, sass
+            sonst fest.
+          */}
+          <button
+            type="button"
+            onClick={forgetToken}
+            className="shrink-0 rounded border border-amber-500 px-2 py-1 text-xs"
+          >
+            Notzugang beenden und anmelden
+          </button>
+        </div>
       )}
 
       {route.view === "tenants" && <Tenants />}
