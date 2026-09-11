@@ -10,9 +10,10 @@
 > (Systemeinstellungen und Rechte in der Konsole) und
 > [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen) und
 > [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff) und
-> [ADR-0020](../adr/0020-konsolen-anmeldung.md) (Konsolen-Anmeldung).
-> Status (2026-09-11): **Phasen 0, 1, 2, 2a, 2b, 3, 4, 5 und 5a stehen.**
-> Offen ist Phase 6. Entscheid E21 (Konsolen-Anmeldung über Entra ID) ist
+> [ADR-0020](../adr/0020-konsolen-anmeldung.md) (Konsolen-Anmeldung) und
+> [ADR-0021](../adr/0021-betrieb-im-grossen.md) (Betrieb im Grossen).
+> Status (2026-09-11): **alle Phasen stehen** — 0, 1, 2, 2a, 2b, 3, 4, 5, 5a
+> und 6. Entscheid E21 (Konsolen-Anmeldung über Entra ID) ist
 > **gegenstandslos** — ADR-0020 entscheidet anders.
 > Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
 
@@ -753,16 +754,79 @@ dieselbe Stelle im Code, ein anderer Faktor.
    Repository und nirgends sonst. Beim Prüfen der Anmeldung aufgefallen,
    nicht beim Lesen des Caddyfiles.
 
-### Phase 6 — Betrieb im Grossen
+### Phase 6 — Betrieb im Grossen ✅
 
-- Migrations-Wellen mit Kanarienvogel und Versions-Schranke.
-- Lastgrenzen pro Kunde (Verbindungen, `statement_timeout`, gleichzeitige
-  Aufträge, Anfragen pro Minute).
-- AD-Sync-Fan-out pro Kunde, versetzt, mit isoliertem Fehlerverhalten.
-- Umzug eines Kunden auf eine eigene Datenbank oder einen eigenen Cluster
-  (nutzt den Restore-Weg aus Phase 2b).
-- Connector-Flotte betreiben: Agent-Versionen, Zertifikatsablauf,
-  Erneuerungsfehler und stehende Agenten überwachen und alarmieren.
+Referenz: **[ADR-0021](../adr/0021-betrieb-im-grossen.md)** (2026-09-11).
+Betriebsanleitung: **[betrieb-im-grossen.md](../runbooks/betrieb-im-grossen.md)**.
+
+- ✅ **Migrations-Welle mit Kanarienvogel**, auf dem Anwendungsserver:
+  `magister-cli tenants migrate --wave` nimmt die Kunden in fester Reihenfolge,
+  hält nach dem ersten an und geht erst weiter, wenn jemand freigibt. Der
+  Kanarienvogel ist ein **Halt**, keine Wartezeit — eine Minute Pause prüft
+  nichts.
+- ✅ **Vor jeder Migration ein Dump, und der ist verschlüsselt** (D1): zwei
+  Prozesse über eine Pipe (`pg_dump | age -r …`), nie eine Klartextdatei
+  dazwischen. Ohne hinterlegten Empfänger (`MAGISTER_BACKUP_AGE_RECIPIENT`
+  oder `--recipient`) läuft die Welle **nicht** an. Gefunden beim Nachlesen
+  des Runbooks: der Weg, den es Betreibern vorschrieb, schrieb den Dump
+  unverschlüsselt auf die Platte.
+- ✅ **Das kundensichtbare Rollout-Ereignis schreibt die Datenebene** (D2) —
+  die Konsole hat den Kundenschlüssel nicht (ADR-0016 D8) und könnte es gar
+  nicht. Dieselbe Stelle meldet den **echten** Kopfstand aus
+  `alembic_version` an die Konsole zurück
+  (`POST /api/tenants/{id}/schema-version`). Vorher trug `tenants.schema_version`
+  die **Erwartung** aus `COCKPIT_EXPECTED_SCHEMA_VERSION` — und die
+  Versions-Schranke fährt darauf.
+- ✅ **Lastgrenzen an der Mandantenrolle** (D3): `statement_timeout`,
+  `idle_in_transaction_session_timeout` und `CONNECTION LIMIT` per
+  `ALTER ROLE`, gesetzt beim Bereitstellen und änderbar in der Konsole
+  (Begründung pflichtig). Sie greifen dort, wo die Last entsteht — auch bei
+  einem Hintergrundlauf, der durch keine Middleware geht. Dazu eine
+  **Obergrenze gleichzeitiger Anfragen** pro Kunde in der Auflösungs-Middleware
+  (503 mit `Retry-After`), damit ein Kunde nicht den Verbindungspool der
+  anderen aufbraucht. Keine Anfragen pro Minute: ein Zähler, der 60 schnelle
+  Anfragen durchlässt und die 61. langsame abweist, misst das Falsche.
+- ✅ **AD-Sync-Fan-out pro Kunde** (D4): eine Schleife über die Registry mit
+  deterministischem Versatz, jeder Kunde in eigener Sitzung und eigenem
+  `try` — ein Kunde mit unerreichbarem AD hält die anderen nicht auf, und der
+  Fahrplan rückt auch nach einem Fehler weiter. Vorher lief der Sync auf der
+  Prozess-Engine und bediente stumm nur einen Mandanten.
+- ✅ **Umzug auf eigene Datenbank oder Cluster** (D5) bleibt ein Runbook mit
+  Sichern, Einspielen, Prüfen, Umstellen. Neu ist genau **ein** Können:
+  `POST /api/tenants/{id}/relocate` stellt `dsn_ref` und `isolation_mode` um —
+  nur bei gesperrtem Kunden, und der gemeldete Schemastand wird dabei
+  gelöscht. Ein Assistent, der den ganzen Umzug „macht“, wäre der Knopf, der
+  ein halb umgezogenes Schema hinterlässt.
+- ✅ **Connector-Flotte überwacht statt angezeigt** (D6):
+  `cockpit_api.services.fleet` rechnet Befunde (abgelaufene und nicht
+  erneuerte Zertifikate, stille Agenten, zurückhängende Versionen, aktive
+  Kunden ganz ohne Agent), `python -m cockpit_api.cli.fleet_check` gibt sie
+  mit Exit-Code 0/1/2 an die bestehende Überwachung, und die Konsole zeigt
+  dieselbe Liste unter „Flotte“. Kein SMTP in Magister: die zweite
+  Alarmierung neben der vorhandenen ist die, die niemand liest.
+- ✅ **Abnahme, live geprüft:** Grenzen über die Konsolen-Oberfläche gesetzt
+  und in `pg_roles` gegengelesen (`rolconnlimit 60`,
+  `statement_timeout=15000ms`); Umzug über die Oberfläche bei gesperrtem
+  Kunden auf `isolation_mode=cluster` umgestellt; die Flotte mit vier gesäten
+  Befunden gezeigt (2 kritisch, 2 Warnungen, `worst` 2).
+
+**Was der Plan nicht vorsah:**
+
+1. **Die Welle kann nicht in der Konsole laufen** (D1). Der Plan las sich, als
+   drücke ein Operator dort einen Knopf. Die Konsole hat aber keine
+   Kunden-DSNs — sie hält nur Verweise (ADR-0013 D4) —, und als
+   Verwaltungsrolle zu migrieren macht die Tabellen der Verwaltungsrolle
+   gehörend: der nächste Zugriff der Kundenrolle endet in
+   `permission denied for table`. Die Welle läuft dort, wo die Geheimnisse
+   ohnehin liegen.
+2. **Die Startup-Seeds liefen nur für einen Mandanten.** Beim Bauen des
+   AD-Fan-outs am selben Muster aufgefallen: die Seeds hingen an der
+   Prozess-Engine. Eine frische gehostete Installation mit zwei Kunden wäre
+   damit gar nicht erst hochgekommen.
+3. **Ein Rückkanal von der Datenebene in die Konsole** (D2). Nicht geplant,
+   aber ohne ihn bleibt jede Aussage der Konsole über den Schemastand eine
+   Erwartung — und die Versions-Schranke hätte einen Kunden weiter bedient,
+   dessen Schema nicht dort ist, wo die Konsole es glaubt.
 
 ## 8 · Neue harte Regeln (Ergänzung zu CLAUDE.md)
 
