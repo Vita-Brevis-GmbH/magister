@@ -43,8 +43,9 @@ from sqlalchemy.engine import make_url
 from magister_api.cli._migration_record import read_head, record_migration
 from magister_api.cli._pipe import PipeError, Stage, run_pipe
 from magister_api.config import Settings, get_settings
+from magister_api.tenancy.console_registry import fetch_registry
 from magister_api.tenancy.context import build_registry
-from magister_api.tenancy.registry import Tenant, TenantConfigError
+from magister_api.tenancy.registry import Tenant, TenantConfigError, TenantRegistry
 from magister_api.tenancy.version import HEAD_REVISION
 
 API_DIR = Path(__file__).resolve().parents[2]
@@ -241,8 +242,39 @@ def migrate_tenant(tenant: Tenant, *, extension_schema: str) -> StepResult:
     return StepResult(tenant.slug, "migrate", True, f"{len(applied)} Migration(en)")
 
 
+def load_registry(settings: Settings | None = None) -> TenantRegistry:
+    """Die Registry so bestimmen, wie der Anfragepfad sie sieht.
+
+    **Warum nicht einfach `build_registry()`:** das liest nur die Umgebung
+    (`MAGISTER_TENANTS`, sonst ein Mandant aus `MAGISTER_DATABASE_URL`). Im
+    gehosteten Betrieb steht die Wahrheit aber in der Konsole, und die
+    Datenebene holt sie sich beim Start (`refresh_from_console`). Ohne diesen
+    Abruf sähe dieses Werkzeug genau **einen** erfundenen Mandanten
+    („default", Schema `public`) — und `migrate --wave`, also der Ablauf, den
+    ADR-0021 D1 ausdrücklich hierher legt, hätte die zwanzig echten Kunden
+    nicht angefasst und stattdessen das Schema des Anwendungsservers
+    migriert. Gemessen beim Aufbau der Entwicklungsumgebung.
+
+    Scheitert der Abruf, bricht der Befehl **ab**. Das ist der Unterschied
+    zum laufenden Betrieb: dort gilt der letzte gute Stand weiter (ADR-0013
+    D4), weil Bedienen wichtiger ist als Aktualität. Hier wäre der letzte
+    gute Stand eine Liste, von der niemand weiss, wie alt sie ist — und der
+    nächste Schritt schreibt in Kundenschemas.
+    """
+    s = settings or get_settings()
+    if not s.console_registry_url:
+        return build_registry(s)
+    return asyncio.run(
+        fetch_registry(
+            s.console_registry_url,
+            token=s.console_registry_token.get_secret_value(),
+            management_marker=s.console_management_marker.get_secret_value(),
+        )
+    )
+
+
 def cmd_list(args: argparse.Namespace) -> int:
-    registry = build_registry()
+    registry = load_registry()
     _out(f"{len(registry.tenants)} Mandant(en), Code-Kopf {HEAD_REVISION}")
     for t in registry.tenants:
         host = t.hostname or "(jeder Hostname)"
@@ -258,7 +290,7 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 def cmd_migrate(args: argparse.Namespace) -> int:
     settings = get_settings()
-    registry = build_registry(settings)
+    registry = load_registry(settings)
     tenants = list(registry.tenants)
     if args.only:
         tenants = [t for t in tenants if t.slug in set(args.only)]
