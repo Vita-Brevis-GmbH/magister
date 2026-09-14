@@ -483,3 +483,110 @@ class TestProvisioning:
 
         again = db_client.post(f"/api/tenants/{tenant_id}/provisioning/resume")
         assert again.status_code == 409, "ein fertiger Auftrag wird nicht erneut gefahren"
+
+
+async def _role_exists(conn: object, name: str) -> bool:
+    """Ob es diese Rolle gibt — vor REVOKE, das sonst über eine fehlende stolpert."""
+    from sqlalchemy.ext.asyncio import AsyncConnection
+
+    assert isinstance(conn, AsyncConnection)
+    found = (
+        await conn.execute(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": name})
+    ).scalar()
+    return bool(found)
+
+
+@pytest.mark.usefixtures("cockpit_schema")
+class TestProvisioningOhneSuperuser:
+    """Bereitstellung mit der Rolle, die das Runbook verlangt.
+
+    Alle anderen Tests hier laufen mit dem Verwaltungszugang aus der CI — und
+    der ist Superuser. Ein Superuser darf SET ROLE auf jede Rolle, und genau
+    das verdeckte einen Fehler, der in Produktion sofort zuschlägt: seit
+    Postgres 16 bekommt eine CREATEROLE-Rolle die selbst angelegten Rollen
+    nur mit ADMIN, nicht mit SET. ``CREATE SCHEMA ... AUTHORIZATION r_x``
+    scheitert dann mit ``must be able to SET ROLE "r_x"`` — der Kunde hat
+    eine Rolle, aber kein Schema, und steht auf ``provisioning``.
+
+    Gemessen auf Postgres 16.15 beim Aufbau einer Entwicklungsmaschine: beide
+    Kunden blieben genau so stehen. Dieser Test legt dafür eigens eine Rolle
+    ohne Superuser an, damit die Zusage „CREATEROLE und CREATE genügen" auch
+    geprüft ist und nicht nur dasteht.
+    """
+
+    def test_a_createrole_admin_without_superuser_can_provision(
+        self, magister_admin_dsn: str
+    ) -> None:
+        import asyncio
+
+        asyncio.run(self._run(magister_admin_dsn))
+
+    @staticmethod
+    async def _run(magister_admin_dsn: str) -> None:
+        from cockpit_api.models.tenant import Tenant, TenantStatus
+        from cockpit_api.services.provisioning import TenantProvisioner
+
+        url = make_url(magister_admin_dsn)
+        database = url.database or "postgres"
+        # Wegwerf-Zugang in einer Wegwerf-Datenbank; er lebt nur in diesem Test.
+        kennwort = "p_setrole"
+        plain = url.set(username="p_setrole", password=kennwort).render_as_string(
+            hide_password=False
+        )
+        superuser = create_async_engine(magister_admin_dsn, pool_size=1, max_overflow=0)
+        tenant = Tenant(
+            slug="setrole",
+            name="SET ROLE",
+            hostname="setrole.magister.test",
+            schema_name="t_setrole",
+            db_role="r_setrole",
+            dsn_ref="tenant_setrole",
+            status=TenantStatus.provisioning,
+            statement_timeout_ms=30_000,
+            idle_in_transaction_ms=60_000,
+            connection_limit=40,
+        )
+
+        async def aufraeumen() -> None:
+            async with superuser.begin() as conn:
+                await conn.exec_driver_sql('DROP SCHEMA IF EXISTS "t_setrole" CASCADE')
+                await conn.exec_driver_sql(
+                    f'REVOKE ALL ON DATABASE "{database}" FROM "p_setrole"'
+                    if await _role_exists(conn, "p_setrole")
+                    else "SELECT 1"
+                )
+                for role in ("r_setrole", "p_setrole"):
+                    await conn.exec_driver_sql(f'DROP ROLE IF EXISTS "{role}"')
+
+        try:
+            await aufraeumen()
+            async with superuser.begin() as conn:
+                await conn.exec_driver_sql(
+                    f"CREATE ROLE \"p_setrole\" LOGIN PASSWORD '{kennwort}' CREATEROLE"
+                )
+                await conn.exec_driver_sql(f'GRANT CREATE ON DATABASE "{database}" TO "p_setrole"')
+
+            admin = create_async_engine(plain, pool_size=1, max_overflow=0)
+            try:
+                provisioner = TenantProvisioner(admin)
+                await provisioner.create_role(tenant)
+                await provisioner.create_schema(tenant)
+            finally:
+                await admin.dispose()
+
+            async with superuser.connect() as conn:
+                owner = (
+                    await conn.execute(
+                        text(
+                            "SELECT pg_get_userbyid(nspowner) FROM pg_namespace "
+                            "WHERE nspname = 't_setrole'"
+                        )
+                    )
+                ).scalar()
+            # Das Schema muss der Mandantenrolle gehören, nicht dem
+            # Administrator: sonst gehören später die Tabellen ihm, und der
+            # Kunde bekommt beim ersten Zugriff „permission denied".
+            assert owner == "r_setrole"
+        finally:
+            await aufraeumen()
+            await superuser.dispose()

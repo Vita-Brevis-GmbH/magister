@@ -10,7 +10,11 @@
 ```bash
 # in cockpit/deploy/.env
 # Verwaltungszugang in den Magister-Cluster: eine Rolle mit CREATEROLE und
-# CREATE auf der Datenbank. NICHT eine Mandantenrolle.
+# CREATE auf der Datenbank. NICHT eine Mandantenrolle. Superuser ist nicht
+# nötig: die Konsole verschafft sich beim Anlegen einer Mandantenrolle
+# selbst das Recht, sie anzunehmen (GRANT … WITH SET TRUE, INHERIT FALSE).
+# Seit Postgres 16 ist das nötig — `CREATE SCHEMA … AUTHORIZATION r_kunde`
+# verlangt SET ROLE auf r_kunde, und CREATEROLE allein bringt das nicht mit.
 COCKPIT_TENANT_ADMIN_DSN=postgresql+asyncpg://magister_admin:<pw>@db:5432/magister
 # Alembic-Verzeichnis der Datenebene, für den Migrationsschritt.
 COCKPIT_MAGISTER_API_DIR=/opt/magister/apps/api

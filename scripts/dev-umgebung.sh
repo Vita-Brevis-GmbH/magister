@@ -71,6 +71,24 @@ pg_dsn() {  # $1 = Datenbank, $2 = Treiber (asyncpg oder leer)
   fi
 }
 
+dienst_muster() {  # $1 = Dienst -> Suchmuster für pgrep/pkill
+  case "$1" in
+    console) echo "uvicorn cockpit_api.main:app --host 127.0.0.1 --port $CONSOLE_PORT" ;;
+    api)     echo "uvicorn magister_api.main:app --host 127.0.0.1 --port $API_PORT" ;;
+    caddy)   echo "caddy run --config $DEV/Caddyfile" ;;
+  esac
+}
+
+# Die PID-Datei hält den Prozess, den die Shell gestartet hat — `uv run` legt
+# den echten Dienst darunter an und verschwindet. Deshalb nach dem Start die
+# wirkliche PID nachtragen: sonst meldet `status` „aus", während der Dienst
+# antwortet, und `down` lässt ihn stehen.
+echte_pid() {  # $1 = Dienst
+  local pid
+  pid="$(pgrep -f "$(dienst_muster "$1")" | head -1)"
+  [ -n "$pid" ] && echo "$pid" > "$RUN/$1.pid"
+}
+
 secret() { openssl rand -hex 32; }
 
 # --- Voraussetzungen ---------------------------------------------------------
@@ -279,10 +297,15 @@ start_console() {
   # beendet wird (CI-Schritt, Hintergrundlauf, geschlossenes Terminal), die
   # Dienste mit — und `status` meldet danach „aus", obwohl gerade alles
   # aufgebaut wurde. Gemessen.
+  # `disown -a`: eine Subshell wartet beim Verlassen auf ihre Hintergrund-
+  # aufträge — anders als die Hauptshell. Ohne das kehrt `up` nach getaner
+  # Arbeit nie zurück, weil es auf den Dienst wartet, den es gerade gestartet
+  # hat. Gemessen: die Umgebung stand vollständig, das Skript hing trotzdem.
   (cd "$REPO/cockpit/api" && setsid nohup uv run uvicorn cockpit_api.main:app \
       --host 127.0.0.1 --port "$CONSOLE_PORT" > "$LOGS/console.log" 2>&1 < /dev/null &
-      echo $! > "$RUN/console.pid")
+      echo $! > "$RUN/console.pid"; disown -a)
   wait_for "http://127.0.0.1:$CONSOLE_PORT/api/health" "Konsole"
+  echte_pid console
 }
 
 console_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf (optional)
@@ -302,17 +325,36 @@ console_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf (optional)
 make_tenants() {
   # shellcheck disable=SC1091
   source "$DEV/env.dataplane"
-  local out
+  local out list id
   for slug in "${TENANTS[@]}"; do
-    if console_api GET "/api/tenants" | grep -q "\"slug\":\"$slug\""; then
-      say "Kunde $slug besteht bereits"
-      continue
+    list="$(console_api GET "/api/tenants")"
+    if echo "$list" | grep -q "\"slug\":\"$slug\""; then
+      # Da, aber fertig? Ein Kunde ohne Schemastand ist in der Bereitstellung
+      # steckengeblieben (so geschehen, als der Verwaltungszugang kein SET
+      # ROLE durfte). Ihn dann als „besteht bereits" zu überspringen, macht
+      # aus einem Fehler einen Dauerzustand — und aus einem roten Prüflauf
+      # siebzehn.
+      id="$(echo "$list" | python3 -c '
+import json, sys
+liste = json.loads(sys.stdin.read().rsplit("\n", 1)[0])
+for t in liste:
+    if t["slug"] == sys.argv[1] and not t.get("schema_version"):
+        print(t["id"])
+' "$slug" 2>/dev/null)"
+      if [ -z "$id" ]; then
+        say "Kunde $slug besteht bereits"
+        continue
+      fi
+      say "Kunde $slug ist halb bereitgestellt — Auftrag fortsetzen"
+      out="$(console_api POST "/api/tenants/$id/provisioning/resume")"
+    else
+      say "Kunde $slug bereitstellen"
+      out="$(console_api POST "/api/tenants" \
+        "{\"slug\":\"$slug\",\"name\":\"${slug^} (dev)\",\"hostname\":\"$slug.mgmt.vitabrevis.dev\"}")"
     fi
-    say "Kunde $slug bereitstellen"
-    out="$(console_api POST "/api/tenants" \
-      "{\"slug\":\"$slug\",\"name\":\"${slug^} (dev)\",\"hostname\":\"$slug.mgmt.vitabrevis.dev\"}")"
-    python3 - "$out" "$DEV/env.dataplane" <<'PY'
-import json, sys, pathlib
+    if ! python3 - "$out" "$DEV/env.dataplane" <<'PY'
+import json, re, sys, pathlib
+
 data = json.loads(sys.argv[1])
 tenant, job = data["tenant"], data["job"]
 # ZWEI Bezeichner, und sie sind nicht dasselbe: der DSN hängt am
@@ -323,22 +365,54 @@ tenant, job = data["tenant"], data["job"]
 ref = tenant["dsn_ref"].upper()
 slug_ref = tenant["slug"].upper().replace("-", "_")
 failed = [s for s in job["steps"] if not s["ok"]]
-if failed:
-    print(f"  ! Bereitstellung von {tenant['slug']} hing bei "
-          f"{failed[0]['step']}: {failed[0]['detail']}")
+
+# Zusammenführen statt anhängen: ein fortgesetzter Auftrag bringt nur die
+# Geheimnisse der Schritte mit, die er wirklich ausgeführt hat. Wurde die
+# Rolle in einem früheren Lauf angelegt, ist `role_password` leer — das
+# vorhandene DSN gilt dann weiter und darf nicht mit „None" überschrieben
+# werden.
+neu: dict[str, str] = {}
+if data.get("role_password"):
+    neu[f"MAGISTER_TENANT_DSN_{ref}"] = (
+        f"__DSN__:{tenant['db_role']}:{data['role_password']}:{tenant['schema_name']}"
+    )
+if data.get("data_key"):
+    neu[f"MAGISTER_TENANT_AUDIT_KEY_{slug_ref}"] = data["data_key"]
+    neu[f"MAGISTER_TENANT_AUDIT_KEY_ID_{slug_ref}"] = f"{tenant['slug']}-dev"
+    neu[f"MAGISTER_TENANT_SECRETS_KEY_{slug_ref}"] = data["data_key"]
+
 env = pathlib.Path(sys.argv[2])
-lines = [
-    f"# --- Kunde {tenant['slug']} ---",
-    f'export MAGISTER_TENANT_DSN_{ref}="{{DSN}}"'.replace(
-        "{DSN}", f"__DSN__:{tenant['db_role']}:{data['role_password']}:{tenant['schema_name']}"),
-    f'export MAGISTER_TENANT_AUDIT_KEY_{slug_ref}="{data["data_key"]}"',
-    f'export MAGISTER_TENANT_AUDIT_KEY_ID_{slug_ref}="{tenant["slug"]}-dev"',
-    f'export MAGISTER_TENANT_SECRETS_KEY_{slug_ref}="{data["data_key"]}"',
+inhalt = env.read_text()
+vorhanden = dict(re.findall(r'^export (MAGISTER_TENANT_\w+)="([^"]*)"$', inhalt, re.M))
+namen = [
+    f"MAGISTER_TENANT_DSN_{ref}",
+    f"MAGISTER_TENANT_AUDIT_KEY_{slug_ref}",
+    f"MAGISTER_TENANT_AUDIT_KEY_ID_{slug_ref}",
+    f"MAGISTER_TENANT_SECRETS_KEY_{slug_ref}",
 ]
-env.write_text(env.read_text() + "\n" + "\n".join(lines) + "\n")
+werte = {name: neu.get(name, vorhanden.get(name, "")) for name in namen}
+
+# Alte Zeilen dieses Kunden entfernen, dann einen sauberen Block schreiben.
+inhalt = re.sub(rf"\n?# --- Kunde {tenant['slug']} ---\n", "\n", inhalt)
+for name in namen:
+    inhalt = re.sub(rf'^export {name}="[^"]*"\n', "", inhalt, flags=re.M)
+zeilen = [f"# --- Kunde {tenant['slug']} ---"]
+zeilen += [f'export {name}="{werte[name]}"' for name in namen if werte[name]]
+env.write_text(inhalt.rstrip("\n") + "\n\n" + "\n".join(zeilen) + "\n")
+
 print(f"  {tenant['slug']}: Schema {tenant['schema_name']}, Rolle {tenant['db_role']}, "
       f"Stand {tenant['schema_version'] or 'keiner'}")
+if failed:
+    # Abbrechen statt weiterlaufen. Eine halbe Bereitstellung trägt sich
+    # durch alles Folgende: die Datenebene startet nicht, und der Prüfer
+    # meldet siebzehn rote Zeilen, die alle denselben einen Grund haben.
+    print(f"\n  ! Bereitstellung von {tenant['slug']} hing bei "
+          f"{failed[0]['step']}: {failed[0]['detail']}")
+    sys.exit(3)
 PY
+    then
+      die "Bereitstellung unvollständig. Ursache oben beheben, dann erneut './scripts/dev-umgebung.sh up' — der Auftrag wird ab der Abbruchstelle fortgesetzt."
+    fi
   done
   # Den Platzhalter durch den echten DSN ersetzen: das Rollenpasswort kommt
   # aus der Antwort und darf nicht durch eine Shell-Interpolation laufen.
@@ -385,8 +459,9 @@ start_dataplane() {
   say "Datenebene starten (127.0.0.1:$API_PORT)"
   (cd "$REPO/apps/api" && uv sync --quiet --extra dev && setsid nohup uv run uvicorn magister_api.main:app \
       --host 127.0.0.1 --port "$API_PORT" > "$LOGS/api.log" 2>&1 < /dev/null &
-      echo $! > "$RUN/api.pid")
+      echo $! > "$RUN/api.pid"; disown -a)
   wait_for "http://127.0.0.1:$API_PORT/healthz" "Datenebene"
+  echte_pid api
 }
 
 seed() {
@@ -478,7 +553,9 @@ EOF
   say "Caddy starten (Konsole $CONSOLE_TLS_PORT, Kunden $TENANT_TLS_PORT)"
   setsid nohup caddy run --config "$DEV/Caddyfile" > "$LOGS/caddy.log" 2>&1 < /dev/null &
   echo $! > "$RUN/caddy.pid"
+  disown -a
   sleep 2
+  echte_pid caddy
 }
 
 wait_for() {  # $1 = URL, $2 = Name
@@ -528,9 +605,12 @@ cmd_status() {
   source "$DEV/env.dataplane" 2>/dev/null || true
   say "Zustand"
   for name in console api caddy; do
-    local pid_file="$RUN/$name.pid"
+    local pid_file="$RUN/$name.pid" pid=""
     if [ -f "$pid_file" ] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
       printf '  %-8s läuft (PID %s)\n' "$name" "$(cat "$pid_file")"
+    elif pid="$(pgrep -f "$(dienst_muster "$name")" | head -1)"; [ -n "$pid" ]; then
+      printf '  %-8s läuft (PID %s, PID-Datei war veraltet)\n' "$name" "$pid"
+      echo "$pid" > "$pid_file"
     else
       printf '  %-8s aus\n' "$name"
     fi
@@ -573,9 +653,9 @@ cmd_down() {
   # und eine PID-Datei kann veraltet sein (Neustart der Maschine, von Hand
   # gestartete Prozesse). Die Muster nennen Port und Modul, treffen also
   # genau diese Umgebung und nicht irgendein fremdes uvicorn.
-  pkill -f "uvicorn cockpit_api.main:app --host 127.0.0.1 --port $CONSOLE_PORT" 2>/dev/null || true
-  pkill -f "uvicorn magister_api.main:app --host 127.0.0.1 --port $API_PORT" 2>/dev/null || true
-  pkill -f "caddy run --config $DEV/Caddyfile" 2>/dev/null || true
+  for name in console api caddy; do
+    pkill -f "$(dienst_muster "$name")" 2>/dev/null || true
+  done
   for name in caddy api console; do
     local pid_file="$RUN/$name.pid"
     [ -f "$pid_file" ] || continue

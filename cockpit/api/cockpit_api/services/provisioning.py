@@ -213,6 +213,7 @@ class TenantProvisioner:
             # Bind-Parameter, weil CREATE/ALTER ROLE keine annehmen — daher der
             # Verifier anstelle des Passworts.
             await conn.exec_driver_sql(f"{verb} ROLE {role} LOGIN PASSWORD '{verifier}'")
+            await self._ensure_can_set_role(conn, tenant.db_role)
             await self._apply_limits(conn, tenant)
         return StepOutcome(
             ProvisioningStep.create_role,
@@ -220,6 +221,51 @@ class TenantProvisioner:
             f"Grenzen gesetzt ({_limits_text(tenant)})",
             secret=password,
         )
+
+    async def _ensure_can_set_role(self, conn: AsyncConnection, db_role: str) -> None:
+        """Dem Administrator SET ROLE auf die Mandantenrolle verschaffen.
+
+        Schritt 2 führt `CREATE SCHEMA ... AUTHORIZATION r_x` aus, und
+        Postgres verlangt dafür, dass der Ausführende SET ROLE auf `r_x`
+        darf. Als Superuser gilt das immer — deshalb fällt es im Test nie
+        auf. Mit der Rolle, die das Runbook verlangt (CREATEROLE, **kein**
+        Superuser), gilt es seit Postgres 16 nicht mehr: selbst angelegte
+        Rollen bekommt eine CREATEROLE-Rolle dort nur mit ADMIN, nicht mit
+        SET (`createrole_self_grant` ist leer voreingestellt). Die
+        Bereitstellung bricht dann in Schritt 2 ab mit „must be able to SET
+        ROLE" — der Kunde hat eine Rolle, aber kein Schema.
+
+        Gemessen auf Postgres 16.15 beim Aufbau einer Entwicklungsmaschine:
+        beide Kunden blieben genau so stehen.
+
+        `INHERIT FALSE`: der Administrator soll die Rolle annehmen dürfen,
+        aber ihre Rechte nicht nebenbei mitführen. Was er als Kunde tut, tut
+        er ausdrücklich.
+        """
+        role = _ident(db_role, field="db_role")
+        is_super = (
+            await conn.execute(text("SELECT rolsuper FROM pg_roles WHERE rolname = current_user"))
+        ).scalar()
+        if is_super:
+            return
+        version = int(
+            (await conn.execute(text("SHOW server_version_num"))).scalar_one()  # type: ignore[arg-type]
+        )
+        # WITH SET/INHERIT gibt es erst ab 16; davor bringt die Mitgliedschaft
+        # SET ROLE ohnehin mit.
+        options = " WITH SET TRUE, INHERIT FALSE" if version >= 160000 else ""
+        await conn.exec_driver_sql(f"GRANT {role} TO CURRENT_USER{options}")
+        allowed = (
+            await conn.execute(text("SELECT pg_has_role(current_user, :r, 'SET')"), {"r": db_role})
+        ).scalar()
+        if not allowed:
+            raise ProvisioningError(
+                f"Der Administrator darf SET ROLE auf {db_role} nicht. Ohne das "
+                "kann Schritt 2 kein Schema anlegen, das dem Kunden gehört. "
+                "Abhilfe: die Administrator-Rolle braucht CREATEROLE und muss "
+                f"Mitglied von {db_role} mit SET sein "
+                f'(GRANT "{db_role}" TO <admin> WITH SET TRUE).'
+            )
 
     async def _apply_limits(self, conn: AsyncConnection, tenant: Tenant) -> None:
         """Lastgrenzen an die Mandantenrolle hängen (ADR-0021 D3).
@@ -265,10 +311,20 @@ class TenantProvisioner:
         role = _ident(tenant.db_role, field="db_role")
         async with self._engine.begin() as conn:
             await conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema} AUTHORIZATION {role}"))
+            # Die beiden folgenden Anweisungen setzen Rechte an einem Schema,
+            # das der **Mandantenrolle** gehört. Wer sie ausführt, muss
+            # Eigentümer sein. Als Superuser gilt das immer; mit der Rolle,
+            # die das Runbook verlangt (CREATEROLE, kein Superuser), gilt es
+            # nicht — dort scheitert der REVOKE mit „permission denied for
+            # schema". Deshalb hier ausdrücklich als Kunde handeln statt die
+            # Rechte der Mandantenrolle nebenbei mitzuführen (der Zuschlag
+            # aus `_ensure_can_set_role` ist INHERIT FALSE, genau dafür).
+            await conn.exec_driver_sql(f"SET LOCAL ROLE {role}")
             # Ohne dieses REVOKE darf in Postgres jede Rolle über PUBLIC
             # hineinsehen — der Schritt, der die Trennung überhaupt herstellt.
             await conn.execute(text(f"REVOKE ALL ON SCHEMA {schema} FROM PUBLIC"))
             await conn.execute(text(f"GRANT USAGE, CREATE ON SCHEMA {schema} TO {role}"))
+            await conn.exec_driver_sql("RESET ROLE")
             # Gegenprobe an der Datenbank statt Vertrauen in die eigenen
             # Anweisungen: hat PUBLIC wirklich kein USAGE mehr?
             leaked = (
