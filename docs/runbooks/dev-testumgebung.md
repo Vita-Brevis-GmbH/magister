@@ -139,6 +139,28 @@ Produktion.
 Zwölf Handgriffe, jeder in ein paar Minuten. Der Wert steckt in den negativen
 Fällen: eine Prüfung, die nur den Erfolgsweg zeigt, hat nichts gezeigt.
 
+### 5.0 Alles auf einmal — der Prüfer
+
+Die zwölf Prüfungen laufen auch selbsttätig gegen die laufende Umgebung:
+
+```bash
+./scripts/dev-pruefen.sh          # alle Prüfungen (~3 Minuten)
+./scripts/dev-pruefen.sh T3 T7    # nur diese
+```
+
+Erwartet: **38 bestanden, 0 gescheitert**. Jede Zeile nennt die Zusage und
+das Ergebnis; wo es geht, wird auch der negative Fall geprüft (dass etwas
+NICHT geht, ist die eigentliche Aussage). Der Prüfer räumt hinter sich auf:
+Schemastand, Lastgrenzen und der Umzug von `bern` stehen danach wieder wie
+vorher.
+
+Was er **nicht** abdeckt, weil es durch die Oberfläche geht und eine Person
+mit Zertifikat und TOTP verlangt: die Anmeldung an der Konsole selbst
+(§4), Operator-Zugriff auf Kundendaten (§5.9), Sicherung und
+Wiederherstellung (§5.10) und die Handgriffe in der Konsolenoberfläche
+(§5.12). Die Abschnitte unten beschreiben jede Prüfung von Hand — nützlich,
+wenn eine Zeile des Prüfers rot ist und man wissen will, woran es liegt.
+
 ### 5.1 Die Trennung hält
 
 ```bash

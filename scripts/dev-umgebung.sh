@@ -317,12 +317,25 @@ start_dataplane() {
   export MAGISTER_CONSOLE_REGISTRY_TOKEN="$COCKPIT_BOOTSTRAP_TOKEN"
   export MAGISTER_CONSOLE_MANAGEMENT_MARKER="$COCKPIT_MANAGEMENT_MARKER"
   export MAGISTER_AD_CONNECTOR_ENABLED="1"
+  # In Produktion holt die Datenebene die Registry alle 300 s. Für die
+  # Entwicklung ist das der kleinste erlaubte Takt: sonst wartet, wer eine
+  # Änderung in der Konsole prüfen will, fünf Minuten auf ihre Wirkung.
+  export MAGISTER_CONSOLE_REGISTRY_INTERVAL_S="30"
+  # Erst die Zeilen eines früheren Laufs entfernen: `up` ist wiederholbar, und
+  # eine Umgebungsdatei, die bei jedem Lauf wächst, führt irgendwann ein
+  # veraltetes Token mit sich, das weiter unten das aktuelle überschreibt.
+  local tmp="$DEV/env.dataplane.tmp"
+  grep -v -E '^export MAGISTER_(CONSOLE_REGISTRY_URL|CONSOLE_REGISTRY_TOKEN|CONSOLE_MANAGEMENT_MARKER|AD_CONNECTOR_ENABLED|CONSOLE_REGISTRY_INTERVAL_S)=' \
+    "$DEV/env.dataplane" > "$tmp"
   {
     echo "export MAGISTER_CONSOLE_REGISTRY_URL=\"$MAGISTER_CONSOLE_REGISTRY_URL\""
     echo "export MAGISTER_CONSOLE_REGISTRY_TOKEN=\"$MAGISTER_CONSOLE_REGISTRY_TOKEN\""
     echo "export MAGISTER_CONSOLE_MANAGEMENT_MARKER=\"$MAGISTER_CONSOLE_MANAGEMENT_MARKER\""
     echo "export MAGISTER_AD_CONNECTOR_ENABLED=\"1\""
-  } >> "$DEV/env.dataplane"
+    echo "export MAGISTER_CONSOLE_REGISTRY_INTERVAL_S=\"30\""
+  } >> "$tmp"
+  mv "$tmp" "$DEV/env.dataplane"
+  chmod 600 "$DEV/env.dataplane"
 
   say "Datenebene starten (127.0.0.1:$API_PORT)"
   (cd "$REPO/apps/api" && uv sync --quiet --extra dev && setsid nohup uv run uvicorn magister_api.main:app \
@@ -340,8 +353,20 @@ seed() {
     dsn="$(eval echo "\${MAGISTER_TENANT_DSN_$ref:-}")"
     [ -z "$dsn" ] && { warn "kein DSN für $slug — Demodaten übersprungen"; continue; }
     say "Demodaten für $slug"
-    (cd "$REPO/apps/api" && MAGISTER_DATABASE_URL="$dsn" \
-      uv run python -m magister_api.cli.seed_demo --schema "t_$slug" 2>&1 | tail -2)
+    # Ein zweiter Lauf von `up` darf nicht scheitern: der Seeder weigert sich
+    # zu Recht, in eine Datenbank zu schreiben, in der schon Klassen stehen.
+    # Ohne diese Behandlung bricht `set -e` den ganzen Aufbau ab — und zwar
+    # NACH der Datenebene und VOR Caddy, also mitten im Stapel. Gemessen.
+    local out rc
+    out="$(cd "$REPO/apps/api" && MAGISTER_DATABASE_URL="$dsn" \
+      uv run python -m magister_api.cli.seed_demo --schema "t_$slug" 2>&1)" && rc=0 || rc=$?
+    if [ "$rc" -eq 0 ]; then
+      printf '  %s\n' "$(echo "$out" | tail -1)"
+    elif echo "$out" | grep -q "already contains classes"; then
+      printf '  %s\n' "Demodaten stehen bereits."
+    else
+      warn "Demodaten für $slug: $(echo "$out" | tail -1)"
+    fi
   done
 }
 

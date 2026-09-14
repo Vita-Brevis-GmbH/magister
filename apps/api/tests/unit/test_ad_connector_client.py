@@ -16,6 +16,7 @@ import httpx
 import pytest
 from pydantic import SecretStr
 
+from magister_api.ad import connector_client
 from magister_api.ad.client import AdUserRecord
 from magister_api.ad.connector_client import (
     MAX_SEARCH_RECORDS,
@@ -364,3 +365,33 @@ class TestTheSyncRunsOverTheAgent:
         # (dort 10 Minuten) — sonst wartet die Datenebene auf etwas, das
         # schon verfallen ist.
         assert SEARCH_TIMEOUT_S < 600.0
+
+
+class TestAbfrageTakt:
+    """Wie oft die Datenebene die Konsole nach einem Auftrag fragt.
+
+    Gemessen in der Entwicklungsumgebung: ein Abgleich ohne erreichbaren Agent
+    hinterliess rund tausend Zeilen Abfrage-Log — 480 s Frist, alle 0,5 s eine
+    Anfrage. Pro Kunde, in jedem Durchlauf. Das ist die Last, die bei fünfzig
+    Kunden ankommt, und sie entsteht im Hintergrund, wo niemand hinsieht.
+    """
+
+    def test_ein_mensch_wartet_weiter_kurz(self) -> None:
+        # Passwort-Reset, Anlegen, Gruppen: alles unter 15 s bleibt schnell.
+        assert connector_client.poll_interval(0.0) == connector_client.POLL_INTERVAL_S
+        assert connector_client.poll_interval(14.0) == connector_client.POLL_INTERVAL_S
+
+    def test_der_abstand_waechst_und_ist_gedeckelt(self) -> None:
+        assert connector_client.poll_interval(20.0) > connector_client.POLL_INTERVAL_S
+        assert connector_client.poll_interval(600.0) == connector_client.POLL_MAX_INTERVAL_S
+
+    def test_ein_ganzer_abgleich_kostet_die_konsole_ein_sechstel_der_abfragen(
+        self,
+    ) -> None:
+        waited, calls = 0.0, 0
+        while waited < connector_client.SEARCH_TIMEOUT_S:
+            waited += connector_client.poll_interval(waited)
+            calls += 1
+        naiv = connector_client.SEARCH_TIMEOUT_S / connector_client.POLL_INTERVAL_S
+        assert naiv == 960
+        assert calls < 200  # gemessen: 154 statt 960

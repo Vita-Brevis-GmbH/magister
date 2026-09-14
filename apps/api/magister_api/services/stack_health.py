@@ -167,10 +167,15 @@ def _key_check(tenant: Tenant, registry: TenantRegistry, settings: Settings) -> 
     return Check("tenant_key", OK, "vorhanden")
 
 
-def _sync_check(state: AdSyncState | None, settings: Settings) -> Check:
-    if state is None:
+def _sync_check(has_state: bool, last_full: datetime | None, settings: Settings) -> Check:
+    """Alter des letzten vollständigen Abgleichs.
+
+    Nimmt Werte und kein ORM-Objekt: alles, was hier ankommt, wurde in der
+    Sitzung gelesen, die es noch gab (siehe `_database_checks`).
+    """
+    if not has_state:
         return Check("ad_sync", WARNING, "noch nie gelaufen")
-    last = state.last_full_sync_at
+    last = last_full
     if last is None:
         return Check("ad_sync", WARNING, "noch kein vollständiger Abgleich")
     if last.tzinfo is None:
@@ -220,11 +225,19 @@ async def _database_checks(
         attach_keys(session, keys)
         await apply_tenant_scope(session, tenant, extension_schema=settings.extension_schema)
         await session.execute(text("SELECT 1"))
-        state = (await session.execute(select(AdSyncState).limit(1))).scalar_one_or_none()
+        # Die **Spalte** und nicht die Zeile als ORM-Objekt: ein Objekt ist
+        # nach `rollback()` abgelaufen und nach dem Verlassen des `with`
+        # abgelöst. Der erste Zugriff darauf endet dann in einem
+        # `DetachedInstanceError` — und die Sonde meldete „Datenbank nicht
+        # erreichbar" für eine Datenbank, die tadellos antwortet. Genau so in
+        # der Entwicklungsumgebung aufgefallen, sobald ein Kunde zum ersten
+        # Mal abgeglichen hatte; vorher gab es keine Zeile und damit keinen
+        # Zugriff.
+        row = (await session.execute(select(AdSyncState.last_full_sync_at).limit(1))).first()
         await session.rollback()
     return [
         Check("database", OK, f"erreichbar als {tenant.db_role or 'Verbindungsrolle'}"),
-        _sync_check(state, settings),
+        _sync_check(row is not None, None if row is None else row[0], settings),
     ]
 
 

@@ -10,6 +10,7 @@ Auskunft an jeden Besucher.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -21,6 +22,7 @@ from starlette.applications import Starlette
 
 from magister_api.config import Settings
 from magister_api.main import create_app
+from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.services.stack_health import CRITICAL, OK, WARNING, stack_health
 from magister_api.tenancy.registry import Tenant, TenantRegistry, TenantStatus
 from magister_api.tenancy.version import HEAD_REVISION
@@ -159,6 +161,42 @@ class TestTheChecks:
         assert health.status == CRITICAL
         assert [c.name for c in health.checks][-1] == "tenant_key"
         assert not any(c.name == "database" for c in health.checks)
+
+    @pytest.mark.asyncio
+    async def test_a_tenant_that_has_already_synced_is_still_readable(
+        self, app_settings: Settings, database_url: str, sm: async_sessionmaker[AsyncSession]
+    ) -> None:
+        """Mit einer Zeile in `ad_sync_state` darf die Sonde nicht umkippen.
+
+        Sie tat es: die Zeile wurde als ORM-Objekt gelesen und nach dem
+        `rollback()` ausserhalb der Sitzung angefasst — `DetachedInstanceError`,
+        gemeldet als „Datenbank nicht erreichbar". Für eine Datenbank, die
+        tadellos antwortete. Aufgefallen in der Entwicklungsumgebung, sobald
+        ein Kunde zum ersten Mal abgeglichen hatte; mit leerer Tabelle gab es
+        keinen Zugriff und damit keinen Fehler.
+        """
+        async with sm() as session:
+            session.add(
+                AdSyncState(
+                    id=1,
+                    last_when_changed=datetime.now(UTC) - timedelta(minutes=1),
+                    # Frisch: hier geht es um den Zugriff nach dem Rollback,
+                    # nicht um die Altersschwelle (die hat ihren eigenen Test).
+                    last_full_sync_at=datetime.now(UTC) - timedelta(minutes=1),
+                )
+            )
+            await session.commit()
+
+        health = await stack_health(
+            HOST,
+            settings=app_settings,
+            registry=TenantRegistry([_tenant(database_url)]),
+            session_factory=lambda _t: sm,
+        )
+        db = next(c for c in health.checks if c.name == "database")
+        assert db.status == OK, f"Sonde meldet die Datenbank als kaputt: {db.detail}"
+        sync = next(c for c in health.checks if c.name == "ad_sync")
+        assert sync.status == OK and "vor" in sync.detail
 
     @pytest.mark.asyncio
     async def test_an_unreachable_database_does_not_raise(

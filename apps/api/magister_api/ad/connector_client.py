@@ -50,6 +50,19 @@ DEFAULT_TIMEOUT_S = 60.0
 #: Warteschlange von zwanzig Kunden die Konsole nicht mit Abfragen flutet.
 POLL_INTERVAL_S = 0.5
 
+#: Obergrenze des Abstands, nachdem der Auftrag länger läuft als ein Mensch
+#: wartet. Ohne diese Grenze fragt ein Abgleich mit 480 s Frist rund 960 Mal
+#: nach — pro Kunde, in jedem Durchlauf. Bei fünfzig Kunden ist das die
+#: Dauerlast der Konsole, und sie entsteht ausgerechnet dort, wo niemand
+#: zusieht. Gemessen an der Entwicklungsumgebung: 1000 Zeilen Abfrage-Log für
+#: einen einzigen Abgleich ohne Agent.
+POLL_MAX_INTERVAL_S = 5.0
+
+#: Solange bleibt der Abstand kurz. Danach wächst er. Deckt alles ab, worauf
+#: jemand vor einem Formular wartet (Reset, Anlegen, Gruppen).
+POLL_FAST_PHASE_S = 15.0
+
+
 #: Zeitüberschreitung einer einzelnen HTTP-Anfrage an die Konsole.
 HTTP_TIMEOUT_S = 10.0
 
@@ -63,6 +76,14 @@ SEARCH_TIMEOUT_S = 480.0
 #: nicht abgeschnitten: ein halber Abgleich sieht aus wie ein ganzer und
 #: behandelt am Ende Konten als verschwunden, die es noch gibt.
 MAX_SEARCH_RECORDS = 50_000
+
+
+def poll_interval(waited_s: float) -> float:
+    """Abstand zur nächsten Abfrage, nach `waited_s` Sekunden Wartezeit."""
+    if waited_s < POLL_FAST_PHASE_S:
+        return POLL_INTERVAL_S
+    grown = POLL_INTERVAL_S * 2 ** ((waited_s - POLL_FAST_PHASE_S) / POLL_FAST_PHASE_S)
+    return min(grown, POLL_MAX_INTERVAL_S)
 
 
 class AdConnectorClient(RemoteAdClient):
@@ -135,7 +156,8 @@ class AdConnectorClient(RemoteAdClient):
     async def _await_result(self, job_id: str, method: str) -> Any:
         url = f"{self._base}/api/tenants/{self._tenant_id}/jobs/{job_id}"
         timeout_s = self._timeout_for(method)
-        deadline = time.monotonic() + timeout_s
+        started = time.monotonic()
+        deadline = started + timeout_s
         while True:
             try:
                 resp = await self._http.get(url)
@@ -173,7 +195,7 @@ class AdConnectorClient(RemoteAdClient):
                     state or "unbekannt",
                 )
                 raise AdUnavailableError("connector_timeout")
-            await asyncio.sleep(POLL_INTERVAL_S)
+            await asyncio.sleep(poll_interval(time.monotonic() - started))
 
     # -- Abgleich ---------------------------------------------------------
     async def search_users(
