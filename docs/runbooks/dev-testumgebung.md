@@ -55,6 +55,19 @@ ernsthaften Durchgang lohnt es sich.
 DEV_PG_USER=postgres DEV_PG_PASSWORD=… ./scripts/dev-umgebung.sh up
 ```
 
+`DEV_PG_USER` ist vorbelegt mit `postgres`; auf Maschinen, auf denen es diese
+Rolle nicht gibt, erst eine anlegen und dann beide Variablen setzen:
+
+```bash
+su - postgres -c "psql -c \"create role magdev login password 'magdev' createdb createrole\""
+DEV_PG_USER=magdev DEV_PG_PASSWORD=magdev ./scripts/dev-umgebung.sh up
+```
+
+Das Skript verbindet sich über **TCP** (`localhost:5432`), nicht über den
+Unix-Socket — `peer`-Authentifizierung in `pg_hba.conf` greift hier also
+nicht. Scheitert der Start an Postgres, nennt das Skript den Grund und den
+Handgriff; weitere Stellschrauben: `DEV_PG_HOST`, `DEV_PG_PORT`, `DEV_ROOT`.
+
 Das Skript legt an: zwei Datenbanken, eine Test-CA (Wurzel, zwei
 Zwischenstellen, Server-, Operator- und Monitor-Zertifikat, ein
 age-Schlüsselpaar), zwei Umgebungsdateien mit frischen Geheimnissen, das

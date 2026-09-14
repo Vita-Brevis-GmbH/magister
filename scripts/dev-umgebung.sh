@@ -78,8 +78,53 @@ preflight() {
   for tool in uv openssl psql curl python3; do
     command -v "$tool" >/dev/null || die "$tool fehlt."
   done
-  psql_admin -d postgres -tc "select 1" >/dev/null 2>&1 \
-    || die "Postgres unter $PG_HOST:$PG_PORT nicht erreichbar (Benutzer $PG_USER)."
+  # Eine Zeile „nicht erreichbar" ist die teuerste Diagnose: sie deckt
+  # „nicht installiert", „läuft nicht", „Rolle gibt es nicht" und „falsches
+  # Passwort" ab, und jeder dieser Fälle braucht einen anderen Handgriff.
+  # Deshalb hier unterscheiden — und sagen, was Postgres selbst gesagt hat.
+  local pg_err
+  if ! pg_err="$(psql_admin -d postgres -tc "select 1" 2>&1 >/dev/null)"; then
+    printf '\033[31m !! Postgres unter %s:%s nicht erreichbar (Benutzer %s).\033[0m\n' \
+      "$PG_HOST" "$PG_PORT" "$PG_USER" >&2
+    [ -n "$pg_err" ] && printf '    Postgres sagt: %s\n' \
+      "$(echo "$pg_err" | grep -v '^$' | head -2 | tr '\n' ' ')" >&2
+    if (exec 3<>"/dev/tcp/$PG_HOST/$PG_PORT") 2>/dev/null; then
+      exec 3<&- 3>&-
+      cat >&2 <<HINWEIS
+
+    Der Dienst hört auf dem Port — es scheitert die Anmeldung. Meist eines davon:
+
+      * Die Rolle "$PG_USER" gibt es nicht. Welche es gibt, zeigt der
+        Systembenutzer, dem der Cluster gehört:
+            su - postgres -c "psql -c '\\du'"
+        Dann mit dieser Rolle starten:
+            DEV_PG_USER=<rolle> DEV_PG_PASSWORD=<passwort> ./scripts/dev-umgebung.sh up
+
+      * Das Passwort fehlt. DEV_PG_PASSWORD=… voranstellen.
+
+      * pg_hba.conf verlangt für 127.0.0.1 eine andere Methode (peer statt
+        md5/scram). Das Skript verbindet sich über TCP, nicht über den Socket.
+HINWEIS
+    else
+      cat >&2 <<HINWEIS
+
+    Auf $PG_HOST:$PG_PORT hört nichts — es läuft kein Postgres. Einrichten:
+
+        apt-get install -y postgresql-16
+        systemctl enable --now postgresql
+
+    Danach eine Anmelderolle anlegen, die CREATEDB und CREATEROLE darf (die
+    Konsole legt für jeden Kunden eine eigene Rolle an, ADR-0013 D1):
+
+        su - postgres -c "psql -c \"create role magdev login password 'magdev' createdb createrole\""
+
+    und das Skript damit starten:
+
+        DEV_PG_USER=magdev DEV_PG_PASSWORD=magdev ./scripts/dev-umgebung.sh up
+HINWEIS
+    fi
+    exit 1
+  fi
   command -v caddy >/dev/null || warn "caddy fehlt — die TLS-Listener werden übersprungen."
   command -v age   >/dev/null || warn "age fehlt — Sicherungen lassen sich nicht prüfen."
 
