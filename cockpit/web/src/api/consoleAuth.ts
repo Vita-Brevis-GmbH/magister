@@ -27,6 +27,21 @@ export type AuthStage =
 
 export interface Whoami {
   stage: AuthStage;
+  /**
+   * Die Uhr des Servers. Zum Vergleich mit der des Browsers: ein Code gilt
+   * dreissig Sekunden, die Anmeldung erlaubt eine Abweichung von einem
+   * Schritt. Geht eine der Uhren weiter daneben, passt kein Code — und
+   * „Der Code stimmt nicht" schickt jeden auf die falsche Suche.
+   */
+  server_time: string | null;
+  /**
+   * Abweichung der beiden Uhren in Sekunden, **beim Empfang** gemessen.
+   *
+   * Hier und nicht im Rendern: `Date.now()` in einer Komponente ist unrein
+   * und liefert bei jedem Rendern einen anderen Wert. Der Moment, in dem die
+   * Antwort ankommt, ist der richtige Zeitpunkt für diese Messung.
+   */
+  drift_seconds: number | null;
   /** Erst gesetzt, sobald das Zertifikat bekannt ist. */
   upn: string | null;
   name: string | null;
@@ -47,20 +62,28 @@ export interface Enrolment {
  * — in aller Regel der Code. Ein 401 bedeutet „unbekannt, falsch oder
  * gesperrt"; welches davon, sagt der Server absichtlich nicht.
  */
-export function login(upn: string, password: string): Promise<Whoami> {
-  return post("/api/auth/console/login", { upn, password });
+function mitAbweichung(who: Whoami): Whoami {
+  const server = who.server_time;
+  return {
+    ...who,
+    drift_seconds: server === null ? null : Math.round((Date.parse(server) - Date.now()) / 1000),
+  };
 }
 
-export function whoami(): Promise<Whoami> {
-  return get("/api/auth/console/whoami");
+export async function login(upn: string, password: string): Promise<Whoami> {
+  return mitAbweichung(await post("/api/auth/console/login", { upn, password }));
+}
+
+export async function whoami(): Promise<Whoami> {
+  return mitAbweichung(await get("/api/auth/console/whoami"));
 }
 
 export function beginEnrolment(): Promise<Enrolment> {
   return post("/api/auth/console/enrol");
 }
 
-export function submitCode(code: string): Promise<Whoami> {
-  return post("/api/auth/console/totp", { code });
+export async function submitCode(code: string): Promise<Whoami> {
+  return mitAbweichung(await post("/api/auth/console/totp", { code }));
 }
 
 export function logout(): Promise<void> {

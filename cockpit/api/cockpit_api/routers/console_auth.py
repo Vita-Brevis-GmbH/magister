@@ -18,6 +18,7 @@ einem Benutzernamen fragt, wäre eine Eingabe für etwas, das schon feststeht.
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +52,17 @@ router = APIRouter(prefix="/auth/console", tags=["console-auth"])
 
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+def _jetzt() -> datetime:
+    """Die Uhr des Servers, wie sie in jede Antwort geht.
+
+    Damit kann die Oberfläche vergleichen, statt dass jemand rät: geht eine
+    der beiden Uhren mehr als einen Zeitschritt daneben, ist der zweite
+    Faktor nicht benutzbar, und „Der Code stimmt nicht" ist die falsche
+    Auskunft.
+    """
+    return datetime.now(UTC)
 
 
 async def _operator_im_gang(
@@ -121,7 +133,7 @@ async def login(
     )
     # Der Name geht mit: wer das Passwort kennt, weiss ohnehin, wer er ist.
     stufe = svc.stage_for(operator)
-    return ConsoleWhoamiOut(stage=stufe, upn=operator.upn, name=operator.name)
+    return ConsoleWhoamiOut(server_time=_jetzt(), stage=stufe, upn=operator.upn, name=operator.name)
 
 
 @router.get("/whoami", response_model=ConsoleWhoamiOut)
@@ -144,9 +156,13 @@ async def whoami(
                 # Passwort gezeigt, Code fehlt. Die Oberfläche soll das
                 # Codefeld zeigen und nicht die Anmeldemaske von vorn.
                 return ConsoleWhoamiOut(
-                    stage=svc.stage_for(operator), upn=operator.upn, name=operator.name
+                    server_time=_jetzt(),
+                    stage=svc.stage_for(operator),
+                    upn=operator.upn,
+                    name=operator.name,
                 )
             return ConsoleWhoamiOut(
+                server_time=_jetzt(),
                 stage=AuthStage.AUTHENTICATED,
                 upn=operator.upn,
                 name=operator.name,
@@ -158,14 +174,14 @@ async def whoami(
         # Fehler in der Verdrahtung. Dieselbe Antwort wie bei einem
         # unbekannten Zertifikat — die Antwort soll nicht verraten, ob ein
         # Zertifikat bekannt wäre.
-        return ConsoleWhoamiOut(stage=AuthStage.UNKNOWN)
+        return ConsoleWhoamiOut(server_time=_jetzt(), stage=AuthStage.UNKNOWN)
 
     operator = await svc.operator_for(fingerprint)
     stage = svc.stage_for(operator)
     if operator is None:
         logger.warning("Konsole: unbekanntes Client-Zertifikat %s…", fingerprint[:12])
-        return ConsoleWhoamiOut(stage=stage)
-    return ConsoleWhoamiOut(stage=stage, upn=operator.upn, name=operator.name)
+        return ConsoleWhoamiOut(server_time=_jetzt(), stage=stage)
+    return ConsoleWhoamiOut(server_time=_jetzt(), stage=stage, upn=operator.upn, name=operator.name)
 
 
 @router.post("/enrol", response_model=ConsoleEnrolmentOut)
@@ -252,6 +268,7 @@ async def submit_totp(
         path="/",
     )
     return ConsoleWhoamiOut(
+        server_time=_jetzt(),
         stage=AuthStage.AUTHENTICATED,
         upn=operator.upn,
         name=operator.name,

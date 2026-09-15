@@ -13,6 +13,14 @@ class ConsoleWhoamiOut(BaseModel):
     """Welcher Schritt fehlt — und bei wem, sobald das feststeht."""
 
     stage: AuthStage
+    #: Die Uhr des Servers, zum Vergleich mit der des Browsers.
+    #:
+    #: Ein zweiter Faktor lebt von gleichen Uhren: ein Code gilt dreissig
+    #: Sekunden, die Anmeldung erlaubt eine Abweichung von einem Schritt.
+    #: Geht eine der beiden Uhren weiter daneben, passt kein Code — und die
+    #: Meldung „Der Code stimmt nicht" schickt jeden auf die falsche Suche.
+    #: Gemessen an einem Server, der zwei Minuten nachging: mehrere Abende.
+    server_time: datetime | None = None
     #: `None`, solange das Zertifikat unbekannt ist. Die Antwort verrät dann
     #: nichts über die Operatoren, die es gibt.
     upn: str | None = None

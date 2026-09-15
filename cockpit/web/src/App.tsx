@@ -159,7 +159,19 @@ export function App() {
     return (
       <div>
         <ConsoleLogin
-          who={who ?? { stage: "unknown_certificate", upn: null, name: null, expires_at: null }}
+          who={
+            who ?? {
+              stage: "unknown_certificate",
+              upn: null,
+              name: null,
+              expires_at: null,
+              // Ohne Antwort des Servers gibt es keine Serverzeit — und damit
+              // keinen Uhrenvergleich. Kein Vergleich ist besser als einer
+              // gegen einen erfundenen Wert.
+              server_time: null,
+              drift_seconds: null,
+            }
+          }
         />
         <div className="mx-auto max-w-xl px-6 pb-6">
           <BootstrapTokenBox onSet={setToken} />

@@ -64,6 +64,8 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
         Anmeldung mit Benutzername, Passwort und zweitem Faktor.
       </p>
 
+      <ClockWarning abweichung={who.drift_seconds} />
+
       {who.stage === "unknown_certificate" && (
         <form
           className="space-y-3 text-sm"
@@ -214,6 +216,38 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Der Hinweis, der einen Abend gespart hätte.
+ *
+ * Ein zweiter Faktor lebt von gleichen Uhren. Geht eine davon mehr als
+ * einen Zeitschritt daneben, passt kein Code — und die Anmeldung sagt nur
+ * „Der Code stimmt nicht". Deshalb vergleicht die Seite die Uhren, sobald
+ * sie die des Servers kennt, und sagt es, bevor jemand zu suchen anfängt.
+ *
+ * Zwanzig Sekunden als Schwelle: darunter greift das Fenster von ±30 s
+ * noch, darüber wird es knapp.
+ */
+function ClockWarning({ abweichung }: { abweichung: number | null }) {
+  // Gemessen wurde beim Empfang der Antwort (siehe api/consoleAuth.ts) —
+  // hier wird nur noch angezeigt.
+  if (abweichung === null || Math.abs(abweichung) < 20) return null;
+  return (
+    <div className="mb-4 rounded border-2 border-red-400 bg-red-50 p-3 text-sm text-red-900">
+      <p className="font-medium">
+        Die Uhren von Server und Gerät weichen um {Math.abs(abweichung)} Sekunden ab
+        {abweichung > 0 ? " (Server ist vor)" : " (Server ist zurück)"}.
+      </p>
+      <p>
+        Ein Code aus der Authenticator-App gilt dreissig Sekunden. Bei dieser
+        Abweichung passt <strong>kein</strong> Code — auch der richtige nicht. Erst
+        die Uhr richten, dann anmelden:{" "}
+        <code className="font-mono text-xs">sudo timedatectl set-ntp true</code> auf
+        dem Konsolen-Host.
+      </p>
     </div>
   );
 }
