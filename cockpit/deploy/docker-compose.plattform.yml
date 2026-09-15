@@ -25,8 +25,10 @@ services:
       # Der Pfad im CONTAINER, nicht auf dem Host.
       COCKPIT_MAGISTER_API_DIR: /opt/magister/apps/api
       # Damit `import magister_api` in der Migration gelingt: das Paket ist
-      # nicht installiert, es liegt eingehängt daneben.
-      PYTHONPATH: /opt/magister/apps/api
+      # nicht installiert, es liegt eingehängt daneben. `/app` steht voran,
+      # weil dort die Konsole selbst liegt — auch sie ist im Abbild nur
+      # einkopiert, nicht installiert.
+      PYTHONPATH: /app:/opt/magister/apps/api
     volumes:
       - ../../apps/api:/opt/magister/apps/api:ro
     networks: [default, plattform]

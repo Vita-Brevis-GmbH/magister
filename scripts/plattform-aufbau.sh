@@ -281,7 +281,10 @@ start_konsole() {
     cp -f "$CERTS/$datei" "$REPO/cockpit/deploy/certs/$datei"
   done
   say "Konsole starten (Container, Listener auf $BIND:4444)"
-  dc_konsole up -d
+  # `--build`, weil das Abbild der Konsole aus dem Arbeitsstand entsteht:
+  # ohne das startet `up` das Abbild von gestern weiter, und eine Korrektur
+  # am Code wirkt erst nach einem Handgriff, den niemand dokumentiert hat.
+  dc_konsole up -d --build
   dc_konsole exec -T api alembic upgrade head >/dev/null
   warte "Konsole" "https://$KONSOLE_HOST:4444/api/health" --cert
 }
