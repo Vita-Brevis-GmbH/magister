@@ -447,18 +447,26 @@ $(printf '\033[1mNächste Schritte\033[0m')
      der DNS, hier reicht die Datei:
        echo "127.0.0.1 $KONSOLE_HOST ${KUNDEN[0]}.$DOMAIN ${KUNDEN[1]}.$DOMAIN" >> /etc/hosts
 
-  2. Konsole öffnen: https://$KONSOLE_HOST:4444
-     Client-Zertifikat: $CERTS/operator.pem (+ -key.pem). Als PKCS#12 für
-     den Browser:
+  2. Ersten Operator anlegen (Passwort wird abgefragt, ADR-0023 D5):
+       docker compose --project-directory $REPO/cockpit/deploy \\
+         -f $REPO/cockpit/deploy/docker-compose.yml \\
+         -f $REPO/cockpit/deploy/docker-compose.plattform.yml \\
+         exec api python -m cockpit_api.cli.add_operator \\
+           --upn vorname.nachname@vitabrevis.ch --name "Vorname Nachname" --set-password
+
+  3. Konsole öffnen: https://$KONSOLE_HOST:4444
+     Anmeldung mit Benutzername, Passwort und Code. Ein Client-Zertifikat
+     ist möglich, aber nicht nötig (ADR-0023 D3) — wer eines benutzen will,
+     nimmt $CERTS/operator.pem (+ -key.pem), als PKCS#12 für den Browser:
        openssl pkcs12 -export -inkey $CERTS/operator-key.pem \\
          -in $CERTS/operator.pem -certfile $CERTS/platform-ca.pem \\
          -out $CERTS/operator.p12 -passout pass:dev
 
-  3. Kundenseite öffnen: https://${KUNDEN[0]}.$DOMAIN
+  4. Kundenseite öffnen: https://${KUNDEN[0]}.$DOMAIN
      (Die Plattform-CA $CERTS/root.pem im Browser als vertrauenswürdig
      eintragen, sonst warnt er — in Produktion kommt sie über die GPO.)
 
-  4. Prüfen: die drei Handgriffe in
+  5. Prüfen: die drei Handgriffe in
      docs/runbooks/plattform-auf-einem-host.md §5
 EOF
 }

@@ -1,14 +1,47 @@
 # Runbook · Einen Operator für die Konsole einrichten
 
-> Wer die Konsole bedienen darf, braucht zwei Dinge: ein Client-Zertifikat der
-> Plattform-CA und einen zweiten Faktor auf seinem Telefon
-> ([ADR-0020](../adr/0020-konsolen-anmeldung.md)).
-> Das Zertifikat kommt aus der Zeremonie in
-> [platform-ca.md](platform-ca.md), die Zeile aus einem CLI-Befehl, der zweite
-> Faktor von der Person selbst.
+> Wer die Konsole bedienen darf, braucht zwei Dinge: einen **ersten Faktor**
+> — seit [ADR-0023](../adr/0023-konsolen-anmeldung-mit-passwort.md) in der
+> Regel ein Passwort, wahlweise weiterhin ein Client-Zertifikat der
+> Plattform-CA ([ADR-0020](../adr/0020-konsolen-anmeldung.md)) — und einen
+> **zweiten Faktor** auf seinem Telefon.
+> Die Zeile entsteht mit einem CLI-Befehl, der zweite Faktor von der Person
+> selbst.
 > Betrifft: **Konsolen-Host** (`console.magister.ch`, interne Adresse).
 
-## 1 · Warum es drei Teile sind
+## 0 · Der kurze Weg (Passwort)
+
+Für den Normalfall reicht ein Befehl auf dem Konsolen-Host:
+
+```bash
+cd /opt/magister/cockpit/api
+uv run python -m cockpit_api.cli.add_operator \
+    --upn vorname.nachname@vitabrevis.ch \
+    --name "Vorname Nachname" \
+    --set-password
+# Passwort: (wird abgefragt, mindestens 12 Zeichen)
+# Passwort wiederholen:
+# → vorname.nachname@vitabrevis.ch eingetragen (Passwort).
+#   Der zweite Faktor wird beim ersten Anmelden eingerichtet.
+```
+
+Im Container-Aufbau steht derselbe Befehl in der Konsole:
+
+```bash
+docker compose --project-directory cockpit/deploy \
+  -f cockpit/deploy/docker-compose.yml -f cockpit/deploy/docker-compose.plattform.yml \
+  exec api python -m cockpit_api.cli.add_operator --upn … --name … --set-password
+```
+
+Das Passwort wird **abgefragt**, nie als Argument übergeben: was in der
+Kommandozeile steht, steht in der Prozessliste und in der Shell-Historie
+(ADR-0023 D5). Danach meldet sich die Person an der Konsole an, richtet den
+zweiten Faktor ein und ist fertig.
+
+Die Abschnitte 1 bis 3 beschreiben den Weg **mit Client-Zertifikat**. Er
+bleibt gültig und ist der strengere; nötig ist er nicht mehr.
+
+## 1 · Warum es drei Teile sind (Weg mit Zertifikat)
 
 Weil die drei Teile **verschiedenen Leuten** gehören, und zwar absichtlich:
 

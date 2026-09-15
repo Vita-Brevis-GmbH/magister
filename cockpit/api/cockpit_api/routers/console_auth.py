@@ -22,10 +22,13 @@ import logging
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cockpit_api import passwords
 from cockpit_api.auth import SESSION_COOKIE, Caller, require_identity
 from cockpit_api.db import get_session
+from cockpit_api.models.operator import ConsoleOperator, ConsoleSession
 from cockpit_api.schemas.console_auth import (
     ConsoleEnrolmentOut,
+    ConsoleLoginRequest,
     ConsoleTotpRequest,
     ConsoleWhoamiOut,
 )
@@ -38,11 +41,87 @@ from cockpit_api.services.console_auth import (
 
 logger = logging.getLogger(__name__)
 
+#: Gegen den rechnet die Anmeldung, wenn es den Benutzer nicht gibt. Ohne das
+#: antwortet ein unbekannter Benutzer messbar schneller als ein bekannter —
+#: und damit sagt die Antwortzeit, welche Konten existieren.
+_LEER_HASH = passwords.hash_password("kein-konto")
+
 router = APIRouter(prefix="/auth/console", tags=["console-auth"])
 
 
 def _client_ip(request: Request) -> str | None:
     return request.client.host if request.client else None
+
+
+async def _operator_im_gang(
+    request: Request,
+    svc: ConsoleAuthService,
+    fingerprint: str | None,
+) -> tuple[ConsoleOperator | None, ConsoleSession | None]:
+    """Wer gerade mitten in der Anmeldung steckt — und woran man ihn erkennt.
+
+    Zwei Wege führen zum zweiten Schritt (ADR-0023): das Client-Zertifikat
+    (ADR-0020 D1) oder der Zwischenstand aus der Passwort-Anmeldung. Beide
+    enden hier, damit `enrol` und `totp` nur einen Ablauf haben.
+    """
+    cookie = request.cookies.get(SESSION_COOKIE)
+    if cookie:
+        resolved = await svc.resolve_session(cookie, fingerprint=None, allow_pending=True)
+        if resolved is not None and resolved[0].pending_totp:
+            return resolved[1], resolved[0]
+    if fingerprint:
+        return await svc.operator_for(fingerprint), None
+    return None, None
+
+
+@router.post("/login", response_model=ConsoleWhoamiOut)
+async def login(
+    request: Request,
+    response: Response,
+    body: ConsoleLoginRequest,
+    session: AsyncSession = Depends(get_session),
+) -> ConsoleWhoamiOut:
+    """Erster Faktor (ADR-0023 D1). Danach folgt der Code, nicht die Konsole.
+
+    Jede Ablehnung ist derselbe 401: unbekannter Benutzer, falsches Passwort
+    und gesperrt sind für den Vorleger nicht zu unterscheiden. Der Grund steht
+    im Log des Betreibers.
+    """
+    svc = ConsoleAuthService(session)
+    operator = await svc.operator_for_upn(body.upn)
+    if operator is None:
+        # Trotzdem rechnen: sonst antwortet ein unbekannter Benutzer
+        # messbar schneller als ein bekannter.
+        passwords.verify_password(body.password, _LEER_HASH)
+        logger.warning("Konsole: Anmeldung für unbekannten Benutzer versucht.")
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid")
+    if svc.is_locked(operator):
+        logger.warning("Konsole: Anmeldung für gesperrten Operator %s.", operator.upn)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid")
+    if not await svc.verify_password(operator, body.password):
+        await session.commit()
+        logger.warning("Konsole: falsches Passwort für %s.", operator.upn)
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid")
+
+    row = await svc.start_session(
+        operator,
+        fingerprint=None,
+        ip=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        pending=True,
+    )
+    await session.commit()
+    response.set_cookie(
+        key=SESSION_COOKIE,
+        value=row.id,
+        httponly=True,
+        samesite="strict",
+        secure=True,
+        path="/",
+    )
+    # Der Name geht mit: wer das Passwort kennt, weiss ohnehin, wer er ist.
+    stufe = svc.stage_for(operator)
+    return ConsoleWhoamiOut(stage=stufe, upn=operator.upn, name=operator.name)
 
 
 @router.get("/whoami", response_model=ConsoleWhoamiOut)
@@ -57,10 +136,16 @@ async def whoami(
 
     cookie = request.cookies.get(SESSION_COOKIE)
     if cookie:
-        resolved = await svc.resolve_session(cookie, fingerprint=fingerprint)
+        resolved = await svc.resolve_session(cookie, fingerprint=fingerprint, allow_pending=True)
         if resolved is not None:
             row, operator = resolved
             await session.commit()
+            if row.pending_totp:
+                # Passwort gezeigt, Code fehlt. Die Oberfläche soll das
+                # Codefeld zeigen und nicht die Anmeldemaske von vorn.
+                return ConsoleWhoamiOut(
+                    stage=svc.stage_for(operator), upn=operator.upn, name=operator.name
+                )
             return ConsoleWhoamiOut(
                 stage=AuthStage.AUTHENTICATED,
                 upn=operator.upn,
@@ -85,13 +170,14 @@ async def whoami(
 
 @router.post("/enrol", response_model=ConsoleEnrolmentOut)
 async def enrol(
+    request: Request,
     x_console_client_cert: str | None = Header(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> ConsoleEnrolmentOut:
     """Zweiten Faktor einrichten. Geheimnis und Codes gibt es **einmal**."""
     svc = ConsoleAuthService(session)
     fingerprint = fingerprint_from_header(x_console_client_cert)
-    operator = await svc.operator_for(fingerprint) if fingerprint else None
+    operator, _ = await _operator_im_gang(request, svc, fingerprint)
     if operator is None:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "unknown_certificate")
     try:
@@ -122,7 +208,7 @@ async def submit_totp(
     """
     svc = ConsoleAuthService(session)
     fingerprint = fingerprint_from_header(x_console_client_cert)
-    operator = await svc.operator_for(fingerprint) if fingerprint else None
+    operator, zwischenstand = await _operator_im_gang(request, svc, fingerprint)
     if operator is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid")
     if svc.stage_for(operator) is AuthStage.LOCKED:
@@ -142,12 +228,18 @@ async def submit_totp(
 
     if enrolling:
         await svc.confirm_enrolment(operator)
-    row = await svc.start_session(
-        operator,
-        fingerprint=fingerprint or "",
-        ip=_client_ip(request),
-        user_agent=request.headers.get("user-agent"),
-    )
+    if zwischenstand is not None:
+        # Aus dem Zwischenstand der Passwort-Anmeldung wird die Sitzung —
+        # dieselbe Zeile, derselbe Cookie (ADR-0023 D2).
+        await svc.promote_session(zwischenstand, operator)
+        row = zwischenstand
+    else:
+        row = await svc.start_session(
+            operator,
+            fingerprint=fingerprint,
+            ip=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
     await session.commit()
     response.set_cookie(
         key=SESSION_COOKIE,

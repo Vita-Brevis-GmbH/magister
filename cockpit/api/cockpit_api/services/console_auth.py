@@ -1,12 +1,18 @@
-"""Wer bedient die Konsole (ADR-0020).
+"""Wer bedient die Konsole (ADR-0020, ADR-0023).
 
 Zwei Schritte, und beide sind nötig:
 
-1. **Das Client-Zertifikat** sagt, welches Gerät anklopft. Caddy hat es gegen
-   die Plattform-CA geprüft; hier wird aus dem öffentlichen Schlüssel ein
-   Fingerprint gebildet und damit die Operator-Zeile gesucht (D1).
+1. **Der erste Faktor** sagt, wer anklopft. Seit ADR-0023 D1 ist das in der
+   Regel ein Passwort (argon2id, Sperre nach fünf Fehlversuchen). Der Weg
+   über das **Client-Zertifikat** aus ADR-0020 D1 bleibt daneben bestehen:
+   Caddy prüft es gegen den Operator-Zweig, hier wird aus dem öffentlichen
+   Schlüssel ein Fingerprint gebildet und damit die Zeile gesucht.
 2. **Der TOTP-Code** sagt, dass die Person dabei ist. Erst danach entsteht
-   eine Sitzung (D2).
+   eine Sitzung (ADR-0020 D2).
+
+Zwischen beiden liegt bei der Passwort-Anmeldung ein **Zwischenstand**
+(ADR-0023 D2): eine Sitzungszeile mit `pending_totp`, zehn Minuten gültig,
+die zu nichts berechtigt ausser dem zweiten Schritt.
 
 Die Mechanik des zweiten Faktors ist die von ADR-0015 D2 — Geheimnis
 verschlüsselt, letzter Schritt gespeichert, zehn Wiederherstellungscodes,
@@ -26,7 +32,7 @@ from argon2.exceptions import VerificationError, VerifyMismatchError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api import totp
+from cockpit_api import passwords, totp
 from cockpit_api.config import settings
 from cockpit_api.models.operator import ConsoleOperator, ConsoleSession
 from cockpit_api.services.connector_ca import spki_fingerprint_from_der_base64
@@ -41,7 +47,17 @@ TOTP_ISSUER = "Magister Konsole"
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION = timedelta(minutes=15)
 
+#: Wie lange der Zwischenstand zwischen Passwort und Code gilt (ADR-0023 D2).
+#: Lang genug, um die App zu öffnen; kurz genug, dass ein liegengebliebener
+#: halb angemeldeter Browser nicht den Tag überdauert.
+PENDING_MINUTES = 10
+
 _hasher = PasswordHasher()
+
+#: Gegen den wird geprüft, wenn es kein Passwort gibt. Ohne das antwortet ein
+#: Konto ohne Passwort messbar schneller als eines mit — und das ist die
+#: Auskunft „diesen Benutzer gibt es, er hat nur kein Passwort".
+_DUMMY_HASH = passwords.hash_password(secrets.token_urlsafe(32))
 
 
 class ConsoleAuthError(RuntimeError):
@@ -51,8 +67,10 @@ class ConsoleAuthError(RuntimeError):
 class AuthStage(StrEnum):
     """Was als Nächstes zu tun ist."""
 
-    #: Kein oder ein unbekanntes Zertifikat. Kein Hinweis darauf, welches von
-    #: beidem — das wäre eine Auskunft darüber, welche Zertifikate es gibt.
+    #: Niemand erkannt: kein Zertifikat, ein unbekanntes, oder schlicht noch
+    #: keine Anmeldung. Kein Hinweis darauf, welches davon — das wäre eine
+    #: Auskunft darüber, welche Zertifikate und Konten es gibt. Der Name
+    #: stammt aus ADR-0020 und bleibt, damit die Oberfläche nichts umlernt.
     UNKNOWN = "unknown_certificate"
     #: Zertifikat bekannt, zweiter Faktor noch nicht eingerichtet.
     ENROL = "enrolment_required"
@@ -111,6 +129,72 @@ class ConsoleAuthService:
             ConsoleOperator.enabled.is_(True),
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def operator_for_upn(self, upn: str) -> ConsoleOperator | None:
+        """Die Zeile zu einem Benutzernamen — unabhängig von Gross-/Kleinschreibung.
+
+        UPNs schreibt niemand zweimal gleich. `lower()` auf beiden Seiten
+        kostet den Index (Postgres kann `lower(upn)` nur mit einem eigenen
+        Index nutzen); bei zwei Dutzend Operatoren ist das keine Frage.
+        """
+        stmt = select(ConsoleOperator).where(
+            func.lower(ConsoleOperator.upn) == upn.strip().lower(),
+            ConsoleOperator.enabled.is_(True),
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    def is_locked(self, operator: ConsoleOperator) -> bool:
+        return operator.locked_until is not None and operator.locked_until > datetime.now(UTC)
+
+    async def verify_password(self, operator: ConsoleOperator, password: str) -> bool:
+        """Passwort prüfen, Fehlversuche zählen, nach fünf sperren.
+
+        Eigener Zähler neben dem des zweiten Faktors (ADR-0023 D1): ein
+        falsches Passwort und ein falscher Code sind verschiedene Ereignisse.
+        Wer sie zusammenzählt, sperrt bei halb so vielen Fehlern — und
+        verschenkt die Auskunft, welcher der beiden Faktoren angegriffen wird.
+        """
+        if not operator.password_hash:
+            # Kein Passwort gesetzt. Trotzdem einen Hash prüfen, damit die
+            # Antwortzeit nicht verrät, ob es für diesen UPN eines gibt.
+            passwords.verify_password(password, _DUMMY_HASH)
+            return False
+        if passwords.verify_password(password, operator.password_hash):
+            operator.login_failed_count = 0
+            operator.locked_until = None
+            if passwords.needs_rehash(operator.password_hash):
+                # Parameter sind gestiegen. Der einzige Moment, in dem das
+                # Passwort im Klartext vorliegt, ist genau hier.
+                operator.password_hash = passwords.hash_password(password)
+                operator.password_set_at = datetime.now(UTC)
+            await self.session.flush()
+            return True
+
+        operator.login_failed_count += 1
+        if operator.login_failed_count >= MAX_FAILED_ATTEMPTS:
+            bis = datetime.now(UTC) + LOCKOUT_DURATION
+            operator.locked_until = bis
+            logger.warning(
+                "Konsolen-Anmeldung für %s nach %d falschen Passwörtern gesperrt bis %s.",
+                operator.upn,
+                operator.login_failed_count,
+                bis.isoformat(),
+            )
+        await self.session.flush()
+        return False
+
+    async def set_password(self, operator: ConsoleOperator, password: str) -> None:
+        """Passwort setzen oder ersetzen. Prüft nur die Länge (ADR-0023 D1)."""
+        if len(password) < passwords.MIN_LENGTH:
+            raise ConsoleAuthError(
+                f"Das Passwort ist zu kurz (mindestens {passwords.MIN_LENGTH} Zeichen)."
+            )
+        operator.password_hash = passwords.hash_password(password)
+        operator.password_set_at = datetime.now(UTC)
+        operator.login_failed_count = 0
+        operator.locked_until = None
+        await self.session.flush()
+        logger.info("Passwort für %s gesetzt.", operator.upn)
 
     def stage_for(self, operator: ConsoleOperator | None) -> AuthStage:
         if operator is None:
@@ -233,26 +317,53 @@ class ConsoleAuthService:
         self,
         operator: ConsoleOperator,
         *,
-        fingerprint: str,
+        fingerprint: str | None,
         ip: str | None,
         user_agent: str | None,
+        pending: bool = False,
     ) -> ConsoleSession:
+        """Eine Sitzungszeile — fertig oder als Zwischenstand.
+
+        `pending=True` ist der Zustand zwischen Passwort und zweitem Faktor
+        (ADR-0023 D2): kurze Frist, und `require_identity` weist die Zeile ab,
+        als wäre niemand angemeldet.
+        """
+        minuten = PENDING_MINUTES if pending else settings.console_session_minutes
         row = ConsoleSession(
             id=secrets.token_urlsafe(32),
             operator_id=operator.id,
-            expires_at=datetime.now(UTC) + timedelta(minutes=settings.console_session_minutes),
+            expires_at=datetime.now(UTC) + timedelta(minutes=minuten),
             ip=ip,
             user_agent=(user_agent or "")[:512] or None,
-            spki_fingerprint=fingerprint,
+            spki_fingerprint=fingerprint or None,
+            pending_totp=pending,
         )
         self.session.add(row)
+        if not pending:
+            operator.last_login_at = datetime.now(UTC)
+        await self.session.flush()
+        logger.info(
+            "Konsolen-%s für %s bis %s.",
+            "Zwischenstand" if pending else "Sitzung",
+            operator.upn,
+            row.expires_at.isoformat(),
+        )
+        return row
+
+    async def promote_session(self, row: ConsoleSession, operator: ConsoleOperator) -> None:
+        """Aus dem Zwischenstand wird eine Sitzung — nach dem zweiten Faktor.
+
+        Dieselbe Zeile und keine neue: der Cookie im Browser bleibt derselbe,
+        und eine zweite Zeile wäre eine Sitzung, die niemand beendet.
+        """
+        row.pending_totp = False
+        row.expires_at = datetime.now(UTC) + timedelta(minutes=settings.console_session_minutes)
         operator.last_login_at = datetime.now(UTC)
         await self.session.flush()
         logger.info("Konsolen-Sitzung für %s bis %s.", operator.upn, row.expires_at.isoformat())
-        return row
 
     async def resolve_session(
-        self, session_id: str, *, fingerprint: str | None
+        self, session_id: str, *, fingerprint: str | None, allow_pending: bool = False
     ) -> tuple[ConsoleSession, ConsoleOperator] | None:
         """Sitzung und Operator zu einem Cookie — oder `None`.
 
@@ -262,6 +373,11 @@ class ConsoleAuthService:
         """
         row = await self.session.get(ConsoleSession, session_id)
         if row is None:
+            return None
+        if row.pending_totp and not allow_pending:
+            # Der Zwischenstand ist keine Anmeldung. Wer hier landet, hat das
+            # Passwort gezeigt und den Code nicht — und das ist genau der
+            # Zustand, in dem ein Angreifer mit gestohlenem Passwort steckt.
             return None
         if row.expires_at <= datetime.now(UTC):
             await self.session.delete(row)
@@ -290,6 +406,7 @@ class ConsoleAuthService:
 __all__ = [
     "LOCKOUT_DURATION",
     "MAX_FAILED_ATTEMPTS",
+    "PENDING_MINUTES",
     "TOTP_ISSUER",
     "AuthStage",
     "ConsoleAuthError",

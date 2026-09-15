@@ -1,23 +1,33 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { beginEnrolment, submitCode, type Enrolment, type Whoami } from "../api/consoleAuth";
+import {
+  beginEnrolment,
+  login,
+  submitCode,
+  type Enrolment,
+  type Whoami,
+} from "../api/consoleAuth";
 import { ErrorBox } from "./ErrorBox";
 
 /**
- * Die Anmeldung an der Konsole (ADR-0020).
+ * Die Anmeldung an der Konsole (ADR-0020, ADR-0023).
  *
- * Sie fragt **nicht**, wer man ist. Das steht schon fest, bevor diese Seite
- * lädt: der Reverse Proxy hat ein Client-Zertifikat gegen die Plattform-CA
- * geprüft, und der Server hat daraus die Zeile gefunden. Ein Feld
- * „Benutzername“ wäre eine Eingabe für etwas Bekanntes — und die Stelle, an
- * der man sich vertippt, statt sich anzumelden.
+ * Zwei Schritte, und der erste hat zwei Wege:
  *
- * Was bleibt, ist der zweite Faktor: ein Code aus der Authenticator-App oder
- * einer der zehn Wiederherstellungscodes.
+ * - **Passwort** (ADR-0023 D1). Der Normalfall: Benutzername und Passwort,
+ *   danach der Code. Vorher steht auf dieser Seite noch kein Name — der
+ *   Server kennt niemanden, und die Maske soll nichts behaupten.
+ * - **Client-Zertifikat** (ADR-0020 D1). Wer eines hat, ist schon erkannt,
+ *   bevor diese Seite lädt; dann fehlt nur noch der Code, und das Formular
+ *   erscheint gar nicht.
+ *
+ * Welcher Fall vorliegt, entscheidet allein die Antwort des Servers.
  */
 export function ConsoleLogin({ who }: { who: Whoami }) {
   const qc = useQueryClient();
+  const [upn, setUpn] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
   const [stored, setStored] = useState(false);
@@ -30,15 +40,69 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
     mutationFn: () => submitCode(code.trim()),
     onSuccess: () => qc.invalidateQueries(),
   });
+  const loginM = useMutation({
+    // Nach dem Passwort ist man NICHT angemeldet, sondern beim zweiten
+    // Schritt. `invalidateQueries` holt den neuen Stand, und der sagt, ob
+    // jetzt der Code oder die Einrichtung dran ist.
+    mutationFn: () => login(upn.trim(), password),
+    onSuccess: () => {
+      setPassword("");
+      void qc.invalidateQueries();
+    },
+  });
 
   return (
     <div className="mx-auto max-w-xl p-6">
       <h1 className="mb-1 text-lg font-semibold">Vita Brevis Cockpit</h1>
       <p className="mb-6 text-sm text-slate-600">
-        Anmeldung mit Client-Zertifikat und zweitem Faktor.
+        Anmeldung mit Benutzername, Passwort und zweitem Faktor.
       </p>
 
-      {who.stage === "unknown_certificate" && <UnknownCertificate />}
+      {who.stage === "unknown_certificate" && (
+        <form
+          className="space-y-3 text-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            loginM.mutate();
+          }}
+        >
+          {loginM.isError && (
+            <p className="rounded border border-red-300 bg-red-50 p-2 text-red-900">
+              Anmeldung nicht möglich. Benutzername, Passwort oder eine Sperre —
+              welches davon, sagt diese Seite absichtlich nicht.
+            </p>
+          )}
+          <label className="block">
+            <span className="mb-1 block text-slate-600">Benutzername</span>
+            <input
+              value={upn}
+              onChange={(e) => setUpn(e.target.value)}
+              autoComplete="username"
+              autoFocus
+              placeholder="vorname.nachname@vitabrevis.ch"
+              className="w-full rounded border px-2 py-1"
+            />
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-slate-600">Passwort</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+              className="w-full rounded border px-2 py-1"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={loginM.isPending || upn.trim().length < 3 || password.length === 0}
+            className="rounded bg-slate-900 px-3 py-1 text-white disabled:opacity-50"
+          >
+            {loginM.isPending ? "Prüfe…" : "Weiter"}
+          </button>
+          <NoAccountHint />
+        </form>
+      )}
 
       {who.stage === "locked" && (
         <div className="rounded border border-red-300 bg-red-50 p-4 text-sm text-red-900">
@@ -53,7 +117,7 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
       {(who.stage === "enrolment_required" || who.stage === "totp_required") && (
         <div className="space-y-4 text-sm">
           <p className="rounded border bg-slate-50 p-3">
-            Zertifikat erkannt:{" "}
+            Angemeldet als{" "}
             <strong>{who.name ?? who.upn}</strong>
             {who.name && who.upn && (
               <span className="text-slate-600"> ({who.upn})</span>
@@ -63,8 +127,8 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
           {who.stage === "enrolment_required" && !enrolment && (
             <div className="space-y-3">
               <p className="text-slate-600">
-                Für dieses Zertifikat ist noch kein zweiter Faktor eingerichtet. Er
-                wird jetzt eingerichtet — von Ihnen, nicht von jemandem, der Sie
+                Für dieses Konto ist noch kein zweiter Faktor eingerichtet. Er wird
+                jetzt eingerichtet — von Ihnen, nicht von jemandem, der Sie
                 eingetragen hat.
               </p>
               {enrolM.isError && <ErrorBox error={enrolM.error} />}
@@ -138,31 +202,22 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
 }
 
 /**
- * Warum hier nicht steht, ob das Zertifikat bekannt wäre.
+ * Warum hier nicht steht, welcher der Gründe zutrifft.
  *
- * Kein Zertifikat und ein unbekanntes Zertifikat sehen gleich aus. Die
- * Unterscheidung wäre eine Auskunft darüber, welche Zertifikate es gibt — an
+ * Unbekannter Benutzer, falsches Passwort und Sperre sehen gleich aus. Die
+ * Unterscheidung wäre eine Auskunft darüber, welche Konten es gibt — an
  * eine Stelle, die noch niemanden angemeldet hat.
  */
-function UnknownCertificate() {
+function NoAccountHint() {
   return (
-    <div className="space-y-3 rounded border bg-slate-50 p-4 text-sm">
-      <p className="font-medium">Kein gültiges Client-Zertifikat.</p>
-      <p className="text-slate-600">
-        Der Browser hat kein Zertifikat der Plattform-CA vorgelegt, oder das
-        vorgelegte gehört zu keinem eingetragenen Operator. Beides sieht hier
-        gleich aus.
-      </p>
-      <ul className="list-disc space-y-1 pl-5 text-slate-600">
-        <li>Ist das Zertifikat im Zertifikatsspeicher dieses Geräts installiert?</li>
-        <li>Hat der Browser beim Öffnen nach einem Zertifikat gefragt?</li>
-        <li>
-          Ist der Operator eingetragen? Das macht{" "}
-          <code className="font-mono">python -m cockpit_api.cli.add_operator</code> auf
-          dem Konsolen-Host.
-        </li>
-      </ul>
-    </div>
+    <p className="pt-2 text-xs text-slate-500">
+      Noch kein Zugang? Ein Operator wird auf dem Konsolen-Host eingetragen:{" "}
+      <code className="font-mono">
+        python -m cockpit_api.cli.add_operator --upn … --name … --set-password
+      </code>
+      . Ein Client-Zertifikat bleibt möglich (ADR-0020) und ist dann der erste
+      Faktor statt des Passworts.
+    </p>
   );
 }
 

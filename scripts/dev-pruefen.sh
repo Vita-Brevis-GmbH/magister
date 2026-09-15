@@ -387,7 +387,7 @@ print(next(t["id"] for t in json.loads(body) if t["slug"]=="bern"))' 2>/dev/null
 
 # --- T12 ---------------------------------------------------------------------
 t12() {
-  head2 T12 "Die Konsole ist ohne Client-Zertifikat nicht erreichbar (ADR-0020 D1)"
+  head2 T12 "Der Konsolen-Listener nimmt nur Operator-Zertifikate an (ADR-0023 D3)"
   wanted "$@" || return 0
   command -v caddy >/dev/null || { skip "caddy fehlt — kein TLS-Listener"; return 0; }
   local code
@@ -405,10 +405,18 @@ t12() {
     return 0
   fi
   exec 3<&- 3>&-
-  code="$(curl -sk --noproxy '*' "${resolve[@]}" -o /dev/null -w "%{http_code}" \
+  # Ohne Zertifikat kommt man bis zur Anmeldeseite — und keinen Schritt
+  # weiter: der Server erkennt niemanden. Vor ADR-0023 D3 scheiterte hier
+  # schon der Handshake; das war der Grund, warum niemand ohne Zertifikat
+  # auch nur eine Fehlermeldung zu sehen bekam.
+  local body
+  body="$(curl -sk --noproxy '*' "${resolve[@]}" \
     "https://$CONSOLE_HOST:$CONSOLE_TLS_PORT/api/auth/console/whoami" 2>/dev/null)"
-  [ "$code" = "000" ] && ok "ohne Zertifikat scheitert schon der Handshake" \
-    || bad "ohne Zertifikat kam HTTP $code — der Listener verlangt keines"
+  if [ "$(json_get "$body" stage)" = "unknown_certificate" ]; then
+    ok "ohne Zertifikat erreichbar, aber niemand erkannt"
+  else
+    bad "ohne Zertifikat kam etwas anderes: $(echo "$body" | head -c 80)"
+  fi
 
   # Der Zweig, der NICHT hineindarf: ein Connector-Agent. So ein Zertifikat
   # stellt die Konsole jedem Kunden aus, und es liegt auf einem Server im
@@ -437,7 +445,6 @@ t12() {
       || bad "ein Agentenzertifikat kam durch den Handshake (HTTP $code) — der Trust Pool enthält mehr als den Operator-Zweig"
   fi
 
-  local body
   body="$(curl -sk --noproxy '*' "${resolve[@]}" \
     --cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem" \
     "https://$CONSOLE_HOST:$CONSOLE_TLS_PORT/api/auth/console/whoami" 2>/dev/null)"

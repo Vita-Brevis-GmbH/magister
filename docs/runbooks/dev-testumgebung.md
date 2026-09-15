@@ -112,22 +112,31 @@ Zustand jederzeit:
 
 ## 4 · Zugang zur Konsole
 
-**Als Operator** (der reguläre Weg, ADR-0020): erst die Person eintragen, dann
-das Zertifikat in den Browser, dann beim ersten Anmelden den zweiten Faktor
-einrichten.
+**Als Operator mit Passwort** (der reguläre Weg seit ADR-0023): Person
+eintragen, anmelden, beim ersten Anmelden den zweiten Faktor einrichten.
 
 ```bash
 source dev/env.console
 (cd cockpit/api && uv run python -m cockpit_api.cli.add_operator \
+   --upn dev@vitabrevis.dev --name "Dev Operator" --set-password)
+# Passwort: (wird abgefragt, mindestens 12 Zeichen)
+```
+
+Danach `https://console.mgmt.vitabrevis.dev:4444` öffnen, Benutzername und
+Passwort eingeben, QR-Code scannen, Code eingeben.
+
+**Mit Client-Zertifikat** (ADR-0020, weiterhin möglich): statt
+`--set-password` das Zertifikat eintragen und in den Browser legen.
+
+```bash
+(cd cockpit/api && uv run python -m cockpit_api.cli.add_operator \
    --upn dev@vitabrevis.dev --name "Dev Operator" --cert ../../dev/certs/operator.pem)
 
-# Zertifikat für den Browser
 openssl pkcs12 -export -inkey dev/certs/operator-key.pem -in dev/certs/operator.pem \
   -certfile dev/certs/platform-ca.pem -out dev/certs/operator.p12 -passout pass:dev
 ```
 
-Danach `https://console.mgmt.vitabrevis.dev:4444` öffnen, das Zertifikat
-auswählen, QR-Code scannen, Code eingeben. Prüfen ohne Browser:
+Prüfen ohne Browser:
 
 ```bash
 curl -sk --cert dev/certs/operator.pem --key dev/certs/operator-key.pem \

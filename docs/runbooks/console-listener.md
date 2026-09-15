@@ -57,8 +57,13 @@ Das ist kein Detail, das sich später nachziehen lässt: fehlt es, scheitert
 jede Kundenseite am TLS-Handshake, und zwar für alle gleichzeitig. Beim
 Bestellen mitbestellen.
 
-`operator-ca.pem` ist der **Trust Pool für Client-Zertifikate** — nur wer ein
-von dieser Kette signiertes Zertifikat vorweist, kommt durch den Handshake.
+`operator-ca.pem` ist der **Trust Pool für Client-Zertifikate** — wer eines
+vorweist, muss eines aus dieser Kette vorweisen, sonst scheitert der
+Handshake. Seit [ADR-0023 D3](../adr/0023-konsolen-anmeldung-mit-passwort.md)
+ist ein Zertifikat allerdings nicht mehr **Pflicht** (`verify_if_given`): der
+erste Faktor ist das Passwort, und die Erreichbarkeit dieser Adresse regeln
+Netz und Firewall. Wer die alte Strenge will, setzt in der Caddy-Konfiguration
+wieder `require_and_verify` — die Anwendung läuft mit und ohne.
 Deshalb dort ausschliesslich die Operator-Kette hinterlegen, nie ein
 öffentliches CA-Bundle: sonst gilt jedes Zertifikat der Welt.
 

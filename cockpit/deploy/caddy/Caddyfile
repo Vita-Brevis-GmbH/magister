@@ -35,10 +35,17 @@
 https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444,
 https://{$COCKPIT_EXTRA_HOST:localhost}:4444 {
 	tls /certs/console.pem /certs/console-key.pem {
-		# Operator certificates only. `require_and_verify` means the handshake
-		# fails without one — a browser or a scanner gets nothing to talk to.
+		# `verify_if_given` seit ADR-0023 D3: ein Client-Zertifikat ist
+		# willkommen und wird gegen den Operator-Zweig geprüft — aber es ist
+		# nicht mehr Pflicht. Der erste Faktor ist das Passwort, und die
+		# Erreichbarkeit dieser Adresse regeln Netz und Firewall.
+		#
+		# Wer die alte Strenge will, setzt hier wieder `require_and_verify`:
+		# die Anwendung läuft mit und ohne Zertifikat. Dann kommt allerdings
+		# niemand ohne Zertifikat bis zur Anmeldeseite — genau das war der
+		# Grund für die Änderung.
 		client_auth {
-			mode require_and_verify
+			mode verify_if_given
 			trust_pool file /certs/operator-ca.pem
 		}
 		protocols tls1.3 tls1.3

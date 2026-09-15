@@ -533,7 +533,11 @@ start_caddy() {
 https://$CONSOLE_HOST:$CONSOLE_TLS_PORT, https://127.0.0.1:$CONSOLE_TLS_PORT {
 	tls $CERTS/server.pem $CERTS/server-key.pem {
 		client_auth {
-			mode require_and_verify
+			# `verify_if_given` wie in Produktion (ADR-0023 D3): ein
+			# Zertifikat ist willkommen und wird gegen den Operator-Zweig
+			# geprüft, Pflicht ist es nicht. Der erste Faktor ist das
+			# Passwort.
+			mode verify_if_given
 			trust_pool file $CERTS/operator-ca.pem
 		}
 	}

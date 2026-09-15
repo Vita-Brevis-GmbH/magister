@@ -1,4 +1,4 @@
-"""Schemata für die Konsolen-Anmeldung (ADR-0020)."""
+"""Schemata für die Konsolen-Anmeldung (ADR-0020, ADR-0023)."""
 
 from __future__ import annotations
 
@@ -18,6 +18,15 @@ class ConsoleWhoamiOut(BaseModel):
     upn: str | None = None
     name: str | None = None
     expires_at: datetime | None = None
+
+
+class ConsoleLoginRequest(BaseModel):
+    """Erster Faktor: Benutzername und Passwort (ADR-0023 D1)."""
+
+    upn: str = Field(min_length=3, max_length=320)
+    #: Obergrenze, weil auch eine Prüfung, die scheitert, Arbeit kostet —
+    #: argon2 rechnet über die volle Eingabe.
+    password: str = Field(min_length=1, max_length=1024)
 
 
 class ConsoleTotpRequest(BaseModel):
