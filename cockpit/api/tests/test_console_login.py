@@ -179,3 +179,39 @@ class TestDerZweiteFaktorMachtDieSitzung:
             https_client.post("/api/auth/console/totp", json={"code": "000000"}).status_code == 401
         )
         assert https_client.get("/api/tenants").status_code == 401
+
+
+class TestEinrichtenIstWiederholbar:
+    """Der Fehler, der einen Abend gekostet hat.
+
+    Vorher erzeugte jeder Aufruf von `/enrol` ein neues Geheimnis. Wer die
+    Seite neu lud oder ein zweites Telefon einrichten wollte, machte damit
+    den bereits gescannten QR-Code ungültig — und bekam beim Code nur
+    „stimmt nicht". Mit zwei Apps nebeneinander ist das praktisch
+    unvermeidlich, und die Meldung nennt die Ursache nicht.
+    """
+
+    def test_zweimal_einrichten_zeigt_dasselbe_geheimnis(
+        self, https_client: TestClient, operator_mit_passwort: str, secret_key: str
+    ) -> None:
+        _login(https_client)
+        erste = https_client.post("/api/auth/console/enrol").json()
+        zweite = https_client.post("/api/auth/console/enrol").json()
+        assert zweite["secret"] == erste["secret"], (
+            "Der zweite Aufruf darf den gescannten QR-Code nicht ungültig machen."
+        )
+        # Die Wiederherstellungscodes sind neu: die alten liegen nur als Hash
+        # vor und liessen sich nicht ein zweites Mal anzeigen. Es gelten also
+        # die zuletzt gezeigten.
+        assert zweite["recovery_codes"] != erste["recovery_codes"]
+
+    def test_der_code_zum_gezeigten_geheimnis_passt_nach_dem_zweiten_aufruf(
+        self, https_client: TestClient, operator_mit_passwort: str, secret_key: str
+    ) -> None:
+        _login(https_client)
+        https_client.post("/api/auth/console/enrol")
+        zweite = https_client.post("/api/auth/console/enrol").json()
+        code = pyotp.TOTP(zweite["secret"]).now()
+        antwort = https_client.post("/api/auth/console/totp", json={"code": code})
+        assert antwort.status_code == 200, antwort.text
+        assert antwort.json()["stage"] == "authenticated"

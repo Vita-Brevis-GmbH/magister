@@ -256,8 +256,15 @@ function EnrolmentOffer({
   return (
     <div className="space-y-3 rounded border-2 border-amber-500 bg-amber-50 p-4">
       <h2 className="font-semibold text-amber-900">
-        Einrichten — diese Angaben kommen genau einmal
+        Einrichten — die Wiederherstellungscodes kommen genau einmal
       </h2>
+      <p className="text-sm text-amber-900">
+        <strong>Nur eine App einrichten.</strong> Das Geheimnis bleibt dasselbe,
+        solange es nicht bestätigt ist — ein zweiter Klick zeigt also denselben
+        QR-Code. Passt der Code trotzdem nicht, ordnet{" "}
+        <code className="font-mono text-xs">plattform-aufbau.sh totp --upn … --code …</code>{" "}
+        auf dem Konsolen-Host ein, ob es die Uhr oder das Geheimnis ist.
+      </p>
 
       <div className="flex flex-wrap items-start gap-4">
         <img

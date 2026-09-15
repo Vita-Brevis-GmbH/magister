@@ -206,16 +206,30 @@ class ConsoleAuthService:
         return AuthStage.TOTP
 
     async def begin_enrolment(self, operator: ConsoleOperator) -> Enrolment:
-        """Ein neues Geheimnis und zehn Codes — einmal sichtbar.
+        """Das Geheimnis und zehn Codes — sichtbar, bis es bestätigt ist.
 
-        Auch bei einem bereits **begonnenen**, aber nicht bestätigten
-        Enrolment: wer die Seite geschlossen hat, soll neu anfangen können. Ein
-        bestätigtes Enrolment wird dagegen nicht überschrieben — sonst könnte
-        ein gestohlenes Zertifikat allein den zweiten Faktor austauschen.
+        **Ein begonnenes, aber unbestätigtes Enrolment wird nicht ersetzt,
+        sondern erneut gezeigt.** Der Grund ist ein Abend, der dafür
+        draufging: vorher erzeugte jeder Aufruf ein neues Geheimnis. Wer die
+        Seite neu lud oder ein zweites Telefon einrichten wollte, machte
+        damit den bereits gescannten QR-Code ungültig — und bekam beim Code
+        nur „stimmt nicht", ohne Hinweis auf die Ursache. Mit zwei Apps
+        nebeneinander ist der Fehler praktisch unvermeidlich.
+
+        Sicherheitlich kostet das nichts: das Geheimnis ist unbestätigt und
+        allein nutzlos — wer es sieht, hat den ersten Faktor bereits
+        vorgelegt. Die Wiederherstellungscodes werden dabei neu erzeugt: die
+        alten sind nur als Hash gespeichert und liessen sich nicht ein
+        zweites Mal anzeigen. Es gelten also immer genau die zuletzt
+        gezeigten.
+
+        Ein **bestätigtes** Enrolment wird nie überschrieben — sonst könnte
+        ein gestohlener erster Faktor allein den zweiten austauschen. Dafür
+        gibt es `add_operator --reset-mfa` auf dem Konsolen-Host.
         """
         if operator.totp_confirmed_at is not None:
             raise ConsoleAuthError("Der zweite Faktor ist schon eingerichtet.")
-        secret = totp.new_secret()
+        secret = await self._secret_of(operator.id) or totp.new_secret()
         codes = totp.new_recovery_codes()
         uri = totp.provisioning_uri(secret, account=operator.upn, issuer=TOTP_ISSUER)
         await self.session.execute(
