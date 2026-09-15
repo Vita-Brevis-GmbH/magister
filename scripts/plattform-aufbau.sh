@@ -70,6 +70,21 @@ dc_daten() {
 
 secret() { openssl rand -hex 32; }
 
+#: Wird gesetzt, wenn eine Änderung die laufenden Container betrifft.
+NEUSTART_NOETIG=0
+
+setze_wert() {  # $1 = Datei, $2 = Schlüssel, $3 = Wert -> 0 wenn geändert
+  local datei="$1" schluessel="$2" wert="$3" alt
+  alt="$(grep -oP "(?<=^$schluessel=).*" "$datei" 2>/dev/null || true)"
+  [ "$alt" = "$wert" ] && return 1
+  if [ -n "$alt" ]; then
+    sed -i "s|^$schluessel=.*|$schluessel=$wert|" "$datei"
+  else
+    echo "$schluessel=$wert" >> "$datei"
+  fi
+  return 0
+}
+
 # --- Voraussetzungen ---------------------------------------------------------
 preflight() {
   for werkzeug in docker openssl curl python3; do
@@ -99,7 +114,18 @@ make_ca() {
     # Nachtragen, was eine frühere Fassung dieses Skripts noch nicht schrieb:
     # der Trust Pool für Client-Zertifikate ist eine eigene Datei geworden.
     [ -f "$CERTS/operator-ca.pem" ] || cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
-    say "Plattform-CA steht bereits"
+    # Und prüfen, ob das Konsolenzertifikat die verlangten Namen überhaupt
+    # trägt. Ein Name, der fehlt, lässt sich nicht nachtragen — nur das
+    # Zertifikat neu ausstellen. Genau das blieb bisher aus, und der Aufruf
+    # unter dem neuen Namen scheiterte an einem Zertifikat, das ihn nicht
+    # kennt.
+    if ! zertifikat_deckt_ab; then
+      say "Konsolenzertifikat neu ausstellen (Adressen haben sich geändert)"
+      konsolen_zertifikat
+      NEUSTART_NOETIG=1
+    else
+      say "Plattform-CA steht bereits"
+    fi
     return
   fi
   say "Plattform-CA erzeugen (Test-CA für $DOMAIN)"
@@ -137,20 +163,8 @@ make_ca() {
   cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
 
   # Serverzertifikat der Konsole — mit allen Adressen, unter denen sie
-  # gerufen wird. Ein Name, der hier fehlt, lässt sich später nur mit einem
-  # neuen Zertifikat nachtragen.
-  local san="DNS:$KONSOLE_HOST,DNS:localhost,IP:127.0.0.1"
-  [ "$BIND" != "127.0.0.1" ] && san="$san,IP:$BIND"
-  if [ -n "$ZUSATZNAME" ]; then
-    # IP oder Name? Die SAN-Einträge sind verschiedene Typen, und ein Name
-    # im IP-Feld macht das Zertifikat still unbrauchbar.
-    if printf '%s' "$ZUSATZNAME" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then
-      san="$san,IP:$ZUSATZNAME"
-    else
-      san="$san,DNS:$ZUSATZNAME"
-    fi
-  fi
-  zertifikat "console" "$KONSOLE_HOST" "$san"
+  # gerufen wird.
+  konsolen_zertifikat
   # Serverzertifikat für ALLE Kundennamen. Der Platzhalter gilt für genau
   # eine Ebene — deshalb steht die Kundenebene hier ausdrücklich.
   zertifikat "tenants" "*.$DOMAIN" "DNS:*.$DOMAIN,DNS:$DOMAIN"
@@ -179,6 +193,40 @@ make_ca() {
     grep "public key:" "$CERTS/backup-age.key" | awk '{print $NF}' > "$CERTS/backup-age.pub"
   fi
   chmod 600 "$CERTS"/*-key.pem "$CERTS/operator-signing.pem" 2>/dev/null || true
+}
+
+konsolen_san() {
+  local san="DNS:$KONSOLE_HOST,DNS:localhost,IP:127.0.0.1"
+  [ "$BIND" != "127.0.0.1" ] && san="$san,IP:$BIND"
+  if [ -n "$ZUSATZNAME" ]; then
+    # IP oder Name? Das sind verschiedene SAN-Typen, und ein Name im IP-Feld
+    # macht das Zertifikat still unbrauchbar.
+    if printf '%s' "$ZUSATZNAME" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then
+      san="$san,IP:$ZUSATZNAME"
+    else
+      san="$san,DNS:$ZUSATZNAME"
+    fi
+  fi
+  echo "$san"
+}
+
+konsolen_zertifikat() {
+  zertifikat "console" "$KONSOLE_HOST" "$(konsolen_san)"
+  cp -f "$CERTS/console.pem" "$CERTS/console-key.pem" "$REPO/cockpit/deploy/certs/" 2>/dev/null || true
+}
+
+zertifikat_deckt_ab() {  # Trägt das Konsolenzertifikat alle verlangten Namen?
+  [ -f "$CERTS/console.pem" ] || return 1
+  local vorhanden fehlt=0
+  vorhanden="$(openssl x509 -in "$CERTS/console.pem" -noout -ext subjectAltName 2>/dev/null)"
+  local eintrag
+  for eintrag in $(konsolen_san | tr ',' ' '); do
+    case "$eintrag" in
+      DNS:*) echo "$vorhanden" | grep -q "DNS:${eintrag#DNS:}\b" || fehlt=1 ;;
+      IP:*)  echo "$vorhanden" | grep -q "IP Address:${eintrag#IP:}\b" || fehlt=1 ;;
+    esac
+  done
+  [ "$fehlt" -eq 0 ]
 }
 
 zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
@@ -228,7 +276,29 @@ PLATTFORM_NETZ=$NETZ
 EOF
     chmod 600 "$konsole_env"
   else
-    say "Umgebung der Konsole besteht bereits"
+    # Bestehende Umgebung: Geheimnisse bleiben, Adressen werden nachgeführt.
+    #
+    # Der Fehler, den das hier behebt, kostete drei Anläufe: `up --bind …
+    # --zusatzname …` auf eine vorhandene `.env` liess beide Optionen
+    # stillschweigend fallen. Das Skript sagte „besteht bereits", der Kunde
+    # las „alles gut", und der Listener hing weiter auf 127.0.0.1. Eine
+    # Option, die nichts tut, ist schlimmer als eine, die es nicht gibt.
+    local gewuenscht_extra
+    gewuenscht_extra="${ZUSATZNAME:-$( [ "$BIND" != "127.0.0.1" ] && echo "$BIND" || echo "localhost" )}"
+    # Alle drei prüfen, dann entscheiden. Mit `a || b || c` hört die Kette
+    # nach der ersten Änderung auf — die Bindung wurde nachgeführt, der
+    # zweite Name nicht, und der Aufruf scheiterte weiter. Beim ersten Test
+    # dieses Fixes genau so passiert.
+    local geaendert=0
+    setze_wert "$konsole_env" COCKPIT_BIND_ADDRESS "$BIND" && geaendert=1
+    setze_wert "$konsole_env" COCKPIT_EXTRA_HOST "$gewuenscht_extra" && geaendert=1
+    setze_wert "$konsole_env" COCKPIT_HOSTNAME "$KONSOLE_HOST" && geaendert=1
+    if [ "$geaendert" -eq 1 ]; then
+      say "Umgebung der Konsole nachgeführt (Adressen geändert)"
+      NEUSTART_NOETIG=1
+    else
+      say "Umgebung der Konsole besteht bereits"
+    fi
   fi
 
   # Das Passwort der Cluster-Rolle steht in BEIDEN Dateien und muss dasselbe
@@ -306,6 +376,13 @@ start_konsole() {
   # ohne das startet `up` das Abbild von gestern weiter, und eine Korrektur
   # am Code wirkt erst nach einem Handgriff, den niemand dokumentiert hat.
   dc_konsole up -d --build
+  if [ "$NEUSTART_NOETIG" -eq 1 ]; then
+    # Adressen oder Zertifikat haben sich geändert. Ein laufender Caddy
+    # merkt davon nichts: die Bindung steht beim Start fest, und die
+    # Zertifikatsdateien liest er einmal.
+    say "Caddy neu starten (Adressen oder Zertifikat geändert)"
+    dc_konsole up -d --force-recreate caddy
+  fi
   dc_konsole exec -T api alembic upgrade head >/dev/null
   warte "Konsole" "https://$KONSOLE_HOST:4444/api/health" --cert
 }
@@ -324,7 +401,12 @@ warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
     curl "${args[@]}" "$2" 2>/dev/null && { say "$1 antwortet"; return 0; }
     sleep 2; i=$((i+1))
   done
-  die "$1 antwortet nicht. Logs: docker compose -f … logs"
+  # Den Grund gleich mitliefern statt auf das Log zu verweisen: das Skript
+  # hat es vor sich, der Bediener müsste erst einen zweiten Befehl mit drei
+  # Pfaden tippen.
+  printf '\033[31m !! %s antwortet nicht. Letzte Zeilen der Container:\033[0m\n' "$1" >&2
+  dc_konsole logs --tail 20 api caddy 2>&1 | tail -30 >&2
+  exit 1
 }
 
 # --- Kunden ------------------------------------------------------------------
