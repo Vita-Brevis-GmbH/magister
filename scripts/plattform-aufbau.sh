@@ -42,6 +42,10 @@ KONSOLE_HOST="konsole.$DOMAIN"
 # Die Adresse, auf der der Konsolen-Listener veröffentlicht wird. NIE
 # 0.0.0.0 — die Konsole kann Sitzungen in jeden Kunden ausstellen.
 BIND="${PLATTFORM_BIND:-127.0.0.1}"
+# Zweite Adresse, unter der die Konsole gerufen wird: der FQDN oder die IP
+# der Maschine. Sie kommt in das Zertifikat UND in den Site-Block von Caddy
+# — ohne beides scheitert der Aufruf, einmal am Namen und einmal an 421.
+ZUSATZNAME="${PLATTFORM_ZUSATZNAME:-}"
 KUNDEN=("thun" "bern")
 ZIEHEN=0
 
@@ -132,8 +136,21 @@ make_ca() {
   cat "$CERTS/root.pem" "$CERTS/operator-int.pem" > "$CERTS/platform-ca.pem"
   cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
 
-  # Serverzertifikat der Konsole.
-  zertifikat "console" "$KONSOLE_HOST" "DNS:$KONSOLE_HOST,DNS:localhost,IP:127.0.0.1"
+  # Serverzertifikat der Konsole — mit allen Adressen, unter denen sie
+  # gerufen wird. Ein Name, der hier fehlt, lässt sich später nur mit einem
+  # neuen Zertifikat nachtragen.
+  local san="DNS:$KONSOLE_HOST,DNS:localhost,IP:127.0.0.1"
+  [ "$BIND" != "127.0.0.1" ] && san="$san,IP:$BIND"
+  if [ -n "$ZUSATZNAME" ]; then
+    # IP oder Name? Die SAN-Einträge sind verschiedene Typen, und ein Name
+    # im IP-Feld macht das Zertifikat still unbrauchbar.
+    if printf '%s' "$ZUSATZNAME" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then
+      san="$san,IP:$ZUSATZNAME"
+    else
+      san="$san,DNS:$ZUSATZNAME"
+    fi
+  fi
+  zertifikat "console" "$KONSOLE_HOST" "$san"
   # Serverzertifikat für ALLE Kundennamen. Der Platzhalter gilt für genau
   # eine Ebene — deshalb steht die Kundenebene hier ausdrücklich.
   zertifikat "tenants" "*.$DOMAIN" "DNS:*.$DOMAIN,DNS:$DOMAIN"
@@ -187,6 +204,10 @@ write_env() {
 COCKPIT_BIND_ADDRESS=$BIND
 COCKPIT_HOSTNAME=$KONSOLE_HOST
 COCKPIT_CONNECTOR_HOSTNAME=connect.$DOMAIN
+# Die zweite Adresse desselben Listeners (IP oder FQDN der Maschine).
+# Leer heisst 'localhost' — dann ist die Konsole nur über ihren Namen
+# erreichbar, und ein Aufruf per IP endet in 421.
+COCKPIT_EXTRA_HOST=${ZUSATZNAME:-$( [ "$BIND" != "127.0.0.1" ] && echo "$BIND" || echo "localhost" )}
 COCKPIT_BOOTSTRAP_TOKEN=$(secret)
 COCKPIT_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
 # Zwei Marker, zwingend verschieden: sonst öffnete jeder von beiden jeden
@@ -494,6 +515,7 @@ while [ $# -gt 0 ]; do
     --ziehen)  ZIEHEN=1; shift ;;
     --domaene) DOMAIN="$2"; KONSOLE_HOST="konsole.$DOMAIN"; shift 2 ;;
     --bind)    BIND="$2"; shift 2 ;;
+    --zusatzname) ZUSATZNAME="$2"; shift 2 ;;
     *) die "Unbekannte Option: $1" ;;
   esac
 done

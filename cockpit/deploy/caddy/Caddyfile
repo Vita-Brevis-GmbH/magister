@@ -20,9 +20,20 @@
 	# validate. The certificate is issued from the platform CA (see below).
 	auto_https off
 	admin off
+	# Wer die Konsole über die IP aufruft, schickt keinen SNI mit. Ohne
+	# diesen Vorgabenamen bricht Caddy den Handshake mit einem internen
+	# Fehler ab, statt das Zertifikat zu zeigen.
+	default_sni {$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}
 }
 
-https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444 {
+# Zwei Adressen, weil die Konsole auf zwei Wegen gerufen wird: über ihren
+# Namen, und über die Adresse der Maschine, auf der sie steht (IP oder
+# Host-FQDN). Ohne die zweite antwortet Caddy auf einen Aufruf per IP mit
+# 421 — die Anfrage passt zu keinem Site-Block, und das sieht aus wie ein
+# kaputter Listener. `COCKPIT_EXTRA_HOST` ist mit `localhost` vorbelegt,
+# damit ein leerer Wert nichts kaputtmacht.
+https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444,
+https://{$COCKPIT_EXTRA_HOST:localhost}:4444 {
 	tls /certs/console.pem /certs/console-key.pem {
 		# Operator certificates only. `require_and_verify` means the handshake
 		# fails without one — a browser or a scanner gets nothing to talk to.

@@ -111,6 +111,9 @@ services:
       - "0.0.0.0:46200:46200"
     environment:
       COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.mgmt.vitabrevis.ch}
+      # Zweite Adresse desselben Listeners: die IP oder der FQDN der
+      # Maschine. Wer die Konsole so aufruft, bekommt sonst 421.
+      COCKPIT_EXTRA_HOST: ${COCKPIT_EXTRA_HOST:-localhost}
       COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-connect.vitabrevis.ch}
       COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required}
       COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required}
