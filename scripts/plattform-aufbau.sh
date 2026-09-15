@@ -70,9 +70,6 @@ dc_daten() {
 
 secret() { openssl rand -hex 32; }
 
-#: Wird gesetzt, wenn eine Änderung die laufenden Container betrifft.
-NEUSTART_NOETIG=0
-
 setze_wert() {  # $1 = Datei, $2 = Schlüssel, $3 = Wert -> 0 wenn geändert
   local datei="$1" schluessel="$2" wert="$3" alt
   alt="$(grep -oP "(?<=^$schluessel=).*" "$datei" 2>/dev/null || true)"
@@ -93,12 +90,16 @@ preflight() {
   docker compose version >/dev/null 2>&1 || die "Das compose-Plugin von Docker fehlt (docker-compose-plugin)."
   docker info >/dev/null 2>&1 || die "Der Docker-Dienst antwortet nicht (systemctl start docker)."
   command -v age >/dev/null || warn "age fehlt — Sicherungen lassen sich nicht prüfen."
-  command -v pnpm >/dev/null || warn "pnpm fehlt — die Konsolen-Oberfläche wird nicht gebaut; der Listener antwortet dann nur auf /api/*."
+  # `apt-get install pnpm` gibt es auf Ubuntu nicht — der Hinweis muss einen
+  # Weg nennen, der auf der Maschine auch funktioniert.
+  command -v pnpm >/dev/null || warn "pnpm fehlt — die Konsolen-Oberfläche wird nicht gebaut; der Listener antwortet dann nur auf /api/*. Abhilfe: 'corepack enable pnpm' (bei installiertem Node) oder 'npm install -g pnpm'."
   [ "$BIND" = "0.0.0.0" ] && die "PLATTFORM_BIND=0.0.0.0 ist nicht zulässig: die Konsole gehört auf eine Verwaltungsadresse (ADR-0015 D1)."
   # 443 und 80 gehören dem Kunden-Listener. Belegt heisst: ein anderer
   # Webserver steht im Weg, und Caddy bekäme den Port nicht.
   for port in 80 443 4444; do
-    if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
+    local ziel="127.0.0.1"
+    [ "$port" = "4444" ] && ziel="$BIND"
+    if (exec 3<>"/dev/tcp/$ziel/$port") 2>/dev/null; then
       exec 3<&- 3>&-
       warn "Port $port ist belegt — wenn das nicht dieser Stack ist, scheitert Caddy beim Start."
     fi
@@ -122,7 +123,6 @@ make_ca() {
     if ! zertifikat_deckt_ab; then
       say "Konsolenzertifikat neu ausstellen (Adressen haben sich geändert)"
       konsolen_zertifikat
-      NEUSTART_NOETIG=1
     else
       say "Plattform-CA steht bereits"
     fi
@@ -295,7 +295,6 @@ EOF
     setze_wert "$konsole_env" COCKPIT_HOSTNAME "$KONSOLE_HOST" && geaendert=1
     if [ "$geaendert" -eq 1 ]; then
       say "Umgebung der Konsole nachgeführt (Adressen geändert)"
-      NEUSTART_NOETIG=1
     else
       say "Umgebung der Konsole besteht bereits"
     fi
@@ -376,13 +375,17 @@ start_konsole() {
   # ohne das startet `up` das Abbild von gestern weiter, und eine Korrektur
   # am Code wirkt erst nach einem Handgriff, den niemand dokumentiert hat.
   dc_konsole up -d --build
-  if [ "$NEUSTART_NOETIG" -eq 1 ]; then
-    # Adressen oder Zertifikat haben sich geändert. Ein laufender Caddy
-    # merkt davon nichts: die Bindung steht beim Start fest, und die
-    # Zertifikatsdateien liest er einmal.
-    say "Caddy neu starten (Adressen oder Zertifikat geändert)"
-    dc_konsole up -d --force-recreate caddy
-  fi
+  # Caddy IMMER neu erzeugen, nicht nur bei geänderten Adressen.
+  #
+  # Compose erkennt Änderungen an Abbild, Umgebung und Mounts — aber nicht
+  # am INHALT einer eingehängten Datei. Die Caddy-Konfiguration ist genau so
+  # eine Datei, und sie ändert sich öfter als alles andere hier. Gemessen:
+  # nach einem `git pull`, der das Client-Zertifikat optional machte, lief
+  # Caddy weiter mit der alten Regel und wies den Browser ab
+  # (ERR_BAD_SSL_CLIENT_AUTH_CERT) — während die Datei auf der Platte schon
+  # das Richtige sagte. Ein Neustart kostet eine Sekunde.
+  say "Caddy neu starten (die Konfiguration ist eine eingehängte Datei)"
+  dc_konsole up -d --force-recreate caddy
   dc_konsole exec -T api alembic upgrade head >/dev/null
   warte "Konsole" "https://$KONSOLE_HOST:4444/api/health" --cert
 }
@@ -394,8 +397,12 @@ start_daten() {
 }
 
 warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
+  # Auf $BIND und nicht auf 127.0.0.1: mit `--bind 10.x.y.z` ist der Port
+  # genau dort veröffentlicht und sonst nirgends. Die feste Loopback-Zeile
+  # war der Grund, warum `up` „Konsole antwortet nicht" meldete, während
+  # die Konsole im Log fröhlich `GET /api/health 200 OK` schrieb.
   local i=0 args=(-sS -o /dev/null --noproxy '*' -k
-                  --resolve "$KONSOLE_HOST:4444:127.0.0.1")
+                  --resolve "$KONSOLE_HOST:4444:$BIND")
   [ "${3:-}" = "--cert" ] && args+=(--cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem")
   while [ "$i" -lt 60 ]; do
     curl "${args[@]}" "$2" 2>/dev/null && { say "$1 antwortet"; return 0; }
@@ -418,7 +425,7 @@ konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
   local token args
   token="$(grep -oP '(?<=^COCKPIT_BOOTSTRAP_TOKEN=).*' "$REPO/cockpit/deploy/.env")"
   args=(-sS --noproxy '*' -k -o /dev/stdout -w "\n%{http_code}"
-        --resolve "$KONSOLE_HOST:4444:127.0.0.1"
+        --resolve "$KONSOLE_HOST:4444:$BIND"
         --cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem"
         -X "$1" "https://$KONSOLE_HOST:4444$2"
         -H "Authorization: Bearer $token")
