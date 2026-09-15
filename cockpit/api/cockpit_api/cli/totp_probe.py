@@ -79,7 +79,15 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"Zeitschritt:        {totp.current_step()}")
         print("Zweiter Faktor:     ", end="")
         if not geheimnis:
-            print("kein Geheimnis hinterlegt — die Einrichtung ist nie angekommen.")
+            # Zwei Wege führen hierher, und der erste ist der Normalfall
+            # direkt nach `--reset-mfa`. Die Meldung darf ihn nicht wie einen
+            # Fehler aussehen lassen.
+            print("kein Geheimnis hinterlegt.")
+            print("\nDas ist der Zustand direkt nach `add_operator --reset-mfa`")
+            print("— und auch der, wenn die Einrichtung nie angekommen ist.")
+            print("Nächster Schritt: an der Konsole anmelden, EINMAL")
+            print("„Zweiten Faktor einrichten“ klicken, den gezeigten QR-Code")
+            print("scannen. Danach sagt dieser Befehl mehr.")
             return 3
         print("bestätigt" if operator.totp_confirmed_at else "eingerichtet, unbestätigt")
         print(f"Letzter Schritt:    {operator.totp_last_step or '—'}")
