@@ -146,6 +146,29 @@ an der Konsole, Operator-Zugriff auf Kundendaten, Sicherung und
 Wiederherstellung über die Oberfläche. Diese Schritte stehen in
 [dev-testumgebung.md](dev-testumgebung.md) §5.9–§5.12 und gelten unverändert.
 
+## 5a · Operatoren und TOTP
+
+Beide Werkzeuge laufen **in** der Konsole, und beide gehen über das Skript —
+nicht über `docker compose exec` von Hand:
+
+```bash
+./scripts/plattform-aufbau.sh operator --upn … --name "…" --set-password
+./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
+./scripts/plattform-aufbau.sh totp --upn … --code 123456
+```
+
+Der Grund ist eine Falle, die einen Abend gekostet hat: `exec api python -m
+…` führt den Code aus, der beim **Bauen** in das Abbild kopiert wurde. Ein
+`git pull` ändert daran nichts — das Werkzeug im Container ist dann älter
+als das Repository, und ein neues Argument existiert dort nicht
+(„unrecognized arguments: --reset-mfa"). Die beiden Befehle oben bauen das
+Abbild vorher neu.
+
+`totp` ordnet einen abgewiesenen Code ein: passt er mit Versatz, geht eine
+Uhr falsch; passt er zu keinem Zeitschritt in ±5 Minuten, hält die App ein
+anderes Geheimnis als die Datenbank — dann `--reset-mfa` und neu
+einrichten.
+
 ## 6 · Anhalten und Abbauen
 
 ```bash

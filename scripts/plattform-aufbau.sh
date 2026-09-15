@@ -7,6 +7,10 @@
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
+#   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
+#   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
+#   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
+#
 # Der Unterschied zu `dev-umgebung.sh`: dort laufen die Dienste als nackte
 # Prozesse auf der Maschine, damit man mit einem Breakpoint hineinkommt.
 # Hier laufen genau die Container, die auch in Produktion laufen, mit
@@ -648,7 +652,35 @@ cmd_purge() {
   say "Gelöscht — der nächste 'up' beginnt von vorn"
 }
 
+# --- Werkzeuge in der Konsole ------------------------------------------------
+# `exec api python -m …` führt den Code aus, der beim BAUEN in das Abbild
+# kopiert wurde. Ein `git pull` ändert daran nichts — das Werkzeug im
+# Container ist dann älter als das Repository, und ein neues Argument
+# existiert dort noch nicht („unrecognized arguments: --reset-mfa"). Genau
+# so passiert.
+#
+# Diese zwei Befehle bauen das Abbild deshalb vorher neu und reichen alles
+# Weitere unverändert durch:
+#
+#   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
+#   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
+#   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
+cmd_werkzeug() {  # $1 = Modul, Rest = Argumente
+  local modul="$1"; shift
+  say "Abbild der Konsole aktualisieren (damit das Werkzeug dem Repository entspricht)"
+  dc_konsole up -d --build api >/dev/null
+  dc_konsole exec api python -m "$modul" "$@"
+}
+
 BEFEHL="${1:-up}"; shift || true
+
+# `operator` und `totp` nehmen die Argumente ihres Werkzeugs, nicht die
+# dieses Skripts — deshalb vor der Optionsschleife.
+case "$BEFEHL" in
+  operator) cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
+  totp)     cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
+esac
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --ziehen)  ZIEHEN=1; shift ;;
@@ -664,5 +696,5 @@ case "$BEFEHL" in
   status) cmd_status ;;
   down)   cmd_down ;;
   purge)  cmd_purge ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up, status, down, purge)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up, status, down, purge, operator, totp)" ;;
 esac
