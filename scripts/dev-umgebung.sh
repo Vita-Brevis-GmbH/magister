@@ -151,11 +151,20 @@ HINWEIS
   # gestern. Man sieht dann Antworten, die zu nichts passen („not_found" auf
   # eine Anfrage mit gültigem Marker). Deshalb hier abbrechen und nicht
   # hoffen. Gemessen: genau so passiert.
-  for port in "$CONSOLE_PORT" "$API_PORT"; do
-    if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then
-      exec 3<&- 3>&-
-      die "Port $port ist belegt. Erst './scripts/dev-umgebung.sh down' — oder ein fremder Dienst hört dort."
+  local port name pid
+  for paar in "console:$CONSOLE_PORT" "api:$API_PORT"; do
+    name="${paar%%:*}"; port="${paar##*:}"
+    (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null || continue
+    exec 3<&- 3>&-
+    # Der eigene Dienst aus einem früheren Lauf oder ein fremder? Das ist der
+    # Unterschied zwischen „einmal down" und „hier stimmt etwas anderes
+    # nicht" — und die Antwort steht in der Prozessliste, nicht im Kopf des
+    # Bedieners.
+    pid="$(pgrep -f "$(dienst_muster "$name")" | head -1)"
+    if [ -n "$pid" ]; then
+      die "Port $port hält die eigene $name aus einem früheren Lauf (PID $pid). Erst './scripts/dev-umgebung.sh down', dann 'up' erneut."
     fi
+    die "Port $port ist belegt, aber nicht von Magister — dort hört ein fremder Dienst. Entweder ihn beenden oder mit DEV_${name^^}_PORT=<frei> starten."
   done
 }
 
