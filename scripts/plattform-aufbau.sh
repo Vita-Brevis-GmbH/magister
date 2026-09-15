@@ -369,13 +369,23 @@ build_ui() {
   say "Konsolen-Oberfläche im Container bauen (kein pnpm auf dem Host)"
   local protokoll="$ZIEL/ui-bau.log"
   mkdir -p "$ZIEL"
-  # COREPACK_ENABLE_DOWNLOAD_PROMPT=0: Corepack lädt pnpm in der im Projekt
-  # festgelegten Fassung nach und FRAGT vorher — an einem Terminal eine
+  # Zwei Eigenheiten, beide teuer bezahlt:
+  #
+  # COREPACK_ENABLE_DOWNLOAD_PROMPT=0 — Corepack lädt pnpm in der im Projekt
+  # festgelegten Fassung nach und FRAGT vorher. An einem Terminal eine
   # Rückfrage, in einem Skript ohne TTY ein Abbruch. Von Hand lief derselbe
   # Befehl deshalb durch und im Skript nicht.
+  #
+  # --ignore-workspace — neuere pnpm-Fassungen legen eine
+  # `pnpm-workspace.yaml` an, um Einstellungen abzulegen. Enthält die kein
+  # `packages:`, bricht pnpm 10 beim nächsten Lauf ab: „packages field
+  # missing or empty". Ein einziger Fehlversuch mit einer neueren Fassung
+  # hinterlässt also eine Datei, die jeden folgenden Lauf verhindert. Hier
+  # gibt es keinen Workspace, also geht die Datei uns nichts an.
   if ! docker run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
        -v "$REPO/cockpit/web:/arbeit" -w /arbeit node:22-alpine \
-       sh -c 'corepack enable pnpm && pnpm install && pnpm build' > "$protokoll" 2>&1; then
+       sh -c 'corepack enable pnpm && pnpm install --ignore-workspace && pnpm build' \
+       > "$protokoll" 2>&1; then
     warn "Der Bau der Oberfläche ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
     # Die Ausgabe zeigen und nicht verstecken. Ein Skript, das den Grund
     # wegwirft, macht aus einem benennbaren Fehler eine Suche.

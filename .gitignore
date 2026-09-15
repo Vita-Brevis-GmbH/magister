@@ -60,3 +60,8 @@ tsconfig.tsbuildinfo
 # Erzeugt von scripts/plattform-aufbau.sh: Test-CA, Schlüssel, Kundendumps.
 /plattform/
 /cockpit/deploy/certs/
+# Erzeugt von neueren pnpm-Fassungen, wenn sie Einstellungen ablegen — hier
+# gibt es keinen Workspace, und eine Datei ohne `packages:` bricht jeden
+# folgenden `pnpm install` ab.
+cockpit/web/pnpm-workspace.yaml
+apps/web/pnpm-workspace.yaml
