@@ -694,6 +694,33 @@ cmd_purge() {
     psql_admin -d postgres -c "DROP ROLE IF EXISTS r_$slug" >/dev/null 2>&1 || true
   done
   rm -rf "$DEV"
+
+  # Nachsehen, ob wirklich weg. Die Löschungen oben schlucken ihre Fehler —
+  # das ist bequem, aber wer „purge" sagt, will von vorn anfangen und nicht
+  # mit einer übriggebliebenen Rolle weiterarbeiten, die dann beim nächsten
+  # Aufbau ein Passwort von gestern trägt.
+  local rest=""
+  for db in cockpit_dev magister_dev; do
+    psql_admin -d postgres -tAc \
+      "SELECT 1 FROM pg_database WHERE datname = '$db'" 2>/dev/null | grep -q 1 \
+      && rest="$rest  Datenbank $db\n"
+  done
+  for slug in "${TENANTS[@]}"; do
+    psql_admin -d postgres -tAc \
+      "SELECT 1 FROM pg_roles WHERE rolname = 'r_$slug'" 2>/dev/null | grep -q 1 \
+      && rest="$rest  Rolle r_$slug\n"
+  done
+  if [ -n "$rest" ]; then
+    warn "Das liess sich nicht löschen — der nächste Aufbau startet also nicht ganz von vorn:"
+    printf "$rest" >&2
+    cat >&2 <<HINWEIS
+    Meist hängt daran noch etwas: eine offene Verbindung, oder ein Objekt in
+    einer anderen Datenbank desselben Clusters. Was genau, sagt:
+        psql -h $PG_HOST -p $PG_PORT -U $PG_USER -d postgres -c 'DROP ROLE r_${TENANTS[0]}'
+HINWEIS
+  else
+    say "Alles gelöscht — der nächste 'up' beginnt von vorn"
+  fi
 }
 
 case "${1:-up}" in

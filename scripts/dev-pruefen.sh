@@ -413,7 +413,11 @@ t12() {
   esac
 }
 
-for t in t1 t2 t3 t4 t5 t6 t7 t8 t9 t10 t11 t12; do "$t" "$@"; done
+# T5 läuft NACH T7, nicht an fünfter Stelle: die Audit-Ereignisse, an denen
+# es die Verschlüsselung prüft, entstehen in der Migrationswelle von T7. Auf
+# einer frisch aufgebauten Umgebung gibt es vorher keines — T5 übersprang
+# sich dann selbst, und ein übersprungener Test beweist nichts.
+for t in t1 t2 t3 t4 t6 t7 t5 t8 t9 t10 t11 t12; do "$t" "$@"; done
 
 printf '\n\033[1m%d bestanden, %d gescheitert, %d übersprungen\033[0m\n' "$PASS" "$FAIL" "$SKIP"
 [ "$FAIL" -eq 0 ] || exit 1
