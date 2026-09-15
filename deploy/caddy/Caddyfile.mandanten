@@ -1,0 +1,80 @@
+# Kundenseiten der gehosteten Plattform (ADR-0013 D3).
+#
+# Der Unterschied zu `Caddyfile`: dort steht **ein** Kunde hinter **einem**
+# Namen — das ist die Installation beim Kunden. Hier stehen viele Kunden
+# hinter vielen Namen auf derselben Maschine, und der Hostname ist das, was
+# sie auseinanderhält. Deshalb:
+#
+#   * EIN Site-Block für alle. Ein Block je Kunde hiesse: bei jedem neuen
+#     Kunden die Konfiguration anfassen und Caddy neu laden — ein Handgriff,
+#     den man vergisst, und dann bekommt der neue Kunde eine Fehlermeldung
+#     statt einer Anmeldeseite.
+#   * `X-Forwarded-Host` geht mit. Daran und an nichts anderem erkennt die
+#     Datenebene den Mandanten (`tenancy/middleware.py`). Fehlt der Kopf,
+#     sieht sie den Namen des Containers und bedient niemanden.
+#   * Kein ACME. Das Zertifikat kommt aus der Plattform-CA und deckt die
+#     Namen aller Kunden ab (ein Platzhalter `*.<domäne>` reicht für genau
+#     eine Ebene — deshalb steht in der Zeremonie die Domäne, unter der die
+#     Kundennamen liegen). Hinter einer WAF ist ACME ohnehin nicht der Weg.
+#
+# Pflicht-Umgebung:
+#   MAGISTER_TENANT_DOMAIN   — die Ebene, unter der die Kundennamen liegen,
+#                              z.B. dev-mgmt.int.vitabrevis.ch
+#   MAGISTER_DEFAULT_SNI     — Name für Aufrufe ohne SNI (Zugriff über die
+#                              IP). Ohne diesen antwortet Caddy mit 421, und
+#                              das sieht aus wie ein kaputter Listener.
+{
+	auto_https off
+	admin off
+	default_sni {$MAGISTER_DEFAULT_SNI}
+}
+
+http:// {
+	redir https://{host}{uri} permanent
+}
+
+(sicherheitskoepfe) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+}
+
+# Alle Kundennamen unter der Plattform-Domäne. Der Platzhalter gilt für genau
+# eine Ebene: `thun.<domäne>` ja, `a.b.<domäne>` nein — dasselbe wie beim
+# Zertifikat, und das ist Absicht.
+*.{$MAGISTER_TENANT_DOMAIN} {
+	tls /certs/tenants.pem /certs/tenants-key.pem
+
+	import sicherheitskoepfe
+	encode zstd gzip
+
+	# Die Sonde für die Überwachung (ADR-0021 D6). Sie läuft VOR der
+	# Mandanten-Auflösung und muss den Hostnamen trotzdem mitbekommen —
+	# sonst kann sie nicht sagen, WELCHER Kunde in Wartung ist.
+	handle /healthz* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# `handle_path`: die Datenebene hängt ihre Router an „/", der Präfix
+	# wird hier abgestreift.
+	handle_path /api/* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle {
+		reverse_proxy magister-web:80 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+}

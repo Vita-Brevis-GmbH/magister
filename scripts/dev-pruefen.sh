@@ -395,10 +395,47 @@ t12() {
   # Zertifikat gilt, und antwortet mit 421 — was hier wie ein kaputter
   # Listener aussähe. `--resolve` spart den Eintrag in /etc/hosts.
   local resolve=(--resolve "$CONSOLE_HOST:$CONSOLE_TLS_PORT:127.0.0.1")
+
+  # Erst nachsehen, ob dort überhaupt jemand hört. Ohne diese Zeile ist
+  # „kein Listener" von „Handshake verweigert" nicht zu unterscheiden —
+  # beides ist HTTP 000, und die Prüfung wäre grün, gerade WEIL nichts
+  # läuft. Einmal genau so passiert.
+  if ! (exec 3<>"/dev/tcp/127.0.0.1/$CONSOLE_TLS_PORT") 2>/dev/null; then
+    skip "auf Port $CONSOLE_TLS_PORT hört nichts — Caddy läuft nicht"
+    return 0
+  fi
+  exec 3<&- 3>&-
   code="$(curl -sk --noproxy '*' "${resolve[@]}" -o /dev/null -w "%{http_code}" \
     "https://$CONSOLE_HOST:$CONSOLE_TLS_PORT/api/auth/console/whoami" 2>/dev/null)"
   [ "$code" = "000" ] && ok "ohne Zertifikat scheitert schon der Handshake" \
     || bad "ohne Zertifikat kam HTTP $code — der Listener verlangt keines"
+
+  # Der Zweig, der NICHT hineindarf: ein Connector-Agent. So ein Zertifikat
+  # stellt die Konsole jedem Kunden aus, und es liegt auf einem Server im
+  # Kundennetz. Läge die Wurzel im Trust Pool statt nur der Operator-Zweig,
+  # käme es durch den Handshake — die Anwendung wiese es danach zwar ab,
+  # aber die zweite von drei Schichten hätte nicht gehalten.
+  if [ -f "$CERTS/connector-int-key.pem" ]; then
+    if [ ! -f "$CERTS/pruef-agent.pem" ]; then
+      openssl req -newkey rsa:2048 -nodes -keyout "$CERTS/pruef-agent-key.pem" \
+        -out "$CERTS/pruef-agent.csr" -subj "/CN=pruef-agent" 2>/dev/null
+      openssl x509 -req -in "$CERTS/pruef-agent.csr" -CA "$CERTS/connector-int.pem" \
+        -CAkey "$CERTS/connector-int-key.pem" -CAcreateserial -days 30 -sha256 \
+        -out "$CERTS/pruef-agent-leaf.pem" \
+        -extfile <(printf 'extendedKeyUsage=clientAuth\n') 2>/dev/null
+      # Blatt UND Zwischenstelle: wer angreift, schickt die Kette mit — die
+      # Zwischenstelle ist öffentlich. Nur das Blatt zu schicken würde die
+      # Prüfung grün machen, ohne dass der Trust Pool etwas dazu beigetragen
+      # hätte. Genau so danebengegriffen, beim ersten Versuch.
+      cat "$CERTS/pruef-agent-leaf.pem" "$CERTS/connector-int.pem" > "$CERTS/pruef-agent.pem"
+    fi
+    code="$(curl -sk --noproxy '*' "${resolve[@]}" \
+      --cert "$CERTS/pruef-agent.pem" --key "$CERTS/pruef-agent-key.pem" \
+      -o /dev/null -w "%{http_code}" \
+      "https://$CONSOLE_HOST:$CONSOLE_TLS_PORT/api/auth/console/whoami" 2>/dev/null)"
+    [ "$code" = "000" ] && ok "ein Agentenzertifikat öffnet den Konsolen-Listener nicht" \
+      || bad "ein Agentenzertifikat kam durch den Handshake (HTTP $code) — der Trust Pool enthält mehr als den Operator-Zweig"
+  fi
 
   local body
   body="$(curl -sk --noproxy '*' "${resolve[@]}" \

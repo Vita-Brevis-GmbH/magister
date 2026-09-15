@@ -28,7 +28,7 @@ https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444 {
 		# fails without one — a browser or a scanner gets nothing to talk to.
 		client_auth {
 			mode require_and_verify
-			trust_pool file /certs/platform-ca.pem
+			trust_pool file /certs/operator-ca.pem
 		}
 		protocols tls1.3 tls1.3
 	}
@@ -130,7 +130,12 @@ https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.vitabrevis.ch}:46200 {
 			# one — and it is why the token is short-lived and why the console
 			# shows the fingerprint afterwards.
 			mode verify_if_given
-			trust_pool file /certs/platform-ca.pem
+			# NUR der Connector-Zweig. Aus demselben Grund, aus dem der
+			# Konsolen-Listener nur den Operator-Zweig kennt: was hier liegt,
+			# ist ein Vertrauensanker. Mit der Wurzel im Pool gälte auch ein
+			# Operator-Zertifikat als gültiger Agent — und ein Zweig, der für
+			# Menschen gedacht ist, hätte plötzlich eine Maschinenrolle.
+			trust_pool file /certs/connector-int.pem
 		}
 		protocols tls1.3 tls1.3
 	}

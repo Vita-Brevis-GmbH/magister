@@ -56,3 +56,7 @@ tsconfig.tsbuildinfo
 # Testwert: ein Beispielschlüssel im Verlauf ist ein Schlüssel, den jemand
 # irgendwann produktiv einsetzt.
 /dev/
+
+# Erzeugt von scripts/plattform-aufbau.sh: Test-CA, Schlüssel, Kundendumps.
+/plattform/
+/cockpit/deploy/certs/

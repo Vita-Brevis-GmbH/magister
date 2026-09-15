@@ -175,7 +175,13 @@ HINWEIS
 # ADR-0020 und ADR-0014 tragen.
 make_ca() {
   mkdir -p "$CERTS"
-  [ -f "$CERTS/root.pem" ] && { say "CA steht bereits"; return; }
+  if [ -f "$CERTS/root.pem" ]; then
+    # Nachtragen, was eine frühere Fassung dieses Skripts noch nicht schrieb:
+    # der Trust Pool für Client-Zertifikate ist eine eigene Datei geworden.
+    [ -f "$CERTS/operator-ca.pem" ] || cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
+    say "CA steht bereits"
+    return
+  fi
   say "Test-CA erzeugen"
   openssl req -x509 -newkey rsa:3072 -sha256 -days 825 -nodes -keyout "$CERTS/root-key.pem" \
     -out "$CERTS/root.pem" -subj "/CN=Magister DEV Root" \
@@ -188,7 +194,14 @@ make_ca() {
       -CAcreateserial -days 730 -sha256 -out "$CERTS/$kind-int.pem" \
       -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n') 2>/dev/null
   done
+  # Zwei Dateien, zwei Fragen: `platform-ca.pem` beantwortet „ist der Server
+  # echt?" (Wurzel + Operator-Zweig), `operator-ca.pem` beantwortet „darf
+  # dieser Client anklopfen?" — und dafür NUR der Operator-Zweig. Mit der
+  # Wurzel im Client-Pool käme auch ein Connector-Agent durch den
+  # Konsolen-Listener; jeder Kunde hat so ein Zertifikat im eigenen Netz.
+  # T12 misst genau das.
   cat "$CERTS/root.pem" "$CERTS/operator-int.pem" > "$CERTS/platform-ca.pem"
+  cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
 
   # Serverzertifikat: der Konsolenname UND ein Wildcard für die Kundenseiten.
   # Wildcards gelten für genau eine Ebene — deshalb steht `*.mgmt…` hier
@@ -521,7 +534,7 @@ https://$CONSOLE_HOST:$CONSOLE_TLS_PORT, https://127.0.0.1:$CONSOLE_TLS_PORT {
 	tls $CERTS/server.pem $CERTS/server-key.pem {
 		client_auth {
 			mode require_and_verify
-			trust_pool file $CERTS/platform-ca.pem
+			trust_pool file $CERTS/operator-ca.pem
 		}
 	}
 	handle /api/* {

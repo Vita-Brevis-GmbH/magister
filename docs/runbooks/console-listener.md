@@ -36,7 +36,9 @@ Drei Dateien müssen in `cockpit/deploy/certs/` liegen, bevor der Stack startet
 
 | Datei | Inhalt | Herkunft |
 |-------|--------|----------|
-| `platform-ca.pem` | Root + Intermediate "Operator" | [Runbook Plattform-CA](platform-ca.md) §4 |
+| `operator-ca.pem` | **Nur** das Intermediate "Operator" — der Trust Pool für Client-Zertifikate | [Runbook Plattform-CA](platform-ca.md) §4 |
+| `connector-int.pem` | **Nur** das Intermediate "Connector" — der Trust Pool des Agenten-Listeners auf 46200 | ebd. |
+| `platform-ca.pem` | Root + Intermediate "Operator" — damit prüfen Browser und `curl` den SERVER | ebd. |
 | `console.pem` | Serverzertifikat für `console.magister.ch` (Kette) | interne CA oder öffentliches Zertifikat |
 | `console-key.pem` | privater Schlüssel dazu, `0600` | ebd. |
 
@@ -55,10 +57,20 @@ Das ist kein Detail, das sich später nachziehen lässt: fehlt es, scheitert
 jede Kundenseite am TLS-Handshake, und zwar für alle gleichzeitig. Beim
 Bestellen mitbestellen.
 
-`platform-ca.pem` ist der **Trust Pool für Client-Zertifikate** — nur wer ein
+`operator-ca.pem` ist der **Trust Pool für Client-Zertifikate** — nur wer ein
 von dieser Kette signiertes Zertifikat vorweist, kommt durch den Handshake.
 Deshalb dort ausschliesslich die Operator-Kette hinterlegen, nie ein
 öffentliches CA-Bundle: sonst gilt jedes Zertifikat der Welt.
+
+**Und deshalb ohne die Wurzel.** Was im Trust Pool liegt, ist ein
+Vertrauensanker; mit der Wurzel darin gälte jedes Zertifikat, das irgendwo
+unter ihr hängt — also auch das eines Connector-Agenten, und davon hat jeder
+Kunde eines auf seinem Server im eigenen Netz. Die Anwendung wiese es danach
+ab (unbekanntes Zertifikat, keine Sitzung), aber die zweite von drei
+Schichten hätte nicht gehalten. Nachgemessen mit `openssl verify`: mit Wurzel
+im Pool geht ein Agentenzertifikat durch, mit nur dem Operator-Intermediate
+nicht. Aus demselben Grund kennt der Agenten-Listener auf 46200 **nur** den
+Connector-Zweig: ein Operator-Zertifikat ist dort kein gültiger Agent.
 
 ### 2.2 `.env` neben der Compose-Datei
 

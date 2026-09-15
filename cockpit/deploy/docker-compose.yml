@@ -126,7 +126,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        for f in /certs/platform-ca.pem /certs/console.pem /certs/console-key.pem \
+        for f in /certs/operator-ca.pem /certs/console.pem /certs/console-key.pem \
                  /certs/connector.pem /certs/connector-key.pem; do
           if [ ! -f "$$f" ]; then
             echo "caddy: $$f is missing — the console listener needs the platform CA and"
