@@ -76,7 +76,8 @@ async def _run(args: argparse.Namespace) -> int:
 
         jetzt = datetime.now(UTC)
         print(f"Serverzeit (UTC):   {jetzt.isoformat(timespec='seconds')}")
-        print(f"Zeitschritt:        {totp.current_step()}")
+        jetzt_schritt = totp.current_step()
+        print(f"Zeitschritt:        {jetzt_schritt}")
         print("Zweiter Faktor:     ", end="")
         if not geheimnis:
             # Zwei Wege führen hierher, und der erste ist der Normalfall
@@ -92,9 +93,28 @@ async def _run(args: argparse.Namespace) -> int:
         print("bestätigt" if operator.totp_confirmed_at else "eingerichtet, unbestätigt")
         print(f"Letzter Schritt:    {operator.totp_last_step or '—'}")
 
+        # Der eine Zustand, in dem ein RICHTIGER Code abgewiesen wird: der
+        # Wiederholungsschutz steht in der Zukunft. Jeder akzeptierte Code
+        # vermerkt seinen Zeitschritt, und ein Code aus demselben oder einem
+        # älteren Schritt gilt nicht mehr (ADR-0020 D2). Ging die Serveruhr
+        # einmal vor und wurde dann gerichtet, liegt der Vermerk vor „jetzt"
+        # — und ab da passt kein Code mehr, bis die Uhr den Vermerk
+        # eingeholt hat. Ohne diese Zeile sieht das aus wie ein falsches
+        # Geheimnis, und man richtet vergeblich neu ein.
+        if operator.totp_last_step is not None and operator.totp_last_step >= jetzt_schritt:
+            vorsprung = (operator.totp_last_step - jetzt_schritt + 1) * totp.PERIOD
+            print(
+                f"\nDer Wiederholungsschutz steht in der ZUKUNFT: Schritt "
+                f"{operator.totp_last_step}, jetzt {jetzt_schritt}."
+            )
+            print("Jeder aktuelle Code wird deshalb abgewiesen, auch der richtige.")
+            print(f"Von selbst löst sich das erst in etwa {vorsprung // 60} Minuten.")
+            print("Abhilfe: Uhr des Servers richten (timedatectl set-ntp true) und")
+            print("`add_operator --upn … --reset-mfa`, dann neu einrichten.")
+            return 6
+
         code = args.code.strip().replace(" ", "")
         rechner = pyotp.TOTP(geheimnis, digits=totp.DIGITS, interval=totp.PERIOD)
-        jetzt_schritt = totp.current_step()
         for versatz in range(-SUCHFENSTER_SCHRITTE, SUCHFENSTER_SCHRITTE + 1):
             if rechner.at((jetzt_schritt + versatz) * totp.PERIOD) != code:
                 continue
