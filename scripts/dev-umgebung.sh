@@ -313,7 +313,7 @@ start_console() {
   (cd "$REPO/cockpit/api" && setsid nohup uv run uvicorn cockpit_api.main:app \
       --host 127.0.0.1 --port "$CONSOLE_PORT" > "$LOGS/console.log" 2>&1 < /dev/null &
       echo $! > "$RUN/console.pid"; disown -a)
-  wait_for "http://127.0.0.1:$CONSOLE_PORT/api/health" "Konsole"
+  wait_for "http://127.0.0.1:$CONSOLE_PORT/api/health" "Konsole" "$LOGS/console.log"
   echte_pid console
 }
 
@@ -469,7 +469,7 @@ start_dataplane() {
   (cd "$REPO/apps/api" && uv sync --quiet --extra dev && setsid nohup uv run uvicorn magister_api.main:app \
       --host 127.0.0.1 --port "$API_PORT" > "$LOGS/api.log" 2>&1 < /dev/null &
       echo $! > "$RUN/api.pid"; disown -a)
-  wait_for "http://127.0.0.1:$API_PORT/healthz" "Datenebene"
+  wait_for "http://127.0.0.1:$API_PORT/healthz" "Datenebene" "$LOGS/api.log"
   echte_pid api
 }
 
@@ -567,11 +567,19 @@ EOF
   echte_pid caddy
 }
 
-wait_for() {  # $1 = URL, $2 = Name
+wait_for() {  # $1 = URL, $2 = Name, $3 = Logdatei (optional)
   for _ in $(seq 1 40); do
     curl -sS -o /dev/null "$1" 2>/dev/null && { say "$2 antwortet"; return 0; }
     sleep 0.5
   done
+  # Den Grund gleich mitliefern. „Siehe $LOGS" verlangt einen zweiten
+  # Handgriff für etwas, das das Skript schon vor sich hat — und die letzte
+  # Zeile des Logs ist fast immer die Antwort.
+  if [ -n "${3:-}" ] && [ -s "$3" ]; then
+    printf '\033[31m !! %s antwortet nicht. Letzte Zeilen aus %s:\033[0m\n' "$2" "$3" >&2
+    tail -15 "$3" >&2
+    exit 1
+  fi
   die "$2 antwortet nicht — siehe $LOGS."
 }
 
