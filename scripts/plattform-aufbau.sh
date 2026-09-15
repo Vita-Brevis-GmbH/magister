@@ -25,8 +25,9 @@
 #      Zertifikate für Operatoren. Sie darf nichts ausserhalb dieses Hosts
 #      bedeuten.
 #
-# Voraussetzungen: docker mit compose-Plugin, openssl, curl, python3, pnpm
-# (für die Konsolen-Oberfläche), age (für die Sicherungen).
+# Voraussetzungen: docker mit compose-Plugin, openssl, curl, python3 und
+# age (für die Sicherungen). Node/pnpm braucht es NICHT: die Oberfläche der
+# Konsole wird, wenn kein pnpm da ist, in einem Node-Container gebaut.
 
 set -euo pipefail
 
@@ -90,9 +91,9 @@ preflight() {
   docker compose version >/dev/null 2>&1 || die "Das compose-Plugin von Docker fehlt (docker-compose-plugin)."
   docker info >/dev/null 2>&1 || die "Der Docker-Dienst antwortet nicht (systemctl start docker)."
   command -v age >/dev/null || warn "age fehlt — Sicherungen lassen sich nicht prüfen."
-  # `apt-get install pnpm` gibt es auf Ubuntu nicht — der Hinweis muss einen
-  # Weg nennen, der auf der Maschine auch funktioniert.
-  command -v pnpm >/dev/null || warn "pnpm fehlt — die Konsolen-Oberfläche wird nicht gebaut; der Listener antwortet dann nur auf /api/*. Abhilfe: 'corepack enable pnpm' (bei installiertem Node) oder 'npm install -g pnpm'."
+  # Kein Hinweis mehr auf fehlendes pnpm: gibt es keines, baut `build_ui`
+  # die Oberfläche in einem Node-Container. Auf einem Server, der Container
+  # fährt, ist das der passendere Weg — und eine Voraussetzung weniger.
   [ "$BIND" = "0.0.0.0" ] && die "PLATTFORM_BIND=0.0.0.0 ist nicht zulässig: die Konsole gehört auf eine Verwaltungsadresse (ADR-0015 D1)."
   # 443 und 80 gehören dem Kunden-Listener. Belegt heisst: ein anderer
   # Webserver steht im Weg, und Caddy bekäme den Port nicht.
@@ -346,13 +347,34 @@ EOF
 
 # --- Oberflächen -------------------------------------------------------------
 build_ui() {
-  command -v pnpm >/dev/null || return 0
-  if [ ! -d "$REPO/cockpit/web/dist" ]; then
+  # Die gebaute Oberfläche ist keine Kür: Caddy hängt `cockpit/web/dist`
+  # ein und liefert daraus alles aus, was nicht `/api/*` ist. Fehlt sie,
+  # antwortet die Konsole im Browser mit **404** — die API läuft, die Seite
+  # gibt es nicht. Genau so auf dev01 passiert.
+  if [ -f "$REPO/cockpit/web/dist/index.html" ]; then
+    say "Konsolen-Oberfläche steht bereits ($REPO/cockpit/web/dist)"
+    return 0
+  fi
+
+  if command -v pnpm >/dev/null; then
     say "Konsolen-Oberfläche bauen"
     (cd "$REPO/cockpit/web" && pnpm install --silent && pnpm build >/dev/null)
-  else
-    say "Konsolen-Oberfläche steht bereits ($REPO/cockpit/web/dist)"
+    return 0
   fi
+
+  # Kein pnpm auf dem Host — und das soll auch nicht nötig sein. Node
+  # gehört nicht auf einen Server, der Container fährt; die Werkzeugkette
+  # kommt aus einem Abbild und verschwindet danach wieder. Derselbe
+  # Gedanke wie bei allem anderen hier.
+  say "Konsolen-Oberfläche im Container bauen (kein pnpm auf dem Host)"
+  if ! docker run --rm -v "$REPO/cockpit/web:/arbeit" -w /arbeit node:22-alpine \
+       sh -c 'corepack enable pnpm && pnpm install --silent && pnpm build' >/dev/null 2>&1; then
+    warn "Der Bau im Container ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
+    warn "Von Hand nachholen: docker run --rm -v $REPO/cockpit/web:/arbeit -w /arbeit node:22-alpine sh -c 'corepack enable pnpm && pnpm install && pnpm build'"
+    return 0
+  fi
+  [ -f "$REPO/cockpit/web/dist/index.html" ] \
+    || warn "Der Bau lief durch, aber dist/index.html fehlt — bitte die Ausgabe von Hand ansehen."
 }
 
 # --- Stacks ------------------------------------------------------------------
