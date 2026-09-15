@@ -367,10 +367,20 @@ build_ui() {
   # kommt aus einem Abbild und verschwindet danach wieder. Derselbe
   # Gedanke wie bei allem anderen hier.
   say "Konsolen-Oberfläche im Container bauen (kein pnpm auf dem Host)"
-  if ! docker run --rm -v "$REPO/cockpit/web:/arbeit" -w /arbeit node:22-alpine \
-       sh -c 'corepack enable pnpm && pnpm install --silent && pnpm build' >/dev/null 2>&1; then
-    warn "Der Bau im Container ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
-    warn "Von Hand nachholen: docker run --rm -v $REPO/cockpit/web:/arbeit -w /arbeit node:22-alpine sh -c 'corepack enable pnpm && pnpm install && pnpm build'"
+  local protokoll="$ZIEL/ui-bau.log"
+  mkdir -p "$ZIEL"
+  # COREPACK_ENABLE_DOWNLOAD_PROMPT=0: Corepack lädt pnpm in der im Projekt
+  # festgelegten Fassung nach und FRAGT vorher — an einem Terminal eine
+  # Rückfrage, in einem Skript ohne TTY ein Abbruch. Von Hand lief derselbe
+  # Befehl deshalb durch und im Skript nicht.
+  if ! docker run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+       -v "$REPO/cockpit/web:/arbeit" -w /arbeit node:22-alpine \
+       sh -c 'corepack enable pnpm && pnpm install && pnpm build' > "$protokoll" 2>&1; then
+    warn "Der Bau der Oberfläche ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
+    # Die Ausgabe zeigen und nicht verstecken. Ein Skript, das den Grund
+    # wegwirft, macht aus einem benennbaren Fehler eine Suche.
+    printf '\033[33m    Letzte Zeilen aus %s:\033[0m\n' "$protokoll" >&2
+    tail -15 "$protokoll" >&2
     return 0
   fi
   [ -f "$REPO/cockpit/web/dist/index.html" ] \
