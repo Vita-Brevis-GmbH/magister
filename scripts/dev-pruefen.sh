@@ -461,6 +461,43 @@ t12() {
 # es die Verschlüsselung prüft, entstehen in der Migrationswelle von T7. Auf
 # einer frisch aufgebauten Umgebung gibt es vorher keines — T5 übersprang
 # sich dann selbst, und ein übersprungener Test beweist nichts.
+# --- Vorprüfung ---------------------------------------------------------------
+# Erst nachsehen, wer überhaupt antwortet. Ohne das erzeugt ein einziger
+# gestoppter Dienst zehn rote Zeilen, die alle denselben Grund haben — und
+# der Grund steht in keiner davon. Gemessen an einem Lauf, in dem nur die
+# Datenebene fehlte: T2, T3, T4 und T9 rot, Ursache nirgends genannt.
+vorpruefung() {
+  local fehlt=()
+  curl -sS -o /dev/null --max-time 5 "http://127.0.0.1:$CONSOLE_PORT/api/health" 2>/dev/null \
+    || fehlt+=("die Konsole (127.0.0.1:$CONSOLE_PORT)")
+  curl -sS -o /dev/null --max-time 5 "http://127.0.0.1:$API_PORT/healthz" 2>/dev/null \
+    || fehlt+=("die Datenebene (127.0.0.1:$API_PORT)")
+  [ ${#fehlt[@]} -eq 0 ] && return 0
+
+  printf '\033[31m !! Es antwortet nicht: %s\033[0m\n' "$(printf '%s, ' "${fehlt[@]}" | sed 's/, $//')" >&2
+  cat >&2 <<HINWEIS
+
+    Ohne diese Dienste prüft dieser Lauf nichts, was mit ihnen zu tun hat.
+    Zustand ansehen und starten:
+
+        ./scripts/dev-umgebung.sh status
+        ./scripts/dev-umgebung.sh up
+
+    Scheitert der Start, druckt 'up' die letzten Zeilen des betroffenen
+    Logs gleich mit.
+
+    Läuft parallel der Container-Aufbau (plattform-aufbau.sh)? Dann teilen
+    sich beide den Port 4444, und einer von beiden muss weichen:
+
+        ./scripts/plattform-aufbau.sh down
+HINWEIS
+  exit 2
+}
+
+# Bei einer Auswahl (z.B. `dev-pruefen.sh T1`) nicht vorprüfen: wer gezielt
+# eine Prüfung laufen lässt, weiss, was steht.
+[ $# -eq 0 ] && vorpruefung
+
 for t in t1 t2 t3 t4 t6 t7 t5 t8 t9 t10 t11 t12; do "$t" "$@"; done
 
 printf '\n\033[1m%d bestanden, %d gescheitert, %d übersprungen\033[0m\n' "$PASS" "$FAIL" "$SKIP"
