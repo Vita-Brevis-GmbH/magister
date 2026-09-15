@@ -65,6 +65,14 @@ def _parse(argv: list[str] | None = None) -> argparse.Namespace:
         help="Passwort setzen oder ersetzen. Wird abgefragt, nie als Argument übergeben.",
     )
     parser.add_argument(
+        "--reset-mfa",
+        action="store_true",
+        help=(
+            "Zweiten Faktor zurücksetzen (verlorenes Telefon, verlorener QR-Code). "
+            "Die Person richtet ihn beim nächsten Anmelden neu ein."
+        ),
+    )
+    parser.add_argument(
         "--disable",
         action="store_true",
         help="Den Operator abschalten statt anlegen — der Widerruf pro Person.",
@@ -73,7 +81,7 @@ def _parse(argv: list[str] | None = None) -> argparse.Namespace:
     # Zum Abschalten braucht es weder Zertifikat noch Namen: wer widerrufen
     # wird, hat unter Umständen genau das verloren, was hier sonst verlangt
     # würde. Beim Anlegen sind beide Pflicht.
-    if args.disable:
+    if args.disable or args.reset_mfa:
         return args
     if args.name is None:
         parser.error("--name ist zum Anlegen nötig.")
@@ -137,6 +145,26 @@ async def _run(args: argparse.Namespace) -> int:
                     select(ConsoleOperator).where(ConsoleOperator.upn == args.upn)
                 )
             ).scalar_one_or_none()
+
+            if args.reset_mfa:
+                if existing is None:
+                    print(f"Kein Operator mit {args.upn}.", file=sys.stderr)
+                    return 1
+                # Alles, was zum zweiten Faktor gehört, in einem Zug: ein
+                # halb zurückgesetzter Faktor wäre einer, bei dem alte
+                # Wiederherstellungscodes noch gelten.
+                existing.totp_secret_enc = None
+                existing.totp_confirmed_at = None
+                existing.totp_last_step = None
+                existing.recovery_codes = []
+                existing.mfa_failed_count = 0
+                existing.locked_until = None
+                await session.commit()
+                print(
+                    f"{args.upn}: zweiter Faktor zurückgesetzt. "
+                    "Beim nächsten Anmelden wird er neu eingerichtet."
+                )
+                return 0
 
             if args.disable:
                 if existing is None:

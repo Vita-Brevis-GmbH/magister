@@ -39,6 +39,12 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
   const codeM = useMutation({
     mutationFn: () => submitCode(code.trim()),
     onSuccess: () => qc.invalidateQueries(),
+    // Auch beim Fehlschlag den Stand neu holen: der Zwischenstand zwischen
+    // Passwort und Code gilt zehn Minuten (ADR-0023 D2). Läuft er ab, ist
+    // die Antwort dieselbe 401 wie bei einem falschen Code — und die Maske
+    // behauptete weiter, es fehle nur der Code. Nach dem Nachfragen steht
+    // wieder das Anmeldeformular da, mit dem Hinweis unten.
+    onError: () => qc.invalidateQueries(),
   });
   const loginM = useMutation({
     // Nach dem Passwort ist man NICHT angemeldet, sondern beim zweiten
@@ -70,6 +76,12 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
             <p className="rounded border border-red-300 bg-red-50 p-2 text-red-900">
               Anmeldung nicht möglich. Benutzername, Passwort oder eine Sperre —
               welches davon, sagt diese Seite absichtlich nicht.
+            </p>
+          )}
+          {codeM.isError && !loginM.isError && (
+            <p className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
+              Der zweite Schritt ist abgelaufen — zwischen Passwort und Code
+              liegen zehn Minuten. Bitte neu anmelden.
             </p>
           )}
           <label className="block">
@@ -162,7 +174,12 @@ export function ConsoleLogin({ who }: { who: Whoami }) {
               {codeM.isError && (
                 <p className="rounded border border-red-300 bg-red-50 p-2 text-red-900">
                   Der Code stimmt nicht. Jeder Code gilt einmal — bei einem erneuten
-                  Versuch den nächsten abwarten.
+                  Versuch den nächsten abwarten. Passt auch der nächste nicht, geht
+                  meist die Uhr des Servers falsch; das ordnet{" "}
+                  <code className="font-mono text-xs">
+                    python -m cockpit_api.cli.totp_probe --upn … --code …
+                  </code>{" "}
+                  auf dem Konsolen-Host ein.
                 </p>
               )}
               <label className="block">
