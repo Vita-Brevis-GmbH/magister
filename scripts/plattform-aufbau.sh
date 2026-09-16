@@ -3,6 +3,7 @@
 # Produktion steht.
 #
 #   ./scripts/plattform-aufbau.sh up      # aufbauen und starten
+#   ./scripts/plattform-aufbau.sh up --ui-neu   # Oberfläche zwingend neu bauen
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
@@ -55,6 +56,9 @@ BIND="${PLATTFORM_BIND:-127.0.0.1}"
 ZUSATZNAME="${PLATTFORM_ZUSATZNAME:-}"
 KUNDEN=("thun" "bern")
 ZIEHEN=0
+# `--ui-neu` baut die Oberfläche auch dann, wenn sie aktuell aussieht — für
+# den Fall, dass die Erkennung über die Zeitstempel danebenliegt.
+UI_NEU=0
 
 say()  { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m !  %s\033[0m\n' "$*"; }
@@ -366,9 +370,33 @@ build_ui() {
   # ein und liefert daraus alles aus, was nicht `/api/*` ist. Fehlt sie,
   # antwortet die Konsole im Browser mit **404** — die API läuft, die Seite
   # gibt es nicht. Genau so auf dev01 passiert.
-  if [ -f "$REPO/cockpit/web/dist/index.html" ]; then
-    say "Konsolen-Oberfläche steht bereits ($REPO/cockpit/web/dist)"
-    return 0
+  #
+  # Und zwar die AKTUELLE. Die frühere Fassung dieser Zeilen stieg aus,
+  # sobald `dist/index.html` überhaupt existierte — mit dem Satz
+  # „Konsolen-Oberfläche steht bereits". Nach einem `git pull` mit einer
+  # neuen Ansicht meldete `up` also Vollzug, und im Browser fehlte sie.
+  # Dieselbe Falle wie beim Werkzeug im Container: ausgeliefert wird, was
+  # beim letzten Bauen entstand, nicht was im Arbeitsbaum liegt.
+  #
+  # `find -newer` statt eines Zeitstempels im Skript: ein `git checkout`
+  # setzt die mtime der geänderten Dateien auf jetzt, und genau danach wird
+  # hier gefragt.
+  if [ -f "$REPO/cockpit/web/dist/index.html" ] && [ "$UI_NEU" -eq 0 ]; then
+    local neuer=""
+    for quelle in src package.json pnpm-lock.yaml index.html vite.config.ts \
+                  tailwind.config.js postcss.config.js tsconfig.json; do
+      [ -e "$REPO/cockpit/web/$quelle" ] || continue
+      neuer="$(find "$REPO/cockpit/web/$quelle" \
+                 -newer "$REPO/cockpit/web/dist/index.html" -print -quit 2>/dev/null)"
+      # Kein `[ -n … ] && break`: schlägt der Test in der letzten Runde fehl,
+      # endet die Schleife mit Status 1 und `set -e` bricht das Skript ab.
+      if [ -n "$neuer" ]; then break; fi
+    done
+    if [ -z "$neuer" ]; then
+      say "Konsolen-Oberfläche steht bereits und ist aktuell ($REPO/cockpit/web/dist)"
+      return 0
+    fi
+    say "Quellstand ist neuer als der Bau (${neuer#"$REPO"/cockpit/web/}) — neu bauen"
   fi
 
   if command -v pnpm >/dev/null; then
@@ -695,6 +723,7 @@ esac
 while [ $# -gt 0 ]; do
   case "$1" in
     --ziehen)  ZIEHEN=1; shift ;;
+    --ui-neu)  UI_NEU=1; shift ;;
     --domaene) DOMAIN="$2"; KONSOLE_HOST="konsole.$DOMAIN"; shift 2 ;;
     --bind)    BIND="$2"; shift 2 ;;
     --zusatzname) ZUSATZNAME="$2"; shift 2 ;;

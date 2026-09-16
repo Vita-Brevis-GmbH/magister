@@ -64,6 +64,26 @@ Was entsteht:
 | Datenebenen-Stack | Postgres, API, Web, Caddy auf 443 nach Hostname getrennt, Sicherungs-Container |
 | Zwei Kunden | über die API der Konsole, durch den Verwaltungs-Listener, wie ein Operator es täte |
 
+### 2.1 Nach einem `git pull`
+
+```bash
+git pull && ./scripts/plattform-aufbau.sh up
+```
+
+`up` ist der Weg für ein Update, nicht nur für den ersten Aufbau: die Abbilder
+entstehen neu (`--build`), Caddy wird neu erzeugt, und die Oberfläche wird neu
+gebaut, sobald `cockpit/web/src` neuer ist als `cockpit/web/dist`.
+
+Das war eine Zeitlang nicht so: `up` stieg aus, sobald `dist/index.html`
+überhaupt existierte, und meldete „steht bereits". Eine neu gebaute Ansicht
+war nach dem Update im Browser nicht da, obwohl das Skript Vollzug meldete.
+Liegt die Erkennung einmal daneben, hilft `up --ui-neu` — das baut die
+Oberfläche in jedem Fall.
+
+Und wenn die Seite danach immer noch alt aussieht: einmal hart neu laden
+(Strg+Umschalt+R). Die Namen der JS-Dateien tragen eine Prüfsumme, `index.html`
+nicht.
+
 **In Produktion anders — und nur das:**
 
 1. Die Plattform-CA entsteht in der Zeremonie auf dem Offline-Rechner
