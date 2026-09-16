@@ -169,6 +169,28 @@ Uhr falsch; passt er zu keinem Zeitschritt in ±5 Minuten, hält die App ein
 anderes Geheimnis als die Datenbank — dann `--reset-mfa` und neu
 einrichten.
 
+## 5b · Agentenpakete bereitstellen
+
+Die Konsole bietet die gebauten Pakete des Connector-Agenten zum Herunterladen
+an (*Kunde → AD-Connector → „Agent herunterladen"*). Sie **baut nichts**: sie
+liest ein Verzeichnis, das der Aufbau anlegt und schreibgeschützt einhängt.
+
+```bash
+# Host-Pfad (steht als COCKPIT_AGENT_PACKAGE_DIR in cockpit/deploy/.env):
+grep COCKPIT_AGENT_PACKAGE_DIR cockpit/deploy/.env
+# Paket hineinlegen — aus der CI, oder lokal gebaut:
+cp magister-connector_1.4.0_amd64.deb "$(grep -oP '(?<=^COCKPIT_AGENT_PACKAGE_DIR=).*' cockpit/deploy/.env)/"
+```
+
+Die Konsole sieht neue Dateien sofort; ein Neustart ist nicht nötig. Ist das
+Verzeichnis leer, sagt die Oberfläche das — und nicht „es gibt kein Paket".
+
+Zwei Dinge, die die Prüfsumme in der Liste **nicht** ist: sie ist kein
+Herkunftsnachweis (dafür die Paketsignatur, Entscheid E18), und sie ersetzt
+das apt-Repository nicht (siehe `agent/packaging/apt/`). Sie beantwortet die
+eine Frage, die beim Onboarding am Telefon steht: „ist die Datei, die ich
+hier habe, dieselbe wie bei euch?"
+
 ## 6 · Anhalten und Abbauen
 
 ```bash
@@ -176,7 +198,8 @@ einrichten.
 ./scripts/plattform-aufbau.sh purge   # Container, Volumes, Netz, Zertifikate und .env löschen
 ```
 
-`purge` löscht Kundendaten. Auf dem Produktionsserver hat dieser Befehl
+`purge` löscht Kundendaten — und mit dem Plattform-Verzeichnis auch die
+abgelegten Agentenpakete. Auf dem Produktionsserver hat dieser Befehl
 nichts zu suchen.
 
 ## 7 · Was hier auffällt, fällt in Produktion nicht mehr auf

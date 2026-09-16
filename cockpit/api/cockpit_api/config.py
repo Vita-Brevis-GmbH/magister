@@ -84,6 +84,17 @@ class Settings(BaseSettings):
     export_root: str = Field(default="")
     export_ttl_days: int = Field(default=7)
 
+    # --- Agentenpakete (ADR-0014) -----------------------------------------
+    # Verzeichnis, in dem die gebauten Pakete des Connector-Agenten liegen
+    # (MSI für Windows, .deb für Debian). Die Konsole liefert sie an
+    # angemeldete Personen aus, damit beim Onboarding niemand erst ein
+    # Release-Archiv suchen muss — und damit die Prüfsumme aus derselben
+    # Quelle kommt wie die Datei.
+    #
+    # Leer heisst „nicht eingerichtet": die Oberfläche sagt das dann, statt
+    # eine leere Liste zu zeigen.
+    agent_package_dir: str = Field(default="")
+
     # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
     # NUR diesen Verweis, nie den DSN mit Passwort.
     dsn_ref_template: str = Field(default="tenant_{slug}")

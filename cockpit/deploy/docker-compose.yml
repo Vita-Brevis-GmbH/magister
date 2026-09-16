@@ -78,6 +78,12 @@ services:
       COCKPIT_BACKUP_SHARE_ROOT: ${COCKPIT_BACKUP_SHARE_ROOT:-}
       COCKPIT_BACKUP_AGE_RECIPIENT: ${COCKPIT_BACKUP_AGE_RECIPIENT:-}
       COCKPIT_EXPORT_ROOT: ${COCKPIT_EXPORT_ROOT:-}
+      # --- Agentenpakete (ADR-0014) --------------------------------------
+      # Verzeichnis mit den gebauten Paketen des Connector-Agenten. Die
+      # Konsole liest es nur; gebaut wird in der CI. Leer heisst „nicht
+      # eingerichtet" — die Oberfläche sagt das, statt eine leere Liste zu
+      # zeigen.
+      COCKPIT_AGENT_PACKAGE_DIR: ${COCKPIT_AGENT_PACKAGE_DIR:-}
     depends_on: [postgres]
     volumes:
       # Die Zertifikate der Connector-CA (ADR-0014) liest die API selbst —
@@ -90,6 +96,9 @@ services:
       # eingerichtet" und die zugehörige Funktion sagt das auch.
       - ${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}:${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}
       - ${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}:${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}
+      # Die Agentenpakete NUR lesend: die Konsole liefert sie aus, sie legt
+      # keine ab.
+      - ${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:ro
     # Deliberately no `ports:` — everything goes through caddy below.
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]

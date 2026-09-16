@@ -11,6 +11,13 @@ import {
   type Agent,
   type Enrollment,
 } from "../api/agents";
+import {
+  downloadAgentPackage,
+  listAgentPackages,
+  platformOf,
+  readableSize,
+} from "../api/agentPackages";
+import { ApiError } from "../api/client";
 import { Badge, StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 
@@ -51,6 +58,101 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
         Ausblenden
       </button>
     </div>
+  );
+}
+
+/**
+ * Die Pakete zum Herunterladen.
+ *
+ * Steht bewusst VOR den Agenten und vor dem Einmal-Token: das ist die
+ * Reihenfolge des Onboardings. Erst die Datei auf den Domaincontroller, dann
+ * das Token, dann meldet sich der Agent.
+ *
+ * Nicht kundenspezifisch — es ist dieselbe Datei für alle. Sie steht hier
+ * trotzdem, weil man sie genau hier braucht.
+ */
+function AgentPackages() {
+  const paketeQ = useQuery({
+    queryKey: ["agent-packages"],
+    queryFn: listAgentPackages,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
+  const ladenM = useMutation({ mutationFn: (filename: string) => downloadAgentPackage(filename) });
+  const nichtEingerichtet = paketeQ.error instanceof ApiError && paketeQ.error.status === 503;
+
+  return (
+    <section className="rounded border bg-white p-4">
+      <h2 className="mb-3 font-semibold">Agent herunterladen</h2>
+      {nichtEingerichtet ? (
+        <p className="text-sm text-slate-600">
+          <span className="font-medium">Kein Paketverzeichnis eingerichtet.</span> Auf dem
+          Plattform-Server gehören die gebauten Pakete nach{" "}
+          <span className="font-mono">COCKPIT_AGENT_PACKAGE_DIR</span>; das Aufbau-Skript
+          legt dafür <span className="font-mono">AGENT_PAKETE_DIR</span> an. Bis dahin holt
+          man den Agenten aus dem Release-Archiv.
+        </p>
+      ) : (
+        paketeQ.isError && <ErrorBox error={paketeQ.error} />
+      )}
+      {ladenM.isError && <ErrorBox error={ladenM.error} />}
+      {paketeQ.data &&
+        (paketeQ.data.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            Das Verzeichnis ist leer — die CI hat noch kein Paket abgelegt.
+          </p>
+        ) : (
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b bg-slate-100 text-left">
+                <th className="p-2">Datei</th>
+                <th className="p-2">Für</th>
+                <th className="p-2">Grösse</th>
+                <th className="p-2">SHA-256</th>
+                <th className="p-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {paketeQ.data.map((paket) => (
+                <tr key={paket.filename} className="border-b">
+                  <td className="p-2">
+                    <span className="font-mono text-xs">{paket.filename}</span>
+                    <br />
+                    <span className="text-xs text-slate-400">
+                      {new Date(paket.modified_at).toLocaleString()}
+                    </span>
+                  </td>
+                  <td className="p-2 text-xs">{platformOf(paket.filename)}</td>
+                  <td className="p-2 text-xs">{readableSize(paket.size_bytes)}</td>
+                  <td className="p-2">
+                    <code className="select-all break-all font-mono text-xs text-slate-500">
+                      {paket.sha256}
+                    </code>
+                  </td>
+                  <td className="p-2">
+                    <button
+                      type="button"
+                      disabled={ladenM.isPending}
+                      onClick={() => ladenM.mutate(paket.filename)}
+                      className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                    >
+                      Herunterladen
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ))}
+      <p className="mt-3 text-xs text-slate-500">
+        Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher sie kommt.
+        Dafür ist die Paketsignatur da: <span className="font-mono">msiexec</span> zeigt sie
+        im Dialog, <span className="font-mono">dpkg-sig --verify</span> auf der Kommando-
+        zeile. Prüfen lässt sich die Summe mit{" "}
+        <span className="font-mono">Get-FileHash</span> resp.{" "}
+        <span className="font-mono">sha256sum</span>.
+      </p>
+    </section>
   );
 }
 
@@ -155,6 +257,8 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
       {enrollment && (
         <EnrollmentCard enrollment={enrollment} onDone={() => setEnrollment(null)} />
       )}
+
+      <AgentPackages />
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Agenten</h2>

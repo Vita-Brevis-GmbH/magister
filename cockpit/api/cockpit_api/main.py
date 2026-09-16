@@ -9,6 +9,7 @@ from starlette.responses import Response
 from cockpit_api.config import settings
 from cockpit_api.management_guard import check_configuration, make_management_guard
 from cockpit_api.routers import (
+    agent_packages,
     backups,
     connector,
     console_auth,
@@ -102,6 +103,9 @@ app.include_router(health.router, prefix="/api")
 app.include_router(console_auth.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(connector.console, prefix="/api")
+# Agentenpakete zum Herunterladen (ADR-0014). Plattformweit und nicht je
+# Kunde: es ist dieselbe Datei für alle.
+app.include_router(agent_packages.router, prefix="/api")
 # Der Agentenpfad liegt NICHT unter /api: er kommt über den
 # Connector-Listener (TCP 46200) und nicht über den Management-Listener.
 app.include_router(connector.agent_api)

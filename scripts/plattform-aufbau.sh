@@ -38,6 +38,8 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ZIEL="${PLATTFORM_ROOT:-$REPO/plattform}"
 CERTS="$ZIEL/certs"
+# Ablage der gebauten Agentenpakete; die Konsole liest sie nur (ADR-0014).
+PAKETE="$ZIEL/agentenpakete"
 NETZ="${PLATTFORM_NETZ:-magister-plattform}"
 
 # Die Ebene, unter der die Kundennamen liegen. In Produktion die echte
@@ -247,7 +249,7 @@ zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
 # Die beiden `.env`-Dateien sind dieselben wie in Produktion — nur die Werte
 # entstehen hier per Zufall statt aus dem Passwortspeicher.
 write_env() {
-  mkdir -p "$ZIEL"
+  mkdir -p "$ZIEL" "$PAKETE"
   local konsole_env="$REPO/cockpit/deploy/.env" daten_env="$REPO/deploy/compose/.env"
 
   if [ ! -f "$konsole_env" ]; then
@@ -277,6 +279,11 @@ COCKPIT_EXPECTED_SCHEMA_VERSION=$(grep -oE '"[0-9]{4}_[a-z_]+"' "$REPO/apps/api/
 COCKPIT_BACKUP_SHARE_ROOT=/var/backups/magister
 COCKPIT_EXPORT_ROOT=/var/lib/magister/exports
 COCKPIT_BACKUP_AGE_RECIPIENT=$( [ -f "$CERTS/backup-age.pub" ] && cat "$CERTS/backup-age.pub" || echo "" )
+# Verzeichnis mit den gebauten Agentenpaketen (ADR-0014). Es wird unter
+# demselben Pfad schreibgeschützt in die Konsole eingehängt; wer ein neues
+# Paket ausliefern will, legt es hier ab. Leer bleibt es, bis die CI etwas
+# hineinlegt — die Oberfläche sagt dann „nicht eingerichtet".
+COCKPIT_AGENT_PACKAGE_DIR=$PAKETE
 PLATTFORM_NETZ=$NETZ
 EOF
     chmod 600 "$konsole_env"
@@ -298,6 +305,10 @@ EOF
     setze_wert "$konsole_env" COCKPIT_BIND_ADDRESS "$BIND" && geaendert=1
     setze_wert "$konsole_env" COCKPIT_EXTRA_HOST "$gewuenscht_extra" && geaendert=1
     setze_wert "$konsole_env" COCKPIT_HOSTNAME "$KONSOLE_HOST" && geaendert=1
+    # Nachgereicht für Installationen, die vor den Agentenpaketen entstanden
+    # sind: ohne den Wert hängt Compose den Vorgabepfad ein, und der liegt
+    # bei einem eigenen PLATTFORM_ROOT woanders.
+    setze_wert "$konsole_env" COCKPIT_AGENT_PACKAGE_DIR "$PAKETE" && geaendert=1
     if [ "$geaendert" -eq 1 ]; then
       say "Umgebung der Konsole nachgeführt (Adressen geändert)"
     else

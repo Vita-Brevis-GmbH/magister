@@ -108,7 +108,15 @@ In dieser Reihenfolge; jeder Schritt ist auditiert.
 4. **Systemeinstellungen** eintragen: OIDC (aus 1.6), AD (DCs, Bind-Modus,
    Such-Basis, LDAPS-Vertrauen aus 1.5), Sync-Intervall.
 5. **Agent-Paket** beziehen und mit dem Einmal-Token (24 h) an die Kunden-IT
-   übergeben. Das Paket enthält kein Geheimnis.
+   übergeben. Das Paket enthält kein Geheimnis. Beides steht in der Konsole
+   unter *Kunde → AD-Connector*: oben „Agent herunterladen" mit Dateiname,
+   Grösse und SHA-256, darunter der Knopf für das Token. Die Prüfsumme gehört
+   mit in die Übergabe — sie stammt aus derselben Quelle wie die Datei und sagt
+   nur, dass sie heil angekommen ist; **woher** sie kommt, sagt die
+   Paketsignatur (`msiexec`-Dialog resp. `dpkg-sig --verify`).
+   Steht dort „Kein Paketverzeichnis eingerichtet", fehlt auf dem
+   Plattform-Server `COCKPIT_AGENT_PACKAGE_DIR` — siehe
+   [plattform-auf-einem-host.md](plattform-auf-einem-host.md).
 6. **Standorte anlegen** (oder den Kunden-Admin das tun lassen), OU-Zuordnung
    pro Standort setzen.
 7. **Sicherung** prüfen: erster Dump auf dem Share, Aufbewahrung 10 Tage,
