@@ -1,0 +1,39 @@
+name: scripts-ci
+
+# Die Skripte unter `scripts/` bauen und aktualisieren die Plattform. Sie
+# hatten bisher keine CI — und genau dort ist zweimal hintereinander eine
+# Regression durchgerutscht, die erst auf dem Server auffiel: ein `up` ohne
+# Optionen setzte die Bindung der Konsole auf die Vorgabe zurück, und die
+# Installation war nach jedem Update unerreichbar.
+#
+# Wenig, aber verlässlich: Syntaxprüfung für alle Skripte, und der Test, der
+# die Rangfolge der Installations-Angaben misst. Beides braucht weder Docker
+# noch eine Datenbank.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "scripts/**"
+      - ".github/workflows/scripts-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax aller Shell-Skripte
+        run: |
+          fehler=0
+          while IFS= read -r datei; do
+            bash -n "$datei" || fehler=1
+          done < <(find scripts -name '*.sh' -type f)
+          exit "$fehler"
+
+      - name: Rangfolge der Installations-Angaben
+        run: ./scripts/tests/plattform-konfig.test.sh

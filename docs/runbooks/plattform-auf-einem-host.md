@@ -43,15 +43,48 @@ cd /opt/magister
 ./scripts/plattform-aufbau.sh up
 ```
 
-Voreingestellt ist die Domäne `dev-mgmt.int.vitabrevis.ch`; in Produktion:
+Beim ersten Mal fragt das Skript drei Dinge und schreibt sie nach
+`plattform/plattform.conf`:
+
+| Angabe | Was sie bedeutet | Vorschlag |
+|---|---|---|
+| Domäne | die Ebene, unter der die Kundennamen liegen | `dev-mgmt.int.vitabrevis.ch` |
+| Verwaltungsadresse | die eine Adresse, auf der die Konsole lauscht (nie `0.0.0.0`) | die Adresse aus der Routing-Tabelle |
+| Zweiter Name | der FQDN dieser Maschine; er kommt in das Zertifikat **und** in den Site-Block von Caddy | `hostname -f` |
+
+**Danach werden sie nie wieder gefragt** — auch nicht beim Update. Wer sie
+gleich mitgeben will (oder keine Rückfrage haben kann, etwa in einem
+Playbook):
 
 ```bash
-./scripts/plattform-aufbau.sh up --domaene mgmt.vitabrevis.ch --bind 10.0.0.5 --ziehen
+./scripts/plattform-aufbau.sh up --domaene mgmt.vitabrevis.ch \
+  --bind 10.0.0.5 --zusatzname srv01.int.vitabrevis.ch --ziehen
+```
+
+Was gerade gilt, sagt:
+
+```bash
+./scripts/plattform-aufbau.sh konfig
 ```
 
 `--ziehen` holt die Abbilder aus GHCR statt sie zu bauen. Ohne die Option
 werden sie aus dem ausgecheckten Stand gebaut — genau dafür gibt es die
 Option, ein Stand ohne Abbild lässt sich sonst nicht ausprobieren.
+
+### 2.1 Die Rangfolge der Angaben
+
+Von stark nach schwach: **Option** auf der Kommandozeile → **Umgebungs-
+variable** (`PLATTFORM_BIND=…`) → **gespeicherte Konfiguration** →
+**Rückfrage** bei der Erstinstallation → **Vorgabe**. Die ersten beiden
+werden in die Konfiguration zurückgeschrieben, aber nur bei `up`; ein
+`konfig --bind …` oder `status --bind …` gilt nur für diesen einen Aufruf.
+
+Eine Vorgabe überschreibt **nie** einen gespeicherten Wert. Das ist die Regel,
+an der es zweimal gescheitert ist: `--bind` und `--zusatzname` waren blosse
+Optionen mit Vorgabewert, ein `up` ohne Optionen setzte die Bindung deshalb
+auf `127.0.0.1` zurück — und die Konsole war nach jedem Update wieder
+unerreichbar. Gemessen wird das jetzt in
+`scripts/tests/plattform-konfig.test.sh` (läuft ohne Docker).
 
 Was entsteht:
 
@@ -64,15 +97,26 @@ Was entsteht:
 | Datenebenen-Stack | Postgres, API, Web, Caddy auf 443 nach Hostname getrennt, Sicherungs-Container |
 | Zwei Kunden | über die API der Konsole, durch den Verwaltungs-Listener, wie ein Operator es täte |
 
-### 2.1 Nach einem `git pull`
+### 2.2 Nach einem `git pull`
 
 ```bash
-git pull && ./scripts/plattform-aufbau.sh up
+git pull && ./scripts/plattform-aufbau.sh update   # `up` tut dasselbe
 ```
 
-`up` ist der Weg für ein Update, nicht nur für den ersten Aufbau: die Abbilder
-entstehen neu (`--build`), Caddy wird neu erzeugt, und die Oberfläche wird neu
-gebaut, sobald `cockpit/web/src` neuer ist als `cockpit/web/dist`.
+`up` ist der Weg für ein Update, nicht nur für den ersten Aufbau — `update`
+ist derselbe Befehl unter dem Namen, unter dem man ihn sucht. Ohne Optionen
+aufrufen: die Angaben aus der Erstinstallation gelten weiter.
+
+Was ein Update anfasst:
+
+| | |
+|---|---|
+| Abbilder | neu gebaut (`--build`) resp. gezogen (`--ziehen`) |
+| Oberfläche | neu gebaut, sobald `cockpit/web/src` neuer ist als `cockpit/web/dist` |
+| Caddy | immer neu erzeugt (die Konfiguration ist eine eingehängte Datei) |
+| `.env` beider Stacks | Namen und Adressen nachgeführt, Geheimnisse unangetastet |
+| Zertifikate | neu ausgestellt, wenn ein Name fehlt; sonst unangetastet |
+| Datenbank | `alembic upgrade head` in der Konsole |
 
 Das war eine Zeitlang nicht so: `up` stieg aus, sobald `dist/index.html`
 überhaupt existierte, und meldete „steht bereits". Eine neu gebaute Ansicht
@@ -115,7 +159,8 @@ Connector-Zweig.
 In Produktion macht das der DNS. Auf einer Testmaschine reicht die Datei:
 
 ```bash
-echo "127.0.0.1 konsole.dev-mgmt.int.vitabrevis.ch thun.dev-mgmt.int.vitabrevis.ch bern.dev-mgmt.int.vitabrevis.ch" >> /etc/hosts
+# Die Adresse ist die aus `konfig` (PLATTFORM_BIND), nicht zwingend 127.0.0.1:
+echo "172.25.12.10 konsole.dev-mgmt.int.vitabrevis.ch thun.dev-mgmt.int.vitabrevis.ch bern.dev-mgmt.int.vitabrevis.ch" >> /etc/hosts
 ```
 
 **Ein Platzhalter-Zertifikat gilt für genau eine Ebene.**
@@ -216,7 +261,14 @@ hier habe, dieselbe wie bei euch?"
 ```bash
 ./scripts/plattform-aufbau.sh down    # Container anhalten, Daten behalten
 ./scripts/plattform-aufbau.sh purge   # Container, Volumes, Netz, Zertifikate und .env löschen
+./scripts/plattform-aufbau.sh purge --auch-konfiguration   # zusätzlich plattform.conf
 ```
+
+`purge` lässt `plattform/plattform.conf` stehen: sie enthält keine
+Geheimnisse und keine Kundendaten, nur die drei Antworten aus der
+Erstinstallation. Der Wiederaufbau trifft damit dieselbe Maschine unter
+denselben Namen — statt dass jemand sie erneut tippt und irgendwann anders
+tippt.
 
 `purge` löscht Kundendaten — und mit dem Plattform-Verzeichnis auch die
 abgelegten Agentenpakete. Auf dem Produktionsserver hat dieser Befehl

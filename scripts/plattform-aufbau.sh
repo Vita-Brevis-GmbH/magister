@@ -3,8 +3,10 @@
 # Produktion steht.
 #
 #   ./scripts/plattform-aufbau.sh up      # aufbauen und starten
+#   ./scripts/plattform-aufbau.sh update  # dasselbe — nach einem `git pull`
 #   ./scripts/plattform-aufbau.sh up --ui-neu   # Oberfläche zwingend neu bauen
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
+#   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
@@ -43,22 +45,51 @@ CERTS="$ZIEL/certs"
 PAKETE="$ZIEL/agentenpakete"
 NETZ="${PLATTFORM_NETZ:-magister-plattform}"
 
-# Die Ebene, unter der die Kundennamen liegen. In Produktion die echte
-# Domäne, hier die interne Testdomäne.
-DOMAIN="${PLATTFORM_DOMAIN:-dev-mgmt.int.vitabrevis.ch}"
-KONSOLE_HOST="konsole.$DOMAIN"
-# Die Adresse, auf der der Konsolen-Listener veröffentlicht wird. NIE
-# 0.0.0.0 — die Konsole kann Sitzungen in jeden Kunden ausstellen.
-BIND="${PLATTFORM_BIND:-127.0.0.1}"
-# Zweite Adresse, unter der die Konsole gerufen wird: der FQDN oder die IP
-# der Maschine. Sie kommt in das Zertifikat UND in den Site-Block von Caddy
-# — ohne beides scheitert der Aufruf, einmal am Namen und einmal an 421.
+# --- Die drei Angaben, die eine Installation ausmachen -----------------------
+#
+# Sie werden bei der Erstinstallation EINMAL gefragt und stehen danach in
+# `$KONF`. Jeder weitere Aufruf — `up`, `status`, `down`, `operator` — liest
+# sie von dort.
+#
+# Der Fehler, den das behebt, hat zweimal denselben Abend gekostet: BIND und
+# ZUSATZNAME waren blosse Optionen mit Vorgabewert. Ein `up` ohne Optionen
+# lief deshalb mit `127.0.0.1` und „localhost" — und weil `write_env` die
+# Adressen in eine bestehende `.env` nachführt, machte jedes Update die
+# Installation wieder unerreichbar. Wer die Optionen beim ersten Mal richtig
+# gesetzt hatte, verlor sie beim ersten `git pull && up`.
+#
+# Die Regel dagegen: **ein Update vergisst keine Antwort, die beim Aufbau
+# gegeben wurde.** Ein Vorgabewert darf einen gespeicherten Wert nie
+# überschreiben — nur eine ausdrückliche Angabe darf das.
+#
+# Rangfolge, von stark nach schwach:
+#   1. Option auf der Kommandozeile (`--bind …`)  — wird gespeichert
+#   2. Umgebungsvariable (`PLATTFORM_BIND=…`)     — wird gespeichert
+#   3. gespeicherte Konfiguration ($KONF)
+#   4. Rückfrage bei der Erstinstallation
+#   5. Vorgabe (nur, wenn niemand fragen kann — CI, Cron)
+KONF="${PLATTFORM_KONF:-$ZIEL/plattform.conf}"
+
+VORGABE_DOMAIN="dev-mgmt.int.vitabrevis.ch"
+VORGABE_BIND="127.0.0.1"
+
+# Leer heisst hier „noch unbeantwortet". Die `_GESETZT`-Flaggen unterscheiden
+# das von einer ausdrücklichen leeren Antwort — ZUSATZNAME darf leer sein.
+DOMAIN="${PLATTFORM_DOMAIN:-}"
+BIND="${PLATTFORM_BIND:-}"
 ZUSATZNAME="${PLATTFORM_ZUSATZNAME:-}"
+DOMAIN_GESETZT=0; [ -n "${PLATTFORM_DOMAIN:-}" ] && DOMAIN_GESETZT=1
+BIND_GESETZT=0;   [ -n "${PLATTFORM_BIND:-}" ]   && BIND_GESETZT=1
+ZUSATZNAME_GESETZT=0
+[ -n "${PLATTFORM_ZUSATZNAME+x}" ] && ZUSATZNAME_GESETZT=1
+KONSOLE_HOST=""
 KUNDEN=("thun" "bern")
 ZIEHEN=0
 # `--ui-neu` baut die Oberfläche auch dann, wenn sie aktuell aussieht — für
 # den Fall, dass die Erkennung über die Zeitstempel danebenliegt.
 UI_NEU=0
+# `purge --auch-konfiguration` löscht auch die Angaben zur Installation.
+KONF_LOESCHEN=0
 
 say()  { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m !  %s\033[0m\n' "$*"; }
@@ -93,6 +124,107 @@ setze_wert() {  # $1 = Datei, $2 = Schlüssel, $3 = Wert -> 0 wenn geändert
   return 0
 }
 
+# --- Konfiguration der Installation ------------------------------------------
+konf_laden() {
+  [ -f "$KONF" ] || return 0
+  local schluessel wert
+  # Nur bekannte Schlüssel, und `read` statt `source`: die Datei wird nicht
+  # ausgeführt. Sie liegt neben Zertifikaten und Kundendaten — ein Skript,
+  # das sie ausführt, macht aus einem Schreibrecht ein Ausführungsrecht.
+  #
+  # Ein gelesener Schlüssel gilt danach als beantwortet — auch ein leerer.
+  # Sonst fragte die Erstinstallation nach dem zweiten Namen erneut, wenn
+  # man ihn beim ersten Mal weggelassen hat: leer wäre dann nicht „keiner",
+  # sondern „noch nicht gesagt", und die Frage käme bei jedem Update wieder.
+  while IFS='=' read -r schluessel wert; do
+    case "$schluessel" in
+      PLATTFORM_DOMAIN)
+        if [ "$DOMAIN_GESETZT" -eq 0 ]; then DOMAIN="$wert"; DOMAIN_GESETZT=1; fi ;;
+      PLATTFORM_BIND)
+        if [ "$BIND_GESETZT" -eq 0 ]; then BIND="$wert"; BIND_GESETZT=1; fi ;;
+      PLATTFORM_ZUSATZNAME)
+        if [ "$ZUSATZNAME_GESETZT" -eq 0 ]; then ZUSATZNAME="$wert"; ZUSATZNAME_GESETZT=1; fi ;;
+    esac
+  done < <(grep -E '^PLATTFORM_[A-Z_]+=' "$KONF" || true)
+}
+
+#: Vorschlag für die Adresse dieser Maschine — die, über die sie ins Netz
+#: schaut. Nicht geraten, sondern aus der Routing-Tabelle.
+vorschlag_ip() {
+  ip route get 1.1.1.1 2>/dev/null | grep -oP '(?<=src )\S+' | head -1 || true
+}
+
+vorschlag_fqdn() {
+  hostname -f 2>/dev/null || hostname 2>/dev/null || true
+}
+
+frage() {  # $1 = Text, $2 = Vorschlag -> Antwort auf stdout
+  local antwort=""
+  printf '\033[1m ?  %s\033[0m [%s]: ' "$1" "$2" > /dev/tty
+  read -r antwort < /dev/tty || true
+  printf '%s' "${antwort:-$2}"
+}
+
+konf_erfragen() {  # nur bei `up`, nur was fehlt, nur mit Terminal
+  # PLATTFORM_NICHT_FRAGEN: für CI und für scripts/tests — dann gelten die
+  # Vorgaben, statt dass ein Lauf ohne Bediener an einer Frage hängt.
+  if [ -n "${PLATTFORM_NICHT_FRAGEN:-}" ]; then return 0; fi
+  if [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then return 0; fi
+  if [ "$DOMAIN_GESETZT" -eq 1 ] && [ "$BIND_GESETZT" -eq 1 ] \
+     && [ "$ZUSATZNAME_GESETZT" -eq 1 ]; then
+    return 0
+  fi
+  if [ ! -f "$KONF" ]; then
+    cat > /dev/tty <<'HINWEIS'
+
+Erstinstallation. Drei Angaben, danach stehen sie in der Konfiguration und
+werden nie wieder gefragt — auch nicht bei einem Update.
+
+HINWEIS
+  fi
+  if [ "$DOMAIN_GESETZT" -eq 0 ]; then
+    DOMAIN="$(frage 'Domäne, unter der die Kundennamen liegen' "$VORGABE_DOMAIN")"
+  fi
+  if [ "$BIND_GESETZT" -eq 0 ]; then
+    local vorschlag
+    vorschlag="$(vorschlag_ip)"
+    printf '    Die Konsole lauscht nur auf dieser Adresse. NICHT 0.0.0.0.\n' > /dev/tty
+    BIND="$(frage 'Verwaltungsadresse der Konsole' "${vorschlag:-$VORGABE_BIND}")"
+  fi
+  if [ "$ZUSATZNAME_GESETZT" -eq 0 ]; then
+    printf '    Zweiter Name derselben Konsole (FQDN dieser Maschine). Er kommt\n' > /dev/tty
+    printf '    in das Zertifikat UND in den Site-Block von Caddy — fehlt er,\n' > /dev/tty
+    printf '    endet ein Aufruf unter diesem Namen in 421.\n' > /dev/tty
+    ZUSATZNAME="$(frage 'Zweiter Name (leer = keiner)' "$(vorschlag_fqdn)")"
+  fi
+  DOMAIN_GESETZT=1; BIND_GESETZT=1; ZUSATZNAME_GESETZT=1
+  printf '\n' > /dev/tty
+}
+
+konf_anwenden() {
+  # Vorgaben NUR für das, was niemand beantwortet hat.
+  DOMAIN="${DOMAIN:-$VORGABE_DOMAIN}"
+  BIND="${BIND:-$VORGABE_BIND}"
+  KONSOLE_HOST="konsole.$DOMAIN"
+  [ "$BIND" = "0.0.0.0" ] && die "0.0.0.0 ist nicht zulässig: die Konsole gehört auf eine Verwaltungsadresse (ADR-0015 D1)."
+  return 0
+}
+
+konf_speichern() {
+  mkdir -p "$(dirname "$KONF")"
+  cat > "$KONF" <<EOF
+# Die Angaben zu DIESER Installation. Erzeugt von plattform-aufbau.sh,
+# gelesen von jedem weiteren Aufruf. Von Hand änderbar; ein `up` mit
+# --domaene/--bind/--zusatzname schreibt die neuen Werte hierher zurück.
+#
+# Diese Datei überlebt ein `purge` (sie enthält keine Geheimnisse und keine
+# Kundendaten). Wirklich alles weg: purge --auch-konfiguration
+PLATTFORM_DOMAIN=$DOMAIN
+PLATTFORM_BIND=$BIND
+PLATTFORM_ZUSATZNAME=$ZUSATZNAME
+EOF
+}
+
 # --- Voraussetzungen ---------------------------------------------------------
 preflight() {
   for werkzeug in docker openssl curl python3; do
@@ -104,7 +236,6 @@ preflight() {
   # Kein Hinweis mehr auf fehlendes pnpm: gibt es keines, baut `build_ui`
   # die Oberfläche in einem Node-Container. Auf einem Server, der Container
   # fährt, ist das der passendere Weg — und eine Voraussetzung weniger.
-  [ "$BIND" = "0.0.0.0" ] && die "PLATTFORM_BIND=0.0.0.0 ist nicht zulässig: die Konsole gehört auf eine Verwaltungsadresse (ADR-0015 D1)."
   # 443 und 80 gehören dem Kunden-Listener. Belegt heisst: ein anderer
   # Webserver steht im Weg, und Caddy bekäme den Port nicht.
   for port in 80 443 4444; do
@@ -360,7 +491,23 @@ PLATTFORM_NETZ=$NETZ
 EOF
     chmod 600 "$daten_env"
   else
-    say "Umgebung der Datenebene besteht bereits"
+    # Dieselbe Nachführung wie oben, und aus demselben Grund: ändert sich
+    # die Domäne, muss die Datenebene mitkommen. Sonst bedient Caddy
+    # weiter die alten Kundennamen, während die Konsole die neuen kennt —
+    # und niemand sieht, warum die Seite 421 sagt. Geheimnisse und
+    # OIDC-Werte bleiben unangetastet.
+    local geaendert=0
+    setze_wert "$daten_env" MAGISTER_PUBLIC_HOSTNAME "$KONSOLE_HOST" && geaendert=1
+    setze_wert "$daten_env" MAGISTER_TENANT_DOMAIN "$DOMAIN" && geaendert=1
+    setze_wert "$daten_env" MAGISTER_DEFAULT_SNI "$KONSOLE_HOST" && geaendert=1
+    setze_wert "$daten_env" MAGISTER_TENANT_CERT_DIR "$CERTS" && geaendert=1
+    setze_wert "$daten_env" MAGISTER_CONSOLE_REGISTRY_URL \
+      "https://$KONSOLE_HOST:4444/api/tenants/registry" && geaendert=1
+    if [ "$geaendert" -eq 1 ]; then
+      say "Umgebung der Datenebene nachgeführt (Namen geändert)"
+    else
+      say "Umgebung der Datenebene besteht bereits"
+    fi
   fi
 }
 
@@ -604,6 +751,10 @@ PY
 
 # --- Befehle -----------------------------------------------------------------
 cmd_up() {
+  # Prüfhilfe: die Angaben festschreiben und aufhören. Damit lässt sich die
+  # Rangfolge aus dem Kopf dieser Datei testen, ohne Docker und ohne eine
+  # halbe Plattform (scripts/tests/plattform-konfig.test.sh).
+  if [ -n "${PLATTFORM_NUR_KONFIG:-}" ]; then cmd_konfig; return 0; fi
   preflight
   make_ca
   write_env
@@ -619,7 +770,7 @@ $(printf '\033[1mNächste Schritte\033[0m')
 
   1. Namen auflösbar machen (einmalig, als root) — in Produktion macht das
      der DNS, hier reicht die Datei:
-       echo "127.0.0.1 $KONSOLE_HOST ${KUNDEN[0]}.$DOMAIN ${KUNDEN[1]}.$DOMAIN" >> /etc/hosts
+       echo "$BIND $KONSOLE_HOST ${KUNDEN[0]}.$DOMAIN ${KUNDEN[1]}.$DOMAIN" >> /etc/hosts
 
   2. Ersten Operator anlegen (Passwort wird abgefragt, ADR-0023 D5):
        docker compose --project-directory $REPO/cockpit/deploy \\
@@ -628,7 +779,7 @@ $(printf '\033[1mNächste Schritte\033[0m')
          exec api python -m cockpit_api.cli.add_operator \\
            --upn vorname.nachname@vitabrevis.ch --name "Vorname Nachname" --set-password
 
-  3. Konsole öffnen: https://$KONSOLE_HOST:4444
+  3. Konsole öffnen: https://$KONSOLE_HOST:4444${ZUSATZNAME:+ (oder https://$ZUSATZNAME:4444)}
      Anmeldung mit Benutzername, Passwort und Code. Ein Client-Zertifikat
      ist möglich, aber nicht nötig (ADR-0023 D3) — wer eines benutzen will,
      nimmt $CERTS/operator.pem (+ -key.pem), als PKCS#12 für den Browser:
@@ -686,9 +837,41 @@ cmd_purge() {
   dc_daten down -v 2>/dev/null || true
   dc_konsole down -v 2>/dev/null || true
   docker network rm "$NETZ" >/dev/null 2>&1 || true
-  rm -rf "$ZIEL" "$REPO/cockpit/deploy/certs" \
+  rm -rf "$REPO/cockpit/deploy/certs" \
          "$REPO/cockpit/deploy/.env" "$REPO/deploy/compose/.env"
-  say "Gelöscht — der nächste 'up' beginnt von vorn"
+  # Alles unter $ZIEL — aber die Konfiguration bleibt, sofern sie dort liegt.
+  # Sie enthält keine Geheimnisse und keine Kundendaten, nur die Antworten
+  # aus der Erstinstallation. Wer sie mitlöscht, tippt sie beim
+  # Wiederaufbau erneut — und tippt sie irgendwann anders.
+  if [ "$KONF_LOESCHEN" -eq 1 ]; then
+    rm -rf "$ZIEL" "$KONF"
+    say "Gelöscht, samt Konfiguration — der nächste 'up' fragt wieder"
+  else
+    # `-name` und nicht `-path`: ein PLATTFORM_ROOT mit Schrägstrich am Ende
+    # ergäbe einen Pfad, der nie gleich aussieht wie der, den find druckt.
+    local behalten; behalten="$(basename "$KONF")"
+    find "$ZIEL" -mindepth 1 -maxdepth 1 ! -name "$behalten" -exec rm -rf {} + 2>/dev/null || true
+    say "Gelöscht — der nächste 'up' beginnt von vorn, mit denselben Angaben aus $KONF"
+  fi
+}
+
+cmd_konfig() {
+  # Im Format der Konfigurationsdatei: was hier steht, steht auch dort —
+  # und lässt sich so ohne Umdeutung vergleichen. Die abgeleiteten Werte
+  # darunter, damit niemand „konsole." vor die Domäne denken muss.
+  if [ -f "$KONF" ]; then
+    say "Angaben dieser Installation ($KONF)"
+  else
+    say "Angaben dieser Installation (noch nicht gespeichert, erst 'up' legt $KONF an)"
+  fi
+  printf 'PLATTFORM_DOMAIN=%s\n' "$DOMAIN"
+  printf 'PLATTFORM_BIND=%s\n' "$BIND"
+  printf 'PLATTFORM_ZUSATZNAME=%s\n' "$ZUSATZNAME"
+  printf '# abgeleitet\n'
+  printf 'KONSOLE_URL=https://%s:4444\n' "$KONSOLE_HOST"
+  local namen=""
+  for slug in "${KUNDEN[@]}"; do namen="$namen $slug.$DOMAIN"; done
+  printf 'KUNDEN=%s\n' "${namen# }"
 }
 
 # --- Werkzeuge in der Konsole ------------------------------------------------
@@ -713,28 +896,42 @@ cmd_werkzeug() {  # $1 = Modul, Rest = Argumente
 
 BEFEHL="${1:-up}"; shift || true
 
+# Die gespeicherten Angaben zuerst — auch für `status`, `down` und die
+# Werkzeuge. Vorher probte `status` stur die Vorgabeadresse und meldete
+# „antwortet nicht", während die Konsole auf der Verwaltungsadresse lief.
+konf_laden
+
 # `operator` und `totp` nehmen die Argumente ihres Werkzeugs, nicht die
 # dieses Skripts — deshalb vor der Optionsschleife.
 case "$BEFEHL" in
-  operator) cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
-  totp)     cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
+  operator) konf_anwenden; cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
+  totp)     konf_anwenden; cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
 esac
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --ziehen)  ZIEHEN=1; shift ;;
     --ui-neu)  UI_NEU=1; shift ;;
-    --domaene) DOMAIN="$2"; KONSOLE_HOST="konsole.$DOMAIN"; shift 2 ;;
-    --bind)    BIND="$2"; shift 2 ;;
-    --zusatzname) ZUSATZNAME="$2"; shift 2 ;;
+    --domaene) DOMAIN="$2"; DOMAIN_GESETZT=1; shift 2 ;;
+    --bind)    BIND="$2"; BIND_GESETZT=1; shift 2 ;;
+    --zusatzname) ZUSATZNAME="$2"; ZUSATZNAME_GESETZT=1; shift 2 ;;
+    --auch-konfiguration) KONF_LOESCHEN=1; shift ;;
     *) die "Unbekannte Option: $1" ;;
   esac
 done
 
+# Fragen darf nur `up`: ein `status` im Cron soll nicht auf eine Eingabe
+# warten. Gespeichert wird ebenfalls nur bei `up` — ein `status --bind …`
+# ist eine einmalige Auskunft und keine Entscheidung über die Installation.
+case "$BEFEHL" in up|update) konf_erfragen ;; esac
+konf_anwenden
+case "$BEFEHL" in up|update) konf_speichern ;; esac
+
 case "$BEFEHL" in
-  up)     cmd_up ;;
+  up|update) cmd_up ;;
   status) cmd_status ;;
   down)   cmd_down ;;
   purge)  cmd_purge ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up, status, down, purge, operator, totp)" ;;
+  konfig) cmd_konfig ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, konfig, down, purge, operator, totp)" ;;
 esac
