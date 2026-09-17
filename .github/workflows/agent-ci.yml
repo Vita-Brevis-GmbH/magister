@@ -155,6 +155,12 @@ jobs:
             Write-Error "check ohne Konfiguration gab $LASTEXITCODE zurueck, erwartet 1"
             exit 1
           }
+          # $LASTEXITCODE steht jetzt auf 1 — und der Runner hängt an jeden
+          # pwsh-Schritt ein `exit $LASTEXITCODE`. Ohne diese Zeile scheitert
+          # der Schritt an genau dem Rückgabewert, den er eine Zeile vorher
+          # als den richtigen bestätigt hat. Genau so passiert: das Payload
+          # war fertig, das Programm lief, und der Job war trotzdem rot.
+          exit 0
 
       - name: Payload hochladen
         uses: actions/upload-artifact@v4

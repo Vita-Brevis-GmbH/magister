@@ -68,3 +68,9 @@ Write-Host "Zum Mitnehmen: $zip ($groesse)" -ForegroundColor Green
 Write-Host ""
 Write-Host "Auf dem Plattform-Server weiter:"
 Write-Host "    ./scripts/agentenpakete.sh msi magister-connector-payload.zip"
+
+# Dieselbe Falle wie in der CI: der letzte native Aufruf oben war `check`, und
+# der gibt bestimmungsgemäss 1 zurück. `$LASTEXITCODE` steht damit auf 1, und
+# wer dieses Skript mit `pwsh -File` aufruft, bekäme einen Fehlschlag für einen
+# Lauf, der durchgelaufen ist.
+exit 0
