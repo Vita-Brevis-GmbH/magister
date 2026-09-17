@@ -163,3 +163,10 @@ if ! msiinfo export "$OUT" ServiceInstall | grep -q MagisterConnector; then
 fi
 [[ $missing -eq 0 ]] || exit 1
 echo "Prüfung: Dienst und Tabellen vorhanden."
+
+# Und jetzt das, was `msiinfo` NICHT sieht: ob Windows die Datei überhaupt
+# öffnet. `msiinfo` benutzt dieselbe Bibliothek, die das MSI geschrieben hat,
+# und liest deshalb auch eine Datenbank anstandslos, die sich selbst
+# widerspricht. Genau so ist ein Paket bis auf den Domaincontroller gekommen,
+# das Windows mit Fehler 1620 abgewiesen hat (msi_pruefen.py erklärt den Fall).
+"$HERE/msi_pruefen.py" "$OUT"

@@ -66,6 +66,32 @@ msiinfo export magister-connector-STUB.msi ServiceInstall
 msiinfo export magister-connector-STUB.msi Directory
 ```
 
+### Ob Windows die Datei überhaupt öffnet
+
+```bash
+agent/packaging/windows/msi_pruefen.py magister-connector-x64.msi
+```
+
+`build-msi.sh` ruft das nach jedem Bau selbst auf — hier steht es, weil es
+für ein fertig heruntergeladenes Paket genauso funktioniert.
+
+Der Anlass: ein Paket, das die CI gebaut, `msiinfo` gelesen und Windows mit
+*„This installation package could not be opened"* abgewiesen hat. Die
+Übertragung war fehlerfrei (Hash auf dem Server = Hash auf dem Client), und
+`msiexec /l*v` sagte nur `MainEngineThread is returning 1620`.
+
+Der Grund war der String-Pool: `wixl` schreibt dort immer **Codepage 0**
+(= rein ASCII) und ignoriert das `Codepage`-Attribut der Quelle. Ein Umlaut
+in einem Attributwert landete damit als Einzelbyte in einer Datenbank, die
+ASCII verspricht. `msiinfo` liest das anstandslos — es benutzt dieselbe
+Bibliothek, die es geschrieben hat. Windows nicht.
+
+Deshalb prüft `msi_pruefen.py` das **Ergebnis** statt der Absicht:
+Containerformat, Wurzel-CLSID (`.msi`, nicht `.msp`) und ob Pool-Codepage
+und Text zusammenpassen. Praktische Folge für die Quelle: **Attributwerte in
+`magister-connector.wxs` bleiben ASCII** (`fuer` statt `für`). Kommentare
+dürfen Umlaute haben, die landen nicht in der Datenbank.
+
 ## Was das MSI tut — und was ausdrücklich nicht
 
 **Es installiert:**

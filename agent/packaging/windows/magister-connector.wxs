@@ -42,11 +42,26 @@
   Liste wäre beim ersten Abhängigkeitswechsel falsch. Sie liefert die
   ComponentGroup "Payload", auf die die Feature-Definition unten verweist.
 -->
+<!--
+  KEINE Umlaute in den Attributwerten weiter unten — und das ist keine
+  Marotte. Die MSI-Datenbank kennt nur ANSI-Codepages (UTF-8 ist keine), und
+  `wixl` übernimmt das `Codepage`-Attribut ohnehin NICHT: es schreibt in den
+  String-Pool immer Codepage 0, also „rein ASCII". Ein „ä" landete damit als
+  Einzelbyte in einer Datenbank, die ASCII verspricht — `msiinfo` liest das
+  anstandslos (dieselbe Bibliothek hat es geschrieben), Windows Installer
+  weist das ganze Paket beim Öffnen ab. Fehler 1620, und im Protokoll steht
+  dazu kein einziges Wort: nur `MainEngineThread is returning 1620`.
+  Genau so ist ein Paket bis auf den Domaincontroller gekommen.
+
+  Die 1252 steht hier für den Fall, dass der Bau einmal über das echte
+  WiX-Toolset läuft — das nimmt das Attribut ernst. `msi_pruefen.py` prüft
+  nach jedem Bau, dass Pool-Codepage und Text zusammenpassen.
+-->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Product Id="*"
            Name="Magister Connector-Agent"
            Language="1031"
-           Codepage="65001"
+           Codepage="1252"
            Version="$(var.Version)"
            Manufacturer="Vita Brevis GmbH"
            UpgradeCode="8f3d5c1a-7b24-4e6f-9a15-2c8d4e0b6f37">
@@ -54,7 +69,7 @@
     <Package InstallerVersion="500"
              Compressed="yes"
              InstallScope="perMachine"
-             Description="Connector-Agent für Magister (Schola Levis)"
+             Description="Connector-Agent fuer Magister (Schola Levis)"
              Comments="Baut ausschliesslich ausgehende Verbindungen auf. Nimmt keine an."
              Manufacturer="Vita Brevis GmbH"/>
 
@@ -112,7 +127,7 @@
         <ServiceInstall Id="ServiceInstall"
                         Name="MagisterConnector"
                         DisplayName="Magister Connector-Agent"
-                        Description="Holt Verzeichnisaufträge von der Magister-Plattform ab und führt sie gegen das lokale Active Directory aus. Baut ausschliesslich ausgehende Verbindungen auf."
+                        Description="Holt Verzeichnisauftraege von der Magister-Plattform ab und fuehrt sie gegen das lokale Active Directory aus. Baut ausschliesslich ausgehende Verbindungen auf."
                         Type="ownProcess"
                         Start="auto"
                         ErrorControl="normal"
@@ -162,14 +177,14 @@
           Zustandsverzeichnis.
         -->
         <Shortcut Id="S.Shell"
-                  Name="Connector-Agent — Eingabeaufforderung"
-                  Description="Eingabeaufforderung im Installationsordner, für enroll und check"
+                  Name="Connector-Agent - Eingabeaufforderung"
+                  Description="Eingabeaufforderung im Installationsordner, fuer enroll und check"
                   Target="[System64Folder]cmd.exe"
                   Arguments="/K cd /d &quot;[INSTALLDIR]&quot;"
                   WorkingDirectory="INSTALLDIR"/>
         <Shortcut Id="S.Readme"
                   Name="Installationsanleitung"
-                  Description="Einrichten, Anmelden, Prüfen"
+                  Description="Einrichten, Anmelden, Pruefen"
                   Target="[INSTALLDIR]INSTALL.txt"/>
         <RemoveFolder Id="R.StartMenu" On="uninstall"/>
         <RegistryValue Root="HKCU"
