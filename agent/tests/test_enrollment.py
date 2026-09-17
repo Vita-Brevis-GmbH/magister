@@ -18,7 +18,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
-from connector_agent.config import AgentConfig, load_secrets
+from connector_agent.config import IS_WINDOWS, AgentConfig, assert_permissions, load_secrets
 from connector_agent.enrollment import (
     EnrollmentFailedError,
     enroll,
@@ -99,9 +99,35 @@ class TestKeyStaysLocal:
         # Und lokal liegt er wirklich.
         assert "PRIVATE KEY" in config.key_path.read_text()
 
-    def test_the_key_and_secrets_are_written_with_0600(self, config: AgentConfig) -> None:
+    def test_the_key_and_secrets_are_not_readable_by_others(self, config: AgentConfig) -> None:
+        """Zwei Betriebssysteme, zwei Mechanismen, eine Zusage.
+
+        Unter POSIX ist der Modus die ganze Aussage. Unter Windows ist er ein
+        Phantasiewert: ``chmod`` setzt dort nur das Read-Only-Attribut, und
+        ``stat()`` meldet danach ``0666`` — der Test hat unter Windows also
+        nicht etwa etwas Schlimmes gefunden, er hat die falsche Frage
+        gestellt. Was dort schützt, ist die DACL des Zustandsverzeichnisses,
+        die ``ensure_state_dir`` setzt und die die Dateien erben
+        (``connector_agent.winsec``).
+
+        Deshalb prüft der Test je Plattform das, was tatsächlich schützt.
+        Nicht auf beiden dasselbe, von dem nur auf einer etwas stimmt — und
+        auch kein ``skipif``: die Zusage gilt auf beiden, nur ihre Form
+        unterscheidet sich.
+        """
         platform = _Platform(FakeCa())
         enroll(config, token="t" * 32, agent_version="0.1.0", transport=platform.transport())
+
+        if IS_WINDOWS:
+            from connector_agent.winsec import offending_trustees, read_sddl
+
+            # Genau die Prüfung, die der Agent bei jedem Start fährt.
+            assert_permissions(config)
+            # Und ausgeschrieben, damit ein Fehler sagt, WER zu viel darf.
+            sddl = read_sddl(config.state_dir)
+            assert offending_trustees(sddl) == [], sddl
+            return
+
         for path in (config.key_path, config.secrets_path):
             mode = stat.S_IMODE(path.stat().st_mode)
             assert mode == 0o600, f"{path} hat {mode:04o}"
