@@ -249,12 +249,43 @@ liest ein Verzeichnis, das der Aufbau anlegt und schreibgeschützt einhängt.
 Die Konsole sieht neue Dateien sofort; ein Neustart ist nicht nötig. Ist das
 Verzeichnis leer, sagt die Oberfläche das — und nicht „es gibt kein Paket".
 
-**Das MSI kann diese Maschine nicht bauen.** PyInstaller friert die Laufzeit
-ein, auf der es selbst läuft; ein Windows-Programm entsteht nur unter Windows.
-Deshalb baut es `agent-ci.yml` auf einem Windows-Runner, und `holen` lädt das
-Ergebnis herunter. Was hier entstünde, wäre der Platzhalter aus
-`build-msi.sh --stub` — installierbar, aber ohne Inhalt, und deshalb trägt er
-STUB im Namen.
+### Das MSI
+
+PyInstaller friert die Laufzeit ein, auf der es selbst läuft: der Agent im MSI
+entsteht nur unter Windows. Das MSI drumherum baut diese Maschine mit `wixl`.
+Zwei Wege zum fertigen Paket:
+
+**a) Aus der CI** — der normale Weg, sobald `agent-ci.yml` auf `main` liegt
+und gelaufen ist:
+
+```bash
+./scripts/agentenpakete.sh holen
+```
+
+**b) Selbst gebaut** — der Weg, solange die CI noch keines hat. Auf
+*irgendeiner* Windows-Maschine mit Netz (**nicht** auf einem
+Domaincontroller, das Skript lädt Abhängigkeiten):
+
+```powershell
+git clone … magister; cd magister\agent
+.\packaging\windows\build-payload.ps1
+```
+
+Das erzeugte `magister-connector-payload.zip` (rund 30 MiB) auf den
+Plattform-Server bringen, dort:
+
+```bash
+apt-get install -y wixl msitools unzip      # einmalig
+./scripts/agentenpakete.sh msi magister-connector-payload.zip
+```
+
+Das Skript entpackt, baut, prüft die MSI-Tabellen (ohne `ServiceInstall`
+bricht es ab — ein MSI, das Dateien installiert und keinen Dienst, merkt man
+sonst erst beim Kunden) und legt das Ergebnis ins Paketverzeichnis.
+
+Was hier **nicht** hineingehört, ist der Platzhalter aus
+`build-msi.sh --stub`: installierbar, aber ohne Inhalt. Er trägt STUB im
+Namen, und `bauen` legt ihn absichtlich nicht ab.
 
 `holen` braucht ein Token mit `actions:read` in `GITHUB_TOKEN` oder in
 `~/.magister/github-token` (0600). Es geht über `curl --config` in die

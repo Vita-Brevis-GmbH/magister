@@ -19,17 +19,32 @@ bauen kann, ist eine Quelle, an der niemand gern etwas ändert.
 
 ### Ganz, wie CI es tut
 
+```powershell
+# --- unter Windows: ein Befehl, der die vier unten zusammenfasst ---
+cd agent
+.\packaging\windows\build-payload.ps1
+```
+
+Er baut das Payload, prüft, dass das eingefrorene Programm auch startet, und
+packt `magister-connector-payload.zip` daneben — zum Mitnehmen auf die
+Linux-Maschine.
+
 ```bash
-# --- unter Windows ---
+# --- unter Linux, mit dem Payload aus dem Windows-Lauf ---
+apt-get install -y wixl msitools
+./scripts/agentenpakete.sh msi magister-connector-payload.zip
+#  … oder direkt, ohne Ablage im Paketverzeichnis der Konsole:
+agent/packaging/windows/build-msi.sh dist/magister-connector magister-connector-0.1.0-x64.msi
+```
+
+Von Hand, falls das PowerShell-Skript nicht passt:
+
+```powershell
 cd agent
 uv sync --extra packaging
 uv run pyinstaller --clean --noconfirm packaging/windows/magister-connector.spec
 copy deploy\config.example.json dist\magister-connector\
 copy packaging\windows\INSTALL.txt dist\magister-connector\
-
-# --- unter Linux, mit dist/magister-connector/ aus dem Windows-Lauf ---
-apt-get install wixl
-agent/packaging/windows/build-msi.sh dist/magister-connector magister-connector-0.1.0-x64.msi
 ```
 
 ### Nur die WiX-Quelle prüfen, ohne Windows

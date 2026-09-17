@@ -4,6 +4,7 @@
 #
 #   ./scripts/agentenpakete.sh holen          # aus der CI holen (MSI + .deb)
 #   ./scripts/agentenpakete.sh bauen          # was hier baubar ist (.deb)
+#   ./scripts/agentenpakete.sh msi <payload>  # MSI aus einem Windows-Payload
 #   ./scripts/agentenpakete.sh zeigen         # was im Verzeichnis liegt
 #
 # **Warum es dieses Skript gibt.** Die CI baut MSI und .deb bei jedem Push
@@ -12,12 +13,20 @@
 # „herunterladbar" fehlte der Weg; im Runbook stand ein `cp` mit einem
 # Dateinamen, den es auf keiner Maschine gab.
 #
-# **Warum das MSI nicht hier gebaut wird.** PyInstaller friert die Laufzeit
-# ein, auf der es selbst läuft — ein Windows-Programm entsteht nur unter
-# Windows (agent/packaging/windows/README.md). Deshalb: `bauen` macht das
-# .deb, das MSI kommt über `holen` aus der CI. Ein MSI, das hier entstünde,
-# wäre der Platzhalter aus `build-msi.sh --stub`, und der ist zum
-# Installieren ausdrücklich nicht gedacht.
+# **Warum das MSI zweigeteilt ist.** PyInstaller friert die Laufzeit ein, auf
+# der es selbst läuft — der eingefrorene Agent (das „Payload") entsteht nur
+# unter Windows. Das MSI drumherum baut Linux mit `wixl`
+# (agent/packaging/windows/README.md). Zwei Wege zum fertigen MSI:
+#
+#   `holen` — aus der CI. Der normale Weg, sobald agent-ci.yml auf `main`
+#             liegt und gelaufen ist.
+#   `msi`   — aus einem Payload, das jemand auf einer Windows-Maschine mit
+#             `agent/packaging/windows/build-payload.ps1` gebaut hat. Der Weg,
+#             wenn die CI noch keines hat.
+#
+# `bauen` macht nur das .deb. Es legt bewusst KEINEN Platzhalter aus
+# `build-msi.sh --stub` ab: der ist installierbar und ohne Inhalt, und
+# niemand soll ihn im Paketverzeichnis für ein Paket halten.
 #
 # Zugang für `holen`: ein Token mit `actions:read` auf dem Repository, in
 # GITHUB_TOKEN oder in ~/.magister/github-token (0600). Es wird nie
@@ -183,17 +192,65 @@ cmd_bauen() {
   # für ein Paket hält.
   cat <<'HINWEIS'
 
-Kein MSI. Es entsteht nur unter Windows (PyInstaller friert die Laufzeit
-ein, auf der es läuft) und kommt deshalb aus der CI:
+Kein MSI: der eingefrorene Agent darin entsteht nur unter Windows.
+Zwei Wege dorthin:
 
-    ./scripts/agentenpakete.sh holen
+  aus der CI          ./scripts/agentenpakete.sh holen
+  selbst gebaut       auf einer Windows-Maschine (nicht dem DC):
+                        cd agent
+                        .\packaging\windows\build-payload.ps1
+                      dann das erzeugte ZIP hierher bringen und
+                        ./scripts/agentenpakete.sh msi magister-connector-payload.zip
 
-Wer die WiX-Quelle prüfen will, ohne Windows in der Nähe:
-
-    agent/packaging/windows/build-msi.sh --stub
-
+Nur die WiX-Quelle prüfen, ohne Windows in der Nähe:
+  agent/packaging/windows/build-msi.sh --stub
 Das Ergebnis heisst STUB und ist zum Installieren nicht gedacht.
 HINWEIS
+}
+
+# --- MSI aus einem Windows-Payload -------------------------------------------
+cmd_msi() {
+  local quelle="${1:-}"
+  [ -n "$quelle" ] || die "Payload angeben: $0 msi <verzeichnis|payload.zip> (gebaut mit agent/packaging/windows/build-payload.ps1)"
+  [ -e "$quelle" ] || die "$quelle gibt es nicht."
+  for werkzeug in wixl wixl-heat msiinfo; do
+    command -v "$werkzeug" >/dev/null \
+      || die "$werkzeug fehlt: apt-get install -y wixl msitools"
+  done
+
+  local ziel payload aufraeumen=""
+  ziel="$(ziel_verzeichnis)"
+  if [ -d "$quelle" ]; then
+    payload="$quelle"
+  else
+    command -v unzip >/dev/null || die "unzip fehlt (apt-get install unzip)."
+    aufraeumen="$(mktemp -d)"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$aufraeumen'" EXIT
+    say "Payload entpacken"
+    unzip -qo "$quelle" -d "$aufraeumen"
+    # Ein ZIP aus `Compress-Archive -Path dist\*` hat die Dateien oben; eines
+    # aus einem Artefakt kann einen Ordner davor haben. Beides annehmen,
+    # statt den Bediener raten zu lassen, wie er hätte packen sollen.
+    if [ -f "$aufraeumen/magister-connector.exe" ]; then
+      payload="$aufraeumen"
+    else
+      payload="$(dirname "$(find "$aufraeumen" -name magister-connector.exe -type f | head -1)")"
+      [ -n "$payload" ] && [ -d "$payload" ] \
+        || die "In $quelle steckt kein magister-connector.exe."
+    fi
+  fi
+
+  local version
+  version="$(grep -oP '^VERSION\s*=\s*"\K[^"]+' "$REPO/agent/connector_agent/cli.py" || echo "0.0.0")"
+  local out="$ziel/magister-connector-${version}-x64.msi"
+  say "MSI bauen aus $payload"
+  # Die .exe-Dateien kommen aus einem ZIP ohne Ausführungsrecht; wixl stört
+  # das nicht, aber ein späterer Handgriff auf dem Payload schon.
+  chmod +x "$payload"/*.exe 2>/dev/null || true
+  "$REPO/agent/packaging/windows/build-msi.sh" "$payload" "$out"
+  chmod 0644 "$out"
+  say "$(basename "$out") liegt in $ziel — die Konsole zeigt es sofort"
 }
 
 # --- Zeigen -----------------------------------------------------------------
@@ -214,6 +271,7 @@ BEFEHL="${1:-zeigen}"; shift || true
 case "$BEFEHL" in
   holen)  cmd_holen "$@" ;;
   bauen)  cmd_bauen "$@" ;;
+  msi)    cmd_msi "$@" ;;
   zeigen) cmd_zeigen "$@" ;;
-  *) die "Unbekannter Befehl: $BEFEHL (holen, bauen, zeigen)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (holen, bauen, msi, zeigen)" ;;
 esac
