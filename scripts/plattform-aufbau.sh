@@ -791,7 +791,12 @@ $(printf '\033[1mNächste Schritte\033[0m')
      (Die Plattform-CA $CERTS/root.pem im Browser als vertrauenswürdig
      eintragen, sonst warnt er — in Produktion kommt sie über die GPO.)
 
-  5. Prüfen: die drei Handgriffe in
+  5. Agentenpakete bereitstellen (sonst sagt die Konsole „Verzeichnis leer"):
+       ./scripts/agentenpakete.sh holen     # MSI + .deb aus der CI
+       ./scripts/agentenpakete.sh bauen     # nur .deb, hier gebaut
+       ./scripts/agentenpakete.sh zeigen    # $PAKETE
+
+  6. Prüfen: die drei Handgriffe in
      docs/runbooks/plattform-auf-einem-host.md §5
 EOF
 }

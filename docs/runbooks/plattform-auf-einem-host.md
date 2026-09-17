@@ -241,14 +241,40 @@ an (*Kunde → AD-Connector → „Agent herunterladen"*). Sie **baut nichts**: 
 liest ein Verzeichnis, das der Aufbau anlegt und schreibgeschützt einhängt.
 
 ```bash
-# Host-Pfad (steht als COCKPIT_AGENT_PACKAGE_DIR in cockpit/deploy/.env):
-grep COCKPIT_AGENT_PACKAGE_DIR cockpit/deploy/.env
-# Paket hineinlegen — aus der CI, oder lokal gebaut:
-cp magister-connector_1.4.0_amd64.deb "$(grep -oP '(?<=^COCKPIT_AGENT_PACKAGE_DIR=).*' cockpit/deploy/.env)/"
+./scripts/agentenpakete.sh holen    # MSI + .deb aus der CI
+./scripts/agentenpakete.sh bauen    # nur das .deb, hier auf der Maschine
+./scripts/agentenpakete.sh zeigen   # was liegt da, mit Prüfsumme
 ```
 
 Die Konsole sieht neue Dateien sofort; ein Neustart ist nicht nötig. Ist das
 Verzeichnis leer, sagt die Oberfläche das — und nicht „es gibt kein Paket".
+
+**Das MSI kann diese Maschine nicht bauen.** PyInstaller friert die Laufzeit
+ein, auf der es selbst läuft; ein Windows-Programm entsteht nur unter Windows.
+Deshalb baut es `agent-ci.yml` auf einem Windows-Runner, und `holen` lädt das
+Ergebnis herunter. Was hier entstünde, wäre der Platzhalter aus
+`build-msi.sh --stub` — installierbar, aber ohne Inhalt, und deshalb trägt er
+STUB im Namen.
+
+`holen` braucht ein Token mit `actions:read` in `GITHUB_TOKEN` oder in
+`~/.magister/github-token` (0600). Es geht über `curl --config` in die
+Anfrage und steht damit weder in der Prozessliste noch in der History. Von
+einem anderen Zweig als `main`:
+
+```bash
+AGENT_CI_ZWEIG=claude/mein-zweig ./scripts/agentenpakete.sh holen
+```
+
+Wer kein Token auf dem Server will, holt die Datei einmal von Hand: GitHub →
+Actions → *agent-ci* → letzter grüner Lauf → Artefakte
+`magister-connector-msi` und `magister-connector-deb`, entpacken, in das
+Verzeichnis legen. Artefakte verfallen (Vorgabe 90 Tage, das Payload nach 7);
+ist keines mehr da, den Workflow neu starten (*Run workflow*).
+
+Die heruntergeladenen Dateien bekommen den Commit-Stand in den Namen
+(`…-a1b2c3d4.msi`). Sonst liegen dort irgendwann zwei Dateien, die gleich
+heissen und verschieden sind, und niemand weiss, welche der Kunde bekommen
+hat.
 
 Zwei Dinge, die die Prüfsumme in der Liste **nicht** ist: sie ist kein
 Herkunftsnachweis (dafür die Paketsignatur, Entscheid E18), und sie ersetzt
