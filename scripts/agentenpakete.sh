@@ -46,8 +46,15 @@ ARTEFAKTE=("magister-connector-msi" "magister-connector-deb")
 #: Verlassen gelöscht.
 KONF=""
 
-say()  { printf '\033[1m==> %s\033[0m\n' "$*"; }
-warn() { printf '\033[33m !  %s\033[0m\n' "$*"; }
+# Fortschritt und Hinweise gehen auf stderr, NICHT auf stdout. Der Grund ist
+# hier gerade aufgeschlagen: `token_datei` gibt seinen Dateipfad über stdout
+# zurück, und ein `warn` darin landete mit im Ergebnis — curl bekam einen
+# Dateinamen mit Warntext davor und meldete „error encountered when reading a
+# file". Eine Meldung darf nie im Rückgabewert einer Funktion stehen.
+# Auf stdout gehört in diesem Skript nur, was ausgewertet wird (die Liste in
+# `zeigen`, der Pfad aus `token_datei`, der Rumpf aus `api`).
+say()  { printf '\033[1m==> %s\033[0m\n' "$*" >&2; }
+warn() { printf '\033[33m !  %s\033[0m\n' "$*" >&2; }
 die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; exit 1; }
 
 # --- Wohin ------------------------------------------------------------------
@@ -65,27 +72,55 @@ ziel_verzeichnis() {
 }
 
 # --- Zugang -----------------------------------------------------------------
+#: Was an einem Wert offensichtlich nicht stimmt — als Satzteil, oder leer.
+#: Der Wert selbst wird nie ausgegeben, nur sein Mangel.
+token_maengel() {  # $1 = Wert
+  case "$1" in
+    *…*) printf 'enthält das Auslassungszeichen „…" und ist damit der Platzhalter aus der Anleitung, nicht das Token'; return 0 ;;
+    *[[:space:]]*) printf 'enthält Leerzeichen oder Zeilenumbrüche'; return 0 ;;
+  esac
+  if [ "${#1}" -lt 20 ]; then
+    printf 'ist nur %d Zeichen lang; ein GitHub-Token ist deutlich länger' "${#1}"
+  fi
+}
+
 token_datei() {
   # Eine DATEI und keine Variable auf der Kommandozeile: curl liest sie mit
   # `--config`, damit das Geheimnis weder in der Prozessliste noch in der
   # Shell-History steht.
   local ablage="$HOME/.magister/github-token"
-  local wert="${GITHUB_TOKEN:-${GH_TOKEN:-}}"
+  local wert="" quelle=""
+  if [ -n "${GITHUB_TOKEN:-}" ]; then
+    wert="$GITHUB_TOKEN"; quelle="der Umgebungsvariablen GITHUB_TOKEN"
+  elif [ -n "${GH_TOKEN:-}" ]; then
+    wert="$GH_TOKEN"; quelle="der Umgebungsvariablen GH_TOKEN"
+  fi
+
+  # Die Umgebung schlägt die Datei — ausser sie enthält offensichtlichen
+  # Unfug und daneben liegt ein hinterlegtes Token. Genau dieser Fall ist
+  # eingetreten: `token` schrieb ein geprüftes Token in die Datei, und im
+  # selben Terminal stand noch ein `export GITHUB_TOKEN=…` von vorher. Das
+  # Werkzeug lief in die Sackgasse, obwohl die Antwort danebenlag.
+  local mangel=""
+  if [ -n "$wert" ]; then
+    mangel="$(token_maengel "$wert")"
+    if [ -n "$mangel" ] && [ -f "$ablage" ]; then
+      warn "Das Token aus $quelle $mangel."
+      warn "Ich nehme das hinterlegte aus $ablage. Aufräumen mit: unset GITHUB_TOKEN GH_TOKEN"
+      wert=""
+    fi
+  fi
+
   if [ -z "$wert" ] && [ -f "$ablage" ]; then
-    wert="$(tr -d '\n' < "$ablage")"
+    wert="$(tr -d '\n' < "$ablage")"; quelle="$ablage"
   fi
   [ -n "$wert" ] || die "Kein Token. Hinterlegen mit: $0 token   (Recht: actions:read)"
-  # Der Wert wird NICHT ausgegeben — aber offensichtlicher Unfug wird benannt.
-  # Der Anlass: eine aus einer Anleitung kopierte Zeile `export GITHUB_TOKEN=…`
-  # setzt buchstäblich das Auslassungszeichen. GitHub antwortet darauf mit 401,
-  # und das sah hier lange wie „kein erfolgreicher Lauf" aus.
-  case "$wert" in
-    *…*) die "GITHUB_TOKEN enthält das Auslassungszeichen '…' — das ist der Platzhalter aus der Anleitung, nicht das Token." ;;
-    *[[:space:]]*) die "GITHUB_TOKEN enthält Leerzeichen oder Zeilenumbrüche." ;;
-  esac
-  if [ "${#wert}" -lt 20 ]; then
-    die "GITHUB_TOKEN ist ${#wert} Zeichen lang — ein GitHub-Token ist deutlich länger. Vermutlich ein Platzhalter."
-  fi
+
+  # Die Quelle gehört in die Meldung: sonst schickt ein Mangel in der Datei
+  # den Bediener zur Umgebungsvariablen und umgekehrt.
+  mangel="$(token_maengel "$wert")"
+  [ -z "$mangel" ] || die "Das Token aus $quelle $mangel."
+
   local konf
   konf="$(mktemp)"
   chmod 600 "$konf"
@@ -169,12 +204,10 @@ cmd_token() {
   printf '\n' > /dev/tty
   [ -n "$wert" ] || die "Nichts eingegeben — nichts geschrieben."
 
-  # Dieselben Prüfungen wie beim Benutzen, nur sofort statt beim nächsten Mal.
-  case "$wert" in
-    *…*) die "Das ist das Auslassungszeichen '…' aus der Anleitung, nicht das Token." ;;
-    *[[:space:]]*) die "Der Wert enthält Leerzeichen — vermutlich mehr als nur das Token eingefügt." ;;
-  esac
-  [ "${#wert}" -ge 20 ] || die "Der Wert ist ${#wert} Zeichen lang. Ein GitHub-Token ist deutlich länger."
+  # Dieselbe Prüfung wie beim Benutzen, nur sofort statt beim nächsten Mal.
+  local mangel
+  mangel="$(token_maengel "$wert")"
+  [ -z "$mangel" ] || die "Der eingegebene Wert $mangel."
 
   ( umask 077; printf '%s' "$wert" > "$ablage" )
   chmod 600 "$ablage"
