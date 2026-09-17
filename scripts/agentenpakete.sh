@@ -40,6 +40,9 @@ WORKFLOW="agent-ci.yml"
 ZWEIG="${AGENT_CI_ZWEIG:-main}"
 # Die Artefaktnamen, die agent-ci.yml hochlädt.
 ARTEFAKTE=("magister-connector-msi" "magister-connector-deb")
+#: Die curl-Konfiguration mit dem Token. Wird in `cmd_holen` gesetzt und beim
+#: Verlassen gelöscht.
+KONF=""
 
 say()  { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m !  %s\033[0m\n' "$*"; }
@@ -70,12 +73,45 @@ token_datei() {
     wert="$(tr -d '\n' < "$ablage")"
   fi
   [ -n "$wert" ] || die "Kein Token. GITHUB_TOKEN setzen oder $ablage anlegen (Recht: actions:read)."
+  # Der Wert wird NICHT ausgegeben — aber offensichtlicher Unfug wird benannt.
+  # Der Anlass: eine aus einer Anleitung kopierte Zeile `export GITHUB_TOKEN=…`
+  # setzt buchstäblich das Auslassungszeichen. GitHub antwortet darauf mit 401,
+  # und das sah hier lange wie „kein erfolgreicher Lauf" aus.
+  case "$wert" in
+    *…*) die "GITHUB_TOKEN enthält das Auslassungszeichen '…' — das ist der Platzhalter aus der Anleitung, nicht das Token." ;;
+    *[[:space:]]*) die "GITHUB_TOKEN enthält Leerzeichen oder Zeilenumbrüche." ;;
+  esac
+  if [ "${#wert}" -lt 20 ]; then
+    die "GITHUB_TOKEN ist ${#wert} Zeichen lang — ein GitHub-Token ist deutlich länger. Vermutlich ein Platzhalter."
+  fi
   local konf
   konf="$(mktemp)"
   chmod 600 "$konf"
   printf 'header = "Authorization: Bearer %s"\n' "$wert" > "$konf"
   printf 'header = "Accept: application/vnd.github+json"\n' >> "$konf"
   printf '%s' "$konf"
+}
+
+#: Eine Anfrage an die API — mit Blick auf den HTTP-Code.
+#:
+#: Ohne diese Prüfung verschwindet jede Ablehnung lautlos: der Rumpf eines
+#: 401 enthält kein `workflow_runs`, die Auswertung findet nichts, und das
+#: Skript meldet „kein erfolgreicher Lauf" für ein Token, das schlicht nicht
+#: gilt. Zwei verschiedene Lagen, eine Meldung — der teuerste Fehler, den ein
+#: Werkzeug machen kann.
+api() {  # $1 = URL -> Rumpf auf stdout
+  local antwort code rumpf
+  antwort="$(curl -sS --config "$KONF" -w $'\n%{http_code}' "$1")" \
+    || die "Die Anfrage an GitHub ist gescheitert (Netz, Proxy oder TLS)."
+  code="${antwort##*$'\n'}"
+  rumpf="${antwort%$'\n'*}"
+  case "$code" in
+    200) printf '%s' "$rumpf" ;;
+    401) die "GitHub weist das Token ab (401). Es ist abgelaufen, falsch kopiert oder gar kein Token." ;;
+    403) die "GitHub verweigert den Zugriff (403). Dem Token fehlt 'actions:read' auf diesem Repository — oder die Organisation verlangt eine SSO-Freigabe für das Token." ;;
+    404) die "GitHub findet $1 nicht (404). Bei einem privaten Repository heisst das meist: das Token darf es nicht sehen." ;;
+    *)   die "GitHub antwortete mit HTTP $code." ;;
+  esac
 }
 
 eigentuemer_repo() {
@@ -92,18 +128,22 @@ cmd_holen() {
   command -v unzip >/dev/null || die "unzip fehlt (apt-get install unzip)."
   command -v python3 >/dev/null || die "python3 fehlt."
 
-  local ziel slug konf
+  local ziel slug
   ziel="$(ziel_verzeichnis)"
   slug="$(eigentuemer_repo)"
-  konf="$(token_datei)"
-  # shellcheck disable=SC2064  # $konf soll JETZT eingesetzt werden.
-  trap "rm -f '$konf'" EXIT
+  KONF="$(token_datei)"
+  # shellcheck disable=SC2064  # $KONF soll JETZT eingesetzt werden.
+  trap "rm -f '$KONF'" EXIT
 
   say "Letzten erfolgreichen Lauf von $WORKFLOW auf '$ZWEIG' suchen ($slug)"
-  local lauf
-  lauf="$(curl -sS --config "$konf" \
-    "https://api.github.com/repos/$slug/actions/workflows/$WORKFLOW/runs?branch=$ZWEIG&status=success&per_page=1" \
-    | python3 -c '
+  # Erst holen, dann auswerten — und zwar in ZWEI Schritten. In
+  # `$(api … | python3 …)` ist der Rückgabewert der der Pipeline, also der von
+  # python; ein Abbruch in `api` bliebe unbemerkt, und python bekäme eine leere
+  # Eingabe und stürbe mit einem JSONDecodeError. Der Bediener sähe einen
+  # Python-Stacktrace statt „das Token gilt nicht".
+  local rumpf lauf
+  rumpf="$(api "https://api.github.com/repos/$slug/actions/workflows/$WORKFLOW/runs?branch=$ZWEIG&status=success&per_page=1")"
+  lauf="$(printf '%s' "$rumpf" | python3 -c '
 import json, sys
 daten = json.load(sys.stdin)
 laeufe = daten.get("workflow_runs") or []
@@ -115,7 +155,20 @@ lauf = laeufe[0]
 print("%s\t%s\t%s" % (lauf["id"], lauf["head_sha"][:8], lauf["created_at"]))
 ')"
   if [ -z "$lauf" ]; then
-    die "Kein erfolgreicher Lauf auf '$ZWEIG'. Anderer Zweig: AGENT_CI_ZWEIG=<zweig> $0 holen"
+    # Unterscheiden, was der Fall ist — sonst rät der Bediener zwischen
+    # „falscher Zweig", „Workflow lief nie" und „lief, aber rot".
+    say "Kein erfolgreicher Lauf. Was es auf '$ZWEIG' gibt:"
+    rumpf="$(api "https://api.github.com/repos/$slug/actions/workflows/$WORKFLOW/runs?branch=$ZWEIG&per_page=5")"
+    printf '%s' "$rumpf" | python3 -c '
+import json, sys
+laeufe = json.load(sys.stdin).get("workflow_runs") or []
+if not laeufe:
+    print("    gar keinen — anderer Zweig? AGENT_CI_ZWEIG=<zweig>")
+for r in laeufe:
+    print("    %s  %s/%s  %s" % (r["created_at"], r["status"],
+                                 r.get("conclusion") or "-", r["head_sha"][:8]))
+'
+    die "Nichts zu holen. Ein roter Lauf kann trotzdem ein MSI gebaut haben — dann über die Actions-Oberfläche herunterladen."
   fi
   local lauf_id sha wann
   lauf_id="$(printf '%s' "$lauf" | cut -f1)"
@@ -124,8 +177,7 @@ print("%s\t%s\t%s" % (lauf["id"], lauf["head_sha"][:8], lauf["created_at"]))
   say "Lauf $lauf_id (Stand $sha, $wann)"
 
   local liste
-  liste="$(curl -sS --config "$konf" \
-    "https://api.github.com/repos/$slug/actions/runs/$lauf_id/artifacts?per_page=100")"
+  liste="$(api "https://api.github.com/repos/$slug/actions/runs/$lauf_id/artifacts?per_page=100")"
 
   local geholt=0
   for name in "${ARTEFAKTE[@]}"; do
@@ -149,9 +201,20 @@ for a in json.load(sys.stdin).get("artifacts", []):
     local tmp
     tmp="$(mktemp -d)"
     say "$name herunterladen"
-    if ! curl -sSL --config "$konf" \
-         "https://api.github.com/repos/$slug/actions/artifacts/$id/zip" -o "$tmp/paket.zip"; then
-      rm -rf "$tmp"; warn "$name: Download gescheitert."; continue
+    # `-w` druckt den Code auch im Fehlerfall (000 = nicht einmal verbunden).
+    # Kein `|| echo 000` daneben: dann stünden beide da und ergäben „000000".
+    local code=""
+    code="$(curl -sSL --config "$KONF" -o "$tmp/paket.zip" -w '%{http_code}' \
+      "https://api.github.com/repos/$slug/actions/artifacts/$id/zip" 2>/dev/null)" || true
+    if [ "${code:-000}" != "200" ]; then
+      rm -rf "$tmp"
+      case "${code:-000}" in
+        403) warn "$name: HTTP 403 — dem Token fehlt 'actions:read' (oder die SSO-Freigabe)." ;;
+        404) warn "$name: HTTP 404 — das Artefakt ist inzwischen verfallen." ;;
+        000) warn "$name: keine Verbindung — Netz oder Proxy." ;;
+        *)   warn "$name: Download scheiterte mit HTTP $code." ;;
+      esac
+      continue
     fi
     unzip -qo "$tmp/paket.zip" -d "$tmp/inhalt"
     # Mit dem Stand im Namen: auf dem Server liegen sonst zwei Dateien, die

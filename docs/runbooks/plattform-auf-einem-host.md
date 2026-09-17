@@ -290,10 +290,23 @@ Was hier **nicht** hineingehört, ist der Platzhalter aus
 `build-msi.sh --stub`: installierbar, aber ohne Inhalt. Er trägt STUB im
 Namen, und `bauen` legt ihn absichtlich nicht ab.
 
-`holen` braucht ein Token mit `actions:read` in `GITHUB_TOKEN` oder in
-`~/.magister/github-token` (0600). Es geht über `curl --config` in die
-Anfrage und steht damit weder in der Prozessliste noch in der History. Von
-einem anderen Zweig als `main`:
+`holen` braucht ein Token mit `actions:read`. Der bessere Weg ist die Datei —
+sie landet nicht in der Shell-History und überlebt die Sitzung:
+
+```bash
+install -m 600 /dev/null ~/.magister/github-token
+# Token hineinschreiben (kein echo auf der Kommandozeile):
+cat > ~/.magister/github-token
+# …Token einfügen, dann Ctrl-D
+./scripts/agentenpakete.sh holen
+```
+
+`GITHUB_TOKEN` in der Umgebung geht auch. **Nicht** die Zeile aus einer
+Anleitung kopieren: `export GITHUB_TOKEN=…` setzt buchstäblich das
+Auslassungszeichen, GitHub antwortet mit 401, und man sucht den Fehler
+woanders. Das Skript erkennt diesen Fall inzwischen und sagt es.
+
+Von einem anderen Zweig als `main`:
 
 ```bash
 AGENT_CI_ZWEIG=claude/mein-zweig ./scripts/agentenpakete.sh holen
