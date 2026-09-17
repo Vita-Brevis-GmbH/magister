@@ -342,11 +342,21 @@ jobs:
               --unsigned /tmp/magister-connector.deb
           echo "deb [signed-by=/etc/apt/keyrings/magister-ci.gpg] file:///tmp/apt-unsigned stable main" \
             | sudo tee /etc/apt/sources.list.d/magister-ci.list
-          if sudo apt-get update 2>&1 | tee /tmp/update.txt; then
+          # OHNE Pipe. `apt-get update | tee` gibt den Rückgabewert von `tee`
+          # zurück, und der ist immer 0 — die Prüfung schlug damit ins
+          # Gegenteil um: apt wies das Repository ab (rc 100, „is not
+          # signed"), und der Schritt meldete „apt hat ein unsigniertes
+          # Repository angenommen". Eine Prüfung, die bei richtigem Verhalten
+          # rot wird, ist schlimmer als keine.
+          rc=0
+          sudo apt-get update > /tmp/update.txt 2>&1 || rc=$?
+          cat /tmp/update.txt
+          if [ "$rc" -eq 0 ]; then
             echo "apt hat ein unsigniertes Repository angenommen — das ist ein Befund." >&2
             exit 1
           fi
-          grep -q "is not signed" /tmp/update.txt
+          grep -q "is not signed" /tmp/update.txt \
+            || { echo "apt ist gescheitert, aber nicht an der fehlenden Signatur:"; exit 1; }
 
       - name: Repository hochladen
         uses: actions/upload-artifact@v4
