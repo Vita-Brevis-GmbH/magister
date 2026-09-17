@@ -253,12 +253,23 @@ jobs:
       - name: Purge behält den Zustand
         # Die eine Eigenschaft, die man nicht falsch haben will: darin liegen
         # der private Schlüssel und das Protokoll.
+        #
+        # `sudo test` und nicht `test`: das Zustandsverzeichnis ist 0700 und
+        # gehört `magister-connector`. Ein unprivilegierter Aufruf kommt nicht
+        # einmal zum Nachsehen hinein — `test -e` gibt dann 1 zurück, und zwar
+        # für „darf ich nicht hinsehen" und für „gibt es nicht" gleichermassen.
+        # Genau das hat diesen Schritt rot gemacht, während der Zustand in
+        # Wahrheit unangetastet dalag. Die Rechte sind hier das Ergebnis, nicht
+        # das Hindernis.
         run: |
           sudo touch /var/lib/magister-connector/agent-key.pem
           sudo dpkg --purge magister-connector
-          test -e /var/lib/magister-connector/agent-key.pem
-          test ! -e /opt/magister-connector
-          test ! -e /etc/magister-connector
+          sudo test -e /var/lib/magister-connector/agent-key.pem \
+            || { echo "Der Zustand ist beim Purge verschwunden."; exit 1; }
+          test ! -e /opt/magister-connector \
+            || { echo "Das Programmverzeichnis blieb liegen:"; ls -la /opt/magister-connector; exit 1; }
+          test ! -e /etc/magister-connector \
+            || { echo "Die Konfiguration blieb liegen:"; ls -la /etc/magister-connector; exit 1; }
 
       - name: Paket hochladen
         uses: actions/upload-artifact@v4
