@@ -127,17 +127,24 @@ eigentuemer_repo() {
 # --- Token hinterlegen -------------------------------------------------------
 cmd_token() {
   local ablage="$HOME/.magister/github-token"
-  # Gelesen wird von /dev/tty und NICHT von stdin. Der Grund ist ein Hänger,
-  # der einen Vormittag gekostet hat: die Anleitung enthielt ein
-  # `cat > ~/.magister/github-token`, und wer den ganzen Block auf einmal in
-  # die Shell wirft, füttert damit `cat` mit den folgenden Zeilen — der
-  # Aufruf danach wird zum Dateiinhalt, und das Terminal wartet auf ein
-  # Ctrl-D, das niemand mehr tippt. Von /dev/tty gelesen kann das nicht
-  # passieren: der eingefügte Text landet in stdin, die Frage aber am
-  # Terminal.
-  # Öffnen und nicht bloss `[ -r /dev/tty ]`: die Gerätedatei existiert auch
-  # dort, wo kein Terminal daran hängt (Cron, eine Pipe, ein Container). Die
-  # Rechte sagen dann „lesbar", und das Öffnen scheitert trotzdem.
+  # Der Anlass: die Anleitung enthielt ein `cat > ~/.magister/github-token`
+  # mitten in einem Block, den man am Stück in die Shell wirft. `cat` liest
+  # stdin, stdin war der Rest des Blocks — der Aufruf danach wurde zum
+  # Dateiinhalt, und das Terminal wartete auf ein Ctrl-D, das niemand mehr
+  # tippt.
+  #
+  # Dagegen helfen ZWEI Dinge, und das erste allein genügt nicht: `/dev/tty`
+  # statt stdin ist an einem Terminal **dasselbe Gerät**, ein eingefügter
+  # Block landet also auch dort. Es beseitigt nur den Hänger, weil `read`
+  # eine Zeile nimmt statt bis zum Dateiende zu warten — die nächste Zeile
+  # des Blocks würde aber stillschweigend zum Token. Deshalb weiter unten
+  # die Prüfung auf bereits anliegende Eingabe: sie unterscheidet „jemand
+  # tippt gleich" von „hier wurde etwas hineingeworfen".
+  #
+  # Geöffnet wird /dev/tty auch wirklich, statt nur `[ -r ]` zu fragen: die
+  # Gerätedatei existiert auch dort, wo kein Terminal daran hängt (Cron, eine
+  # Pipe, ein Container). Die Rechte sagen dann „lesbar", und das Öffnen
+  # scheitert trotzdem.
   if ! (exec 3</dev/tty) 2>/dev/null || ! (exec 3>/dev/tty) 2>/dev/null; then
     die "Kein Terminal. Dann die Datei von Hand anlegen: $ablage (Rechte 0600)."
   fi
