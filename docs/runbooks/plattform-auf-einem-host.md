@@ -267,7 +267,10 @@ und gelaufen ist:
 Domaincontroller, das Skript lädt Abhängigkeiten):
 
 ```powershell
-git clone … magister; cd magister\agent
+# PowerShell auf der Windows-Maschine — NICHT auf dem Plattform-Server.
+# Eingefügt in eine Linux-Shell ergibt das nur Fehlermeldungen.
+git clone https://github.com/Vita-Brevis-GmbH/magister.git
+cd magister\agent
 .\packaging\windows\build-payload.ps1
 ```
 

@@ -209,10 +209,48 @@ HINWEIS
 }
 
 # --- MSI aus einem Windows-Payload -------------------------------------------
+#: Die Anleitung für den Teil, den diese Maschine nicht tun kann. Sie steht
+#: hier und nicht nur im Runbook, weil sie genau dann gebraucht wird, wenn
+#: jemand `msi` ohne Payload aufruft — und weil die PowerShell-Zeilen in
+#: einer Linux-Shell nichts als Fehlermeldungen ergeben.
+payload_anleitung() {
+  cat >&2 <<'ANLEITUNG'
+
+Das Payload (der eingefrorene Agent) entsteht NUR unter Windows — PyInstaller
+kann nicht für eine fremde Plattform bauen. Diese Maschine baut nur das MSI
+darum herum.
+
+  SCHRITT 1 — auf einer WINDOWS-Maschine mit Netz (nicht auf einem
+  Domaincontroller; das Skript lädt Abhängigkeiten). In PowerShell:
+
+      git clone https://github.com/Vita-Brevis-GmbH/magister.git
+      cd magister\agent
+      git checkout claude/multitenant-capability-planning-t6mygz
+      .\packaging\windows\build-payload.ps1
+
+  Ergebnis: magister-connector-payload.zip (rund 30 MiB).
+
+  SCHRITT 2 — die Datei hierher bringen (scp, Share, USB) und dann HIER:
+
+      ./scripts/agentenpakete.sh msi magister-connector-payload.zip
+
+Ohne Windows in der Nähe bleibt der Weg über die CI: `holen`. Er setzt
+voraus, dass agent-ci.yml auf `main` liegt und gelaufen ist.
+ANLEITUNG
+}
+
 cmd_msi() {
   local quelle="${1:-}"
-  [ -n "$quelle" ] || die "Payload angeben: $0 msi <verzeichnis|payload.zip> (gebaut mit agent/packaging/windows/build-payload.ps1)"
-  [ -e "$quelle" ] || die "$quelle gibt es nicht."
+  if [ -z "$quelle" ]; then
+    printf '\033[31m !! Kein Payload angegeben.\033[0m\n' >&2
+    payload_anleitung
+    exit 1
+  fi
+  if [ ! -e "$quelle" ]; then
+    printf '\033[31m !! %s gibt es auf dieser Maschine nicht.\033[0m\n' "$quelle" >&2
+    payload_anleitung
+    exit 1
+  fi
   for werkzeug in wixl wixl-heat msiinfo; do
     command -v "$werkzeug" >/dev/null \
       || die "$werkzeug fehlt: apt-get install -y wixl msitools"
