@@ -290,21 +290,28 @@ Was hier **nicht** hineingehört, ist der Platzhalter aus
 `build-msi.sh --stub`: installierbar, aber ohne Inhalt. Er trägt STUB im
 Namen, und `bauen` legt ihn absichtlich nicht ab.
 
-`holen` braucht ein Token mit `actions:read`. Der bessere Weg ist die Datei —
-sie landet nicht in der Shell-History und überlebt die Sitzung:
+`holen` braucht ein Token mit `actions:read`. Hinterlegt wird es mit einem
+eigenen Befehl — **allein aufrufen**, nicht als Teil eines eingefügten Blocks:
 
 ```bash
-install -m 600 /dev/null ~/.magister/github-token
-# Token hineinschreiben (kein echo auf der Kommandozeile):
-cat > ~/.magister/github-token
-# …Token einfügen, dann Ctrl-D
-./scripts/agentenpakete.sh holen
+./scripts/agentenpakete.sh token
 ```
 
-`GITHUB_TOKEN` in der Umgebung geht auch. **Nicht** die Zeile aus einer
-Anleitung kopieren: `export GITHUB_TOKEN=…` setzt buchstäblich das
-Auslassungszeichen, GitHub antwortet mit 401, und man sucht den Fehler
-woanders. Das Skript erkennt diesen Fall inzwischen und sagt es.
+Er fragt am Terminal (die Eingabe wird nicht angezeigt), schreibt
+`~/.magister/github-token` mit 0600 und probiert das Token gleich gegen die
+API aus. Damit steht es weder in der Shell-History noch in der Prozessliste,
+und ein untaugliches Token fällt sofort auf statt beim nächsten Onboarding.
+
+Zwei Fallen, beide schon zugeschnappt, beide jetzt abgefangen:
+
+* `export GITHUB_TOKEN=…` aus einer Anleitung kopiert setzt buchstäblich das
+  Auslassungszeichen. GitHub antwortet mit 401, und man sucht den Fehler
+  woanders. Das Skript benennt diesen Fall.
+* Ein `cat > datei` in einem Block, den man am Stück einfügt, frisst die
+  folgenden Zeilen als Dateiinhalt und wartet dann auf ein Ctrl-D, das
+  niemand mehr tippt. Deshalb fragt `token` nicht mit `cat`, und es bricht
+  ab, wenn beim Fragen schon Eingabe anliegt — dann steckt der Aufruf in
+  einem eingefügten Block, und die nächste Zeile ist nicht das Token.
 
 Von einem anderen Zweig als `main`:
 

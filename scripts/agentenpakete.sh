@@ -5,6 +5,7 @@
 #   ./scripts/agentenpakete.sh holen          # aus der CI holen (MSI + .deb)
 #   ./scripts/agentenpakete.sh bauen          # was hier baubar ist (.deb)
 #   ./scripts/agentenpakete.sh msi <payload>  # MSI aus einem Windows-Payload
+#   ./scripts/agentenpakete.sh token          # Token hinterlegen und prüfen
 #   ./scripts/agentenpakete.sh zeigen         # was im Verzeichnis liegt
 #
 # **Warum es dieses Skript gibt.** Die CI baut MSI und .deb bei jedem Push
@@ -31,7 +32,8 @@
 # Zugang für `holen`: ein Token mit `actions:read` auf dem Repository, in
 # GITHUB_TOKEN oder in ~/.magister/github-token (0600). Es wird nie
 # ausgegeben und steht in keiner Prozessliste — curl liest es aus einer
-# Datei.
+# Datei. Hinterlegt wird es mit `token`; das fragt am Terminal und prüft
+# den Wert gleich gegen die API.
 
 set -euo pipefail
 
@@ -72,7 +74,7 @@ token_datei() {
   if [ -z "$wert" ] && [ -f "$ablage" ]; then
     wert="$(tr -d '\n' < "$ablage")"
   fi
-  [ -n "$wert" ] || die "Kein Token. GITHUB_TOKEN setzen oder $ablage anlegen (Recht: actions:read)."
+  [ -n "$wert" ] || die "Kein Token. Hinterlegen mit: $0 token   (Recht: actions:read)"
   # Der Wert wird NICHT ausgegeben — aber offensichtlicher Unfug wird benannt.
   # Der Anlass: eine aus einer Anleitung kopierte Zeile `export GITHUB_TOKEN=…`
   # setzt buchstäblich das Auslassungszeichen. GitHub antwortet darauf mit 401,
@@ -120,6 +122,67 @@ eigentuemer_repo() {
   [ -n "$url" ] || die "Kein origin-Remote — Repository nicht bestimmbar."
   printf '%s' "$url" | sed -E 's#^git@github\.com:#https://github.com/#; s#\.git$##' \
     | sed -E 's#^https://[^/]+/##'
+}
+
+# --- Token hinterlegen -------------------------------------------------------
+cmd_token() {
+  local ablage="$HOME/.magister/github-token"
+  # Gelesen wird von /dev/tty und NICHT von stdin. Der Grund ist ein Hänger,
+  # der einen Vormittag gekostet hat: die Anleitung enthielt ein
+  # `cat > ~/.magister/github-token`, und wer den ganzen Block auf einmal in
+  # die Shell wirft, füttert damit `cat` mit den folgenden Zeilen — der
+  # Aufruf danach wird zum Dateiinhalt, und das Terminal wartet auf ein
+  # Ctrl-D, das niemand mehr tippt. Von /dev/tty gelesen kann das nicht
+  # passieren: der eingefügte Text landet in stdin, die Frage aber am
+  # Terminal.
+  # Öffnen und nicht bloss `[ -r /dev/tty ]`: die Gerätedatei existiert auch
+  # dort, wo kein Terminal daran hängt (Cron, eine Pipe, ein Container). Die
+  # Rechte sagen dann „lesbar", und das Öffnen scheitert trotzdem.
+  if ! (exec 3</dev/tty) 2>/dev/null || ! (exec 3>/dev/tty) 2>/dev/null; then
+    die "Kein Terminal. Dann die Datei von Hand anlegen: $ablage (Rechte 0600)."
+  fi
+  mkdir -p "$(dirname "$ablage")"
+  chmod 700 "$(dirname "$ablage")" 2>/dev/null || true
+
+  exec 3</dev/tty
+  # Liegt schon etwas im Puffer, bevor überhaupt gefragt wurde, dann wurde
+  # dieser Aufruf als Teil eines eingefügten Blocks gestartet — und die
+  # nächste Zeile ist NICHT das Token, sondern der nächste Befehl. `read`
+  # würde ihn stillschweigend als Geheimnis wegschreiben. Lieber abbrechen
+  # und es sagen.
+  if read -r -t 0 -u 3 2>/dev/null; then
+    exec 3<&-
+    die "Es liegt bereits Eingabe an — dieser Aufruf steckt in einem eingefügten Block. '$0 token' bitte allein aufrufen, dann die Frage beantworten."
+  fi
+
+  local wert=""
+  printf 'GitHub-Token (Eingabe wird nicht angezeigt, dann Enter): ' > /dev/tty
+  read -rs -u 3 wert || true
+  exec 3<&-
+  printf '\n' > /dev/tty
+  [ -n "$wert" ] || die "Nichts eingegeben — nichts geschrieben."
+
+  # Dieselben Prüfungen wie beim Benutzen, nur sofort statt beim nächsten Mal.
+  case "$wert" in
+    *…*) die "Das ist das Auslassungszeichen '…' aus der Anleitung, nicht das Token." ;;
+    *[[:space:]]*) die "Der Wert enthält Leerzeichen — vermutlich mehr als nur das Token eingefügt." ;;
+  esac
+  [ "${#wert}" -ge 20 ] || die "Der Wert ist ${#wert} Zeichen lang. Ein GitHub-Token ist deutlich länger."
+
+  ( umask 077; printf '%s' "$wert" > "$ablage" )
+  chmod 600 "$ablage"
+  say "Hinterlegt in $ablage (0600)"
+
+  # Und gleich ausprobieren: ein Token, das erst beim nächsten Onboarding
+  # auffällt, ist keines.
+  local slug
+  slug="$(eigentuemer_repo)"
+  KONF="$(GITHUB_TOKEN="$wert" token_datei)"
+  # shellcheck disable=SC2064
+  trap "rm -f '$KONF'" EXIT
+  say "Gegen die API prüfen ($slug)"
+  api "https://api.github.com/repos/$slug/actions/workflows/$WORKFLOW/runs?per_page=1" >/dev/null
+  say "Das Token gilt und darf die Läufe von $WORKFLOW sehen."
 }
 
 # --- Holen ------------------------------------------------------------------
@@ -370,9 +433,10 @@ cmd_zeigen() {
 
 BEFEHL="${1:-zeigen}"; shift || true
 case "$BEFEHL" in
+  token)  cmd_token "$@" ;;
   holen)  cmd_holen "$@" ;;
   bauen)  cmd_bauen "$@" ;;
   msi)    cmd_msi "$@" ;;
   zeigen) cmd_zeigen "$@" ;;
-  *) die "Unbekannter Befehl: $BEFEHL (holen, bauen, msi, zeigen)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (token, holen, bauen, msi, zeigen)" ;;
 esac
