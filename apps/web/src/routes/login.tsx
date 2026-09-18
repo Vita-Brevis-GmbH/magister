@@ -89,10 +89,7 @@ export function LoginPage(): JSX.Element {
           {caps.isError ? <ErrorBanner>{t("auth.login_capabilities_failed")}</ErrorBanner> : null}
 
           {keinWeg ? (
-            <div
-              role="alert"
-              className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm"
-            >
+            <div role="alert" className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
               <p className="font-medium">{t("auth.login_none_title")}</p>
               <p className="text-muted-foreground">{t("auth.login_none_intro")}</p>
             </div>
