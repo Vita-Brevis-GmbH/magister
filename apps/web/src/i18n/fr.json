@@ -34,6 +34,10 @@
   "auth": {
     "login_title": "Connexion",
     "login_intro": "Connecte-toi avec ton compte.",
+    "login_checking": "Vérification des méthodes de connexion …",
+    "login_none_title": "Aucune méthode de connexion configurée",
+    "login_none_intro": "Pour cette installation, ni Entra ID n'est enregistré ni la connexion locale n'est activée. Tant que c'est le cas, personne ne peut entrer — pas même l'administration. Cela se configure dans la console de l'exploitant : enregistrer les paramètres OIDC ou activer le compte d'administration local.",
+    "login_capabilities_failed": "Impossible d'interroger les méthodes de connexion disponibles pour le moment. Il s'agit d'une erreur du serveur, pas de ta saisie. Recharge la page ; si cela persiste, préviens l'administration.",
     "login_button": "Se connecter avec Entra ID",
     "logged_in_as": "Connecté en tant que",
     "expires_at": "Session valable jusqu'à",

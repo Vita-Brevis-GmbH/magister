@@ -106,6 +106,47 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+  # Das Bild der Konsole. Anlass: auf dem Dev-Host brach die Sicherung mit
+  # „pg_dump ist nicht installiert" ab. Der Code prueft die Werkzeuge, die
+  # Tests laufen auf einem Runner, der sie ohnehin hat — nur im Bild fehlten
+  # sie, und das hat niemand gemessen. Genau das passiert hier jetzt.
+  bild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Bild bauen (ohne Push)
+        uses: docker/build-push-action@v6
+        with:
+          context: cockpit/api
+          file: cockpit/api/Dockerfile
+          push: false
+          load: true
+          tags: magister-cockpit-api:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Die Werkzeuge sind im Bild — und pg_dump passt zum Server
+        # Nicht `--version` um des Aufrufs willen: die Hauptversion MUSS die
+        # des Servers sein (postgres:16). Ein pg_dump 15 verweigert einen
+        # Server 16, und zwar erst bei der ersten echten Sicherung.
+        run: |
+          docker run --rm magister-cockpit-api:ci pg_dump --version
+          docker run --rm magister-cockpit-api:ci pg_restore --version
+          docker run --rm magister-cockpit-api:ci age --version
+          haupt=$(docker run --rm magister-cockpit-api:ci pg_dump --version \
+                  | grep -oE '[0-9]+' | head -1)
+          if [ "$haupt" != "16" ]; then
+            echo "pg_dump meldet Hauptversion $haupt, der Server ist 16." >&2
+            exit 1
+          fi
+
+      - name: Die Anwendung startet aus dem Bild
+        run: docker run --rm magister-cockpit-api:ci uvicorn --help > /dev/null
+
   # Der Update-Runner (ADR-0003) lief bis hierhin in keiner CI: fuenf Tests,
   # gruen, aber niemand haette gemerkt, wenn sie es nicht mehr waeren. Er
   # spielt Updates auf Kundeninstallationen ein — die Stelle, an der ein

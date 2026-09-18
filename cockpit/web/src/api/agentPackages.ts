@@ -58,3 +58,57 @@ export function platformOf(filename: string): string {
   if (lower.endsWith(".deb")) return "Debian/Ubuntu";
   return "—";
 }
+
+/** Ein Betriebssystem mit seinem aktuellen Paket — und dem, was davor kam. */
+export interface PlattformGruppe {
+  plattform: string;
+  aktuell: AgentPackage;
+  aeltere: AgentPackage[];
+}
+
+/** Reihenfolge der Gruppen. Was nicht drinsteht, kommt hinten nach Namen. */
+const PLATTFORM_ORDNUNG = ["Windows", "Debian/Ubuntu"];
+
+/**
+ * Die Pakete nach Betriebssystem bündeln, je Gruppe das neueste zuerst.
+ *
+ * Warum überhaupt: das Paketverzeichnis sammelt jeden CI-Lauf an. Nach einer
+ * Woche standen dort sieben Dateien in einer flachen Liste, und wer den Agenten
+ * installieren will, muss raten, welche die richtige ist. Die Frage beim
+ * Onboarding lautet „welches Paket für diesen Server?" — also wird genau das
+ * beantwortet, und die älteren Stände bleiben erreichbar, statt zu
+ * verschwinden: ein Rückschritt auf die vorige Fassung ist ein legitimer
+ * Schritt, wenn eine neue beim Kunden Ärger macht.
+ *
+ * Aussortiert wird nichts. Das Löschen alter Pakete gehört auf den Server
+ * (Aufbewahrung im Aufbau-Skript), nicht in eine Oberfläche, die sie nur
+ * anzeigt.
+ */
+export function nachPlattform(pakete: AgentPackage[]): PlattformGruppe[] {
+  const gruppen = new Map<string, AgentPackage[]>();
+  for (const paket of pakete) {
+    const schluessel = platformOf(paket.filename);
+    const liste = gruppen.get(schluessel);
+    if (liste) liste.push(paket);
+    else gruppen.set(schluessel, [paket]);
+  }
+
+  const aus: PlattformGruppe[] = [];
+  for (const [plattform, liste] of gruppen) {
+    // Nach Zeit, neueste zuerst. Bei gleichem Zeitstempel — zwei Dateien aus
+    // demselben CI-Lauf — entscheidet der Name absteigend, damit die höhere
+    // Version oben steht und die Reihenfolge überhaupt eindeutig ist.
+    const sortiert = [...liste].sort((a, b) => {
+      const zeit = Date.parse(b.modified_at) - Date.parse(a.modified_at);
+      return zeit !== 0 ? zeit : b.filename.localeCompare(a.filename);
+    });
+    aus.push({ plattform, aktuell: sortiert[0], aeltere: sortiert.slice(1) });
+  }
+
+  return aus.sort((a, b) => {
+    const ra = PLATTFORM_ORDNUNG.indexOf(a.plattform);
+    const rb = PLATTFORM_ORDNUNG.indexOf(b.plattform);
+    if (ra !== rb) return (ra < 0 ? PLATTFORM_ORDNUNG.length : ra) - (rb < 0 ? PLATTFORM_ORDNUNG.length : rb);
+    return a.plattform.localeCompare(b.plattform);
+  });
+}

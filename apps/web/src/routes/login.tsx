@@ -68,6 +68,11 @@ export function LoginPage(): JSX.Element {
   // form replaces it.
   const showLocal = caps.isSuccess && localEnabled;
   const showOidc = caps.isSuccess && oidcEnabled;
+  // Weder das eine noch das andere: dann gibt es keinen Weg hinein, und das
+  // muss dastehen. Vorher rendert die Karte in diesem Fall Titel und Intro und
+  // sonst nichts — auf dem Dev-Host sah das aus, als lade die Seite nicht
+  // fertig, und gesucht wurde im Frontend statt in der Konfiguration.
+  const keinWeg = caps.isSuccess && !oidcEnabled && !localEnabled;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -77,6 +82,22 @@ export function LoginPage(): JSX.Element {
           <CardDescription>{t("auth.login_intro")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {caps.isPending ? (
+            <p className="text-sm text-muted-foreground">{t("auth.login_checking")}</p>
+          ) : null}
+
+          {caps.isError ? <ErrorBanner>{t("auth.login_capabilities_failed")}</ErrorBanner> : null}
+
+          {keinWeg ? (
+            <div
+              role="alert"
+              className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm"
+            >
+              <p className="font-medium">{t("auth.login_none_title")}</p>
+              <p className="text-muted-foreground">{t("auth.login_none_intro")}</p>
+            </div>
+          ) : null}
+
           {showOidc ? (
             <a href="/api/auth/login" className={cn(anchorButtonClasses)}>
               {t("auth.login_button")}

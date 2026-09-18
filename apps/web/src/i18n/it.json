@@ -34,6 +34,10 @@
   "auth": {
     "login_title": "Accedi",
     "login_intro": "Accedi con il tuo account.",
+    "login_checking": "Verifica dei metodi di accesso …",
+    "login_none_title": "Nessun metodo di accesso configurato",
+    "login_none_intro": "Per questa installazione non è registrato Entra ID né è attivato l'accesso locale. Finché è così, nessuno può entrare — nemmeno l'amministrazione. Si configura nella console dell'operatore: registrare i dati OIDC oppure attivare l'account di amministrazione locale.",
+    "login_capabilities_failed": "Al momento non è possibile richiedere i metodi di accesso disponibili. È un errore del server, non del tuo inserimento. Ricarica la pagina; se persiste, avvisa l'amministrazione.",
     "login_button": "Accedi con Entra ID",
     "logged_in_as": "Accesso come",
     "expires_at": "Sessione valida fino a",

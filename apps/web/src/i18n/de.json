@@ -31,6 +31,10 @@
   "auth": {
     "login_title": "Anmeldung",
     "login_intro": "Melde dich mit deinem Konto an.",
+    "login_checking": "Anmeldewege werden geprüft …",
+    "login_none_title": "Kein Anmeldeweg eingerichtet",
+    "login_none_intro": "Für diese Installation ist weder Entra ID hinterlegt noch die lokale Anmeldung freigeschaltet. Solange das so ist, kommt niemand hinein — auch nicht die Administration. Einzurichten ist das in der Betreiber-Konsole: OIDC-Angaben hinterlegen oder das lokale Administrationskonto aktivieren.",
+    "login_capabilities_failed": "Die verfügbaren Anmeldewege lassen sich gerade nicht abfragen. Das ist ein Fehler des Servers, nicht deiner Eingabe. Seite neu laden; bleibt es dabei, die Administration verständigen.",
     "login_button": "Mit Entra ID anmelden",
     "logged_in_as": "Angemeldet als",
     "expires_at": "Sitzung gültig bis",

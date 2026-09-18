@@ -14,8 +14,9 @@ import {
 import {
   downloadAgentPackage,
   listAgentPackages,
-  platformOf,
+  nachPlattform,
   readableSize,
+  type AgentPackage,
 } from "../api/agentPackages";
 import { ApiError } from "../api/client";
 import { Badge, StatusBadge } from "../components/Badge";
@@ -71,6 +72,37 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
  * Nicht kundenspezifisch — es ist dieselbe Datei für alle. Sie steht hier
  * trotzdem, weil man sie genau hier braucht.
  */
+/** Eine Datei: Name, Zeitpunkt, Grösse, Prüfsumme, Knopf. */
+function PaketZeile({
+  paket,
+  laden,
+  laeuft,
+}: {
+  paket: AgentPackage;
+  laden: (filename: string) => void;
+  laeuft: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border bg-slate-50 px-3 py-2">
+      <span className="font-mono text-xs">{paket.filename}</span>
+      <span className="text-xs text-slate-400">
+        {new Date(paket.modified_at).toLocaleString()} · {readableSize(paket.size_bytes)}
+      </span>
+      <code className="w-full select-all break-all font-mono text-[11px] text-slate-500">
+        {paket.sha256}
+      </code>
+      <button
+        type="button"
+        disabled={laeuft}
+        onClick={() => laden(paket.filename)}
+        className="ml-auto rounded border bg-white px-2 py-1 text-xs disabled:opacity-50"
+      >
+        Herunterladen
+      </button>
+    </div>
+  );
+}
+
 function AgentPackages() {
   const paketeQ = useQuery({
     queryKey: ["agent-packages"],
@@ -102,47 +134,36 @@ function AgentPackages() {
             Das Verzeichnis ist leer — die CI hat noch kein Paket abgelegt.
           </p>
         ) : (
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b bg-slate-100 text-left">
-                <th className="p-2">Datei</th>
-                <th className="p-2">Für</th>
-                <th className="p-2">Grösse</th>
-                <th className="p-2">SHA-256</th>
-                <th className="p-2"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {paketeQ.data.map((paket) => (
-                <tr key={paket.filename} className="border-b">
-                  <td className="p-2">
-                    <span className="font-mono text-xs">{paket.filename}</span>
-                    <br />
-                    <span className="text-xs text-slate-400">
-                      {new Date(paket.modified_at).toLocaleString()}
-                    </span>
-                  </td>
-                  <td className="p-2 text-xs">{platformOf(paket.filename)}</td>
-                  <td className="p-2 text-xs">{readableSize(paket.size_bytes)}</td>
-                  <td className="p-2">
-                    <code className="select-all break-all font-mono text-xs text-slate-500">
-                      {paket.sha256}
-                    </code>
-                  </td>
-                  <td className="p-2">
-                    <button
-                      type="button"
-                      disabled={ladenM.isPending}
-                      onClick={() => ladenM.mutate(paket.filename)}
-                      className="rounded border px-2 py-1 text-xs disabled:opacity-50"
-                    >
-                      Herunterladen
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="space-y-4">
+            {nachPlattform(paketeQ.data).map((gruppe) => (
+              <div key={gruppe.plattform}>
+                <h3 className="mb-1 text-sm font-medium text-slate-700">{gruppe.plattform}</h3>
+                <PaketZeile
+                  paket={gruppe.aktuell}
+                  laden={(name) => ladenM.mutate(name)}
+                  laeuft={ladenM.isPending}
+                />
+                {gruppe.aeltere.length > 0 && (
+                  <details className="mt-1">
+                    <summary className="cursor-pointer text-xs text-slate-500">
+                      {gruppe.aeltere.length} ältere{" "}
+                      {gruppe.aeltere.length === 1 ? "Fassung" : "Fassungen"}
+                    </summary>
+                    <div className="mt-1 space-y-1 border-l-2 border-slate-200 pl-3">
+                      {gruppe.aeltere.map((paket) => (
+                        <PaketZeile
+                          key={paket.filename}
+                          paket={paket}
+                          laden={(name) => ladenM.mutate(name)}
+                          laeuft={ladenM.isPending}
+                        />
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            ))}
+          </div>
         ))}
       <p className="mt-3 text-xs text-slate-500">
         Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher sie kommt.

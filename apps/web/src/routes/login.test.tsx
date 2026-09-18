@@ -60,6 +60,32 @@ describe("LoginPage", () => {
     // Disclosure summary present, password field initially not visible.
     expect(screen.getByText(/anderen anmeldeweg/i)).toBeInTheDocument();
   });
+
+  // Die drei Fälle, in denen die Karte vorher NUR Titel und Intro zeigte. Das
+  // sah nach einer halb geladenen Seite aus; gesucht wurde dann im Frontend,
+  // während die Ursache in der Konfiguration lag. Jede Antwort der
+  // Capabilities muss zu einem Satz auf dem Schirm führen.
+  it("says so when neither sign-in path is configured", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: false, local_login_enabled: false }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByText(/kein anmeldeweg eingerichtet/i)).toBeInTheDocument();
+    expect(screen.getByText(/betreiber-konsole/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /entra id/i })).toBeNull();
+    expect(screen.queryByLabelText(/benutzername/i)).toBeNull();
+  });
+
+  it("says so when the capabilities request fails", async () => {
+    fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/anmeldewege/i);
+  });
+
+  it("shows a hint while the capabilities are still loading", () => {
+    // Nie auflösendes fetch: der Zustand, den ein langsamer Server erzeugt.
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    renderWithQuery(<LoginPage />);
+    expect(screen.getByText(/werden geprüft/i)).toBeInTheDocument();
+  });
 });
 
 describe("LocalLoginForm", () => {
