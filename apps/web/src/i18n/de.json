@@ -432,6 +432,9 @@
     "settings": {
       "title": "Systemeinstellungen",
       "description": "OIDC- und AD-Konfiguration. Änderungen greifen sofort, ohne Neustart.",
+      "description_managed": "Die Systemkonfiguration verwaltet der Betreiber. Was hier bleibt, sind Handlungen auf euren eigenen Daten.",
+      "ad_actions_title": "Active Directory",
+      "ad_actions_desc": "Die Verbindungsangaben verwaltet der Betreiber. Der Abgleich selbst bleibt hier: er liest euer AD und schreibt in eure Daten.",
       "oidc_section": "Entra ID (OIDC)",
       "oidc_section_desc": "Issuer, Client-ID, Client-Secret und Redirect-URI für die Anmeldung von Benutzern + Admins.",
       "ad_section": "Active Directory (LDAPS)",

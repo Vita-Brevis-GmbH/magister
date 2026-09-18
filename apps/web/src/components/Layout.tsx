@@ -237,7 +237,15 @@ export function Layout() {
                         {t("nav.substitutions")}
                       </Link>
                     ) : null}
-                    {navAsAdmin && !managedByPlatform ? (
+                    {/*
+                      Anders als die Rechte-Matrix bleibt dieser Punkt auch
+                      gehostet stehen: die Seite führt dann kein Formular,
+                      sondern den AD-Abgleich — eine Handlung auf den eigenen
+                      Daten, die dem Kunden gehört. Ohne Menüpunkt wäre sie nur
+                      über ein Lesezeichen erreichbar, und genau das ist beim
+                      ersten Kunden passiert.
+                    */}
+                    {navAsAdmin ? (
                       <Link
                         to="/admin/settings"
                         role="menuitem"

@@ -435,6 +435,9 @@
     "settings": {
       "title": "Impostazioni di sistema",
       "description": "Configurazione OIDC e AD. Le modifiche hanno effetto immediato.",
+      "description_managed": "La configurazione di sistema è gestita dall'operatore. Qui restano le azioni sui vostri dati.",
+      "ad_actions_title": "Active Directory",
+      "ad_actions_desc": "I dati di connessione sono gestiti dall'operatore. La sincronizzazione resta qui: legge il vostro AD e scrive nei vostri dati.",
       "mail_section": "Domini e-mail",
       "mail_section_desc": "Domini disponibili nel modulo di modifica utente.",
       "oidc_section": "Entra ID (OIDC)",

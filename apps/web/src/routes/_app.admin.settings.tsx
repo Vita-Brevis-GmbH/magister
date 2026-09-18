@@ -156,6 +156,57 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   return payload;
 }
 
+/**
+ * „AD jetzt abgleichen" — Knopf, Ergebnis, Hinweis.
+ *
+ * Eigene Komponente, weil sie an zwei Stellen steht: im Formular der
+ * Einzelinstallation und, gehostet, allein auf dieser Seite. Der Abgleich ist
+ * **keine Konfiguration**: er liest das AD des Kunden und schreibt in dessen
+ * Schema. Dass er mit der Systemkonfiguration aus der Kunden-Oberfläche
+ * verschwand (ADR-0017 D1), war ein Nebeneffekt der Verlagerung, kein
+ * Entscheid — `POST /ad/sync` ist auch gehostet gemountet.
+ */
+export function SyncAdAction(): JSX.Element {
+  const { t } = useTranslation();
+  const syncAd = useTriggerAdSync();
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => syncAd.mutate()}
+          disabled={syncAd.isPending}
+        >
+          {syncAd.isPending
+            ? t("admin.settings.sync_ad_running")
+            : t("admin.settings.sync_ad_button")}
+        </Button>
+        {syncAd.data ? (
+          <span className="text-sm text-emerald-700">
+            {t("admin.settings.sync_ad_ok", {
+              count: syncAd.data.synced_count,
+              groups: syncAd.data.group_count,
+              devices: syncAd.data.device_count,
+            })}
+          </span>
+        ) : syncAd.isError ? (
+          <span className="text-sm text-destructive">
+            {syncAd.error instanceof ApiError && syncAd.error.status === 503
+              ? t([
+                  `admin.settings.sync_ad_reason.${syncAd.error.code}`,
+                  "admin.settings.sync_ad_unavailable",
+                ])
+              : t("errors.generic")}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+    </>
+  );
+}
+
 function AppSettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const settings = useAppSettings();
@@ -168,14 +219,30 @@ function AppSettingsPage(): JSX.Element {
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="font-serif text-2xl font-semibold">{t("admin.settings.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("admin.settings.description")}</p>
+        <p className="text-sm text-muted-foreground">
+          {/* Gehostet wäre „Änderungen greifen sofort" schlicht falsch. */}
+          {t(managed ? "admin.settings.description_managed" : "admin.settings.description")}
+        </p>
       </header>
 
       {managed ? (
-        // Der Menüpunkt ist ausgeblendet, aber ein Lesezeichen führt trotzdem
-        // hierher. Dann steht hier, wer es verwaltet — und nicht ein leeres
-        // Formular, das beim Speichern 404 sagt.
-        <ManagedByPlatform area="settings" />
+        // Gehostet gehört die Konfiguration dem Betreiber (ADR-0017 D1), und
+        // statt eines Formulars, das beim Speichern 404 sagt, steht hier, wer
+        // sie verwaltet. Der AD-Abgleich bleibt aber die Sache des Kunden: er
+        // liest dessen AD und schreibt in dessen Schema. Er ist mit der
+        // Konfiguration nur mitverschwunden, weil er im selben Formular stand.
+        <>
+          <ManagedByPlatform area="settings" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("admin.settings.ad_actions_title")}</CardTitle>
+              <CardDescription>{t("admin.settings.ad_actions_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SyncAdAction />
+            </CardContent>
+          </Card>
+        </>
       ) : settings.isLoading ? (
         <p>{t("common.loading")}</p>
       ) : settings.isError ? (
@@ -197,7 +264,6 @@ function SettingsForm({
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
-  const syncAd = useTriggerAdSync();
   // Term-pack vars from the passed-down profile (no extra query, keeps the
   // form's unit-test fetch assertions intact) so provisioning copy reads
   // "Standort" in the company edition instead of a hardcoded school word.
@@ -539,37 +605,7 @@ function SettingsForm({
           </div>
 
           <div className="space-y-2 border-t pt-4">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => syncAd.mutate()}
-                disabled={syncAd.isPending}
-              >
-                {syncAd.isPending
-                  ? t("admin.settings.sync_ad_running")
-                  : t("admin.settings.sync_ad_button")}
-              </Button>
-              {syncAd.data ? (
-                <span className="text-sm text-emerald-700">
-                  {t("admin.settings.sync_ad_ok", {
-                    count: syncAd.data.synced_count,
-                    groups: syncAd.data.group_count,
-                    devices: syncAd.data.device_count,
-                  })}
-                </span>
-              ) : syncAd.isError ? (
-                <span className="text-sm text-destructive">
-                  {syncAd.error instanceof ApiError && syncAd.error.status === 503
-                    ? t([
-                        `admin.settings.sync_ad_reason.${syncAd.error.code}`,
-                        "admin.settings.sync_ad_unavailable",
-                      ])
-                    : t("errors.generic")}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+            <SyncAdAction />
           </div>
         </CardContent>
       </Card>

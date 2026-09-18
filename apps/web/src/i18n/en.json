@@ -432,6 +432,9 @@
     "settings": {
       "title": "System settings",
       "description": "OIDC and AD configuration. Changes take effect immediately, no restart.",
+      "description_managed": "System configuration is managed by the operator. What stays here are actions on your own data.",
+      "ad_actions_title": "Active Directory",
+      "ad_actions_desc": "The connection details are managed by the operator. The sync itself stays here: it reads your AD and writes into your data.",
       "mail_section": "Mail domains",
       "mail_section_desc": "Domains offered as UPN and mail suffix in the user-edit form.",
       "oidc_section": "Entra ID (OIDC)",

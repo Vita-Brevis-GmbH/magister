@@ -435,6 +435,9 @@
     "settings": {
       "title": "Paramètres système",
       "description": "Configuration OIDC et AD. Les changements prennent effet immédiatement.",
+      "description_managed": "La configuration système est gérée par l'exploitant. Ce qui reste ici, ce sont les actions sur vos propres données.",
+      "ad_actions_title": "Active Directory",
+      "ad_actions_desc": "Les paramètres de connexion sont gérés par l'exploitant. La synchronisation reste ici : elle lit votre AD et écrit dans vos données.",
       "mail_section": "Domaines e-mail",
       "mail_section_desc": "Domaines proposés dans le formulaire d'édition utilisateur.",
       "oidc_section": "Entra ID (OIDC)",
