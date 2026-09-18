@@ -6,6 +6,11 @@
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
     "strict": true,
+    // Ohne dies schreibt `tsc` im Build-Skript ("tsc && vite build")
+    // JavaScript NEBEN die Quellen — src/App.js, src/api.js, src/main.js
+    // tauchen im Arbeitsbaum auf und landen beim nächsten `git add .` im
+    // Repository. Vite übersetzt selbst; `tsc` ist hier nur die Prüfung.
+    "noEmit": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "esModuleInterop": true,

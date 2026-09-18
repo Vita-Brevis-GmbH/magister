@@ -6,12 +6,14 @@ import { ApiError } from "@/api/client";
 import {
   useAppSettings,
   useInstanceProfile,
+  usePlatformManaged,
   useTestAdConnection,
   useTriggerAdSync,
   useUpdateAppSettings,
 } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,8 +36,6 @@ interface FormState {
   ad_bind_password: string;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string;
-  ad_login_enabled: boolean;
-  ad_login_group: string;
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
@@ -63,8 +63,6 @@ function fromOut(data: AppSettingsOut): FormState {
     ad_bind_password: "",
     ad_tls_verify: data.ad_tls_verify,
     ad_tls_ca_pem: data.ad_tls_ca_pem ?? "",
-    ad_login_enabled: data.ad_login_enabled,
-    ad_login_group: data.ad_login_group ?? "",
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
@@ -128,12 +126,6 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
     // Empty string clears the stored cert (falls back to the OS trust store).
     payload.ad_tls_ca_pem = form.ad_tls_ca_pem;
   }
-  if (form.ad_login_enabled !== current.ad_login_enabled) {
-    payload.ad_login_enabled = form.ad_login_enabled;
-  }
-  if (form.ad_login_group !== (current.ad_login_group ?? "")) {
-    payload.ad_login_group = form.ad_login_group || null;
-  }
   if (form.ad_users_search_base !== (current.ad_users_search_base ?? "")) {
     payload.ad_users_search_base = form.ad_users_search_base || null;
   }
@@ -164,21 +156,94 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   return payload;
 }
 
+/**
+ * „AD jetzt abgleichen" — Knopf, Ergebnis, Hinweis.
+ *
+ * Eigene Komponente, weil sie an zwei Stellen steht: im Formular der
+ * Einzelinstallation und, gehostet, allein auf dieser Seite. Der Abgleich ist
+ * **keine Konfiguration**: er liest das AD des Kunden und schreibt in dessen
+ * Schema. Dass er mit der Systemkonfiguration aus der Kunden-Oberfläche
+ * verschwand (ADR-0017 D1), war ein Nebeneffekt der Verlagerung, kein
+ * Entscheid — `POST /ad/sync` ist auch gehostet gemountet.
+ */
+export function SyncAdAction(): JSX.Element {
+  const { t } = useTranslation();
+  const syncAd = useTriggerAdSync();
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => syncAd.mutate()}
+          disabled={syncAd.isPending}
+        >
+          {syncAd.isPending
+            ? t("admin.settings.sync_ad_running")
+            : t("admin.settings.sync_ad_button")}
+        </Button>
+        {syncAd.data ? (
+          <span className="text-sm text-emerald-700">
+            {t("admin.settings.sync_ad_ok", {
+              count: syncAd.data.synced_count,
+              groups: syncAd.data.group_count,
+              devices: syncAd.data.device_count,
+            })}
+          </span>
+        ) : syncAd.isError ? (
+          <span className="text-sm text-destructive">
+            {syncAd.error instanceof ApiError && syncAd.error.status === 503
+              ? t([
+                  `admin.settings.sync_ad_reason.${syncAd.error.code}`,
+                  "admin.settings.sync_ad_unavailable",
+                ])
+              : t("errors.generic")}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+    </>
+  );
+}
+
 function AppSettingsPage(): JSX.Element {
   const { t } = useTranslation();
   const settings = useAppSettings();
   // Read the profile here (page level) and pass it down, so the form component
   // stays free of that extra query — keeps its unit test's fetch assertions valid.
   const profile = useInstanceProfile().data ?? "school";
+  const managed = usePlatformManaged().data ?? false;
 
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="font-serif text-2xl font-semibold">{t("admin.settings.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("admin.settings.description")}</p>
+        <p className="text-sm text-muted-foreground">
+          {/* Gehostet wäre „Änderungen greifen sofort" schlicht falsch. */}
+          {t(managed ? "admin.settings.description_managed" : "admin.settings.description")}
+        </p>
       </header>
 
-      {settings.isLoading ? (
+      {managed ? (
+        // Gehostet gehört die Konfiguration dem Betreiber (ADR-0017 D1), und
+        // statt eines Formulars, das beim Speichern 404 sagt, steht hier, wer
+        // sie verwaltet. Der AD-Abgleich bleibt aber die Sache des Kunden: er
+        // liest dessen AD und schreibt in dessen Schema. Er ist mit der
+        // Konfiguration nur mitverschwunden, weil er im selben Formular stand.
+        <>
+          <ManagedByPlatform area="settings" />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("admin.settings.ad_actions_title")}</CardTitle>
+              <CardDescription>{t("admin.settings.ad_actions_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SyncAdAction />
+            </CardContent>
+          </Card>
+        </>
+      ) : settings.isLoading ? (
         <p>{t("common.loading")}</p>
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
@@ -199,7 +264,6 @@ function SettingsForm({
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
-  const syncAd = useTriggerAdSync();
   // Term-pack vars from the passed-down profile (no extra query, keeps the
   // form's unit-test fetch assertions intact) so provisioning copy reads
   // "Standort" in the company edition instead of a hardcoded school word.
@@ -484,46 +548,6 @@ function SettingsForm({
             </div>
           </div>
 
-          <div className="space-y-3 border-t pt-4">
-            <p className="text-sm font-medium">{t("admin.settings.ad_login_title")}</p>
-            <div className="space-y-1">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={form.ad_login_enabled}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, ad_login_enabled: e.target.checked }));
-                    setSuccess(false);
-                  }}
-                />
-                <span>
-                  <span className="font-medium">{t("admin.settings.field.ad_login_enabled")}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {t("admin.settings.ad_login_enabled_hint")}
-                  </span>
-                </span>
-              </label>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ad-login-group">{t("admin.settings.field.ad_login_group")}</Label>
-              <Input
-                id="ad-login-group"
-                disabled={!form.ad_login_enabled}
-                placeholder="CN=Magister-Login,OU=Groups,DC=…"
-                {...field("ad_login_group")}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t("admin.settings.field.ad_login_group_hint")}
-              </p>
-            </div>
-            {form.ad_login_enabled && !form.ad_login_group.trim() ? (
-              <p className="text-xs font-medium text-destructive">
-                {t("admin.settings.ad_login_group_required")}
-              </p>
-            ) : null}
-          </div>
-
           <div className="space-y-1">
             <Label htmlFor="ad-search-base">{t("admin.settings.field.ad_users_search_base")}</Label>
             <Input id="ad-search-base" {...field("ad_users_search_base")} />
@@ -581,37 +605,7 @@ function SettingsForm({
           </div>
 
           <div className="space-y-2 border-t pt-4">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => syncAd.mutate()}
-                disabled={syncAd.isPending}
-              >
-                {syncAd.isPending
-                  ? t("admin.settings.sync_ad_running")
-                  : t("admin.settings.sync_ad_button")}
-              </Button>
-              {syncAd.data ? (
-                <span className="text-sm text-emerald-700">
-                  {t("admin.settings.sync_ad_ok", {
-                    count: syncAd.data.synced_count,
-                    groups: syncAd.data.group_count,
-                    devices: syncAd.data.device_count,
-                  })}
-                </span>
-              ) : syncAd.isError ? (
-                <span className="text-sm text-destructive">
-                  {syncAd.error instanceof ApiError && syncAd.error.status === 503
-                    ? t([
-                        `admin.settings.sync_ad_reason.${syncAd.error.code}`,
-                        "admin.settings.sync_ad_unavailable",
-                      ])
-                    : t("errors.generic")}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+            <SyncAdAction />
           </div>
         </CardContent>
       </Card>

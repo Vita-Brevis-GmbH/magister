@@ -1,0 +1,366 @@
+name: agent-ci
+
+# Der Connector-Agent (ADR-0014) hatte wie die Konsole keinen eigenen
+# Workflow: 89 Tests, die nur lokal liefen. Er läuft im Kundennetz, direkt am
+# Active Directory, und ist damit die Komponente mit der grössten
+# Fehlerwirkung ausserhalb unserer Reichweite.
+#
+# Zwei Jobs:
+#
+#   test  — Lint, Typprüfung und Tests. Auf Linux UND Windows, weil der Agent
+#           auf beiden läuft und der Windows-Teil (Dienst, ACL-Prüfung)
+#           plattformabhängig ist. Genau dort steckte der Fehler, der ohne
+#           diesen Job niemandem aufgefallen wäre: die POSIX-Rechteprüfung
+#           schlägt unter Windows immer fehl, weil os.stat() dort erfundene
+#           Modus-Bits liefert.
+#
+#   msi   — Das Windows-Paket. Payload unter Windows (PyInstaller kann nicht
+#           für eine fremde Plattform bauen), MSI drumherum unter Linux mit
+#           wixl. Läuft bei jedem Push, damit ein Fehler in der WiX-Quelle
+#           nicht erst beim Ausliefern auffällt.
+#
+#   deb   — Das Debian-Paket. Anders als beim MSI lässt sich hier ALLES
+#           prüfen: bauen, installieren, den Agenten aufrufen, wieder
+#           entfernen. Genau das tut der Job — ein Paket, von dem nur der
+#           Inhalt geprüft ist, hat schon zweimal ein kaputtes postinst
+#           durchgelassen.
+
+on:
+  push:
+    branches: [main]
+    tags: ["agent-v*"]
+  pull_request:
+    paths:
+      - "agent/**"
+      - "apps/api/magister_api/ad/**"
+      - ".github/workflows/agent-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        run: uv run ruff check connector_agent tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check connector_agent tests
+
+      - name: Pyright (strict)
+        run: uv run pyright
+
+      - name: Pytest
+        run: uv run pytest -q
+
+      - name: Kommandozeile antwortet
+        # Der billigste Test, der einen kaputten Import findet — und unter
+        # Windows zusätzlich, dass der Vorgabepfad der Konfiguration dort ein
+        # Windows-Pfad ist und nicht /etc/magister-connector/config.json.
+        run: |
+          uv run magister-connector --version
+          uv run magister-connector --help
+
+      - name: Dienst-Modul ist unter Windows importierbar
+        if: runner.os == 'Windows'
+        # Es importiert pywin32 auf Modulebene. Ein fehlendes oder falsch
+        # installiertes pywin32 fällt hier auf und nicht erst, wenn der Dienst
+        # beim Kunden nicht startet.
+        run: uv run python -c "import connector_agent.winservice as w; print(w.MagisterConnectorService._svc_name_)"
+
+      - name: ACL-Prüfung gegen ein echtes Verzeichnis
+        if: runner.os == 'Windows'
+        # Der Teil, der sich nur unter Windows prüfen lässt: erst abdichten,
+        # dann prüfen. Ohne diesen Schritt ist die ctypes-Anbindung an
+        # advapi32 ungetestet, und die Einheitentests prüfen nur die
+        # SDDL-Zerlegung.
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP "connector-acl-probe"
+          uv run python -c @"
+          from pathlib import Path
+          from connector_agent.winsec import assert_windows_permissions, harden_directory, read_sddl
+          p = Path(r'$probe')
+          p.mkdir(parents=True, exist_ok=True)
+          print('vorher:', read_sddl(p))
+          harden_directory(p)
+          print('nachher:', read_sddl(p))
+          assert_windows_permissions(p, what='Probe')
+          print('Pruefung bestanden')
+          "@
+
+  payload:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra packaging --extra dev
+
+      - name: PyInstaller
+        run: uv run pyinstaller --clean --noconfirm packaging/windows/magister-connector.spec
+
+      - name: Vorlage und Anleitung dazulegen
+        shell: pwsh
+        run: |
+          Copy-Item deploy/config.example.json dist/magister-connector/
+          Copy-Item packaging/windows/INSTALL.txt dist/magister-connector/
+
+      - name: Das eingefrorene Programm antwortet
+        # Der Test, der zählt: nicht ob PyInstaller gelaufen ist, sondern ob
+        # das Ergebnis startet. Ein fehlender hiddenimport fällt genau hier
+        # auf — und sonst erst beim Kunden.
+        shell: pwsh
+        run: |
+          & dist/magister-connector/magister-connector.exe --version
+          & dist/magister-connector/magister-connector.exe --help
+          # check ohne Konfiguration MUSS mit einer lesbaren Meldung enden und
+          # nicht mit einem Stacktrace. Rückgabewert 1 ist hier richtig.
+          & dist/magister-connector/magister-connector.exe --config nichts.json check
+          if ($LASTEXITCODE -ne 1) {
+            Write-Error "check ohne Konfiguration gab $LASTEXITCODE zurueck, erwartet 1"
+            exit 1
+          }
+          # $LASTEXITCODE steht jetzt auf 1 — und der Runner hängt an jeden
+          # pwsh-Schritt ein `exit $LASTEXITCODE`. Ohne diese Zeile scheitert
+          # der Schritt an genau dem Rückgabewert, den er eine Zeile vorher
+          # als den richtigen bestätigt hat. Genau so passiert: das Payload
+          # war fertig, das Programm lief, und der Job war trotzdem rot.
+          exit 0
+
+      - name: Payload hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-payload-windows
+          path: agent/dist/magister-connector/
+          if-no-files-found: error
+          retention-days: 7
+
+  msi:
+    needs: payload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install wixl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wixl msitools
+
+      # Zuerst die WiX-Quelle allein prüfen. Scheitert sie, braucht es den
+      # teuren Windows-Lauf nicht — und die Fehlermeldung zeigt auf die
+      # richtige Datei.
+      - name: WiX-Quelle prüfen (Platzhalter-Payload)
+        run: agent/packaging/windows/build-msi.sh --stub /tmp/stub.msi
+
+      - name: Payload herunterladen
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-payload-windows
+          path: payload
+
+      - name: MSI bauen
+        run: |
+          chmod +x payload/*.exe || true
+          agent/packaging/windows/build-msi.sh payload magister-connector-x64.msi
+
+      - name: MSI-Inhalt protokollieren
+        # Ins Protokoll, damit man nach einem Release nachsehen kann, was
+        # ausgeliefert wurde, ohne die Datei zu besorgen.
+        run: |
+          msiinfo suminfo magister-connector-x64.msi
+          msiinfo export magister-connector-x64.msi ServiceInstall
+          msiinfo export magister-connector-x64.msi Directory
+
+      - name: MSI hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-connector-msi
+          path: magister-connector-x64.msi
+          if-no-files-found: error
+
+  deb:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        # Nicht über uv: das .deb bringt ein venv mit, und das muss mit dem
+        # Python gebaut werden, das auf dem Zielsystem liegt — nicht mit einem,
+        # das uv dazustellt.
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Bauen
+        run: agent/packaging/debian/build-deb.sh /tmp/magister-connector.deb
+
+      - name: Installieren
+        run: sudo dpkg -i /tmp/magister-connector.deb
+
+      - name: Der Agent läuft aus dem Paket
+        run: |
+          magister-connector --version
+          sudo cp /etc/magister-connector/config.example.json \
+                  /etc/magister-connector/config.json
+          # check gibt 1 zurück, weil die Anmeldung fehlt — das ist richtig.
+          # Geprüft wird, dass es eine lesbare Ausgabe ist und kein Stacktrace.
+          sudo runuser -u magister-connector -- magister-connector check | tee /tmp/check.txt || true
+          grep -q "Rechte:       ok" /tmp/check.txt
+          grep -q "Anmeldung:    fehlt" /tmp/check.txt
+
+      - name: Rechte des Zustandsverzeichnisses
+        # 0700 und dem Dienstkonto gehörend — dort liegt der private
+        # Schlüssel. Ein postinst, das das vergisst, fällt hier auf.
+        run: |
+          test "$(stat -c '%a %U' /var/lib/magister-connector)" \
+             = "700 magister-connector"
+          test "$(stat -c '%a %U:%G' /etc/magister-connector/ad.env)" \
+             = "640 root:magister-connector"
+
+      - name: Die Unit ist gültig
+        run: systemd-analyze verify /lib/systemd/system/magister-connector.service
+
+      - name: Purge behält den Zustand
+        # Die eine Eigenschaft, die man nicht falsch haben will: darin liegen
+        # der private Schlüssel und das Protokoll.
+        #
+        # `sudo test` und nicht `test`: das Zustandsverzeichnis ist 0700 und
+        # gehört `magister-connector`. Ein unprivilegierter Aufruf kommt nicht
+        # einmal zum Nachsehen hinein — `test -e` gibt dann 1 zurück, und zwar
+        # für „darf ich nicht hinsehen" und für „gibt es nicht" gleichermassen.
+        # Genau das hat diesen Schritt rot gemacht, während der Zustand in
+        # Wahrheit unangetastet dalag. Die Rechte sind hier das Ergebnis, nicht
+        # das Hindernis.
+        run: |
+          sudo touch /var/lib/magister-connector/agent-key.pem
+          sudo dpkg --purge magister-connector
+          sudo test -e /var/lib/magister-connector/agent-key.pem \
+            || { echo "Der Zustand ist beim Purge verschwunden."; exit 1; }
+          test ! -e /opt/magister-connector \
+            || { echo "Das Programmverzeichnis blieb liegen:"; ls -la /opt/magister-connector; exit 1; }
+          test ! -e /etc/magister-connector \
+            || { echo "Die Konfiguration blieb liegen:"; ls -la /etc/magister-connector; exit 1; }
+
+      - name: Paket hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-connector-deb
+          path: /tmp/magister-connector.deb
+          if-no-files-found: error
+
+      # --- apt-Repository (Entscheid E18, Schritt 1) ------------------------
+      # Mit einem Wegwerfschlüssel: der echte Signierschlüssel gehört nicht in
+      # CI, und für die Frage, ob das Werkzeug funktioniert, taugt jeder
+      # Schlüssel. Geprüft wird nicht "der Script läuft durch", sondern ob
+      # **apt** das Ergebnis annimmt — und ob es ein manipuliertes ablehnt.
+      - name: Werkzeuge
+        run: sudo apt-get update && sudo apt-get install -y apt-utils
+
+      - name: Wegwerf-Signierschlüssel
+        run: |
+          # Kurzes GNUPGHOME: der Socket von gpg-agent hat eine Längengrenze,
+          # und ein Pfad unter $GITHUB_WORKSPACE reisst sie.
+          export GNUPGHOME=/tmp/gnupg-ci
+          mkdir -p "$GNUPGHOME" && chmod 700 "$GNUPGHOME"
+          cat >/tmp/keyparams <<'EOF'
+          %no-protection
+          Key-Type: eddsa
+          Key-Curve: ed25519
+          Key-Usage: sign
+          Name-Real: Magister Packaging CI
+          Name-Email: ci@invalid
+          Expire-Date: 1d
+          %commit
+          EOF
+          gpg --batch --gen-key /tmp/keyparams
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+
+      - name: Repository bauen
+        run: |
+          agent/packaging/apt/build-repo.sh --out /tmp/apt \
+              --key 'Magister Packaging CI' /tmp/magister-connector.deb
+
+      - name: apt nimmt es an
+        run: |
+          sudo install -d -m 755 /etc/apt/keyrings
+          gpg --batch --yes --export 'Magister Packaging CI' \
+            | sudo tee /etc/apt/keyrings/magister-ci.gpg >/dev/null
+          echo "deb [signed-by=/etc/apt/keyrings/magister-ci.gpg] file:///tmp/apt stable main" \
+            | sudo tee /etc/apt/sources.list.d/magister-ci.list
+          sudo apt-get update
+          # 500 heisst: gesehen und vertrauenswürdig. Eine nicht
+          # vertrauenswürdige Quelle bekäme hier keine Kandidatenversion.
+          apt-cache policy magister-connector | tee /tmp/policy.txt
+          grep -q "Candidate: " /tmp/policy.txt
+          # `grep -qv` waere hier falsch: es gibt 0 zurueck, sobald IRGENDEINE
+          # Zeile nicht passt, also praktisch immer. Die Verneinung gehoert vor
+          # den Aufruf, nicht hinein.
+          ! grep -q "Candidate: (none)" /tmp/policy.txt
+
+      - name: apt lehnt ein unsigniertes Repository ab
+        # Die wichtigere Richtung. Ohne diesen Schritt wüsste der Test nicht,
+        # ob apt überhaupt prüft — er würde auch grün, wenn die Signatur
+        # bedeutungslos wäre.
+        run: |
+          agent/packaging/apt/build-repo.sh --out /tmp/apt-unsigned \
+              --unsigned /tmp/magister-connector.deb
+          echo "deb [signed-by=/etc/apt/keyrings/magister-ci.gpg] file:///tmp/apt-unsigned stable main" \
+            | sudo tee /etc/apt/sources.list.d/magister-ci.list
+          # OHNE Pipe. `apt-get update | tee` gibt den Rückgabewert von `tee`
+          # zurück, und der ist immer 0 — die Prüfung schlug damit ins
+          # Gegenteil um: apt wies das Repository ab (rc 100, „is not
+          # signed"), und der Schritt meldete „apt hat ein unsigniertes
+          # Repository angenommen". Eine Prüfung, die bei richtigem Verhalten
+          # rot wird, ist schlimmer als keine.
+          rc=0
+          sudo apt-get update > /tmp/update.txt 2>&1 || rc=$?
+          cat /tmp/update.txt
+          if [ "$rc" -eq 0 ]; then
+            echo "apt hat ein unsigniertes Repository angenommen — das ist ein Befund." >&2
+            exit 1
+          fi
+          grep -q "is not signed" /tmp/update.txt \
+            || { echo "apt ist gescheitert, aber nicht an der fehlenden Signatur:"; exit 1; }
+
+      - name: Repository hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-apt-repo
+          path: /tmp/apt
+          if-no-files-found: error

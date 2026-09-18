@@ -1,0 +1,200 @@
+# Magister Connector Agent
+
+Läuft im Netz des Kunden und **telefoniert nach Hause**: die Plattform baut nie
+eine Verbindung ins Kundennetz auf, und LDAP verlässt das Kundennetz nicht.
+Referenz: [ADR-0014](../docs/adr/0014-ad-connector-agent.md).
+
+## Was der Agent ist — und was er nicht ist
+
+Er ist ein **Ausführender mit eigenen Grenzen**, kein Fernsteuerungs-Endpunkt.
+Die Plattform kann ihm nur die siebzehn bekannten AD-Operationen auftragen; es
+gibt keinen Weg, freies LDAP, PowerShell oder ein Skript zu schicken. Und was
+der Agent tatsächlich tut, begrenzt seine **lokale** Konfiguration:
+
+| Grenze | Wo konfiguriert | Was sie verhindert |
+|---|---|---|
+| Methoden-Allowlist | im Agenten fest | alles außer den bekannten Operationen |
+| OU-Allowlist | `config.json` beim Kunden | Zugriff auf Objekte außerhalb der Magister-OUs |
+| Gruppen-Denylist | `config.json`, mit Vorgabe | Aufnahme in privilegierte Gruppen (deutsch **und** englisch benannt) |
+| Attribut-Denylist | im Agenten fest | `userAccountControl`, `servicePrincipalName`, `memberOf` und Verwandte |
+
+Die Annahme dahinter ist unbequem und beabsichtigt: **die Plattform könnte
+kompromittiert sein.** Der Agent hat ein Dienstkonto, das Passwörter setzen
+darf — wer die Plattform übernimmt, würde genau das ausnutzen. Diese Grenzen
+liegen deshalb beim Kunden, und die Plattform kann sie nicht ändern, nicht
+lesen und nicht abschalten.
+
+## Installation (Linux)
+
+```bash
+# 1. Paket auslegen, Dienstkonto anlegen
+sudo useradd --system --home /var/lib/magister-connector --shell /usr/sbin/nologin magister-connector
+sudo install -d -o magister-connector -g magister-connector -m 0700 /var/lib/magister-connector
+sudo install -d -m 0755 /etc/magister-connector
+
+# 2. Konfiguration ablegen und anpassen
+sudo install -m 0640 -g magister-connector deploy/config.example.json /etc/magister-connector/config.json
+sudo install -m 0600 -o magister-connector deploy/ad.env.example /etc/magister-connector/ad.env
+# CA-Bundle der Plattform dazu (kommt mit dem Paket):
+sudo install -m 0644 platform-ca.pem /etc/magister-connector/platform-ca.pem
+
+# 3. Anmelden — das Einmal-Token kommt über stdin, damit es nicht in der
+#    Prozessliste und nicht in der Shell-History landet.
+sudo -u magister-connector magister-connector --config /etc/magister-connector/config.json enroll
+
+# 4. Prüfen, dann Dienst starten
+sudo -u magister-connector magister-connector --config /etc/magister-connector/config.json check
+sudo install -m 0644 deploy/magister-connector.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now magister-connector
+```
+
+Nach der Anmeldung nennt der Agent seinen **SPKI-Fingerprint**. Der muss mit
+der Anzeige in der Konsole übereinstimmen. Weicht er ab, hat sich jemand
+anders mit dem Token angemeldet — deshalb lebt es nur 24 Stunden und gilt nur
+einmal.
+
+### Als Paket
+
+```bash
+sudo dpkg -i magister-connector_0.1.0_amd64.deb
+sudo cp /etc/magister-connector/config.example.json /etc/magister-connector/config.json
+sudoedit /etc/magister-connector/config.json      # endpoint, allowed_ous
+sudoedit /etc/magister-connector/ad.env           # MAGISTER_AD_*
+sudo runuser -u magister-connector -- magister-connector enroll
+sudo runuser -u magister-connector -- magister-connector check
+sudo systemctl start magister-connector
+```
+
+Das Paket legt Dienstkonto, Zustandsverzeichnis (`0700`) und `ad.env` (`0640`)
+an und aktiviert die Unit — startet den Dienst aber absichtlich nicht: der
+Agent ist noch nicht angemeldet. Einzelheiten und die beiden Abwägungen dahinter
+(venv unter `/opt`, Zustand überlebt den Purge) in
+[`packaging/debian/README.md`](packaging/debian/README.md).
+
+## Installation (Windows)
+
+Für Windows gibt es ein MSI. Es installiert den Agenten, richtet den Dienst
+`MagisterConnector` ein und legt eine Konfigurationsvorlage ab.
+
+```
+msiexec /i magister-connector-0.1.0-x64.msi /qn
+```
+
+Danach am Server:
+
+1. `%ProgramData%\Magister Connector\config.example.json` nach `config.json`
+   kopieren und anpassen (`endpoint`, `allowed_ous`).
+2. Die `MAGISTER_AD_*`-Werte in die Umgebung des Dienstes eintragen.
+3. Eingabeaufforderung **als Administrator** (das Startmenü liefert eine):
+   `magister-connector enroll`, dann `magister-connector check`.
+4. `sc start MagisterConnector`.
+
+Der ganze Ablauf mit Begründungen steht in
+[`packaging/windows/INSTALL.txt`](packaging/windows/INSTALL.txt) — die Datei
+wird mitinstalliert und ist über das Startmenü erreichbar.
+
+**Das MSI startet den Dienst absichtlich nicht.** Zum Installationszeitpunkt
+ist der Agent nicht angemeldet; ein Start würde nur eine Fehlermeldung
+erzeugen. Und es fragt nicht nach dem Einmal-Token: eine MSI-Eigenschaft steht
+in der Kommandozeile des Installers und damit im Ereignisprotokoll und in
+jedem Verteilungswerkzeug.
+
+Wie das Paket gebaut wird — Payload unter Windows mit PyInstaller, MSI
+drumherum unter Linux mit `wixl` — steht in
+[`packaging/windows/README.md`](packaging/windows/README.md). Es ist noch
+**unsigniert**; siehe dort.
+
+### Die Rechte unter Windows
+
+Im Zustandsverzeichnis liegt der private Schlüssel des Agenten. Unter Linux
+schützt ihn `0700`; unter Windows schützt ihn die **ACL**, und das ist nicht
+dasselbe in anderer Schreibweise:
+
+* `os.stat()` liefert unter Windows erfundene Modus-Bits (Verzeichnisse melden
+  `0o777`). Die POSIX-Prüfung schlägt dort **immer** fehl — ohne Anpassung
+  wäre der Dienst nie gestartet.
+* Der Agent dichtet das Verzeichnis deshalb beim Anlegen selbst ab (`icacls`
+  mit SIDs, nicht mit lokalisierten Namen) und prüft bei jedem Start die DACL
+  über SDDL. Nicht das Installationsprogramm: ein Sicherheitsmerkmal, das nur
+  die MSI setzt, fehlt genau bei der Handinstallation, die dann drei Jahre
+  läuft.
+
+## Zertifikatserneuerung
+
+Das Agentenzertifikat gilt 90 Tage. Der Dienst erneuert es **selbständig**, 30
+Tage vor Ablauf, über den beglaubigten Kanal — bestehendes Client-Zertifikat
+plus API-Key, kein Einmal-Token und kein Mensch beim Kunden. Scheitert es,
+wird stündlich erneut versucht; es bleibt ein Monat, in dem jemand eingreifen
+kann.
+
+`magister-connector check` nennt die Restlaufzeit. Innerhalb der 30 Tage ist
+das kein Befund, sondern der vorgesehene Zustand.
+
+**Ein widerrufener Agent kann sich nicht erneuern.** Der Widerruf ist ein
+Datenbank-Flag und wird bei jeder Anfrage geprüft — genau deshalb, und nicht
+über eine CRL: eine CRL wäre morgen aktuell, und der Erneuerungs-Endpunkt wäre
+bis dahin der Weg, aus einem widerrufenen Agenten einen gültigen zu machen.
+
+Bei jeder Erneuerung entsteht ein **neues Schlüsselpaar**. Dasselbe
+wiederzuverwenden wäre einfacher und falsch: ein Schlüssel, der über Jahre auf
+einem Kundenserver liegt, wird nie gewechselt.
+
+Damit der Wechsel keine Aussperrung werden kann, gelten in der Plattform für
+sieben Tage **beide** Fingerprints. Der Grund ist ein konkreter Fall: die
+Plattform schreibt den neuen Fingerprint, die Antwort geht auf dem Rückweg
+verloren (abgebrochene Verbindung, Proxy-Zeitüberschreitung, Neustart in genau
+diesem Moment), und der Agent klopft weiter mit dem alten Schlüssel an — auf
+eine Zeile, die ihn nicht mehr kennt. Er wäre ausgesperrt, und zwar endgültig.
+Meldet er sich mit dem neuen Fingerprint, gilt die Erneuerung als bestätigt und
+der alte wird verworfen.
+
+Lokal wechselt die Erneuerung zwei Dateien (Zertifikat und Schlüssel). Stirbt
+der Prozess dazwischen, passen sie nicht zusammen — der Agent legt deshalb das
+alte Paar als `.prev` daneben und stellt es beim Start wieder her, wenn das
+aktive Paar nicht zusammengehört.
+
+## Voraussetzungen beim Kunden
+
+* **Ausgehend TCP 46200** zu `connect.magister.ch`. Kein Rückfall auf 443
+  (Entscheid E11): eine Rückfallebene würde einen geschlossenen Port
+  verstecken, bis es darauf ankommt. `check` sagt, ob es geht.
+* Ein **AD-Dienstkonto** mit delegierten Rechten auf den Magister-OUs — nicht
+  Domänen-Admin. Details in
+  [kunden-onboarding.md](../docs/runbooks/kunden-onboarding.md) §1.3.
+* **LDAPS** auf 636 mit vertrauenswürdigem Zertifikat.
+
+## Warum der Agent `magister_api` mitbringt
+
+Die siebzehn LDAP-Operationen sind schon geschrieben und getestet. Sie ein
+zweites Mal zu schreiben hiesse, zwei Stände zu pflegen, von denen einer
+schlechter getestet ist — und Abweichungen fielen erst beim Kunden auf. Der
+Agent benutzt deshalb `magister_api.ad`. Damit dafür kein Web-Framework
+mitkommt, ist diese Schicht seit ADR-0014 frei von FastAPI
+(`magister_api/ad/threadpool.py` erklärt, wie).
+
+## Entwicklung
+
+```bash
+cd agent
+uv sync --extra dev
+uv run pytest
+uv run ruff check && uv run ruff format --check
+uv run pyright
+```
+
+## Was noch fehlt
+
+* **Windows-Signatur.** Das MSI ist **unsigniert**: Windows zeigt eine
+  SmartScreen-Warnung, unter AppLocker oder WDAC lässt es sich nicht
+  installieren. Entscheid E18 hat das an ein Ereignis gebunden statt an einen
+  Zeitpunkt — beim ersten Kunden mit AppLocker oder ab der dritten
+  Windows-Installation. Kosten: 400–700 CHF einmalig für die
+  Hardware-Verwahrung, 300–600 CHF jährlich für das Zertifikat.
+* **Der Ort für das apt-Repository.** Das Repository selbst ist gebaut und
+  geprüft ([packaging/apt/README.md](packaging/apt/README.md)); es fehlt
+  `apt.magister.ch` — ein DNS-Eintrag und statisches HTTPS.
+* **Automatische Updates** (Entscheid E10). Durch das signierte Repository
+  jetzt möglich; zu entscheiden bleibt, ob `unattended-upgrades` mit unserer
+  Quelle in der Allowlist oder nur ein Hinweis in der Konsole.
+* **Sync-Seiten als Push.** Der Agent holt heute nur Aufträge ab; der
+  wiederkehrende AD-Sync läuft noch über den direkten Weg.

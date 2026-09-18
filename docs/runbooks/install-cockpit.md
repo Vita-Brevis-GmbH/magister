@@ -55,15 +55,33 @@ cd /opt/cockpit/src/cockpit/deploy
 ## 3. Secrets generieren
 
 ```bash
+ENV_FILE=/opt/cockpit/src/cockpit/deploy/.env
 BOOTSTRAP_TOKEN=$(openssl rand -base64 32 | tr -d '/+=' | head -c 40)
-echo "COCKPIT_BOOTSTRAP_TOKEN=$BOOTSTRAP_TOKEN" > /opt/cockpit/src/cockpit/deploy/.env
-chmod 600 /opt/cockpit/src/cockpit/deploy/.env
+# pgcrypto-Schlüssel für die TOTP-Geheimnisse der Operatoren (ADR-0020 D2).
+SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
+cat > "$ENV_FILE" <<EOF
+COCKPIT_BOOTSTRAP_TOKEN=$BOOTSTRAP_TOKEN
+COCKPIT_SECRET_KEY=$SECRET_KEY
+EOF
+chmod 600 "$ENV_FILE"
 
 # In 1Password ablegen (oder Vault deiner Wahl)
 echo ""
 echo "↓ Diesen Token jetzt in 1Password speichern:"
 echo "$BOOTSTRAP_TOKEN"
 ```
+
+`COCKPIT_SECRET_KEY` bleibt in der `.env` und gehört in die **Sicherung** des
+Konsolen-Servers: ohne ihn ist nach einer Wiederherstellung kein zweiter Faktor
+prüfbar, und der Weg herein ist der Bootstrap-Token plus ein neues Enrolment
+für jede Person ([key-rotation.md §5](key-rotation.md)).
+
+Nicht hier erzeugt, weil sie von dir kommen: `COCKPIT_BIND_ADDRESS` (die
+Management-Adresse), `COCKPIT_MANAGEMENT_MARKER` und
+`COCKPIT_CONNECTOR_MARKER` (zwei **verschiedene** Werte, je
+`openssl rand -hex 32`) sowie `COCKPIT_HOSTNAME`. Ohne sie startet der Stack
+absichtlich nicht — siehe den Kopf von `cockpit/deploy/docker-compose.yml` und
+[console-listener.md](console-listener.md).
 
 ---
 
@@ -78,7 +96,10 @@ Das Compose-File startet:
 - `postgres` (Port 5433 lokal)
 - `api` (Port 8001 lokal)
 
-Frontend wird im aktuellen Stand separat per `vite build` + statischem Hosting deployed (folgt in M5.2 als Compose-Service).
+Die Oberfläche liefert der Konsolen-Listener selbst aus — sie muss nur gebaut
+sein (`cd ../web && pnpm install && pnpm build`; das Compose-File mountet
+`../web/dist` nach `/srv/console`). Ohne `dist` antwortet der Listener auf
+alles ausser `/api/*` mit 404.
 
 ---
 

@@ -61,6 +61,7 @@ from magister_api.models.school_class import (
     SchoolClass,
 )
 from magister_api.repositories.base import ScopeContext
+from magister_api.tenancy.keys import keys_for
 
 logger = logging.getLogger(__name__)
 
@@ -456,7 +457,9 @@ class ImportService:
         columns) only when it is actually being stored.
         """
         store_pw = bool(settings_row.password_store_enabled) and cannot_change_password
-        key = self.settings.app_secrets_key()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self.settings).secrets_key
         if store_pw and key:
             return True, func.pgp_sym_encrypt(password, key)
         return store_pw, None

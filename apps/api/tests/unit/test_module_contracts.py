@@ -30,8 +30,9 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("/auth/login", "GET"),  # OIDC redirect start
         ("/auth/callback", "GET"),  # OIDC redirect return
         ("/auth/capabilities", "GET"),  # login-screen feature probe
-        ("/auth/login/ad", "POST"),  # AD credential login
         ("/auth/login/local", "POST"),  # local-admin fallback login
+        ("/auth/login/local/totp", "POST"),  # local-admin second factor (ADR-0015 D2)
+        ("/auth/login/local/enroll", "POST"),  # local-admin forced TOTP enrolment
     }
 )
 
@@ -39,6 +40,11 @@ _AUTH_MARKER = "get_current_user"
 # The internal AD-RPC surface (ADR-0011) is session-less by design; it is guarded
 # by the shared-secret dependency instead of the user-session auth.
 _SECRET_AUTH_MARKER = "require_rpc_secret"
+# Die tiefe Gesundheitssonde (`/healthz/stack`) ist ebenfalls sitzungslos und
+# ebenfalls nicht offen: sie hängt an einem Token aus der Umgebung. Ohne
+# diesen Marker landete sie auf der Liste „bewusst öffentlich" — und das wäre
+# eine Zeile, die etwas Falsches behauptet.
+_HEALTH_AUTH_MARKER = "require_health_token"
 _GUARD_MARKER = "make_module_guard.<locals>._guard"
 
 
@@ -95,7 +101,7 @@ def test_every_own_route_is_authenticated_or_explicitly_public() -> None:
         for key in _route_keys(route):
             if key in PUBLIC_ROUTES:
                 continue
-            if _AUTH_MARKER not in markers and _SECRET_AUTH_MARKER not in markers:
+            if not markers & {_AUTH_MARKER, _SECRET_AUTH_MARKER, _HEALTH_AUTH_MARKER}:
                 offenders.append(key)
     assert offenders == [], f"unauthenticated routes not on the public allowlist: {offenders}"
 
@@ -133,3 +139,13 @@ def test_toggleable_module_routes_are_guarded() -> None:
             unexpected_guard.append(f"{module_id}:{route.path}")
     assert missing_guard == [], f"toggleable-module routes without request guard: {missing_guard}"
     assert unexpected_guard == [], f"non-toggleable routes carry a guard: {unexpected_guard}"
+
+
+def test_no_directory_password_login_route() -> None:
+    """ADR-0015 D3: no endpoint may accept a directory user's own password.
+
+    The direct AD login was removed, not switched off — this pins that a future
+    change cannot quietly reintroduce a route under ``/auth/login/ad``.
+    """
+    offenders = [r.path for r in _own_routes() if r.path.startswith("/auth/login/ad")]
+    assert offenders == [], f"AD-credential login route(s) are back: {offenders}"

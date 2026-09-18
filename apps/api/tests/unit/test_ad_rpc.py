@@ -16,9 +16,12 @@ import pytest
 from pydantic import SecretStr
 
 from magister_api.ad.client import AdClient, AdUserRecord
+from magister_api.ad.connector_client import AdConnectorClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.remote_base import RemoteAdClient
 from magister_api.ad.rpc import (
     ALLOWED_METHODS,
+    CONNECTOR_METHODS,
     RPC_PATH,
     SECRET_HEADER,
     ad_user_record_from_jsonable,
@@ -81,11 +84,34 @@ def test_allowed_methods_are_async_on_adclient() -> None:
         assert inspect.iscoroutinefunction(fn), f"{name} must be async"
 
 
-def test_rpc_client_overrides_every_allowed_method() -> None:
-    # Each RPC method must be defined ON AdRpcClient (forwarding), not inherited
-    # from AdClient — otherwise a client container would try to hit AD directly.
-    for name in ALLOWED_METHODS:
-        assert name in AdRpcClient.__dict__, f"{name} is not overridden on AdRpcClient"
+def test_every_remote_backend_overrides_every_allowed_method() -> None:
+    """Kein entfernter Rücken darf eine Methode von ``AdClient`` erben.
+
+    Ein geerbter Körper würde ldap3 benutzen — in einem Container ohne
+    Verzeichnis-Zugangsdaten also scheitern, und in einem gehosteten Aufbau
+    hiesse es, dass die Plattform selbst ins Kundennetz greifen will.
+
+    Seit ADR-0014 gibt es zwei entfernte Rücken (RPC und Connector). Die
+    Methodenkörper liegen deshalb gemeinsam auf ``RemoteAdClient``; geprüft
+    wird, dass die Auflösung dort und nicht bei ``AdClient`` endet.
+    """
+    for backend in (AdRpcClient, AdConnectorClient):
+        for name in ALLOWED_METHODS:
+            owner = next(klass for klass in backend.__mro__ if name in klass.__dict__)
+            assert owner is not AdClient, (
+                f"{backend.__name__}.{name} kommt von AdClient — der Aufruf würde "
+                "direkt ins Verzeichnis gehen statt über den Transport"
+            )
+            assert issubclass(owner, RemoteAdClient), (
+                f"{backend.__name__}.{name} kommt aus {owner.__name__}, "
+                "erwartet ist RemoteAdClient oder der Rücken selbst"
+            )
+
+
+def test_every_remote_backend_implements_the_transport() -> None:
+    # _call ist die einzige Methode, die ein Rücken selbst beitragen muss.
+    for backend in (AdRpcClient, AdConnectorClient):
+        assert "_call" in backend.__dict__, f"{backend.__name__} implementiert _call nicht"
 
 
 def test_rpc_client_signatures_match_adclient() -> None:
@@ -103,6 +129,53 @@ def test_sync_methods_are_not_on_the_rpc_surface() -> None:
         assert name not in ALLOWED_METHODS
 
 
+# --- contract: der Connector kann eine Methode mehr (ADR-0022 D1) ----------------
+
+
+def test_the_connector_surface_is_the_rpc_surface_plus_the_sync() -> None:
+    """Eine Menge mehr, und zwar genau eine Methode mehr.
+
+    Getrennte Mengen, weil die beiden Transporte verschieden liegen: über RPC
+    läuft der Abgleich **im** AD-Container (ADR-0011), über den Connector muss
+    er über den Agenten laufen, weil nur er ins Verzeichnis kommt (ADR-0014).
+    """
+    assert CONNECTOR_METHODS == ALLOWED_METHODS | {"search_users"}
+    assert "search_users" not in ALLOWED_METHODS
+
+
+def test_only_the_connector_overrides_the_sync() -> None:
+    """Der RPC-Rücken erbt `search_users` weiter von `AdClient` — mit Absicht.
+
+    Ein geerbter Körper scheitert dort laut, statt still in ein Verzeichnis zu
+    greifen, das dieser Container nicht hat. Der Connector-Rücken muss ihn
+    dagegen überschreiben, sonst griffe die Plattform beim Abgleich eines
+    gehosteten Kunden selbst per LDAP ins Kundennetz.
+    """
+    owner_connector = next(
+        klass for klass in AdConnectorClient.__mro__ if "search_users" in klass.__dict__
+    )
+    assert owner_connector is AdConnectorClient
+
+    owner_rpc = next(klass for klass in AdRpcClient.__mro__ if "search_users" in klass.__dict__)
+    assert owner_rpc is AdClient
+
+
+def test_the_connector_sync_keeps_the_signature_of_the_direct_one() -> None:
+    # Sonst ruft die Fachschicht beim gehosteten Kunden mit Argumenten auf,
+    # die dieser Rücken nicht kennt — und das fiele erst im Betrieb auf.
+    parent = _param_shape(AdClient.search_users)
+    child = _param_shape(AdConnectorClient.search_users)
+    assert child == parent
+
+
+def test_directory_password_authentication_is_not_on_the_rpc_surface() -> None:
+    # ADR-0015 D3: the direct AD login was removed, not switched off. Nothing may
+    # bind with a directory user's own password over this boundary again.
+    assert "authenticate" not in ALLOWED_METHODS
+    assert not hasattr(AdClient, "authenticate")
+    assert not hasattr(AdRpcClient, "authenticate")
+
+
 # --- RPC client (httpx MockTransport) --------------------------------------------
 
 
@@ -115,7 +188,7 @@ def _client(handler: Any, *, secret: str = "s3cr3t") -> AdRpcClient:
     )
 
 
-async def test_client_forwards_and_deserializes_record() -> None:
+async def test_client_forwards_method_secret_and_body() -> None:
     seen: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -124,23 +197,23 @@ async def test_client_forwards_and_deserializes_record() -> None:
         import json
 
         seen["body"] = json.loads(request.content)
-        return httpx.Response(200, json={"result": ad_user_record_to_jsonable(_record())})
+        return httpx.Response(200, json={"result": True})
 
     client = _client(handler)
     try:
-        rec = await client.authenticate(login="a@b.ch", password="pw")
+        ok = await client.probe_bind_as_user(user_dn="CN=A B,OU=x,DC=b,DC=ch", password="pw")
     finally:
         await client.aclose()
-    assert rec == _record()
-    assert seen["url"] == f"http://magister-api-ad:8000{RPC_PATH}/authenticate"
+    assert ok is True
+    assert seen["url"] == f"http://magister-api-ad:8000{RPC_PATH}/probe_bind_as_user"
     assert seen["secret"] == "s3cr3t"
-    assert seen["body"] == {"login": "a@b.ch", "password": "pw"}
+    assert seen["body"] == {"user_dn": "CN=A B,OU=x,DC=b,DC=ch", "password": "pw"}
 
 
-async def test_client_authenticate_none() -> None:
+async def test_client_passes_null_result_through() -> None:
     client = _client(lambda r: httpx.Response(200, json={"result": None}))
     try:
-        assert await client.authenticate(login="x", password="y") is None
+        assert await client.find_user_dn("unknown-guid") is None
     finally:
         await client.aclose()
 
@@ -192,8 +265,8 @@ class _FakeAd:
     async def find_user_dn(self, *, ad_object_guid: str) -> str | None:
         return f"CN={ad_object_guid}"
 
-    async def authenticate(self, *, login: str, password: str) -> AdUserRecord | None:
-        return _record() if password == "good" else None
+    async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
+        return password == "good"
 
     async def modify_password(self, *, user_dn: str, new_password: str, force_change: bool) -> None:
         raise AdUnavailableError("ldap_modify_failed:denied")
@@ -220,9 +293,9 @@ async def test_server_dispatches_and_serializes() -> None:
     assert r.status_code == 200
     assert r.json() == {"result": "CN=g1"}
 
-    r = await _post("authenticate", {"login": "a", "password": "good"})
+    r = await _post("probe_bind_as_user", {"user_dn": "CN=x", "password": "good"})
     assert r.status_code == 200
-    assert ad_user_record_from_jsonable(r.json()["result"]) == _record()
+    assert r.json() == {"result": True}
 
 
 async def test_server_rejects_wrong_secret() -> None:

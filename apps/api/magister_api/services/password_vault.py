@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
+from magister_api.tenancy.keys import keys_for
 
 
 class PasswordVaultService:
@@ -28,7 +29,9 @@ class PasswordVaultService:
 
     @property
     def _key(self) -> str:
-        key = self._settings.app_secrets_key()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self._settings).secrets_key
         if not key:
             raise RuntimeError(
                 "neither MAGISTER_SECRETS_KEY nor MAGISTER_AUDIT_KEY is set — "

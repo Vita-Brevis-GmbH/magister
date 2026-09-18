@@ -60,10 +60,38 @@ describe("LoginPage", () => {
     // Disclosure summary present, password field initially not visible.
     expect(screen.getByText(/anderen anmeldeweg/i)).toBeInTheDocument();
   });
+
+  // Die drei Fälle, in denen die Karte vorher NUR Titel und Intro zeigte. Das
+  // sah nach einer halb geladenen Seite aus; gesucht wurde dann im Frontend,
+  // während die Ursache in der Konfiguration lag. Jede Antwort der
+  // Capabilities muss zu einem Satz auf dem Schirm führen.
+  it("says so when neither sign-in path is configured", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: false, local_login_enabled: false }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByText(/kein anmeldeweg eingerichtet/i)).toBeInTheDocument();
+    expect(screen.getByText(/betreiber-konsole/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /entra id/i })).toBeNull();
+    expect(screen.queryByLabelText(/benutzername/i)).toBeNull();
+  });
+
+  it("says so when the capabilities request fails", async () => {
+    fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/anmeldewege/i);
+  });
+
+  it("shows a hint while the capabilities are still loading", () => {
+    // Nie auflösendes fetch: der Zustand, den ein langsamer Server erzeugt.
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    renderWithQuery(<LoginPage />);
+    expect(screen.getByText(/werden geprüft/i)).toBeInTheDocument();
+  });
 });
 
 describe("LocalLoginForm", () => {
-  it("submits to /api/auth/login/local and redirects on success", async () => {
+  it("redirects straight away when the backend answers 204 (MFA suspended)", async () => {
+    // 204 with no body is the one case where the password alone is enough:
+    // a Global Admin has suspended the MFA requirement (ADR-0015 D2).
     fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
     renderWithQuery(<LocalLoginForm />);
     const user = userEvent.setup();
@@ -121,5 +149,117 @@ describe("LocalLoginForm", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/zu viele anfragen/i);
     });
+  });
+});
+
+describe("LocalLoginForm — second factor (ADR-0015 D2)", () => {
+  it("asks for a code instead of signing in, then redirects once it verifies", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ stage: "totp", challenge: "chal-1" }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    renderWithQuery(<LocalLoginForm />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/benutzername/i), "admin");
+    await user.type(screen.getByLabelText(/^passwort$/i), "hunter2hunter2");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+
+    // No navigation yet: the password alone must not sign anyone in.
+    await waitFor(() => {
+      expect(screen.getByLabelText(/einmalcode/i)).toBeInTheDocument();
+    });
+    expect(window.location.assign).not.toHaveBeenCalled();
+
+    await user.type(screen.getByLabelText(/einmalcode/i), "123456");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+
+    await waitFor(() => {
+      expect(window.location.assign).toHaveBeenCalledWith("/");
+    });
+    expect(fetchMock.mock.calls[1]![0]).toBe("/api/auth/login/local/totp");
+    const init = fetchMock.mock.calls[1]![1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({ challenge: "chal-1", code: "123456" });
+  });
+
+  it("shows a wrong-code banner and keeps the code field", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ stage: "totp", challenge: "chal-1" }))
+      .mockResolvedValueOnce(jsonResponse({ detail: "invalid_code" }, { status: 401 }));
+    renderWithQuery(<LocalLoginForm />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/benutzername/i), "admin");
+    await user.type(screen.getByLabelText(/^passwort$/i), "pw");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+    await waitFor(() => expect(screen.getByLabelText(/einmalcode/i)).toBeInTheDocument());
+
+    await user.type(screen.getByLabelText(/einmalcode/i), "000000");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent(/code stimmt nicht/i);
+    });
+    expect(screen.getByLabelText(/einmalcode/i)).toBeInTheDocument();
+    expect(window.location.assign).not.toHaveBeenCalled();
+  });
+
+  it("offers a restart when the challenge has expired", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ stage: "totp", challenge: "chal-1" }))
+      .mockResolvedValueOnce(jsonResponse({ detail: "expired" }, { status: 401 }));
+    renderWithQuery(<LocalLoginForm />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/benutzername/i), "admin");
+    await user.type(screen.getByLabelText(/^passwort$/i), "pw");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+    await waitFor(() => expect(screen.getByLabelText(/einmalcode/i)).toBeInTheDocument());
+    await user.type(screen.getByLabelText(/einmalcode/i), "123456");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+
+    const restart = await screen.findByRole("button", { name: /von vorne/i });
+    await user.click(restart);
+    expect(screen.getByLabelText(/benutzername/i)).toBeInTheDocument();
+  });
+
+  it("forces enrolment, then shows the recovery codes exactly once", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          stage: "enroll",
+          challenge: "chal-e",
+          provisioning_uri: "otpauth://totp/Magister:admin",
+          qr_data_uri: "data:image/svg+xml;charset=utf-8,%3Csvg%3E%3C/svg%3E",
+          secret: "JBSWY3DPEHPK3PXP",
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ recovery_codes: ["AAAA-1111", "BBBB-2222"] }));
+    renderWithQuery(<LocalLoginForm />);
+    const user = userEvent.setup();
+
+    await user.type(screen.getByLabelText(/benutzername/i), "admin");
+    await user.type(screen.getByLabelText(/^passwort$/i), "pw");
+    await user.click(screen.getByRole("button", { name: /anmelden/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/zweiten faktor einrichten/i)).toBeInTheDocument();
+    });
+    expect(screen.getByAltText(/qr-code/i)).toHaveAttribute(
+      "src",
+      expect.stringContaining("data:image/svg+xml"),
+    );
+    expect(screen.getByDisplayValue("JBSWY3DPEHPK3PXP")).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/einmalcode/i), "123456");
+    await user.click(screen.getByRole("button", { name: /einrichtung abschliessen/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText("AAAA-1111")).toBeInTheDocument();
+    });
+    expect(screen.getByText("BBBB-2222")).toBeInTheDocument();
+    // Navigation happens only after the operator confirms they saved them.
+    expect(window.location.assign).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /codes gesichert/i }));
+    expect(window.location.assign).toHaveBeenCalledWith("/");
   });
 });

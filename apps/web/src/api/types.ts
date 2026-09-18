@@ -1,6 +1,15 @@
 /** Typed views of the backend's Pydantic response schemas. */
 
+/** Der laufende Operator-Zugriff — fuer den Hinweisbalken (ADR-0019 D6). */
+export interface OperatorBanner {
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  until: string;
+}
+
 export interface CurrentUserOut {
+  /** Leer bei einer Operator-Sitzung: sie gehoert zu keinem AD-Objekt. */
   ad_object_guid: string;
   upn: string;
   given_name: string | null;
@@ -12,17 +21,27 @@ export interface CurrentUserOut {
   school_scope: number[];
   roles: string[];
   expires_at: string;
+  /** Diese Sitzung ist selbst ein Operator-Zugriff. */
+  is_operator: boolean;
+  /** Gesetzt, solange ein Zugriff laeuft — fuer alle Benutzer. */
+  operator_active: OperatorBanner | null;
+}
+
+/** Ein Zugriff in der Liste, die der Kunde sieht (ADR-0019 D6). */
+export interface OperatorAccessOut {
+  jti: string;
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  started_at: string;
+  expires_at: string;
+  /** `null` heisst: laeuft noch oder ist abgelaufen. */
+  ended_at: string | null;
 }
 
 export interface AuthCapabilities {
   oidc_enabled: boolean;
   local_login_enabled: boolean;
-  ad_login_enabled: boolean;
-}
-
-export interface AdLoginRequest {
-  login: string;
-  password: string;
 }
 
 // Built-in role keys still used for i18n label lookup; custom roles carry their
@@ -78,6 +97,35 @@ export interface RoleCreateRequest {
 export interface LocalLoginRequest {
   username: string;
   password: string;
+}
+
+/** Step 1 of the local login: the password checked out, this says what's next. */
+export interface LocalLoginStageOut {
+  /** "totp" — ask for a code. "enroll" — set up the second factor first. */
+  stage: "totp" | "enroll";
+  challenge: string;
+  /** Enrolment stage only. */
+  provisioning_uri: string | null;
+  qr_data_uri: string | null;
+  secret: string | null;
+}
+
+export interface LocalTotpRequest {
+  challenge: string;
+  code: string;
+}
+
+/** Returned once, at the end of enrolment. Cannot be shown again. */
+export interface LocalRecoveryCodesOut {
+  recovery_codes: string[];
+}
+
+export interface LocalAdminMfaOut {
+  enrolled: boolean;
+  recovery_codes_left: number;
+  reset_at: string | null;
+  reset_by: string | null;
+  suspended_until: string | null;
 }
 
 export interface LocalAdminOut {
@@ -251,6 +299,13 @@ export interface ModuleOut {
 export interface ModulesOut {
   profile: string;
   modules: ModuleOut[];
+  /**
+   * Ob diese Installation von einer Konsole verwaltet wird (ADR-0017 D1).
+   *
+   * Optional, weil eine ältere API das Feld nicht schickt — dann gilt
+   * `false`, und alles bleibt wie bisher.
+   */
+  platform_managed?: boolean;
 }
 
 /** M6 Phase 1: admin view + update of the module configuration. */
@@ -564,6 +619,26 @@ export interface DocumentTemplateOut {
   is_active: boolean;
   updated_by: string | null;
   updated_at: string;
+  /** Die Fassung des Betreibers, die zur Kenntnis genommen wurde (ADR-0018 D4). */
+  platform_version_ack: number | null;
+  /** Es gibt eine neuere gelieferte Fassung als die quittierte. */
+  platform_update_available: boolean;
+  /**
+   * Diese eigene Fassung gilt derzeit nicht, weil die Fassung des Betreibers
+   * gesperrt ist. Sie bleibt liegen und wird nicht geloescht (ADR-0018 D3).
+   */
+  superseded_by_platform: boolean;
+}
+
+/** Eine vom Betreiber gelieferte Vorlage, wie der Kunde sie sieht (ADR-0018). */
+export interface PlatformTemplateOut {
+  key: string;
+  language: string;
+  subject: string | null;
+  body_html: string;
+  may_override: boolean;
+  version: number;
+  delivered_at: string;
 }
 
 export interface DocumentTemplateMetaOut {
@@ -577,6 +652,8 @@ export interface DocumentTemplateMetaOut {
 export interface DocumentTemplateListOut {
   templates: DocumentTemplateOut[];
   meta: DocumentTemplateMetaOut;
+  /** Leer auf einer Einzelinstallation: dort gibt es keinen Betreiber ausser dem Kunden. */
+  platform_templates: PlatformTemplateOut[];
 }
 
 export interface DocumentTemplateSave {
@@ -636,8 +713,6 @@ export interface AppSettingsOut {
   ad_bind_password_set: boolean;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string | null;
-  ad_login_enabled: boolean;
-  ad_login_group: string | null;
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
@@ -1097,8 +1172,6 @@ export interface AppSettingsUpdate {
   ad_bind_password?: string | null;
   ad_tls_verify?: boolean | null;
   ad_tls_ca_pem?: string | null;
-  ad_login_enabled?: boolean | null;
-  ad_login_group?: string | null;
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;

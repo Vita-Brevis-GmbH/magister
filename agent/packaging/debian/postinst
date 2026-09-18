@@ -1,0 +1,67 @@
+#!/bin/sh
+# Nach dem Auspacken: Dienstkonto, Zustandsverzeichnis, systemd.
+#
+# Ausdrücklich NICHT: den Dienst starten. Zum Installationszeitpunkt ist der
+# Agent nicht angemeldet — er hat kein Zertifikat und keinen API-Key. Ein Start
+# würde nur eine Fehlermeldung ins Journal schreiben. Nach
+# `magister-connector enroll` startet ihn der Betreiber einmal; ab dann kommt
+# er bei jedem Neustart mit.
+set -e
+
+USER=magister-connector
+STATE=/var/lib/magister-connector
+CONFDIR=/etc/magister-connector
+
+case "$1" in
+configure)
+    if ! getent passwd "$USER" >/dev/null; then
+        adduser --system --group --no-create-home \
+                --home "$STATE" --shell /usr/sbin/nologin \
+                --gecos "Magister Connector-Agent" "$USER" >/dev/null
+    fi
+
+    # 0700 und dem Dienstkonto gehörend: hier liegt der private Schlüssel des
+    # Agenten. Der Agent prüft das bei jedem Start und weigert sich, mit zu
+    # weiten Rechten zu laufen — diese Zeilen sind also nicht die Sicherung,
+    # sondern die Bequemlichkeit. Die Sicherung ist die Prüfung.
+    mkdir -p "$STATE"
+    chown "$USER:$USER" "$STATE"
+    chmod 0700 "$STATE"
+
+    mkdir -p "$CONFDIR"
+    chmod 0755 "$CONFDIR"
+    # Die Vorlage wird bei jedem Update ersetzt, die echte config.json nie —
+    # ein Update, das eine funktionierende Konfiguration überschreibt, ist der
+    # mit Abstand häufigste Paketfehler.
+    # ad.env aus der Vorlage, mit 0600 und dem Dienstkonto als Eigentümer.
+    # Darin steht das AD-Bind-Passwort; 0644 wäre es für jeden auf dem Server
+    # lesbar. Angelegt wird sie hier, damit der Betreiber sie nur ausfüllen
+    # muss und nicht auch noch die Rechte richtig setzen.
+    if [ ! -e "$CONFDIR/ad.env" ]; then
+        cp "$CONFDIR/ad.env.example" "$CONFDIR/ad.env"
+    fi
+    chown root:"$USER" "$CONFDIR/ad.env"
+    chmod 0640 "$CONFDIR/ad.env"
+
+    if [ ! -e "$CONFDIR/config.json" ]; then
+        echo "Hinweis: $CONFDIR/config.json fehlt noch."
+        echo "  cp $CONFDIR/config.example.json $CONFDIR/config.json  und anpassen."
+    fi
+
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable magister-connector.service || true
+        if systemctl is-active --quiet magister-connector.service; then
+            # Bei einem Update: neu starten, damit die neue Fassung läuft.
+            systemctl restart magister-connector.service || true
+        else
+            echo "Der Dienst wird nicht gestartet: der Agent ist noch nicht angemeldet."
+            echo "  magister-connector enroll     (Einmal-Token aus der Konsole)"
+            echo "  magister-connector check"
+            echo "  systemctl start magister-connector"
+        fi
+    fi
+    ;;
+abort-upgrade | abort-remove | abort-deconfigure) ;;
+esac
+exit 0

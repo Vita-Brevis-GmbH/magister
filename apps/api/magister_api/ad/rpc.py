@@ -25,6 +25,9 @@ SECRET_HEADER = "x-ad-rpc-secret"  # noqa: S105 — header name, not a credentia
 
 # The exact AdClient surface reachable over RPC. The recurring sync/search
 # methods are deliberately absent — they run only in the AD container.
+# ``authenticate`` was removed with the direct AD login (ADR-0015 D3): no
+# endpoint accepts a directory user's password any more, so nothing may bind
+# with one over this boundary either.
 ALLOWED_METHODS: frozenset[str] = frozenset(
     {
         "find_user_dn",
@@ -32,7 +35,6 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "probe_service_connection",
         "probe_service_connection_detailed",
         "probe_bind_as_user",
-        "authenticate",
         "modify_password",
         "modify_user_attributes",
         "rename_user",
@@ -46,6 +48,28 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "create_user",
     }
 )
+
+#: Was **zusätzlich** über den Connector geht (ADR-0022 D1).
+#:
+#: Getrennt von ``ALLOWED_METHODS`` und nicht dort hineingeschrieben: die
+#: beiden Transporte haben denselben Zweck, aber nicht dieselbe Lage. Im
+#: Container-Split (ADR-0011) läuft der Abgleich **im** AD-Container; eine
+#: Suche über RPC wäre ein Aufruf, den es dort nicht geben soll, und ein
+#: geerbter Körper scheitert laut statt still ins Leere zu greifen.
+#:
+#: Beim Connector ist es umgekehrt: der Agent ist der einzige Prozess mit
+#: AD-Zugang (ADR-0014), also muss der Abgleich über ihn laufen oder gar
+#: nicht. Ohne diesen Eintrag holte die Plattform das Verzeichnis eines
+#: gehosteten Kunden direkt per LDAP — die Verbindung, die es nicht geben darf.
+CONNECTOR_EXTRA_METHODS: frozenset[str] = frozenset(
+    {
+        "search_users",
+    }
+)
+
+#: Die Allowlist des Connector-Kanals. Die Konsole führt dieselbe Menge
+#: wörtlich; ein Test hält die beiden zusammen.
+CONNECTOR_METHODS: frozenset[str] = ALLOWED_METHODS | CONNECTOR_EXTRA_METHODS
 
 
 def ad_user_record_to_jsonable(rec: AdUserRecord) -> dict[str, Any]:

@@ -1,0 +1,111 @@
+# Overlay: Cluster-PITR (ADR-0016 Ebene 1, Entscheid E17).
+#
+# Schaltet die WAL-Archivierung auf den Backup-Host ein. Nur für die
+# GEHOSTETE Installation — eine Einzelinstallation bleibt bei der
+# pg-backup-Sidecar (ADR-0016 D9), die bekommt keinen pgBackRest-Zwang.
+#
+# Bring up:
+#   docker compose -f docker-compose.yml -f docker-compose.pitr.yml up -d
+#
+# Voraussetzungen auf DIESEM Host, vor dem ersten Start:
+#   1. /etc/pgbackrest.conf aus deploy/pgbackrest/pgbackrest.conf.app.example,
+#      Besitzer 999:999 (das ist `postgres` IM Container, nicht auf dem Host),
+#      Rechte 0600. Darin `pg1-path=/var/lib/postgresql/data` — der Pfad im
+#      Container, nicht der des Volumes auf dem Host.
+#   2. /etc/pgbackrest/cert mit app.crt, app.key, backup-channel-ca.crt
+#      (auf dem Backup-Host erzeugt, siehe deploy/pgbackrest/issue-channel-certs.sh).
+#   3. Auf dem Backup-Host: `pgbackrest --stanza=magister stanza-create`,
+#      danach `check`. Erst wenn `check` grün ist, hier hochfahren.
+#
+# Der Reihenfolge-Fallstrick, ausgeschrieben: wer `archive_mode=on` einschaltet,
+# bevor die Stanza existiert, bekommt einen Postgres, der WAL nicht loswird.
+# Er läuft weiter, aber pg_wal wächst, bis die Platte voll ist — und dann
+# bleibt er stehen. `check` zuerst.
+
+name: magister
+
+services:
+  postgres:
+    build:
+      context: ../pgbackrest
+      dockerfile: Dockerfile.postgres
+    image: ${MAGISTER_POSTGRES_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-postgres-pgbackrest:16}
+    # `command` ergänzt die Vorgabe des Bildes nicht, es ersetzt sie — deshalb
+    # steht `postgres` hier explizit davor.
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - archive_mode=on
+      - -c
+      - archive_command=pgbackrest --stanza=magister archive-push %p
+      - -c
+      - archive_timeout=60
+      # archive_timeout=60: auch eine ruhige Nacht schliesst jede Minute ein
+      # WAL-Segment ab. Ohne dies ist der jüngste wiederherstellbare Zeitpunkt
+      # bei geringer Last der letzte Segmentwechsel — das kann Stunden her
+      # sein, und die Zusage „jeder Stand" wäre unwahr, ohne dass es auffällt.
+      # Der Preis sind leere Segmente; komprimiert sind das wenige Kilobyte.
+      - -c
+      - max_wal_senders=3
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Nur lesend: der Container soll seine eigene Konfiguration nicht ändern
+      # können.
+      - /etc/pgbackrest.conf:/etc/pgbackrest.conf:ro
+      - /etc/pgbackrest/cert:/etc/pgbackrest/cert:ro
+      # WAL-Warteschlange und Sperren überleben einen Neustart des Containers.
+      # Ohne eigenes Volume beginnt die asynchrone Archivierung nach jedem
+      # `docker compose up` von vorn und schiebt bereits übertragene Segmente
+      # erneut.
+      - pgbackrest_spool:/var/spool/pgbackrest
+      - pgbackrest_state:/var/lib/pgbackrest
+    # Healthcheck bewusst UNVERÄNDERT (aus docker-compose.yml).
+    #
+    # Naheliegend wäre, hier auch die Archivierung zu prüfen. Das wäre falsch:
+    # `pg_stat_archiver.last_failed_wal` bleibt gesetzt, bis der Zähler
+    # zurückgesetzt wird. Ein einziger vorübergehender Fehler machte den
+    # Container damit dauerhaft "unhealthy" — und Compose würde die Datenbank
+    # neu starten, weil das Archivieren einmal geschluckt hat. Die Überwachung
+    # der Archivierung gehört in die Prüfungen des Runbooks (§7), nicht in
+    # einen Handgriff, der die Datenbank anfassen darf.
+    networks: [internal]
+
+  # Der Gegenpart, den der Backup-Host anspricht, wenn er die Sicherung
+  # anstösst. Eigener Container, weil `archive_command` im Postgres-Prozess
+  # läuft und dort kein zweiter Daemon Platz hat.
+  #
+  # Dasselbe Bild, dasselbe Datenverzeichnis (nur lesend genügt nicht:
+  # pgBackRest legt beim Sichern `backup_label` an), dieselbe Konfiguration.
+  pgbackrest-server:
+    build:
+      context: ../pgbackrest
+      dockerfile: Dockerfile.postgres
+    image: ${MAGISTER_POSTGRES_IMAGE:-ghcr.io/vita-brevis-gmbh/magister-postgres-pgbackrest:16}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # `postgres` im Container, damit die Rechte auf dem Datenverzeichnis
+    # stimmen. Ein `server` als root wäre einfacher und genau der Handgriff,
+    # den man später nicht mehr zurückdreht.
+    user: postgres
+    entrypoint: ["pgbackrest", "server"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - /etc/pgbackrest.conf:/etc/pgbackrest.conf:ro
+      - /etc/pgbackrest/cert:/etc/pgbackrest/cert:ro
+      - pgbackrest_spool:/var/spool/pgbackrest
+      - pgbackrest_state:/var/lib/pgbackrest
+    # Der Backup-Host erreicht diesen Port. Er gehört NICHT ins öffentliche
+    # Netz — auf dem Host mit der Firewall auf die Adresse des Backup-Hosts
+    # einschränken. Die gegenseitige Zertifikatsprüfung ist die Sicherung,
+    # die Firewall ist die Grenze davor.
+    ports:
+      - "${MAGISTER_PGBACKREST_BIND:-127.0.0.1}:${MAGISTER_PGBACKREST_PORT:-8433}:8433"
+    networks: [internal]
+
+volumes:
+  pgbackrest_spool:
+  pgbackrest_state:

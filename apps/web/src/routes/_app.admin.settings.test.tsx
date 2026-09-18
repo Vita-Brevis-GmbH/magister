@@ -6,7 +6,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import i18n from "@/i18n";
 import type { AppSettingsOut } from "@/api/types";
-import { SettingsForm } from "./_app.admin.settings";
+import { SettingsForm, SyncAdAction } from "./_app.admin.settings";
 
 beforeAll(async () => {
   await i18n.changeLanguage("de");
@@ -47,8 +47,6 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     ad_bind_password_set: false,
     ad_tls_verify: true,
     ad_tls_ca_pem: null,
-    ad_login_enabled: false,
-    ad_login_group: null,
     ad_users_search_base: "OU=Users,DC=example,DC=local",
     ad_computers_search_base: null,
     ad_sync_interval_minutes: 15,
@@ -155,6 +153,52 @@ describe("SettingsForm", () => {
     await user.click(screen.getByRole("button", { name: /speichern/i }));
     await waitFor(() => {
       expect(screen.getByRole("status")).toHaveTextContent(/gespeichert/i);
+    });
+  });
+});
+
+// Der AD-Abgleich ist eine Handlung auf den eigenen Daten, keine
+// Konfiguration. Als die Systemeinstellungen in die Konsole zogen (ADR-0017
+// D1), verschwand er mit ihnen aus der Kunden-Oberfläche — ohne dass das
+// jemand entschieden hätte. Beim ersten Kunden ist es aufgefallen.
+describe("SyncAdAction", () => {
+  function renderAction(): void {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={qc}>
+        <SyncAdAction />
+      </QueryClientProvider>,
+    );
+  }
+
+  it("triggers a full sync and reports the counts", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ synced_count: 42, group_count: 3, device_count: 0 }),
+    );
+    renderAction();
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /synchronisieren/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledOnce();
+    });
+    expect(fetchMock.mock.calls[0]![0]).toBe("/api/ad/sync?mode=full");
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe("POST");
+    await waitFor(() => {
+      expect(screen.getByText(/42/)).toBeInTheDocument();
+    });
+  });
+
+  it("explains a 503 instead of showing a generic error", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ detail: { code: "ad_unreachable" } }, { status: 503 }),
+    );
+    renderAction();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /synchronisieren/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/nicht erreichbar/i)).toBeInTheDocument();
     });
   });
 });

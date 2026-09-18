@@ -1,0 +1,134 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div style="display: flex; min-height: 100vh; align-items: center; justify-content: center; background: #ffffff; padding: 24px;">
+  <div class="card" style="width: 100%; max-width: 448px;">
+    <div style="padding: 24px 24px 0;">
+      <h1 class="serif" style="font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0;">Zweiten Faktor einrichten</h1>
+      <p class="muted" style="margin: 10px 0 0;">
+        Das lokale Konto <span class="mono">admin</span> ist der Notzugang, wenn Entra ID nicht erreichbar
+        ist. Er verlangt einen zweiten Faktor &mdash; ohne Einrichtung geht es nicht weiter.
+      </p>
+    </div>
+
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+      <div style="display: flex; justify-content: center;">
+        <div style="width: 168px; height: 168px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; background: #ffffff;">
+          <svg viewBox="0 0 21 21" width="144" height="144" shape-rendering="crispEdges" aria-label="QR-Code Platzhalter">
+            <rect width="21" height="21" fill="#ffffff"/>
+            <g fill="#020817">
+              <path d="M0 0h7v1H0zM8 0h1v1H8zM10 0h2v1h-2zM14 0h7v1h-7z"/>
+              <path d="M0 1h1v1H0zM6 1h1v1H6zM9 1h3v1H9zM14 1h1v1h-1zM20 1h1v1h-1z"/>
+              <path d="M0 2h1v1H0zM2 2h3v1H2zM6 2h1v1H6zM8 2h1v1H8zM11 2h1v1h-1zM14 2h1v1h-1zM16 2h3v1h-3zM20 2h1v1h-1z"/>
+              <path d="M0 3h1v1H0zM2 3h3v1H2zM6 3h1v1H6zM9 3h1v1H9zM12 3h1v1h-1zM14 3h1v1h-1zM16 3h3v1h-3zM20 3h1v1h-1z"/>
+              <path d="M0 4h1v1H0zM2 4h3v1H2zM6 4h1v1H6zM8 4h2v1H8zM11 4h1v1h-1zM14 4h1v1h-1zM16 4h3v1h-3zM20 4h1v1h-1z"/>
+              <path d="M0 5h1v1H0zM6 5h1v1H6zM10 5h1v1h-1zM12 5h1v1h-1zM14 5h1v1h-1zM20 5h1v1h-1z"/>
+              <path d="M0 6h7v1H0zM8 6h1v1H8zM10 6h2v1h-2zM14 6h7v1h-7z"/>
+              <path d="M9 7h1v1H9zM11 7h2v1h-2z"/>
+              <path d="M0 8h2v1H0zM3 8h2v1H3zM6 8h4v1H6zM12 8h2v1h-2zM15 8h1v1h-1zM17 8h4v1h-4z"/>
+              <path d="M1 9h1v1H1zM4 9h1v1H4zM8 9h1v1H8zM10 9h1v1h-1zM13 9h3v1h-3zM18 9h1v1h-1zM20 9h1v1h-1z"/>
+              <path d="M0 10h3v1H0zM5 10h2v1H5zM9 10h2v1H9zM12 10h1v1h-1zM14 10h2v1h-2zM17 10h2v1h-2zM20 10h1v1h-1z"/>
+              <path d="M2 11h1v1H2zM4 11h1v1H4zM7 11h1v1H7zM10 11h3v1h-3zM15 11h1v1h-1zM17 11h1v1h-1zM19 11h2v1h-2z"/>
+              <path d="M0 12h2v1H0zM3 12h3v1H3zM8 12h1v1H8zM11 12h1v1h-1zM13 12h2v1h-2zM16 12h2v1h-2zM20 12h1v1h-1z"/>
+              <path d="M8 13h2v1H8zM11 13h2v1h-2zM14 13h1v1h-1zM16 13h1v1h-1zM18 13h1v1h-1z"/>
+              <path d="M0 14h7v1H0zM9 14h1v1H9zM12 14h2v1h-2zM16 14h2v1h-2zM19 14h1v1h-1z"/>
+              <path d="M0 15h1v1H0zM6 15h1v1H6zM8 15h2v1H8zM11 15h1v1h-1zM14 15h1v1h-1zM17 15h1v1h-1zM20 15h1v1h-1z"/>
+              <path d="M0 16h1v1H0zM2 16h3v1H2zM6 16h1v1H6zM9 16h1v1H9zM12 16h3v1h-3zM16 16h2v1h-2zM19 16h2v1h-2z"/>
+              <path d="M0 17h1v1H0zM2 17h3v1H2zM6 17h1v1H6zM8 17h1v1H8zM10 17h1v1h-1zM13 17h1v1h-1zM15 17h1v1h-1zM18 17h1v1h-1z"/>
+              <path d="M0 18h1v1H0zM2 18h3v1H2zM6 18h1v1H6zM9 18h3v1H9zM14 18h2v1h-2zM17 18h2v1h-2zM20 18h1v1h-1z"/>
+              <path d="M0 19h1v1H0zM6 19h1v1H6zM8 19h1v1H8zM11 19h1v1h-1zM13 19h1v1h-1zM16 19h1v1h-1zM19 19h1v1h-1z"/>
+              <path d="M0 20h7v1H0zM8 20h2v1H8zM12 20h3v1h-3zM17 20h2v1h-2zM20 20h1v1h-1z"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Falls die Kamera nicht geht</label>
+        <div class="input" style="justify-content: space-between; background: #f8fafc;">
+          <span class="mono" style="font-size: 12px;">JBSW Y3DP EHPK 3PXP GQ7A</span>
+          <span style="font-size: 13px; font-weight: 500;">Kopieren</span>
+        </div>
+      </div>
+
+      <div>
+        <label class="label">Code aus der App</label>
+        <div class="input"><span class="ph mono" style="letter-spacing: 0.3em;">000000</span></div>
+      </div>
+
+      <div class="note">
+        <div style="font-weight: 500; font-size: 13px;">Wiederherstellungscodes</div>
+        <p class="muted" style="margin: 6px 0 10px; font-size: 13px;">
+          Zehn Codes, jeder einmal verwendbar. Sie werden nur jetzt angezeigt.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px;">
+          <span class="mono" style="font-size: 12px;">4KQ7-9RJP</span>
+          <span class="mono" style="font-size: 12px;">2M6X-D8LA</span>
+          <span class="mono" style="font-size: 12px;">7TVB-1NZC</span>
+          <span class="mono" style="font-size: 12px;">9HDK-3WQE</span>
+          <span class="mono" style="font-size: 12px;">6PYF-8SLM</span>
+          <span class="mono" style="font-size: 12px;">1RKG-5XJT</span>
+          <span class="muted" style="font-size: 12px;">und 4 weitere</span>
+        </div>
+        <button class="btn btn-outline btn-sm" type="button" style="margin-top: 12px;">Als Datei speichern</button>
+      </div>
+
+      <button class="btn btn-primary" type="button" style="width: 100%;">Einrichtung abschliessen</button>
+      <p class="muted" style="margin: 0; font-size: 13px; text-align: center;">
+        Der direkte AD-Login ist entfernt. Es bleiben Entra ID und dieses Konto.
+      </p>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

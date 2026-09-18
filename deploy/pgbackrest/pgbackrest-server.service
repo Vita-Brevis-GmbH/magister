@@ -1,0 +1,61 @@
+# pgBackRest TLS-Server.
+#
+# Läuft auf BEIDEN Maschinen — auf dem Backup-Host, damit der
+# Anwendungsserver WAL abliefern kann, und auf dem Anwendungsserver, damit der
+# Backup-Host die Sicherung anstossen kann (ADR-0016 Ebene 1, Entscheid E17).
+#
+# Der einzige Unterschied ist `User=`:
+#   Backup-Host:       User=pgbackrest   (dem gehört das Repository)
+#   Anwendungsserver:  User=postgres     (der muss pg_wal lesen können)
+#
+# Installation:
+#   sudo install -m 644 pgbackrest-server.service /etc/systemd/system/
+#   sudoedit /etc/systemd/system/pgbackrest-server.service   # User= setzen
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pgbackrest-server
+[Unit]
+Description=pgBackRest TLS Server
+Documentation=https://github.com/Vita-Brevis-GmbH/magister/blob/main/deploy/pgbackrest/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=postgres
+Group=postgres
+ExecStart=/usr/bin/pgbackrest server
+# pgBackRest liest die Konfiguration bei SIGHUP neu — kein Neustart nötig,
+# wenn eine Stanza dazukommt.
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=10
+
+# Härtung. Der Prozess liest Konfiguration und Zertifikate, spricht das Netz
+# und arbeitet in seinen eigenen Verzeichnissen — mehr braucht er nicht.
+#
+# Bewusst NICHT gesetzt: ProtectSystem=strict. Auf dem Anwendungsserver muss
+# dieser Prozess pg_wal und das Datenverzeichnis lesen, auf dem Backup-Host
+# ins Repository schreiben; eine schreibgeschützte Wurzel mit ReadWritePaths
+# für beide Fälle wäre eine Unit, die auf einer der zwei Maschinen falsch ist.
+# ProtectSystem=full lässt /usr und /boot schreibgeschützt und /etc lesbar.
+ProtectSystem=full
+ProtectHome=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

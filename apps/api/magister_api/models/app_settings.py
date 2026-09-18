@@ -75,10 +75,10 @@ class AppSettings(Base):
         Boolean, nullable=False, default=True, server_default=true()
     )
     ad_tls_ca_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Direct AD-credential login (username + password, LDAPS bind) as an
-    # alternative to Entra/OIDC. ``ad_login_enabled`` is the master switch;
-    # only members of ``ad_login_group`` (a DN or CN, direct membership) may
-    # sign in that way. No MFA on this path.
+    # DEPRECATED — the direct AD-credential login was removed (ADR-0015 D3).
+    # Nothing reads or writes these two any more; they only still exist so this
+    # release can be rolled back without a schema change. The next release drops
+    # them (rollback of migration ``0019_ad_login``). Do not use.
     ad_login_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default=false()
     )

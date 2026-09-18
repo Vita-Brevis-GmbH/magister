@@ -1,3 +1,24 @@
+# Console stack. The api and web services are NOT published to the host: the
+# only way in is the caddy service's management listener (ADR-0015 D1), and
+# that is bound to the management address, never 0.0.0.0.
+#
+# Required env (put them in a .env next to this file):
+#   COCKPIT_BIND_ADDRESS        — the management address, e.g. 10.0.0.5.
+#                                 Must not be 0.0.0.0; the api refuses to start.
+#   COCKPIT_MANAGEMENT_MARKER   — shared marker between caddy and api.
+#                                 Generate with: openssl rand -hex 32
+#   COCKPIT_CONNECTOR_MARKER    — the same for the connector listener, and it
+#                                 MUST be a different value. Same value on both
+#                                 would mean either marker opens either
+#                                 listener; the api refuses to start then.
+#   COCKPIT_HOSTNAME            — the name on the console certificate.
+#   COCKPIT_BOOTSTRAP_TOKEN     — break-glass API token.
+#   COCKPIT_SECRET_KEY          — pgcrypto key for the operators' TOTP
+#                                 secrets (ADR-0020 D2).
+#                                 Generate with: openssl rand -base64 48
+#
+# Before the first start: build the console UI, otherwise the listener answers
+# 404 on everything but /api/* — `cd cockpit/web && pnpm install && pnpm build`.
 services:
   postgres:
     image: postgres:16
@@ -15,7 +36,118 @@ services:
     environment:
       COCKPIT_DATABASE_URL: postgresql+asyncpg://cockpit:cockpit@postgres:5432/cockpit
       COCKPIT_BOOTSTRAP_TOKEN: ${COCKPIT_BOOTSTRAP_TOKEN:-change-me-in-prod}
+      # ADR-0015 D1: refuse anything that did not come through the management
+      # listener, and refuse to start if that listener looks public.
+      COCKPIT_REQUIRE_MANAGEMENT_LISTENER: "1"
+      COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required — openssl rand -hex 32}
+      COCKPIT_PUBLISHED_ADDRESS: ${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required — the management address, not 0.0.0.0}:4444
+      # ADR-0014: der Connector-Kanal auf 46200. Eigener Marker, zwingend
+      # anders als der Management-Marker.
+      COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required and must differ from COCKPIT_MANAGEMENT_MARKER}
+      COCKPIT_CONNECTOR_CA_CERT: /certs/connector-int.pem
+      COCKPIT_CONNECTOR_CA_KEY: /certs/connector-int-key.pem
+      # ADR-0019: der private Ed25519-Schlüssel, mit dem Einlösescheine
+      # signiert werden. Ohne ihn gibt es die Ausstellroute nicht — die
+      # Konsole läuft, kann aber keinen Operator-Zugriff öffnen.
+      COCKPIT_OPERATOR_SIGNING_KEY: /certs/operator-signing.pem
+      # ADR-0020 D2: damit ist das TOTP-Geheimnis der Operatoren in der
+      # Konsolen-Datenbank verschlüsselt (pgcrypto). Pflicht, und nicht mit
+      # einem Vorgabewert: ein voreingestellter Schlüssel wäre einer, der auf
+      # jeder Installation derselbe ist. Ohne ihn ist keine Anmeldung ausser
+      # dem Bootstrap-Token möglich. Gehört in die Sicherung
+      # (docs/runbooks/key-rotation.md §5).
+      COCKPIT_SECRET_KEY: ${COCKPIT_SECRET_KEY:?COCKPIT_SECRET_KEY is required — openssl rand -base64 48}
+      # --- Bereitstellung (ADR-0013 D2) ---------------------------------
+      # Ohne diese drei kann die Konsole zwar starten und Kunden erfassen,
+      # aber keinen einzigen bereitstellen: Rolle, Schema und Migration
+      # brauchen einen Verwaltungszugang zum Magister-Cluster und das
+      # Alembic-Verzeichnis der Datenebene. Der Fehler zeigt sich sonst erst
+      # beim ersten Kunden, mitten im Termin.
+      COCKPIT_TENANT_ADMIN_DSN: ${COCKPIT_TENANT_ADMIN_DSN:-}
+      COCKPIT_MAGISTER_API_DIR: ${COCKPIT_MAGISTER_API_DIR:-/opt/magister/apps/api}
+      COCKPIT_TENANT_EXTENSION_SCHEMA: ${COCKPIT_TENANT_EXTENSION_SCHEMA:-public}
+      # Die Revision, die ein frisch bereitgestelltes Schema tragen soll, und
+      # der Wert, gegen den eine Meldung der Datenebene geprüft wird
+      # (ADR-0021 D2). Leer heisst: keine Erwartung, jede Meldung wird
+      # angenommen.
+      COCKPIT_EXPECTED_SCHEMA_VERSION: ${COCKPIT_EXPECTED_SCHEMA_VERSION:-}
+      # --- Sicherung und Export (ADR-0016) -------------------------------
+      # Ohne Empfänger gibt es keine verschlüsselte Sicherung — und eine
+      # unverschlüsselte darf es nicht geben. Der Pfad muss unten als Volume
+      # eingehängt sein.
+      COCKPIT_BACKUP_SHARE_ROOT: ${COCKPIT_BACKUP_SHARE_ROOT:-}
+      COCKPIT_BACKUP_AGE_RECIPIENT: ${COCKPIT_BACKUP_AGE_RECIPIENT:-}
+      COCKPIT_EXPORT_ROOT: ${COCKPIT_EXPORT_ROOT:-}
+      # --- Agentenpakete (ADR-0014) --------------------------------------
+      # Verzeichnis mit den gebauten Paketen des Connector-Agenten. Die
+      # Konsole liest es nur; gebaut wird in der CI. Leer heisst „nicht
+      # eingerichtet" — die Oberfläche sagt das, statt eine leere Liste zu
+      # zeigen.
+      COCKPIT_AGENT_PACKAGE_DIR: ${COCKPIT_AGENT_PACKAGE_DIR:-}
     depends_on: [postgres]
-    ports: ["8001:8000"]
+    volumes:
+      # Die Zertifikate der Connector-CA (ADR-0014) liest die API selbst —
+      # sie stellt damit Agentenzertifikate aus. Ohne dieses Volume zeigt
+      # COCKPIT_CONNECTOR_CA_CERT auf eine Datei, die es im Container nicht
+      # gibt, und die erste Anmeldung eines Agenten scheitert.
+      - ./certs:/certs:ro
+      # Sicherungen und Exporte. Beide Pfade müssen im Container dieselben
+      # sein wie in den Einstellungen oben; ein leerer Wert heisst „nicht
+      # eingerichtet" und die zugehörige Funktion sagt das auch.
+      - ${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}:${COCKPIT_BACKUP_SHARE_ROOT:-/var/backups/magister}
+      - ${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}:${COCKPIT_EXPORT_ROOT:-/var/lib/magister/exports}
+      # Die Agentenpakete NUR lesend: die Konsole liefert sie aus, sie legt
+      # keine ab.
+      - ${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:ro
+    # Deliberately no `ports:` — everything goes through caddy below.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  caddy:
+    image: caddy:2.8-alpine
+    depends_on: [api]
+    # THE line that keeps the console off the internet: published on the
+    # management address only. Never change the left-hand side to 0.0.0.0 —
+    # the api would still refuse to start, but do not rely on that.
+    ports:
+      - "${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required}:4444:4444"
+      # Der Connector-Kanal ist ABSICHTLICH öffentlich: der Agent ruft aus dem
+      # Kundennetz an, damit LDAP das Kundennetz nicht verlässt (ADR-0014).
+      # Geschützt wird er durch Client-Zertifikat und API-Key, nicht durch die
+      # Bindung. Kein Rückfall auf 443 (E11).
+      - "0.0.0.0:46200:46200"
+    environment:
+      COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-console.mgmt.vitabrevis.ch}
+      # Zweite Adresse desselben Listeners: die IP oder der FQDN der
+      # Maschine. Wer die Konsole so aufruft, bekommt sonst 421.
+      COCKPIT_EXTRA_HOST: ${COCKPIT_EXTRA_HOST:-localhost}
+      COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-connect.vitabrevis.ch}
+      COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required}
+      COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy-data:/data
+      # Die gebaute Konsolen-Oberfläche (`cd cockpit/web && pnpm build`).
+      # Als Verzeichnis und nicht als Image-Schicht: die Oberfläche ändert
+      # sich öfter als der Listener, und ein Neubau von Caddy dafür wäre
+      # Aufwand ohne Grund.
+      - ../web/dist:/srv/console:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        for f in /certs/operator-ca.pem /certs/console.pem /certs/console-key.pem \
+                 /certs/connector.pem /certs/connector-key.pem; do
+          if [ ! -f "$$f" ]; then
+            echo "caddy: $$f is missing — the console listener needs the platform CA and"
+            echo "       a server certificate. See cockpit/deploy/caddy/README.md and"
+            echo "       docs/runbooks/platform-ca.md. Refusing to start."
+            exit 1
+          fi
+        done
+        exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
 volumes:
   cockpit-pg:
+  caddy-data:

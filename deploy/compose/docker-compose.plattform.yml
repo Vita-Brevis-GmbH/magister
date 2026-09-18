@@ -1,0 +1,75 @@
+# Die Datenebene im GEHOSTETEN Betrieb (ADR-0013).
+#
+# `docker-compose.yml` beschreibt die Installation beim Kunden: ein Mandant,
+# ein Name, ein selbstsigniertes Zertifikat von Caddy. Auf der Plattform
+# stehen viele Kunden auf derselben Maschine, und drei Dinge ändern sich:
+#
+#   1. Caddy bedient alle Kundennamen aus EINEM Block und reicht den
+#      Hostnamen weiter (Caddyfile.mandanten). Das Zertifikat kommt aus der
+#      Plattform-CA und wird eingehängt, nicht von Caddy erzeugt.
+#   2. Die Mandantenliste kommt aus der Konsole, nicht aus der Umgebung
+#      (ADR-0013 D4). Die Datenebene hält deshalb nur einen Verweis auf die
+#      Konsole plus die Nachweise — DSNs und Kundenschlüssel stehen in der
+#      `.env` und kommen über `env_file` in den Container.
+#   3. OIDC hat pro Kunde eine eigene Einbindung; ein fester Redirect auf
+#      EINEN Namen wäre hier falsch. Die Datenebene setzt ihn je Anfrage aus
+#      dem Hostnamen zusammen.
+#
+# Aufruf:
+#   docker compose -f docker-compose.yml -f docker-compose.plattform.yml up -d
+# Mit lokal gebauten Abbildern zusätzlich `-f docker-compose.build.yml`.
+services:
+  # Die Konsole legt Rollen und Schemas in DIESER Instanz an (ADR-0013 D2).
+  # Sie steht im anderen Stack, deshalb hängt Postgres zusätzlich am
+  # gemeinsamen Netz — und weiterhin an keinem Host-Port: erreichbar ist es
+  # nur für Container, die an diesem Netz hängen.
+  postgres:
+    networks:
+      internal:
+      plattform:
+        # Ein EIGENER Name im gemeinsamen Netz, und das ist kein Schmuck:
+        # der Konsolen-Stack hat selbst einen Dienst „postgres". Unter dem
+        # Namen würde die Konsole ihre eigene Datenbank erwischen und die
+        # Kundenschemas dort anlegen — in der Datenbank, die laut ADR-0013 D4
+        # gerade keine Kundendaten sehen soll.
+        aliases: [magister-db]
+
+  magister-api:
+    environment:
+      # Die Registry kommt aus der Konsole. Ohne diese drei sieht die
+      # Datenebene genau einen erfundenen Mandanten („default", Schema
+      # public) und bedient jeden echten Kunden mit Wartung.
+      MAGISTER_CONSOLE_REGISTRY_URL: ${MAGISTER_CONSOLE_REGISTRY_URL:?MAGISTER_CONSOLE_REGISTRY_URL is required — ohne Konsole keine Mandanten}
+      MAGISTER_CONSOLE_REGISTRY_TOKEN: ${MAGISTER_CONSOLE_REGISTRY_TOKEN:?MAGISTER_CONSOLE_REGISTRY_TOKEN is required}
+      MAGISTER_CONSOLE_MANAGEMENT_MARKER: ${MAGISTER_CONSOLE_MANAGEMENT_MARKER:?MAGISTER_CONSOLE_MANAGEMENT_MARKER is required — ohne Marker verwirft die Konsole die Anfrage mit 404}
+      MAGISTER_CONSOLE_REGISTRY_INTERVAL_S: ${MAGISTER_CONSOLE_REGISTRY_INTERVAL_S:-300}
+      # Der AD-Abgleich läuft über den Connector im Kundennetz (ADR-0014,
+      # ADR-0022), nicht über LDAP von hier aus.
+      MAGISTER_AD_CONNECTOR_ENABLED: "1"
+      # Die Sonde für PRTG (ADR-0021 D6). Ohne Wert gibt es sie nicht — und
+      # eine Überwachung, die nichts abfragt, meldet auch nichts.
+      MAGISTER_HEALTH_TOKEN: ${MAGISTER_HEALTH_TOKEN:?MAGISTER_HEALTH_TOKEN is required — sonst hat PRTG keine Sonde}
+      # Kein fester Redirect: jeder Kunde hat seine eigene Entra-Einbindung,
+      # und der Rückweg gehört an seinen eigenen Namen.
+      MAGISTER_OIDC_REDIRECT_URI: ""
+
+  caddy:
+    environment:
+      MAGISTER_TENANT_DOMAIN: ${MAGISTER_TENANT_DOMAIN:?MAGISTER_TENANT_DOMAIN is required — die Ebene, unter der die Kundennamen liegen}
+      MAGISTER_DEFAULT_SNI: ${MAGISTER_DEFAULT_SNI:?MAGISTER_DEFAULT_SNI is required — ein Aufruf ohne SNI bekommt sonst 421}
+    volumes:
+      - ../caddy/Caddyfile.mandanten:/etc/caddy/Caddyfile:ro
+      # Zertifikat und Schlüssel für alle Kundennamen, ausgestellt aus der
+      # Plattform-CA. Read-only eingehängt: Caddy stellt hier nichts aus.
+      - ${MAGISTER_TENANT_CERT_DIR:?MAGISTER_TENANT_CERT_DIR is required — dort liegen tenants.pem und tenants-key.pem}:/certs:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    # Kein Warten auf /certs/tls.caddy: das gilt der Einzelinstallation, die
+    # ihr Zertifikat von der Anwendung bekommt. Hier liegt es vorher da.
+    entrypoint: ["caddy"]
+    command: ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+
+networks:
+  plattform:
+    external: true
+    name: ${PLATTFORM_NETZ:-magister-plattform}

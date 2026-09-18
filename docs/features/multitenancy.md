@@ -1,0 +1,1031 @@
+# Mandantenfähigkeit — Planung
+
+> Umsetzungsplan zu [ADR-0013](../adr/0013-mandantenfaehigkeit-control-plane.md)
+> (Mandantenfähigkeit), [ADR-0014](../adr/0014-ad-connector-agent.md)
+> (AD-Connector-Agent), [ADR-0015](../adr/0015-authentisierungs-haertung.md)
+> (Authentisierungs-Härtung) und
+> [ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md) (Sicherung,
+> Wiederherstellung, Export) und
+> [ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)
+> (Systemeinstellungen und Rechte in der Konsole) und
+> [ADR-0018](../adr/0018-globale-vorlagen.md) (globale Vorlagen) und
+> [ADR-0019](../adr/0019-operator-zugriff.md) (Operator-Zugriff) und
+> [ADR-0020](../adr/0020-konsolen-anmeldung.md) (Konsolen-Anmeldung) und
+> [ADR-0021](../adr/0021-betrieb-im-grossen.md) (Betrieb im Grossen) und
+> [ADR-0022](../adr/0022-ad-abgleich-ueber-den-connector.md) (AD-Abgleich über
+> den Connector).
+> Status (2026-09-11): **alle Phasen stehen** — 0, 1, 2, 2a, 2b, 3, 4, 5, 5a
+> und 6. Entscheid E21 (Konsolen-Anmeldung über Entra ID) ist
+> **gegenstandslos** — ADR-0020 entscheidet anders.
+> Mockup der Oberfläche: `docs/mockups/multitenancy-console/`.
+
+## 1 · Ziel
+
+Eine gehostete Magister-Plattform, auf der mehrere Kunden (Schulträger und
+Firmen) betrieben werden. Vita Brevis erfasst Kunden und pflegt deren
+Systemeinstellungen zentral; Kunden melden sich unter einem eigenen Pfad an und
+sehen von der Plattform nichts. Die Trennung ist auf Datenbankebene erzwungen.
+
+**Kein Sonderweg für Einzelinstallationen.** Jede Installation ist
+mandantenfähig; eine Installation beim Kunden hat einfach genau einen Mandanten
+— gleiche Auflösung, gleicher Agent, gleiche Ports, gleicher Code (ADR-0013 D8).
+On-prem bleibt gebraucht und bekommt keine eingeschränkte Variante.
+
+## 2 · Begriffe
+
+| Begriff | Bedeutung |
+|---|---|
+| Kunde / Mandant | Ein Schulträger oder eine Firma. Eigenes Schema, eigene DB-Rolle, eigener Pfad. |
+| Standort | Bisherige `schools`-Zeile. Bleibt die Scope-Einheit *innerhalb* eines Kunden. |
+| Konsole / Control Plane | Global-Admin-Oberfläche plus deren API und Datenbank. Weiterentwicklung von `cockpit/`. |
+| Kunden-Ebene / Data Plane | Die bestehende `magister-api` plus `magister-web`, pro Anfrage auf genau einen Kunden aufgelöst. |
+| Global Admin | Vita-Brevis-Rolle: Kunden, Systemeinstellungen, Rechte, Vorlagen. |
+| Global Operator | Vita-Brevis-Rolle: alle Kunden sehen und bedienen, keine Plattformkonfiguration. |
+| Kunden-Admin | Bisherige Rolle `admin`. Verliert Systemeinstellungen und die Rechte-Matrix. |
+| Connector-Agent | Kleiner Dienst im Kundennetz, der ausgehend zur Plattform telefoniert und dort die AD-Aufträge abholt. Einziger Prozess mit AD-Zugang. |
+
+## 3 · Zielbild
+
+```mermaid
+flowchart TB
+  subgraph VB["Vita Brevis"]
+    Ops[Global Admin / Operator] -->|OIDC + Hardware-Key| Console[Magister Console<br/>console.magister.ch]
+    Console --> CDB[(Konsolen-DB<br/>Registry, Konfig, Vorlagen<br/>keine Personendaten)]
+  end
+
+  subgraph Platform["Gehostete Kunden-Ebene"]
+    Caddy[Caddy] --> API[magister-api<br/>Mandanten-Auflösung pro Anfrage]
+    API --> PG[(PostgreSQL)]
+  end
+
+  KundeA[Kunde A<br/>wattwil.magister.ch] --> Caddy
+  KundeB[Kunde B<br/>uzwil.magister.ch] --> Caddy
+
+  PG --- SA[Schema t_wattwil<br/>Rolle r_wattwil]
+  PG --- SB[Schema t_uzwil<br/>Rolle r_uzwil]
+
+  Console -.->|Reconciler: Konfig, Rechte,<br/>Vorlagen materialisieren| PG
+  Console -.->|befristete, begründete<br/>Assertion| API
+
+  AgentA[Agent Kunde A<br/>vor Ort] -->|TCP 46200 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentB[Agent Kunde B<br/>vor Ort] -->|TCP 46200 ausgehend<br/>mTLS + API-Key| Caddy
+  AgentA -->|LDAPS 636<br/>bleibt im Kundennetz| ADA[AD Kunde A]
+  AgentB -->|LDAPS 636<br/>bleibt im Kundennetz| ADB[AD Kunde B]
+```
+
+Die Agenten bauen ihre Verbindung selbst auf; die Plattform öffnet nie eine
+Verbindung ins Kundennetz.
+
+Drei Listener mit drei Erreichbarkeiten:
+
+| Listener | Adresse | Hostname | Wer | Aus dem Internet |
+|---|---|---|---|---|
+| Kundenoberfläche | `0.0.0.0:443` | `<kunde>.magister.ch` | Lehr- und Leitungspersonen, MFA über Entra | erreichbar, WAF davor |
+| Konsole | `10.0.0.5:4444` | `console.magister.ch` | Global Admin, Global Operator | **nicht geroutet** |
+| Connector | `0.0.0.0:46200` | `connect.magister.ch` | Connector-Agenten, nur mit Client-Zertifikat | erreichbar |
+
+Das Usermanagement des Kunden gehört ins Internet, das Global Management nicht.
+Quell-IP-Regeln macht die Fortigate mit der WAF, nicht Magister.
+
+Die gestrichelten Pfeile laufen **nie** im Anfrage-Pfad eines Kunden: die
+Konsole schreibt in die Kundenschemas, aber kein Kunden-Request liest die
+Konsolen-DB.
+
+## 4 · Datenmodell
+
+### 4.1 Konsolen-Datenbank (neu)
+
+| Tabelle | Inhalt |
+|---|---|
+| `tenants` | `id`, `slug`, `name`, `customer_no`, `status` (`provisioning`/`active`/`suspended`/`offboarding`), `profile` (`school`/`company`/`neutral`), `path_prefix`, `custom_domain`, `isolation_mode` (`schema`/`database`/`cluster`), `dsn_ref`, `schema_name`, `db_role`, `schema_version`, `created_at` |
+| `tenant_settings` | Autoritative Fassung dessen, was heute `app_settings` ist — **pro Kunde**, ohne `CHECK id = 1`. Secrets als Envelope-Referenz, nicht als Wert. |
+| `tenant_secrets` | Pro Kunde: Datenschlüssel (Audit), AD-Bind-Passwort, OIDC-Client-Secret. Envelope-verschlüsselt mit dem Plattform-Schlüssel. |
+| `tenant_entitlements` | Edition, Modul-Freischaltung, Benutzer-Limit, Lastgrenzen. |
+| `global_roles` / `global_role_capabilities` | Globale Rechte-Matrix, pro Profil ein Standard-Set. |
+| `global_document_templates` / `global_group_templates` | Globale Vorlagen mit `version` und `tenant_may_override`. |
+| `rollouts` | Ein Auftrag je Ausrollung (Konfig, Rechte, Vorlagen, Migration) mit Status pro Kunde. |
+| `provisioning_jobs` | Schritte beim Anlegen eines Kunden, wiederaufnehmbar. |
+| `platform_operators` / `platform_role_assignments` | Global Admin / Global Operator. |
+| `operator_access_grants` | Jeder Zugriff im Kundenkontext: Operator, Kunde, Grund/Ticket, Beginn, Ende. |
+| `platform_audit_events` | Plattform-Audit, getrennt vom Kunden-Audit. |
+| `connector_agents` | Pro Kunde ein bis mehrere Agenten: Name, Status, Version, letzter Kontakt, SPKI-Fingerprint des Client-Zertifikats, Ablaufdatum, argon2id-Hash des API-Keys, Widerruf-Flag. |
+| `connector_enrollments` | Einmal-Token für die Anmeldung eines Agenten: Kunde, Hash, Ablauf, eingelöst-am, ausgestellt-von. |
+| `connector_jobs` | Auftragswarteschlange: Kunde, Methode (aus der Allowlist), Nutzlast, Status, TTL, Ergebnis, HMAC. Nutzlasten mit Passwörtern werden nach Abschluss sofort gelöscht. |
+| `platform_ca` | CA-Zustand: die zwei Intermediates (Connector, Operator), Seriennummern, Widerrufs-Flags (intern, kein CRL-Vertrieb). |
+| `tenant_backups` | Eine Zeile pro Sicherung: Kunde, Zeitpunkt, Art (`daily`/`monthly`/`pre_migration`/`manual`), Ablage, Grösse, Prüfsumme, Schlüssel-Id, `verified_at`. |
+| `tenant_backup_policy` | Aufbewahrung, Zeitfenster, Ziel-Ablagen, RPO/RTO pro Kunde — Vertragswerte. |
+| `restore_jobs` / `export_jobs` | Wiederherstellungen (Quelle, Ziel-Schema, Freigaben) und Exporte (Umfang, Prüfsumme, Ablauf des Download-Links). |
+
+### 4.2 Kundenschema (Änderungen)
+
+- `app_settings` bleibt als **materialisierte Kopie** bestehen; neue Spalten
+  `managed_by` (`platform`) und `source_version`. Schreibzugriff nur für den
+  Reconciler (Rolle `r_reconciler`, nicht `r_<slug>`).
+- `roles` / `role_capabilities` dito: Kopie, schreibgeschützt für den Kunden.
+- `document_templates` / `group_templates`: neue Spalten `origin`
+  (`global`/`tenant`), `global_template_id`, `global_version`,
+  `tenant_may_override`. Auflösung: **Kunde+Standort → Kunde → global →
+  eingebaut**.
+- `sessions`: neue Spalte `tenant_id` (Gegenprobe zum aufgelösten Kunden) und
+  `operator_grant_id` für Operator-Sitzungen.
+- `audit_events`: die Ereignisse `settings_pushed`, `templates_pushed`,
+  `rights_pushed`, `operator_access_started`, `operator_access_ended` sind für
+  den Kunden lesbar — Transparenz ist Teil der Zusage.
+- `role_assignments` bleibt unverändert beim Kunden (siehe offener Entscheid E2).
+- `local_admins`: neue Spalten `totp_secret_enc`, `totp_confirmed_at`,
+  `totp_last_step`, `recovery_codes`, dazu `totp_reset_at` / `totp_reset_by` und
+  `mfa_suspended_until` für die befristete Aufhebung (ADR-0015 D2). Gehostet ist
+  dieser Anmeldeweg ganz abgeschaltet; on-prem ist er der Notzugang.
+- `app_settings`: `ad_login_enabled` und `ad_login_group` fallen weg (ADR-0015 D3).
+
+## 5 · Anfrage-Pfad
+
+1. Caddy nimmt `*.magister.ch` auf einem Wildcard-Zertifikat an und gibt den
+   `Host` als `X-Forwarded-Host` weiter.
+2. Middleware löst den Hostnamen gegen einen Registry-Cache auf: unbekannt →
+   404, `suspended` → eigene Seite, Stand ≠ Kopf-Version → 503 Wartung. Bei
+   einer Installation mit genau einem Mandanten trägt dessen Registry-Zeile den
+   konfigurierten Hostnamen — dieselbe Auflösung, nur eine Zeile.
+3. Aus dem Registry-Eintrag (DSN + Schema) kommt die Engine; pro Transaktion
+   `SET LOCAL ROLE r_<slug>` und `SET LOCAL search_path = t_<slug>`.
+4. Zusicherung: `current_user` passt zum Kunden der Anfrage, sonst Abbruch.
+5. Session-Cookie wird gegen `sessions.tenant_id` geprüft; eine Session von
+   Kunde A auf der Subdomain von Kunde B → 401. Weil jeder Kunde eine eigene
+   Origin hat, trennt der Browser Cookies und Speicher ohnehin schon.
+6. Ab hier ist der bestehende Code unverändert — inklusive `school_id`-Filter,
+   der weiterhin *innerhalb* eines Kunden gilt.
+
+Die `SET LOCAL`-Variante erlaubt **einen** gemeinsamen Verbindungs-Pool: beide
+Einstellungen enden mit der Transaktion, ein Pool kann nichts weitertragen.
+
+Neuer Kunde heisst betrieblich: ein DNS-Eintrag, eine Registry-Zeile, ein
+Entra-Redirect-URI. Das Wildcard-Zertifikat deckt die Subdomain ohne weiteres
+Zutun ab.
+
+## 6 · Was zieht wohin
+
+| Heute | Künftig |
+|---|---|
+| `admin_settings.py` (`/admin/app-settings`) | **Konsole** — die *Politik*. In der gehosteten Betriebsart nicht gemountet; on-prem bleibt sie (ADR-0017 D1/D2). Die vier Geheimnisse bleiben im Kundenschema. |
+| `admin_rbac.py` (`/admin/rbac`) | **Konsole.** In der gehosteten Betriebsart nicht gemountet; on-prem bleibt sie. |
+| `admin_modules.py` | **Konsole** (Freischaltung); `/me/modules` bleibt lesend beim Kunden. |
+| `admin_system.py`, `admin_maintenance.py`, `services/web_tls.py` | **Konsole / Plattform-Betrieb.** |
+| `admin_local_admin.py` | **Entfällt** in gehosteter Betriebsart (kein lokales Notkonto beim Kunden). |
+| `admin_document_templates.py`, `group_templates.py` | Autorenstelle **Konsole**; Kunde liest, und überschreibt nur wo erlaubt. |
+| `admin_roles.py` (Rollen*zuweisung* an Personen) | **Bleibt beim Kunden** — siehe E2. |
+| `admin_sync.py` (Sync auslösen) | Bleibt beim Kunden; Intervall und Ziele kommen global. |
+| `POST /auth/login/ad` | **Entfällt** (ADR-0015 D3) — der Code wird entfernt, nicht abgeschaltet. |
+| `POST /auth/login/local` | Bleibt on-prem, zweistufig mit TOTP; gehostet abgeschaltet. |
+| `routers/ad_rpc.py` (eingehendes AD-RPC) | Bleibt für den Monolith und den Container-Split; gehostet tritt der Connector-Rücken daneben (ADR-0014). |
+| — neu — | `/connector/*` (Anmeldung, Auftragsabruf, Ergebnis, Zertifikatserneuerung): eigener Listener auf `0.0.0.0:46200`, nur mit Client-Zertifikat, nicht Teil der Kunden-API. |
+| — neu — | `/auth/local/totp/*` (Einrichtung, Prüfung) beim Kunden; die vier Reset-Eingriffe liegen in der Konsole beziehungsweise im CLI. |
+| — neu — | `magister-cli local-admin totp-reset` (`--new-recovery-codes`, `--disable`) für On-prem-Installationen ohne Konsole. |
+| Alles Fachliche (Benutzer, Klassen, Abteilungen, Geräte, Importe, Briefe, Auswertungen, Audit) | Bleibt beim Kunden. |
+
+## 7 · Phasen
+
+### Phase 0 — Authentisierungs-Härtung ← **hier fangen wir an**
+
+Braucht keine Mandantenfähigkeit und verkleinert die Angriffsfläche, bevor
+irgendetwas gehostet wird. Läuft allein, nicht parallel zu Phase 1 — beide
+fassen denselben Auth- und DB-Bereich an. Referenz: ADR-0015.
+
+- ✅ **AD-Login entfernen, Release N.** Endpunkt `/auth/login/ad`,
+  `complete_ad_login`, `AdClient.authenticate` samt Hilfsfunktionen,
+  `authenticate` aus der RPC-Allowlist, das Settings-Feld in Service, Schema und
+  Config, Formular und Einstellungs-Abschnitt im Frontend, 44 i18n-Schlüssel in
+  vier Sprachen. Neu: `Settings.reject_removed_env()` bricht den Start ab, wenn
+  `MAGISTER_AD_LOGIN_ENABLED` noch auf einen wahren Wert gesetzt ist, und warnt
+  bei einem veralteten `=false`. Zwei Regressionstests halten es fest: keine
+  Route unter `/auth/login/ad`, und `authenticate` weder in `ALLOWED_METHODS`
+  noch auf `AdClient`/`AdRpcClient`. Die Spalten `ad_login_enabled` /
+  `ad_login_group` bleiben als deprecated stehen, damit dieses Release ohne
+  Schemaänderung zurückrollbar ist.
+- **AD-Login, Release N+1:** Alembic entfernt die beiden Spalten (Rückbau von
+  `0019_ad_login`).
+- ✅ **TOTP für lokale Konten**, verpflichtend. Der Login ist zweistufig:
+  das Passwort ergibt nur einen signierten, fünf Minuten gültigen Nachweis plus
+  die nächste Stufe (`totp` oder erzwungene Einrichtung) — **keine Sitzung**.
+  Damit gibt es keinen halb privilegierten Zustand, den jeder andere Endpunkt
+  gegen prüfen müsste. Zehn Wiederherstellungscodes, argon2id-gehasht,
+  einmalig, einmal angezeigt. QR als serverseitiges Inline-SVG (`segno`), CSP
+  unverändert. Migration `0044_local_admin_totp`.
+- ✅ **Vier Reset-Eingriffe** (ADR-0015 D2): zurücksetzen, neue
+  Wiederherstellungscodes, Konto deaktivieren, MFA-Pflicht befristet (24 h,
+  selbst ablaufend) aufheben — als Konsolen-API unter
+  `/admin/local-admin/mfa*` **und** als `magister-cli local-admin totp-reset`
+  für Installationen ohne Konsole. Jeder Eingriff mit eigenem,
+  kundensichtbarem Audit-Ereignis. Das Notkonto bleibt ein Singleton (E12).
+  Runbook: [`docs/runbooks/local-admin-mfa.md`](../runbooks/local-admin-mfa.md).
+- ✅ **Eigener Fehlversuchszähler für den zweiten Faktor**
+  (`local_admins.mfa_failed_count`). Nötig, weil ein korrektes Passwort
+  `failed_login_count` zurücksetzt — dort mitzuzählen hätte jedem, der das
+  Passwort hat, unbegrenzte Versuche am zweiten Faktor gelassen. Zwei Budgets,
+  eine gemeinsame 15-Minuten-Sperre.
+- **Plattform-CA anlegen** (E9): Offline-Root auf zwei verschlüsselten
+  USB-Sticks im Tresor, Passphrase getrennt bei zwei Verwahrern, zwei
+  Intermediates im Betrieb, dazu das dokumentierte Verfahren für Ausstellung,
+  Erneuerung und Verlust. Verwahrer und Ablage sind entschieden; die Zeremonie
+  selbst ist Handarbeit an einem Rechner ohne Netz —
+  [`scripts/platform-ca-ceremony.sh`](../../scripts/platform-ca-ceremony.sh)
+  führt sie schrittweise durch und schreibt das Protokoll mit.
+  Runbook: [`docs/runbooks/platform-ca.md`](../runbooks/platform-ca.md).
+- **Konsolen-Listener** vorbereiten: eigener Site-Block, Bindung an die interne
+  Adresse, Client-Zertifikat gegen die private CA, Marker-Riegel in der
+  Anwendung. (Die Konsole selbst kommt in Phase 2 — Listener und CA sind die
+  Vorarbeit, die der Connector in Phase 2a ebenfalls braucht.)
+- **Abnahme:** Kein Anmeldeweg ohne zweiten Faktor; ein Contract-Test verweigert
+  jede Route unter `/auth/login/ad`; ein lokales Konto ohne bestätigtes TOTP
+  erreicht ausschliesslich die Einrichtungsseite; ein zurückgesetztes Konto
+  landet beim nächsten Anmelden zwingend in der Einrichtung und bekommt dabei
+  kein Geheimnis angezeigt; eine aufgehobene MFA-Pflicht greift nach 24 Stunden
+  von selbst wieder; der Konsolen-Listener ist auf der öffentlichen Adresse
+  nicht gebunden und lehnt ohne Client-Zertifikat den Handshake ab.
+
+### Phase 1 — Mandanten-Abstraktion mit genau einem Kunden ✅
+
+Der wichtigste De-Risking-Schritt: die ganze Mechanik einbauen, **ohne**
+Verhaltensänderung.
+
+- ✅ **Registry** (`magister_api/tenancy/registry.py`) aus `MAGISTER_TENANTS`,
+  noch ohne Konsole. Die Validierung ist die Sicherheitsgrenze für Bezeichner,
+  weil `SET` keine Bind-Parameter nimmt; ab zwei Mandanten erzwingt sie
+  ausserdem eigene Anmelderolle, eigenen Hostnamen und eigenes Schema pro Kunde.
+- ✅ **Auflösungs-Middleware** (`tenancy/middleware.py`): unbekannter Hostname →
+  404 (nicht 400 — eine unterscheidende Antwort verrät die Kundenliste), nicht
+  aktiv → 503, Schema-Stand ≠ Kopf-Version → 503 Wartung.
+- ✅ **Engine-Registry** (`tenancy/engines.py`) je DSN, **ein Pool pro Kunde**.
+- ✅ **Zusicherung** (`tenancy/scope.py`): `search_path` setzen, dann `session_user`,
+  `current_user` und `search_path` gegen die Datenbank prüfen, bevor der erste
+  Query läuft.
+- ✅ **Ein einziger Eingriff im Anwendungscode:** `db.get_session` nimmt jetzt
+  den Request und liefert eine mandantengebundene Transaktion. Kein Router,
+  kein Service, kein Repository wurde angefasst — alle 40 Aufrufstellen hängen
+  an `Depends(get_session)`.
+- ✅ **Alembic pro Schema** (`version_table_schema` + `search_path`), die 44
+  bestehenden Migrationen unverändert. Kopf-Version als Konstante in
+  `tenancy/version.py`, gegen den echten Alembic-Kopf getestet.
+- ✅ **Migrations-Runner** `magister-cli tenants migrate`: Dump pro Kunde
+  **vor** der Migration (ADR-0016 D6), Kanarienvogel zuerst, Abbruch bei
+  Fehler, `--keep-going` nur für die Nicht-Kanarienvögel.
+- ✅ **Schema-Umzug** `public` → `t_default`:
+  `scripts/schema-move-to-tenant.sql`, mit Vorprüfungen, Eigentumsübergabe und
+  Nachprüfung, dass in `public` keine Anwendungstabelle zurückbleibt.
+- ✅ Kein `MAGISTER_MULTITENANT`-Schalter: eine Installation mit einem Mandanten
+  löst über den konfigurierten Hostnamen seiner Registry-Zeile auf — dieselbe
+  Middleware, dieselben Abfragen (E4, ADR-0013 D8). Ohne `MAGISTER_TENANTS`
+  entsteht die Zeile aus `MAGISTER_DATABASE_URL`.
+- ✅ **Abnahme:** alle 856 bestehenden Tests grün und unverändert; ein
+  Contract-Test gegen echtes Postgres beweist, dass eine Mandantenrolle das
+  Nachbarschema nicht lesen, nicht in dessen Rolle wechseln und es nicht einmal
+  im Katalog sehen kann (`tests/integration/test_tenant_isolation.py`); ein
+  zweiter Test führt eine echte HTTP-Anfrage ohne jede Überschreibung durch die
+  ganze Kette (`tests/integration/test_tenant_request_path.py`).
+
+**Drei Dinge, die beim Bauen anders herauskamen als geplant** — alle drei sind
+gemessen, nicht überlegt:
+
+1. **`SET LOCAL ROLE` ist keine Grenze gegen SQL-Injection.** Postgres prüft
+   `SET ROLE` gegen den Sitzungsbenutzer; eine gemeinsame Anmelderolle kann
+   aus jedem Mandanten in jeden anderen wechseln. Folge: eigene Anmelderolle
+   pro Kunde, ein Pool pro Kunde. Siehe die Korrektur in ADR-0013 D1.
+2. **Migrieren als Superuser macht das Schema für den Kunden unbenutzbar.**
+   Die Tabellen gehören dann dem Superuser, und die Mandantenrolle bekommt
+   beim ersten Query „permission denied for table“. Der Runner migriert
+   deshalb mit der Anmelderolle des Kunden.
+3. **Das Erweiterungsschema muss auf dem `search_path` stehen**, sonst findet
+   der Audit-Dienst `pgp_sym_encrypt` nicht — aber als *zweiter* Eintrag und
+   in einem Schema ohne Anwendungstabellen, sonst könnte eine fehlende Tabelle
+   still darauf zurückfallen. Der Umzug prüft das nach.
+
+### Phase 2 — Konsole und Bereitstellung (API fertig, Oberfläche und OIDC offen)
+
+- ✅ **Konsolen-DB** mit `tenants` und `provisioning_jobs`
+  (`cockpit/api/alembic/versions/0004_tenants.py`). Kein DSN und kein Passwort
+  in der Konsole: `dsn_ref` ist ein **Verweis**, den die Datenebene aus ihrem
+  eigenen Geheimnisspeicher auflöst. Die Konsole kann Sitzungen in jeden Kunden
+  ausstellen — ein Geheimnis, das dort nicht liegt, kann dort nicht gestohlen
+  werden.
+- ✅ **Bereitstellungs-Auftrag** in fünf Schritten (`create_role`,
+  `create_schema`, `migrate`, `data_key`, `activate`), jeder idempotent, mit
+  Protokoll je Schritt. `POST /api/tenants` legt an und fährt den Auftrag;
+  `POST /api/tenants/{id}/provisioning/resume` macht **ab der Abbruchstelle**
+  weiter, nicht von vorn.
+- ✅ **Kundenliste und -Detail** (`GET /api/tenants`, `GET /api/tenants/{id}`),
+  **Sperren und Entsperren** (`suspend` mit Pflicht-Begründung, `unsuspend`).
+  Sperren ist eine Aussage über die Bedienung, nicht über den Bestand: Rolle,
+  Schema und Daten bleiben stehen, sonst wäre Entsperren eine Wiederherstellung.
+- ✅ **Registry-Auslieferung an die Datenebene** (`GET /api/tenants/registry`)
+  plus Abholer in `magister_api/tenancy/console_registry.py`: Abruf beim Start
+  und danach im Hintergrund, im heissen Pfad nur der Zwischenspeicher. Ist die
+  Konsole nicht erreichbar oder liefert sie Unbrauchbares, **bleibt der letzte
+  gute Stand in Kraft** — eine Störung in der Verwaltung ist kein Ausfall des
+  Betriebs. Ein leeres Ergebnis ersetzt nichts, sonst setzte ein Fehler in der
+  Konsole alle Kunden auf 404.
+- ✅ **Abnahme:** zwei Kunden auf einer Installation, der Griff ins
+  Nachbarschema scheitert an Postgres und nicht an einem Filter; ein
+  abgebrochener Auftrag lässt den Kunden auf `provisioning`, das Protokoll
+  nennt den Schritt und `next_step` zeigt, wo es weitergeht. 56 Tests im
+  Cockpit, davon der komplette Auftrag samt Alembic gegen echtes Postgres.
+- ✅ **Anmeldung** — aber anders als hier geplant: **nicht** OIDC mit
+  Hardware-Schlüssel (ADR-0013 D2, Entscheid E21), sondern Client-Zertifikat
+  plus lokales TOTP. Siehe Phase 5a und
+  [ADR-0020](../adr/0020-konsolen-anmeldung.md). Der Grund in einem Satz: in
+  die Konsole geht man, wenn etwas kaputt ist, und eine Anmeldung, die einen
+  fremden Dienst braucht, ist dann nicht verfügbar.
+- ✅ **Die Oberfläche** steht: Kundenliste und -Detail mit den Reitern
+  Übersicht, Sicherungen, AD-Connector, Zugriff und Kündigung, dazu Instanzen
+  und Vorlagen. Ausgeliefert wird sie vom Konsolen-Listener selbst
+  (`cockpit/deploy/caddy/Caddyfile`, `/srv/console`) — dieselbe Herkunft wie
+  die API, damit der Sitzungs-Cookie erststellig bleibt.
+
+**Zwei Fallstricke, die beim Bauen aufgefallen sind** — beide gemessen:
+
+1. **`CREATE ROLE ... PASSWORD` nimmt keine Bind-Parameter.** Das Passwort
+   müsste als Literal ins SQL — und stünde damit im Postgres-Log, sobald
+   `log_statement = ddl` gesetzt ist, sowie in `pg_stat_activity`, solange die
+   Anweisung läuft. Die Konsole schickt deshalb einen **vorberechneten
+   SCRAM-SHA-256-Verifier**, wie `psql \password` es tut: was über die Leitung
+   geht, lässt sich nicht in ein Passwort zurückrechnen. Dass die Ableitung
+   stimmt, belegt ein Test, der sich mit dem Klartextpasswort tatsächlich
+   anmeldet.
+2. **`text()` liest `:` im Verifier als Bind-Parameter.** Der SCRAM-String
+   enthält `4096:` — SQLAlchemy machte daraus einen Parameter und brach ab.
+   Die Rollen-Anweisungen laufen deshalb über `exec_driver_sql`.
+
+### Phase 2a — AD-Connector-Agent (Plattformseite steht, Agent folgt)
+
+Blockiert den ersten gehosteten Kunden: ohne Agenten gibt es keinen
+Passwort-Reset. Referenz: ADR-0014.
+
+- ⏳ **Plattform-CA**: Verfahren und Skript stehen vollständig
+  ([platform-ca.md](../runbooks/platform-ca.md)); seit den Entscheiden E19 und
+  E20 (2026-09-09) ist auch geklärt, worauf die Zeremonie läuft (Live-System,
+  Hash im Protokoll) und wo das Protokoll lebt (Stick **und** `docs/ca/`).
+  Offen ist nur noch der Termin — die Zeremonie ist Handarbeit bei Vita
+  Brevis. Der Code-Pfad der Ausstellung ist fertig und gegen eine
+  eigens gebaute Test-CA geprüft: der Agent schickt nur einen **CSR**, der
+  Subject kommt aus der Agent-Zeile und nicht aus dem CSR, ein RSA-Schlüssel
+  unter 3072 Bit wird abgelehnt, das Zertifikat trägt ausschliesslich
+  `clientAuth`.
+- ✅ **Connector-Endpunkt** auf eigenem Listener `0.0.0.0:46200` mit
+  `require_and_verify`, plus Abgleich von **SPKI-Fingerprint** und API-Key
+  gegen dieselbe Agent-Zeile. Der Fingerprint geht über den öffentlichen
+  Schlüssel, nicht über das Zertifikat — eine Erneuerung mit demselben
+  Schlüssel löst die Bindung dann nicht. Kein Rückfall auf 443 (E11).
+- ✅ **Zwei getrennte Marker** für die zwei Listener derselben Anwendung: der
+  Management-Marker öffnet den Connector-Kanal nicht und umgekehrt. Gleiche
+  Werte brechen den Start ab.
+- ✅ **Anmeldung mit Einmal-Token**: 24 Stunden, genau einmal einlösbar, im
+  Paket liegt kein weiteres Geheimnis. API-Key und HMAC-Schlüssel kommen genau
+  einmal zurück; die Konsole speichert den API-Key nur als argon2id-Hash.
+- ✅ **Auftragswarteschlange** mit der Allowlist aus `ad/rpc.py` — wörtlich,
+  und ein Test hält die beiden Mengen zusammen. Auch ein Global Admin bekommt
+  kein freies LDAP, kein PowerShell, kein Skript. Aufträge verfallen (ein Agent,
+  der zehn Minuten weg war, soll kein Passwort mehr setzen), Nutzlasten mit
+  Passwörtern werden nach Abschluss sofort gelöscht, und `payload_purged_at`
+  zeigt, dass ein leeres Feld absichtlich leer ist.
+- ✅ **Ergebnis-HMAC** über Auftrags-Id **und** Körper. Die Id gehört hinein,
+  sonst liesse sich ein gültig signiertes Ergebnis auf einen anderen Auftrag
+  umhängen.
+- ✅ **Widerruf als Datenbank-Flag**, bei jeder Anfrage geprüft — keine CRL,
+  kein OCSP. Ein gesperrter Kunde stoppt seinen Agenten mit.
+- ✅ **Der Agent** (`agent/`): Schlüsselerzeugung lokal, Anmeldung mit
+  Einmal-Token, Long-Poll, HMAC über Ergebnisse, systemd-Unit mit Härtung,
+  OCI-Abbild, `check`-Befehl für die Abnahme. **Lokale Grenzen**, die die
+  Plattform nicht ändern kann: OU-Allowlist, Gruppen-Denylist (deutsch *und*
+  englisch benannt), Attribut-Denylist gegen Privilegierung, Methoden-Allowlist
+  ein zweites Mal. Die Annahme dahinter ist ausdrücklich, dass die Plattform
+  kompromittiert sein könnte.
+- ✅ **Die Warteschlange hinter `AdClient`** als dritter Rücken — kein Aufrufer
+  im Fachcode ändert sich, und die Methodenkörper der beiden entfernten Rücken
+  liegen gemeinsam auf `RemoteAdClient`, damit sie nicht auseinanderlaufen.
+- ✅ **Ende-zu-Ende gemessen**, nicht nur im Mock: echter Caddy mit Test-CA,
+  echtes Client-Zertifikat, echte Konsole, echte Datenbank. Der Agent meldet
+  sich an, holt Aufträge, führt einen aus (Ergebnis `done`), lehnt einen
+  zweiten lokal ab (`failed` mit Grund), und verfallene Aufträge stehen auf
+  `expired` — alle Nutzlasten gelöscht. Vier Befunde daraus stehen in
+  ADR-0014.
+- ✅ **Windows-MSI** (`agent/packaging/windows/`). Payload unter Windows mit
+  PyInstaller, MSI drumherum unter Linux mit `wixl` — damit ist die WiX-Quelle
+  auf dem Entwicklerrechner prüfbar (`build-msi.sh --stub`) und nicht nur in
+  CI. Das Paket richtet den Dienst `MagisterConnector` ein, startet ihn aber
+  absichtlich nicht (zum Installationszeitpunkt ist der Agent nicht
+  angemeldet) und fragt nicht nach dem Einmal-Token (eine MSI-Eigenschaft
+  landet im Ereignisprotokoll und in jedem Verteilungswerkzeug).
+
+  Dabei kam ein Fehler heraus, der ohne den Windows-Lauf niemandem
+  aufgefallen wäre: **der Agent konnte unter Windows gar nicht starten.**
+  Seine Rechteprüfung liest POSIX-Modi, und `os.stat()` liefert unter Windows
+  erfundene Bits — Verzeichnisse melden `0o777`, die Prüfung schlug also immer
+  fehl. Sie dort stumm zu überspringen wäre die schlechtere Lösung gewesen:
+  dann liefe der Agent, und die Zusage über seinen privaten Schlüssel wäre
+  unbelegt. Er dichtet sein Zustandsverzeichnis jetzt selbst ab (`icacls` mit
+  SIDs) und prüft bei jedem Start die DACL über SDDL.
+
+  Zweiter Fund am Rand: die Liste geschützter Gruppen wurde von einer
+  Konfiguration **ersetzt** statt ergänzt. Wer eine eigene Gruppe eintrug,
+  verlor damit still den Schutz für „Domänen-Admins“. Sie ist jetzt eine
+  Untergrenze.
+- ✅ **Automatische Zertifikatserneuerung.** Das Agentenzertifikat gilt 90
+  Tage; ohne Erneuerung hätte jeder ausgelieferte Agent nach drei Monaten
+  aufgehört zu arbeiten, gleichzeitig bei allen Kunden. Der Dienst erneuert
+  jetzt selbständig 30 Tage vor Ablauf über den beglaubigten Kanal — kein
+  Token, kein Mensch beim Kunden. Ein widerrufener Agent kommt dabei nicht
+  durch; genau dafür ist der Widerruf ein Datenbank-Flag und keine CRL.
+
+  Der schwierige Teil war nicht die Erneuerung, sondern ihr Scheitern: geht
+  die Antwort auf dem Rückweg verloren, klopft der Agent weiter mit dem alten
+  Schlüssel an — auf eine Zeile, die ihn nicht mehr kennt. Er wäre
+  ausgesperrt, und endgültig. Deshalb gelten beide Fingerprints sieben Tage,
+  und lokal bleibt das alte Paar als `.prev` liegen, falls der Prozess mitten
+  im Dateiwechsel stirbt. Einzelheiten im Nachtrag zu ADR-0014.
+- ✅ **`.deb` für Debian/Ubuntu** (`agent/packaging/debian/`). Anders als beim
+  MSI ist hier alles prüfbar, und CI prüft es bis zum Purge: bauen,
+  installieren, den Agenten als Dienstkonto aufrufen, Rechte des
+  Zustandsverzeichnisses und der `ad.env` messen, die Unit von
+  `systemd-analyze` prüfen lassen, purgen und nachsehen, dass der private
+  Schlüssel überlebt hat. Ein Paket, von dem nur der Inhalt geprüft ist, lässt
+  ein kaputtes `postinst` durch.
+
+  Dabei fiel ein Fehler ausserhalb des Pakets auf: **`apps/api` liess sich
+  überhaupt nicht als Rad bauen.** Eine `force-include` in `pyproject.toml`
+  fügte die Brief-Vorlagen ein zweites Mal hinzu, was hatchling abweist. Über
+  den Entwicklungsweg (`uv sync`, editable) entsteht kein Rad, deshalb ist es
+  nie aufgefallen — das Paket war nie installierbar.
+- ✅ **Der Abgleich läuft über den Agenten** (ADR-0022, 2026-09-11). Er tat es
+  nicht: `search_users` stand auf keiner Allowlist, der Rücken erbte den
+  direkten Körper, und die Plattform griff beim Abgleich eines gehosteten
+  Kunden selbst per LDAP ins Kundennetz — die eine Verbindung, die es nach
+  ADR-0014 nicht geben darf. Sie scheiterte am Netz, nicht an einer Prüfung;
+  die Zusage hielt also aus Versehen.
+- ⏳ **Offen: Signaturen** (Code-Signing-Zertifikat auf einem HSM für das MSI,
+  GPG-Schlüssel für ein `apt`-Repository), Paket-Download in der Konsole,
+  automatische Updates (E10, braucht das Repository).
+- ⏳ **Offen: die vier Reset-Eingriffe in der Oberfläche** (Phase 0 hat sie im
+  CLI).
+- **Abnahme, bisher erfüllt:** ein Client-Zertifikat von Kunde A wird auf dem
+  Kanal von Kunde B abgewiesen; ein Auftrag mit einer Methode ausserhalb der
+  Allowlist wird plattformseitig verweigert; das Download-Paket enthält kein
+  Geheimnis ausser dem Einmal-Token; ein widerrufener Agent kommt bei der
+  nächsten Anfrage nicht mehr durch. **Noch offen** (braucht den Agenten): der
+  Passwort-Reset über den Agenten, das 503-Banner bei stehendem Agenten, und
+  „Agent stoppen beendet jeden Plattformzugriff auf das AD“.
+
+### Phase 2b — Sicherung, Wiederherstellung, Export ✅
+
+Ebenfalls Voraussetzung für den ersten gehosteten Kunden: ohne Restore-Weg pro
+Kunde darf keine Fremddaten-Haltung starten. Referenz: ADR-0016.
+
+- **Cluster-PITR** (WAL-Archivierung plus Basebackup) für „Datenbank kaputt“.
+- **Logische Sicherung pro Kunde** (`pg_dump --schema=t_<slug>`), mit `age`
+  verschlüsselt, auf einen Share geschrieben, den das tägliche
+  Unternehmens-Backup mitnimmt (E13). Magister schreibt, löscht aber nicht — ein
+  Cron-Job auf dem Fileserver mit eigenem Konto entfernt Dumps, die älter als
+  **10 Tage** sind (E14).
+- **Wöchentliche Prüf-Wiederherstellung** in ein Wegwerf-Schema mit
+  Prüfabfragen; Ergebnis pro Kunde in der Konsole.
+- **Restore daneben, nie darüber**: neues Schema, Umschalten erst nach Freigabe
+  durch eine zweite Person, altes Schema bleibt stehen.
+- **Export** in offenen Formaten (CSV plus Manifest), zeitlich begrenzter
+  Download, auditiert.
+- **Offboarding-Ablauf** mit Karenzzeit, Crypto-Shredding des Kundenschlüssels
+  und Löschung mit Fristablauf.
+- **Aufbewahrung** 10 Tage, in der Konsole sichtbar, pro Kunde überschreibbar.
+- **Einzelinstallationen**: derselbe Weg mit `n=1`; die bestehende Sidecar wird
+  um Verschlüsselung, Prüf-Wiederherstellung und `magister-cli backup verify`
+  erweitert, statt daneben etwas Eigenes zu bekommen.
+- **Abnahme:** Ein Kunde wird aus einem Dump in ein Nebenschema
+  wiederhergestellt, ohne dass ein anderer Kunde etwas merkt; ein absichtlich
+  beschädigter Dump fällt in der wöchentlichen Prüfung auf; ein Export ist ohne
+  Magister lesbar; nach dem Vernichten des Kundenschlüssels ist kein
+  Audit-Payload mehr entschlüsselbar.
+
+**Stand 2026-09-09.** Umgesetzt und gegen echtes Postgres, echtes
+`pg_dump`/`pg_restore` und echtes `age` geprüft:
+
+| Punkt | Stand |
+|---|---|
+| Logische Sicherung pro Kunde, `age`-verschlüsselt | ✅ `POST /api/tenants/{id}/backups` |
+| Prüf-Wiederherstellung mit Prüfabfragen | ✅ `cockpit_api.cli.verify_backup` (Backup-Host) |
+| Restore daneben, Freigabe durch zweite Person | ✅ erfasst und freigegeben in der Konsole, eingespielt auf dem Backup-Host |
+| Export in offenen Formaten, befristeter Download | ✅ `POST /api/tenants/{id}/exports` |
+| Offboarding mit Fristen und Crypto-Shredding | ✅ fünf Endpunkte mit Reihenfolgeschranken |
+| Kundenschlüssel **je Mandant** | ✅ war Voraussetzung für D8 und fehlte (siehe unten) |
+| Aufbewahrung pro Kunde | ✅ `GET/PUT /api/tenants/{id}/backup-policy` |
+| Einzelinstallation | ✅ Sidecar verschlüsselt jetzt, `magister-cli backup verify` |
+| **Cluster-PITR (Ebene 1)** | ✅ pgBackRest, Repository auf dem Backup-Host (E17), Wiederherstellung auf einen Zeitpunkt gegen echtes Postgres 16 geprüft |
+
+Vier Dinge sind beim Bauen anders herausgekommen als geplant; sie stehen
+ausführlich in den [Nachträgen zu
+ADR-0016](../adr/0016-sicherung-wiederherstellung-export.md#nachträge-aus-der-umsetzung-2026-09-09).
+Kurz:
+
+1. **D2 und D4 widersprechen sich auf einer Maschine.** Prüfen und
+   Wiederherstellen müssen entschlüsseln; der private Schlüssel darf nicht auf
+   dem Anwendungsserver liegen. Beides läuft deshalb auf dem Backup-Host, und
+   die Konsole *erfasst* Aufträge und *nimmt Ergebnisse entgegen* — sie führt
+   nichts aus. Damit ist ADR-0013 D4 („eine Störung in der Verwaltung ist kein
+   Ausfall des Betriebs") für diesen Weg umgekehrt zu lesen: eine Störung im
+   Betrieb ist kein Ausfall der Wiederherstellung.
+2. **Wiederhergestellt wird in eine eigene Datenbank, nicht in ein
+   Nebenschema.** Ein `pg_dump --schema=t_slug` enthält `CREATE SCHEMA t_slug`;
+   in dieselbe Datenbank zurückspielen hiesse, den Schemanamen im SQL
+   umzuschreiben. Der Preis: Umschalten ist eine Konfigurationsänderung auf dem
+   Anwendungsserver, kein Klick in der Konsole. Beide Wege stehen im
+   [Runbook](../runbooks/sicherung-wiederherstellung.md).
+3. **Das Abnahmekriterium zum Crypto-Shredding war vorher unwahr.** Der
+   pgcrypto-Schlüssel kam aus *einer* Umgebungsvariablen für die ganze
+   Installation — den Schlüssel eines Kunden zu vernichten hätte die
+   Audit-Inhalte aller Kunden unlesbar gemacht, und ein gestohlener Dump hätte
+   mit demselben Schlüssel die Inhalte aller Kunden hergegeben. Jeder Mandant
+   hat jetzt seinen eigenen (`MAGISTER_TENANT_AUDIT_KEY_<REF>`); fehlt er,
+   antwortet die Datenebene für diesen Kunden mit 503 statt still auf den
+   gemeinsamen zurückzufallen.
+4. **Crypto-Shredding wird bestätigt, nicht geprüft.** Die Konsole kommt nicht
+   an die Umgebung des Anwendungsservers. Was sie nachprüft, ist das Löschen
+   von Schema und Rolle; was sie festhält, ist die Bestätigung eines Menschen
+   über den Schlüssel. Zwei verschiedene Grade von Gewissheit, zwei Felder.
+
+**Was offen bleibt und wehtut:**
+
+- ~~Cluster-PITR~~ — **entschieden (E17 = B) und gebaut am 2026-09-09.**
+  pgBackRest, Repository auf dem Backup-Host, TLS statt SSH zwischen den zwei
+  Maschinen, Sicherung wird von der Repository-Seite angestossen. Der Weg auf
+  „gestern 14:37“ ist gegen ein echtes Postgres 16 belegt: Tabelle gelöscht,
+  auf einen Zeitpunkt davor zurückgeholt, 500 von 510 Zeilen zurück — die zehn
+  nach dem Zielzeitpunkt eingefügten korrekt nicht.
+
+  Was daran offen bleibt, ist ein Betriebswert und keine Technik: wie viel WAL
+  pro Tag wirklich anfällt. Erst der erste Monat sagt, ob die Reserve von
+  32 GB und der Platz auf dem Backup-Host stimmen.
+- ~~Entscheid E15~~ — **entschieden (ja) und umgesetzt am 2026-09-09.** Zwölf
+  Monatskopien, ohne zweiten Dump: die erste geglückte Sicherung eines Monats
+  wird *als* Monatskopie geschrieben. Dabei stellte sich heraus, dass E15 die
+  Löschzusage aus D8 unwahr gemacht hätte (eine Monatskopie kann elf Monate
+  alt sein) und dass das Aufräumen mit `find -mtime +10 -delete` genau die
+  Monatskopien gelöscht hätte. Beides ist mitgelöst: eine
+  `.offboarding`-Markierung auf dem Share und `scripts/prune-backups.sh`.
+- **Kein Zeitplaner.** Tägliche Sicherung und wöchentliche Prüfung sind
+  Cron-Zeilen im Runbook, kein Dienst in der Konsole.
+- **Die README im Export ist nur auf Deutsch.** Das Manifest selbst ist
+  sprachneutral und maschinenlesbar.
+
+### Phase 3 — Systemeinstellungen und Rechte umziehen ✅
+
+Referenz: **[ADR-0017](../adr/0017-systemeinstellungen-und-rechte-in-der-konsole.md)**
+(2026-09-10). Die vier Bullets sind erledigt; die Abweichung vom Plan steht
+darunter.
+
+- ✅ `tenant_settings` und globale Rechte-Matrix in der Konsole
+  (`platform_settings` als Vorgaben-Singleton, `tenant_settings` als
+  Abweichungen je Kunde), plus `GET /api/tenants/{id}/desired-state` als
+  Fläche, die die Datenebene abholt.
+- ✅ **Reconciler** in der Datenebene (`services/reconciler.py` und
+  `reconcile_loop.py`): holt den Soll-Zustand, vergleicht feldweise und
+  schreibt **nur die Differenz**, mit einem kundensichtbaren Audit-Ereignis
+  (`platform_settings_reconciled`) — und ohne Ereignis, wenn sich nichts
+  geändert hat.
+- ✅ `/admin/app-settings` und `/admin/rbac` sind aus der Kunden-API entfernt,
+  sobald eine Konsole regiert: sie werden **nicht gemountet**, nicht mit einer
+  Prüfung davor. Ein Contract-Test prüft beide Betriebsarten.
+- ✅ Frontend: die zwei Menüpunkte entfallen; wer über ein Lesezeichen doch
+  auf der Seite landet, liest, wer sie verwaltet. Bei den Rechten verschwindet
+  **nur die Matrix** — die Rollenzuweisung bleibt beim Kunden (E2).
+- ✅ Plattform-Capabilities (`platform.*`), die keine Kundenrolle halten kann.
+
+**Zwei Abweichungen vom Plan, beide in ADR-0017 begründet:**
+
+1. **Die Geheimnisse ziehen nicht mit um.** Der Plan sagte „Konsole“, und der
+   naheliegende Entwurf hätte die vollständige Konfiguration nach oben geholt
+   — samt AD-Bind-Passwort, OIDC-Client-Secret und privatem
+   Webserver-Schlüssel jedes Kunden, an einem Ort. Das ist genau die
+   Eigenschaft, für die ADR-0013 und ADR-0016 überall Aufwand betrieben haben.
+   Die Konsole besitzt deshalb die **Politik**; die vier Geheimnisse bleiben im
+   Kundenschema und werden auf dem Anwendungsserver gesetzt. Preis: das
+   Einrichten eines Kunden ist zweigeteilt.
+2. **On-prem behält beide Flächen.** „Entfernen“ gilt für die gehostete
+   Betriebsart. Eine Gemeinde mit einem Server ist ihr eigener Betreiber; ihr
+   die Konfiguration wegzunehmen wäre keine Härtung, sondern ein Ausfall —
+   dieselbe Linie wie ADR-0016 D9. Der Contract-Test prüft deshalb beide
+   Richtungen, sonst wäre die Zweiteilung eine Behauptung.
+
+**Abnahme (erfüllt):** `tests/unit/test_platform_managed_surface.py` prüft die
+Fläche in beiden Betriebsarten — als Muster über Pfade, nicht als Zählung, damit
+der Test nicht bei jeder neuen Fachroute hochgesetzt werden muss. Er schlägt
+fehl, sobald eine System- oder Rechte-Matrix-Route in der gehosteten Fläche
+wieder auftaucht *und* sobald der Filter mehr wegnimmt als die fünf Pfade.
+
+### Phase 4 — Globale Vorlagen ✅
+
+Referenz: **[ADR-0018](../adr/0018-globale-vorlagen.md)** (2026-09-10).
+
+- ✅ `platform_templates` in der Konsole, mit Fassungsnummer und
+  `may_override`; Zielgruppe **alle**, ein **Profil** oder eine **Auswahl**
+  von Kunden, in der Konsole aufgelöst (D5). Die Fassungsnummer steigt nur bei
+  einer inhaltlichen Änderung — eine Änderung der Zielgruppe bumpt nicht (D4),
+  sonst leuchtete bei jedem Kunden „neue Fassung“, weil in der Konsole jemand
+  ein Häkchen verschoben hat.
+- ✅ Die Vorlagen reisen im **Soll-Zustand** (D1): derselbe Kanal wie die
+  Einstellungen, dieselbe Richtung — die Datenebene holt. Materialisiert wird
+  in `platform_document_templates` im Kundenschema; der Renderer liest eine
+  lokale Tabelle und weiss nicht, ob die Konsole läuft.
+- ✅ **Auflösungskette** in einer Funktion
+  (`DocumentTemplateService.resolve_effective`): gesperrte Plattformfassung >
+  eigene Standortfassung > eigene globale Fassung > freigegebene
+  Plattformfassung > eingebaute Vorlage (D3).
+- ✅ Hinweis „neue globale Fassung verfügbar“ mit **ausdrücklicher Quittung**
+  (`platform_version_ack`, ein eigener Endpunkt): wer seinen Text bearbeitet,
+  hat damit nicht gesagt, dass er den neuen gelesen hat (D4).
+- ✅ **Abnahme, alle drei erfüllt und geprüft:** der zweite Lauf schreibt
+  nichts (kein neuer `delivered_at`, kein Audit-Ereignis); ein Kunde mit
+  eigener Fassung bleibt unverändert — auch beim Zurückziehen und unter einer
+  Sperre; und gedruckt wird aus der lokalen Tabelle, ohne die Konsole zu
+  fragen.
+
+**Zwei Dinge, die im Plan nicht standen:**
+
+1. **Eine Sperre löscht nichts** (D3). Der eigene Text des Kunden bleibt
+   liegen und gilt wieder, sobald die Sperre aufgehoben wird — die Oberfläche
+   sagt das ausdrücklich, weil ein verschwundener Text ein Fehlerbild ist.
+2. **Was sich nicht rendern lässt, wird nicht ausgeliefert** (D7). Nachträglich
+   aus einem Test: eine Vorlage mit einem Platzhalter, den es nicht gibt, liess
+   den Brief in einer Ausnahme enden — der erste Ort, an dem der Tippfehler
+   aufgefallen wäre, war der Drucker eines Kunden. Der Abgleich rendert deshalb
+   gegen den Beispielkontext und weist ab; die bisherige brauchbare Fassung
+   bleibt in Kraft.
+
+### Phase 5 — Operator-Zugriff ✅
+
+Referenz: **[ADR-0019](../adr/0019-operator-zugriff.md)** (2026-09-11).
+
+- ✅ Die Konsole stellt je Kunde einen **Einlöseschein** aus (Reiter
+  „Zugriff“): Ed25519-signiert, sechzig Sekunden gültig, Grund oder
+  Ticketnummer pflichtig (mindestens zehn Zeichen). Kein Algorithmus-Feld im
+  Dokument — das Verfahren steht im Präfix und im Code (D2).
+- ✅ Die Kunden-API tauscht ihn gegen eine Sitzung von sechzig Minuten, ohne
+  gleitende Verlängerung. Geprüft wird **offline** gegen einen hinterlegten
+  öffentlichen Schlüssel (D3); ohne Schlüssel gibt es die Einlöseroute nicht.
+- ✅ **Einmal einlösbar** über den Primärschlüssel auf `jti` — dieselbe
+  Tabelle ist die Zugriffsliste des Kunden (D4). Damit bleibt ein `jti` für
+  immer verbraucht, statt mit einem Nonce-Verfall wieder einlösbar zu werden.
+- ✅ **Lesend**, erzwungen über die HTTP-Methode (D1): alles ausser
+  `GET`/`HEAD`/`OPTIONS` wird abgewiesen, dazu die einzige Leseroute, die ein
+  Klartext-Passwort zeigt (`/classes/{id}/password-list`). Eine Ausnahme in
+  die andere Richtung: den eigenen Zugriff beenden.
+- ✅ **Sichtbar**: Hinweisbalken für **jeden** angemeldeten Benutzer, eine
+  Liste über den Balken und über `/me`, zwei Audit-Ereignisse
+  (`operator_access_started`, `operator_access_ended`).
+- ✅ Der Operator ist **kein** Benutzer des Kunden: keine Zeile in
+  `ad_user_cache`, keine Rollenzuweisung, nichts, was nach dem Ablauf bleibt
+  (D5).
+- ✅ **Abnahme, beides geprüft:** eine abgelaufene und eine zweimal eingelöste
+  Assertion werden abgewiesen; jeder Zugriff steht mit seinem Grund im Audit
+  des Kunden. Dazu ein Contract-Test, der **jede** schreibende Route der
+  Anwendung durchgeht und für jede eine Sitzungsabhängigkeit verlangt — sonst
+  wäre „eine Prüfung für alle Routen“ eine Behauptung.
+
+**Was der Plan nicht vorsah:**
+
+1. **Ein Operator-Zugriff ist lesend** (D1). Der Plan sagte nichts über die
+   Rechte. Der Entwurf davor war eine Ausschlussliste, und beim Aufschreiben
+   kam heraus, wie lang sie ist: sechs Dienste geben ein Klartext-Passwort
+   heraus. Mit der Methodenregel fallen fünf von selbst weg.
+2. **Die Kundenwahl entfällt.** Sie war als eigener Schritt „nach dem Login“
+   geplant; sie ist jetzt der Reiter „Zugriff“ am Kunden, den man ohnehin
+   offen hat. Ein zweites Auswahlfeld für etwas, das im Kontext schon
+   entschieden ist, wäre ein Klick ohne Inhalt.
+
+### Phase 5a — Die Konsole erkennt Personen ✅
+
+Referenz: **[ADR-0020](../adr/0020-konsolen-anmeldung.md)** (2026-09-11).
+Betriebsanleitung: **[konsolen-operator.md](../runbooks/konsolen-operator.md)**.
+
+Diese Phase stand nicht im Plan. Sie ist beim Bauen von Phase 5 fällig
+geworden: der Name des Operators reist signiert mit und landet im Audit des
+Kunden — und kam aus dem Anfragekörper. Damit war die Auskunft „wer hat
+zugesehen" eine Behauptung des Aufrufers.
+
+- ✅ **Identität ist der öffentliche Schlüssel, nicht der Name** (D1): Caddy
+  gibt das geprüfte Client-Zertifikat als DER-base64 weiter
+  (`X-Console-Client-Cert`), die Konsole bildet den SPKI-Fingerprint und findet
+  damit die Zeile in `console_operators`. Nicht über den `CN` — ein Name im
+  Zertifikat ist eine Zeichenkette, ein Fingerprint gehört zum Schlüsselpaar.
+- ✅ **TOTP als zweiter Faktor, lokal** (D2): RFC 6238, Geheimnis
+  pgcrypto-verschlüsselt (`COCKPIT_SECRET_KEY`), letzter Zeitschritt
+  gespeichert (ein Code gilt **einmal**), zehn Wiederherstellungscodes als
+  argon2id-Hashes, Sperre nach fünf Fehlversuchen. Dieselbe Mechanik wie beim
+  lokalen Notkonto der Datenebene (ADR-0015 D2), bewusst nicht eine neue.
+- ✅ **`actor` wird abgeleitet** (D3): die drei Schemata haben das Feld
+  verloren, und zwar mit `extra="forbid"` — ein alter Aufrufer bekommt einen
+  Fehler statt eines stillen Nicht-Effekts, sonst glaubte er, sein Name sei
+  angekommen, während im Kundenprotokoll ein anderer steht.
+- ✅ **Drei Arten von Aufrufern** (D4): Person (Sitzung), Dienst
+  (Service-Token, darf nur was kein `actor` braucht — der Runner holt
+  Update-Aufträge ab), Notzugang (Bootstrap-Token, im Protokoll als
+  `bootstrap-token`). Ein Dienst-Token kann die Rechte-Matrix eines Kunden
+  nicht mehr ändern und keinen Operator-Zugriff ausstellen.
+- ✅ **Anlegen ist ein CLI-Befehl und keine Oberfläche** (D5):
+  `python -m cockpit_api.cli.add_operator`. Er legt an, ersetzt ein Zertifikat
+  (der zweite Faktor bleibt), schaltet ab (`--disable`, ohne Zertifikat — wer
+  widerrufen wird, hat es unter Umständen gerade verloren) und weist ein
+  Zertifikat ab, das schon einer anderen Person gehört. Den zweiten Faktor
+  fasst er **nicht** an.
+- ✅ **Anmeldeseite** statt Token-Kasten: sie fragt nicht, wer man ist — das
+  steht fest, bevor sie lädt. Einrichten mit QR-Code (serverseitig als
+  `data:`-URI, damit keine QR-Bibliothek ins Bündel und keine CSP-Lockerung
+  nötig ist), Code, Sitzung, Abmelden. Der Bootstrap-Token steht darunter als
+  „Notzugang“.
+- ✅ **Abnahme gegen einen echten Handschlag:** Caddy mit
+  `require_and_verify` gegen eine Test-CA, Chromium mit Client-Zertifikat. Ohne
+  Zertifikat scheitert der Handshake (kein HTTP-Status, `000`); mit einem
+  fremden Zertifikat steht „Kein gültiges Client-Zertifikat“ und **keine**
+  Auskunft darüber, welche Zertifikate es gibt; mit dem eingetragenen läuft
+  Einrichten → falscher Code abgewiesen → richtiger Code → Sitzung übersteht
+  ein Neuladen → Abmelden. Danach stand in `platform_templates.updated_by` die
+  angemeldete Person und in der Zugriffsliste des Kunden derselbe Name — beide
+  von der Anwendung eingetragen, nicht getippt. Dazu 16 Tests im Cockpit.
+
+**Ehrlich zur Reichweite:** TOTP ist **nicht** phishing-resistent. Was das
+trägt, sind die Schichten davor — interne Adresse und ein gültiges
+Client-Zertifikat. Wächst das Betreiber-Team, ist WebAuthn der nächste Schritt:
+dieselbe Stelle im Code, ein anderer Faktor.
+
+**Was der Plan nicht vorsah:**
+
+1. **Entra ID fällt weg** (Entscheid E21). Der Plan sah OIDC mit
+   Conditional Access vor. Verworfen an diesem Punkt, nicht für immer: siehe
+   ADR-0020 D2.
+2. **Der Konsolen-Listener lieferte die Oberfläche gar nicht aus.** Er
+   antwortete auf alles ausser `/api/*` mit 404 — die gebaute SPA lag im
+   Repository und nirgends sonst. Beim Prüfen der Anmeldung aufgefallen,
+   nicht beim Lesen des Caddyfiles.
+
+### Phase 6 — Betrieb im Grossen ✅
+
+Referenz: **[ADR-0021](../adr/0021-betrieb-im-grossen.md)** (2026-09-11).
+Betriebsanleitung: **[betrieb-im-grossen.md](../runbooks/betrieb-im-grossen.md)**.
+
+- ✅ **Migrations-Welle mit Kanarienvogel**, auf dem Anwendungsserver:
+  `magister-cli tenants migrate --wave` nimmt die Kunden in fester Reihenfolge,
+  hält nach dem ersten an und geht erst weiter, wenn jemand freigibt. Der
+  Kanarienvogel ist ein **Halt**, keine Wartezeit — eine Minute Pause prüft
+  nichts.
+- ✅ **Vor jeder Migration ein Dump, und der ist verschlüsselt** (D1): zwei
+  Prozesse über eine Pipe (`pg_dump | age -r …`), nie eine Klartextdatei
+  dazwischen. Ohne hinterlegten Empfänger (`MAGISTER_BACKUP_AGE_RECIPIENT`
+  oder `--recipient`) läuft die Welle **nicht** an. Gefunden beim Nachlesen
+  des Runbooks: der Weg, den es Betreibern vorschrieb, schrieb den Dump
+  unverschlüsselt auf die Platte.
+- ✅ **Das kundensichtbare Rollout-Ereignis schreibt die Datenebene** (D2) —
+  die Konsole hat den Kundenschlüssel nicht (ADR-0016 D8) und könnte es gar
+  nicht. Dieselbe Stelle meldet den **echten** Kopfstand aus
+  `alembic_version` an die Konsole zurück
+  (`POST /api/tenants/{id}/schema-version`). Vorher trug `tenants.schema_version`
+  die **Erwartung** aus `COCKPIT_EXPECTED_SCHEMA_VERSION` — und die
+  Versions-Schranke fährt darauf.
+- ✅ **Lastgrenzen an der Mandantenrolle** (D3): `statement_timeout`,
+  `idle_in_transaction_session_timeout` und `CONNECTION LIMIT` per
+  `ALTER ROLE`, gesetzt beim Bereitstellen und änderbar in der Konsole
+  (Begründung pflichtig). Sie greifen dort, wo die Last entsteht — auch bei
+  einem Hintergrundlauf, der durch keine Middleware geht. Dazu eine
+  **Obergrenze gleichzeitiger Anfragen** pro Kunde in der Auflösungs-Middleware
+  (503 mit `Retry-After`), damit ein Kunde nicht den Verbindungspool der
+  anderen aufbraucht. Keine Anfragen pro Minute: ein Zähler, der 60 schnelle
+  Anfragen durchlässt und die 61. langsame abweist, misst das Falsche.
+- ✅ **AD-Sync-Fan-out pro Kunde** (D4): eine Schleife über die Registry mit
+  deterministischem Versatz, jeder Kunde in eigener Sitzung und eigenem
+  `try` — ein Kunde mit unerreichbarem AD hält die anderen nicht auf, und der
+  Fahrplan rückt auch nach einem Fehler weiter. Vorher lief der Sync auf der
+  Prozess-Engine und bediente stumm nur einen Mandanten.
+- ✅ **Umzug auf eigene Datenbank oder Cluster** (D5) bleibt ein Runbook mit
+  Sichern, Einspielen, Prüfen, Umstellen. Neu ist genau **ein** Können:
+  `POST /api/tenants/{id}/relocate` stellt `dsn_ref` und `isolation_mode` um —
+  nur bei gesperrtem Kunden, und der gemeldete Schemastand wird dabei
+  gelöscht. Ein Assistent, der den ganzen Umzug „macht“, wäre der Knopf, der
+  ein halb umgezogenes Schema hinterlässt.
+- ✅ **Connector-Flotte überwacht statt angezeigt** (D6):
+  `cockpit_api.services.fleet` rechnet Befunde (abgelaufene und nicht
+  erneuerte Zertifikate, stille Agenten, zurückhängende Versionen, aktive
+  Kunden ganz ohne Agent), `python -m cockpit_api.cli.fleet_check` gibt sie
+  mit Exit-Code 0/1/2 an die bestehende Überwachung, und die Konsole zeigt
+  dieselbe Liste unter „Flotte“. Kein SMTP in Magister: die zweite
+  Alarmierung neben der vorhandenen ist die, die niemand liest.
+- ✅ **Abnahme, live geprüft:** Grenzen über die Konsolen-Oberfläche gesetzt
+  und in `pg_roles` gegengelesen (`rolconnlimit 60`,
+  `statement_timeout=15000ms`); Umzug über die Oberfläche bei gesperrtem
+  Kunden auf `isolation_mode=cluster` umgestellt; die Flotte mit vier gesäten
+  Befunden gezeigt (2 kritisch, 2 Warnungen, `worst` 2).
+
+**Was der Plan nicht vorsah:**
+
+1. **Die Welle kann nicht in der Konsole laufen** (D1). Der Plan las sich, als
+   drücke ein Operator dort einen Knopf. Die Konsole hat aber keine
+   Kunden-DSNs — sie hält nur Verweise (ADR-0013 D4) —, und als
+   Verwaltungsrolle zu migrieren macht die Tabellen der Verwaltungsrolle
+   gehörend: der nächste Zugriff der Kundenrolle endet in
+   `permission denied for table`. Die Welle läuft dort, wo die Geheimnisse
+   ohnehin liegen.
+2. **Die Startup-Seeds liefen nur für einen Mandanten.** Beim Bauen des
+   AD-Fan-outs am selben Muster aufgefallen: die Seeds hingen an der
+   Prozess-Engine. Eine frische gehostete Installation mit zwei Kunden wäre
+   damit gar nicht erst hochgekommen.
+3. **Ein Rückkanal von der Datenebene in die Konsole** (D2). Nicht geplant,
+   aber ohne ihn bleibt jede Aussage der Konsole über den Schemastand eine
+   Erwartung — und die Versions-Schranke hätte einen Kunden weiter bedient,
+   dessen Schema nicht dort ist, wo die Konsole es glaubt.
+
+## 8 · Neue harte Regeln (Ergänzung zu CLAUDE.md)
+
+- **Niemals** eine DB-Verbindung benutzen, ohne dass die Mandanten-Auflösung
+  Rolle und `search_path` für die Transaktion gesetzt hat.
+- **Niemals** `SET ROLE` oder `SET search_path` ohne `LOCAL`.
+- **Niemals** aus der Kunden-Ebene die Konsolen-Datenbank lesen oder schreiben.
+- **Niemals** eine System- oder Rechte-Konfigurationsroute in der Kunden-API
+  mounten.
+- **Niemals** einen kundenübergreifenden Query ohne `# scope-bypass: <reason>`
+  *und* Ausführung als Plattform-Rolle.
+- **Immer** Personendaten eines Kunden nur im Kundenschema — die Konsolen-DB
+  bleibt frei davon.
+- **Immer** ein kundensichtbares Audit-Ereignis bei Operator-Zugriff und bei
+  jedem Rollout in ein Kundenschema.
+- **Niemals** einen Connector-Auftrag annehmen, dessen Methode nicht in der
+  Allowlist steht — und niemals eine Auftragsart einführen, die beliebiges
+  LDAP, PowerShell oder Skripte im Kundennetz ausführt.
+- **Niemals** ein Geheimnis in ein herunterladbares Agent-Paket legen; der
+  private Schlüssel entsteht auf dem Agenten.
+- **Niemals** einen Connector-Kanal ohne *beide* Faktoren akzeptieren
+  (Client-Zertifikat mit passendem Fingerprint **und** API-Key derselben Zeile).
+- **Niemals** das Klartext-Passwort eines Verzeichnisbenutzers gegen AD binden.
+  Einzige Ausnahme bleibt der Probe-Bind eines gerade selbst gesetzten
+  Passworts (`probe_bind_as_user`).
+- **Niemals** einen Anmeldeweg ohne zweiten Faktor einführen oder
+  wiederherstellen.
+- **Immer** die Konsole nur über den Management-Listener bedienen; eine Anfrage
+  ohne dessen Marker wird abgewiesen.
+- **Niemals** den Konsolen-Listener auf `0.0.0.0` binden.
+- **Niemals** die MFA-Pflicht unbefristet aufheben; die Aufhebung läuft nach
+  24 Stunden von selbst ab.
+- **Niemals** bei einem TOTP-Reset ein Geheimnis anzeigen oder zurückgeben — der
+  Reset löscht nur, das neue Geheimnis entsteht bei der Einrichtung.
+- **Niemals** Quell-IP-Regeln in Magister nachbauen; Netzfilter gehören auf die
+  Firewall und die WAF.
+- **Niemals** eine Wiederherstellung über ein Produktivschema laufen lassen —
+  immer in ein neues Schema, Umschalten ist ein getrennter, freigegebener
+  Schritt. Kein `DROP SCHEMA … CASCADE` auf ein Produktivschema.
+- **Niemals** einen Kunden-Dump unverschlüsselt schreiben oder ablegen.
+- **Niemals** Kundenschlüssel und Dump in derselben Ablage sichern.
+- **Immer** vor einer Migration pro Kunde einen Dump ziehen.
+- **Immer** jeden Hintergrundlauf, der Kundendaten anfasst, über die Registry
+  fahren — eine Sitzung je Kunde, ein eigenes `try` je Kunde. Die
+  Prozess-Engine (`get_sessionmaker()`) gehört keinem Kunden; wer sie in einer
+  Schleife benutzt, arbeitet bei mehreren Kunden am falschen Schema
+  (ADR-0021 D4).
+
+## 9 · Risiken
+
+| Risiko | Gegenmassnahme |
+|---|---|
+| Die Konsole kann Sitzungen in jeden Kunden ausstellen — höchstwertiges Ziel. | Eigene Origin, OIDC mit Hardware-Schlüssel und verwaltetem Gerät, keine Personendaten in der Konsolen-DB, kurze TTL, Grund pflichtig, unveränderliches Audit, optional Freigabe durch den Kunden. |
+| Verbindungs- und Migrationsaufwand wächst mit der Kundenzahl. | Ein Pool mit `SET LOCAL ROLE`, pgbouncer, Obergrenzen pro Kunde, Wellen-Runner. |
+| Ein Kunde reisst die Last an sich. | `statement_timeout`, Auftrags-Obergrenze, Anfragegrenzen, Umzug auf eigene DB oder eigenen Cluster. |
+| Versions-Schieflage zwischen Code und Kundenschema. | Nur erweiternde Migrationen, Stand in der Registry, 503 Wartung statt falscher Query. |
+| Falscher Kunde aufgelöst (Code-Fehler, nicht vergessener Filter). | Zusicherung vor dem ersten Query, `tenant_id` in der Session, Auflösung genau an einer Stelle, Contract-Tests. |
+| Alle Kunden auf einer Origin: XSS- und Storage-Radius. | Siehe E1 — Subdomain pro Kunde als Zielbild. |
+| Rechtlich: Auftragsverarbeitung für Daten Minderjähriger. | AVV pro Kunde, dokumentierte Trennung, Datenhaltung in der Schweiz, Lösch- und Exportpfad pro Kunde, Revision der Zero-Phone-Home-Politik. |
+| Reconciler-Drift (Kopie ≠ Autorenstelle). | Idempotent, versioniert, Abweichungsanzeige in der Konsole, regelmässiger Abgleich. |
+| Der Agent wird zum Ausfallpunkt für Passwort-Resets. | Mehrere Agenten pro Kunde zulässig, Überwachung mit Alarm, `503` mit dem bestehenden Banner statt eines stillen Fehlers, Auftrags-TTL statt verspäteter Ausführung. |
+| Kompromittierte Plattform greift über den Agenten ins Kundennetz. | Nur Aufträge aus der Methoden-Allowlist, dazu die lokal erzwungene Politik des Agenten (OU-Allowlist, Gruppen-Denylist, abschaltbare Operationen) und der Not-Aus beim Kunden. |
+| Verlust des Agent-Schlüssels oder des Kundengeräts. | Schlüssel nicht exportierbar erzeugt, Widerruf als Datenbank-Flag mit sofortiger Wirkung, 90-Tage-Zertifikate mit automatischer Erneuerung. |
+| Notzugang verloren (kein Telefon, keine Wiederherstellungscodes). | Zehn Codes bei der Einrichtung, Reset über die Konsole (gehostet) beziehungsweise ein dokumentiertes und geübtes Offline-Verfahren (on-prem). |
+| Konsolen-Listener aus Versehen auf `0.0.0.0` gebunden. | Bindung an die interne Adresse ist die Massnahme; dazu Client-Zertifikat und Marker-Riegel als zweite und dritte Schicht, plus ein Start-Check, der eine Bindung auf `0.0.0.0` ablehnt. |
+| Kundennetz sperrt ausgehend hohe Ports, der Agent kommt nicht heraus. | Bewusst ohne Rückfallebene (E11): die Freigabe von `TCP 46200` ist harte Onboarding-Voraussetzung und muss vor dem Termin bestätigt sein; der Agent meldet beim ersten Start klar, wenn der Port zu ist. |
+| Befristete MFA-Aufhebung wird zur Gewohnheit. | 24-Stunden-Automatik ohne Verlängerungsknopf, Grund/Ticket verpflichtend, Warnbalken in der Oberfläche, Ereignis im Kunden-Audit. |
+| Sicherung vorhanden, aber nicht wiederherstellbar. | Wöchentliche Prüf-Wiederherstellung mit Prüfabfragen; „zuletzt geprüft“ pro Kunde in der Konsole; ein nie geprüfter Dump gilt als nicht vorhanden. |
+| Dump wiederhergestellt, aber Kundenschlüssel fehlt — Audit-Payloads unlesbar. | Schlüssel in getrenntem Tresor mit eigener Sicherung, Schlüssel-Id im Dump vermerkt, Entschlüsselbarkeit ist Teil der wöchentlichen Prüfung. |
+| Angreifer mit Serverzugang löscht die Sicherungen mit. | Magister hat auf dem Share Schreibrecht ohne Löschrecht, das Aufräumen läuft unter eigenem Konto, und der Anwendungsserver kennt nur den öffentlichen Backup-Schlüssel. Die letzte Instanz ist die Kopie des Tages-Backups — dessen Unveränderlichkeit trägt damit die Garantie (E13). |
+| Löschzusage beim Offboarding nicht einhaltbar. | Crypto-Shredding sofort, vollständige Löschung mit Ablauf der Aufbewahrungsfrist des Tages-Backups — genau so im Vertrag und in der AVV formuliert, nicht als „sofort alles weg“. |
+| Wildcard-Zertifikat `*.magister.ch` kompromittiert. | Betrifft alle Kunden-Subdomains zugleich. Privater Schlüssel nur auf dem Reverse-Proxy, kurze Laufzeit, automatische Erneuerung, Zertifikatstransparenz überwachen. |
+| Operator setzt TOTP und Passwort zurück und übernimmt den Notzugang. | Liegt in der Natur eines Break-Glass-Kontos. Abgesichert durch: Reset zeigt nie ein Geheimnis, Passwort-Reset ist eine getrennte Handlung, beide Ereignisse stehen im Audit des Kunden und in dessen Zugriffsliste. |
+
+## 10 · Entscheide
+
+Alle zwölf offenen Punkte sind entschieden (2026-09-08). Sie stehen hier, weil
+der Grund für eine Entscheidung später mehr wert ist als die Entscheidung selbst.
+
+| # | Frage | Entscheid |
+|---|---|---|
+| E1 | Pfad oder Subdomain? | **Nur Subdomain** `<kunde>.magister.ch`. Eigene Origin je Kunde, damit Browser-Speicher und XSS-Radius beim Kunden enden. Kein Pfad-Alias. |
+| E2 | Rollen*zuweisung*: Kunde oder global? | Matrix global, **Zuweisung beim Kunden-Admin**. Ist heute schon so: alle vier Endpunkte in `admin_roles.py` hängen an `require_admin`. Die Schulleitung weist keine Rollen zu. |
+| E3 | Was bleibt dem Kunden-Admin? | Standorte, Klassen, Abteilungen, Benutzer, Importe, Geräte, Auswertungen, Rollenzuweisung. Ohne: System, Rechte-Matrix, Module, Zertifikate. |
+| E4 | Bestandskunden? | **Beides dauerhaft**, aber ohne Sonderweg: on-prem ist dieselbe Plattform mit `n=1`, samt Agent und Ports (ADR-0013 D8). Keine Einschränkungen für Einzelinstallationen. |
+| E5 | Standard-Isolationsstufe? | **Eigenes Schema für alle**, eigene Datenbank auf Wunsch oder ab einer Grösse. Umzug ist ein Registry-Eintrag. |
+| E6 | Konsole erweitern oder trennen? | Im **Monorepo** wachsen lassen; `git subtree split` bleibt später möglich (ADR-0003). Solange Konsole und Kunden-API zusammen entwickelt werden, ist Cross-Repo-Koordination reiner Verlust. |
+| E7 | Nutzt jemand den AD-Login? | **Nein.** Der Ausbau läuft direkt, ohne Übergangsfrist — nur Release-Notes. |
+| E8 | Agenten pro Kunde? | Datenmodell erlaubt mehrere, Auslieferung startet mit einem. |
+| E9 | Wo liegt der CA-Schlüssel? | **Offline-Root auf zwei verschlüsselten USB-Sticks im Tresor**; die Passphrase liegt getrennt davon in zwei versiegelten Umschlägen bei **Matthias Hadorn** und **Rolf Straubhaar**. Zwei Intermediates im Betrieb (Connector, Operator) — **nicht** pro Kunde, die Kundenbindung macht der Fingerprint-Abgleich. Der Root wird nur zum Ausstellen eines Intermediate gebraucht. Ein zweiter Standort ist bewusst zurückgestellt: ein verlorener Root ist kein Ausfall, sondern ein planbarer Neuaufbau mit bis zu fünf Jahren Vorlauf ([Runbook](../runbooks/platform-ca.md) §3). |
+| E10 | Agent-Updates? | **Automatisch, Sicherheits-Updates sofort.** Version und Fingerprint der Flotte in der Konsole, Alarm bei nicht anlaufenden Updates. |
+| E11 | Rückfallebene für den Connector-Port? | **Nein, nur 46200.** Die Firewall-Freigabe ist harte Onboarding-Voraussetzung; der Agent prüft sie beim ersten Start und meldet klar, wenn der Port zu ist. |
+| E12 | Mehrere lokale Notkonten? | **Nein**, der Singleton bleibt (`CHECK id = 1`). Jedes weitere Notkonto wäre ein weiterer Weg ohne Entra. |
+| E13 | Wohin die Sicherungen? | **Lokaler Share**, den das tägliche Unternehmens-Backup mitnimmt. Kein Objektspeicher. Magister hat **nur Schreibrechte**; ein Cron-Job auf dem Fileserver (eigenes Konto, nicht der Anwendungsserver) löscht nach Frist (ADR-0016 D2). |
+| E14 | Aufbewahrungsfrist? | **10 Tage** — auf dem Share und im Tages-Backup gleich. Dieselbe Zahl ist Wiederherstellungszusage, Löschfrist beim Offboarding und der Wert in Vertrag und AVV. |
+
+| E16 | Darf ein Kunden-Admin mehrere Kunden bedienen? | **Innerhalb eines Kunden ja, mandantenübergreifend nein.** Ein Mandant ist ein Schulträger; die Schulen darin sind Standorte, und ein Kunden-Admin ohne `school_id` ist schon heute für alle zuständig — der Gemeinde-IT-Fall braucht also gar keine Änderung. Für zwei *getrennte* Kunden bleibt es bei zwei Anmeldungen: die Sitzungen liegen im Kundenschema, und eine Sitzung über beide bräuchte einen Rollenwechsel in der Datenbank — genau den Ausbruch, den Phase 1 geschlossen hat. Bequemlichkeit kommt als **Umschalter in der Oberfläche** (ein Klick, Redirect plus SSO), nicht als gemeinsame Sitzung. Siehe Abschnitt 9. |
+
+### Kein Punkt bleibt offen
+
+Hier stand E15 als letzte offene Frage (monatliche Kopie mit längerer Frist?).
+Sie ist am 2026-09-09 mit **ja** entschieden und am selben Tag gebaut — zwölf
+Monatskopien, der tägliche Zyklus bleibt bei 10 Tagen (Abschnitt 7, Phase 2b).
+Und E21 (Konsolen-Anmeldung über Entra ID) ist am 2026-09-11 entschieden, und
+zwar **dagegen**: ADR-0020 macht es lokal. Damit sind E1 bis E21 beantwortet.
+
+Die beiden Verfahren, die vorher hier offen standen, sind jetzt ausgeschrieben:
+
+- **CA-Betrieb:** [`docs/runbooks/platform-ca.md`](../runbooks/platform-ca.md)
+- **Kunden-Onboarding:** [`docs/runbooks/kunden-onboarding.md`](../runbooks/kunden-onboarding.md)
+
+Beide enthalten am Ende die konkreten Angaben, die noch von dir kommen müssen
+(Schlüsselverwahrer, Standorte, Kontaktwege) — jeweils als Liste zum Ausfüllen.
+
+## 11 · Mockup
+
+`docs/mockups/multitenancy-console/` — fünfzehn Bildschirme auf drei Seiten:
+
+- *Konsole:* Anmeldung, Kundenwahl, Kundenliste, Kunde mit Systemeinstellungen,
+  Kunde erfassen.
+- *Global anwenden und Betrieb:* Rechte-Matrix, globale Vorlagen mit Rollout,
+  Datenbank und Migrationen, Sicherungen pro Kunde, Kundenkontext aus beiden
+  Perspektiven.
+- *Zugang und Connector:* AD-Connector eines Kunden, Agent-Bezug mit
+  Einmal-Token, Übersicht der Anmeldewege nach der Härtung, TOTP-Einrichtung
+  für ein lokales Konto, Notzugang mit den vier OTP-Eingriffen.
+
+Farben, Schrift und Bausteine sind aus `apps/web` übernommen; alle Kundennamen,
+Zahlen, Fingerprints und Tokens sind Platzhalter.
+
+
+## 9 · Ein Kunden-Admin für mehrere Kunden? (Entscheid E16)
+
+Die Frage kommt aus der Praxis: der IT-Verantwortliche der Gemeinde soll auch
+die Schule bedienen. Dahinter stecken zwei verschiedene Fälle, und nur einer
+ist überhaupt mandantenübergreifend.
+
+### 9.1 Der häufige Fall braucht keine Änderung
+
+Ein Mandant ist **ein Schulträger** (eine Gemeinde, ein Zweckverband). Die
+Schulen darin sind keine Mandanten, sondern Standorte: die Tabelle `schools`,
+der `school_id`-Scope, die Standort-Zuordnung der OUs. Ein Kunden-Admin mit
+einer Rollenzuweisung **ohne** `school_id` ist damit für *alle* Schulen seines
+Trägers zuständig — genau der Gemeinde-IT-Verantwortliche. Eine Schulleitung
+ist auf ihre Schule eingeschränkt.
+
+Das funktioniert heute, ohne Zutun. Wer also fragt „darf der Gemeinde-Mensch
+auch die Schule bedienen", bekommt in der Regel die Antwort: er tut es schon.
+
+### 9.2 Der echte Fall: zwei getrennte Kunden
+
+Mandantenübergreifend wird es erst, wenn es **zwei Verträge** sind: zwei
+Schulträger, zwei AD, zwei Entra-Tenants, zwei AVV — und eine Person, die beide
+betreut. Das geht heute nicht, und zwar aus drei Gründen, von denen nur der
+erste technisch ist.
+
+**Die Sitzung liegt im Kundenschema.** `sessions` ist eine Tabelle des
+Kundenschemas. Eine Sitzungs-Id aus Kunde A existiert im Schema von Kunde B
+nicht — der Versuch endet in einem 401, ohne dass die Anwendung etwas prüfen
+müsste. Die Schematrennung *ist* die Sitzungstrennung. (Die in Abschnitt 4.2
+geplante Spalte `sessions.tenant_id` ist die Gegenprobe dazu, nicht der
+Mechanismus.)
+
+**Der Anfragepfad läuft unter der Anmelderolle des Kunden.** Eine Sitzung, die
+beide Kunden sieht, müsste innerhalb einer Anfrage die Datenbankrolle wechseln.
+Genau dieser Wechsel ist der Ausbruch, den Phase 1 gemessen und geschlossen hat
+(ADR-0013 D1, Korrektur). Ihn für einen Kunden-Admin wieder zu öffnen, wäre die
+teuerste denkbare Ausnahme.
+
+**Datenschutz.** Zwei Schulträger sind zwei Verantwortliche. Eine Ansicht, die
+Personendaten beider gleichzeitig zeigt, ist keine Bequemlichkeit, sondern eine
+Bekanntgabe — und in den AVV so nicht abgebildet. Das ist der Grund, der auch
+dann bliebe, wenn die Technik es hergäbe.
+
+### 9.3 Was stattdessen kommen soll
+
+**Ein Umschalter in der Oberfläche, ohne gemeinsame Sitzung.** Eine
+Entra-Identität, in beiden Kunden berechtigt. Nach der Anmeldung bei Kunde A
+zeigt die Oberfläche „Sie sind auch für B berechtigt → wechseln“; der Klick ist
+ein Redirect auf die Subdomain von B und dort eine Anmeldung über Entra — die
+in der Regel ohne erneute Eingabe durchläuft, weil Entra die Sitzung schon hat.
+
+Für die Person ist das ein Klick. Für die Trennung ist es kein Abstrich: jeder
+Kunde behält seine eigene Sitzung, seine eigene Datenbankrolle, sein eigenes
+Audit. Und in den Audit-Ereignissen beider Kunden steht sauber getrennt, was
+diese Person wo getan hat.
+
+Was dafür fehlt: die Liste „welche Identität darf in welchen Kunden“. Sie gehört
+in die **Konsole** (Control Plane) und in kein Kundenschema — sonst wüsste
+Kunde A, für wen Kunde B Berechtigungen vergeben hat. Der Registry-Feed liefert
+sie dann pro Kunde gefiltert mit: „diese Identität hat auch bei X ein Konto“.
+
+Aufwand: klein, aber nicht null (Konsolen-Tabelle, ein Feld im Feed, eine
+Kachel in der Oberfläche). Eingeplant für Phase 3, wenn die Konsolen-Oberfläche
+steht — vorher gibt es keinen Ort, an dem man die Zuordnung pflegen könnte.

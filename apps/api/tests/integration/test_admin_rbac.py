@@ -275,3 +275,46 @@ async def test_set_roles_requires_admin(as_schulleitung_a: AsyncClient) -> None:
     guid = "00000000-0000-0000-0000-0000000000d4"
     r = await as_schulleitung_a.put(f"/admin/users/{guid}/roles", json={"assignments": []})
     assert r.status_code == 403
+
+
+class TestPlatformCapabilitiesAreRefused:
+    """Ein Kunden-Admin kann sich kein Plattform-Recht geben (ADR-0017 D5).
+
+    Über die HTTP-Fläche, weil dort der Versuch stattfinden würde. Die Regel
+    selbst sitzt im Dienst — aber eine Regel, die nur der Dienst kennt und der
+    Router in einen 500er verwandelt, ist keine, mit der man arbeiten kann.
+    """
+
+    async def test_assigning_one_is_403_with_a_reason(self, as_admin: AsyncClient) -> None:
+        resp = await as_admin.put(
+            "/admin/rbac/roles/schulleitung/capabilities",
+            json={"capabilities": ["platform.settings.manage"]},
+        )
+        assert resp.status_code == 403, resp.text
+        detail = resp.json()["detail"]
+        assert "platform.settings.manage" in detail
+        assert "Betreiber" in detail
+
+    async def test_the_matrix_does_not_offer_them(self, as_admin: AsyncClient) -> None:
+        # Sonst stehen in der Oberfläche Kästchen, die beim Anklicken 403 geben.
+        resp = await as_admin.get("/admin/rbac")
+        assert resp.status_code == 200
+        offered = resp.json()["capabilities"]
+        assert not [c for c in offered if c.startswith("platform.")]
+        # Die Kunden-Rechte sind weiterhin da — nicht versehentlich alle weg.
+        assert "user.administer" in offered
+
+    async def test_a_mixed_list_is_refused_as_a_whole(self, as_admin: AsyncClient) -> None:
+        """Kein „das Erlaubte wird gesetzt, das andere verworfen".
+
+        Ein Teilerfolg wäre die schlechteste Antwort: der Aufrufer glaubt, die
+        Zuweisung sei durch, und die Rolle hat etwas anderes als angefordert.
+        """
+        resp = await as_admin.put(
+            "/admin/rbac/roles/schulleitung/capabilities",
+            json={"capabilities": ["user.read", "platform.maintenance"]},
+        )
+        assert resp.status_code == 403
+        after = await as_admin.get("/admin/rbac")
+        caps = {r["key"]: r["capabilities"] for r in after.json()["roles"]}
+        assert "platform.maintenance" not in caps["schulleitung"]

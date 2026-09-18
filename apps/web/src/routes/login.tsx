@@ -3,7 +3,8 @@ import { useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
-import { useAdLogin, useAuthCapabilities, useLocalLogin } from "@/api/hooks";
+import { useAuthCapabilities, useLocalEnroll, useLocalLogin, useLocalTotp } from "@/api/hooks";
+import type { LocalLoginStageOut } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,11 +30,32 @@ function localLoginErrorKey(err: ApiError): string {
   return "errors.generic";
 }
 
-function adLoginErrorKey(err: ApiError): string {
-  if (err.status === 401) return "auth.errors.invalid_credentials";
-  if (err.status === 403) return "auth.errors.ad_login_disabled";
+function secondFactorErrorKey(err: ApiError): string {
+  // 401 covers both a wrong code and an expired challenge; the detail tells
+  // them apart, and they need different advice (retry vs. start over).
+  if (err.status === 401) {
+    return err.code === "expired" ? "auth.errors.challenge_expired" : "auth.errors.invalid_code";
+  }
+  if (err.status === 403) return "auth.errors.local_login_disabled";
+  if (err.status === 423) return "auth.errors.account_locked";
   if (err.status === 429) return "errors.rate_limited";
   return "errors.generic";
+}
+
+/** Hard navigation so React-Query refetches `me` with the fresh session. */
+function goToApp(): void {
+  window.location.assign("/");
+}
+
+function ErrorBanner({ children }: { children: React.ReactNode }): JSX.Element {
+  return (
+    <div
+      role="alert"
+      className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+    >
+      {children}
+    </div>
+  );
 }
 
 export function LoginPage(): JSX.Element {
@@ -41,13 +63,16 @@ export function LoginPage(): JSX.Element {
   const caps = useAuthCapabilities();
   const oidcEnabled = caps.data?.oidc_enabled ?? false;
   const localEnabled = caps.data?.local_login_enabled ?? false;
-  const adEnabled = caps.data?.ad_login_enabled ?? false;
   // While the capabilities are loading, render only the title — avoids a
   // flicker where the OIDC button appears, then disappears, then the local
   // form replaces it.
   const showLocal = caps.isSuccess && localEnabled;
   const showOidc = caps.isSuccess && oidcEnabled;
-  const showAd = caps.isSuccess && adEnabled;
+  // Weder das eine noch das andere: dann gibt es keinen Weg hinein, und das
+  // muss dastehen. Vorher rendert die Karte in diesem Fall Titel und Intro und
+  // sonst nichts — auf dem Dev-Host sah das aus, als lade die Seite nicht
+  // fertig, und gesucht wurde im Frontend statt in der Konfiguration.
+  const keinWeg = caps.isSuccess && !oidcEnabled && !localEnabled;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -57,25 +82,26 @@ export function LoginPage(): JSX.Element {
           <CardDescription>{t("auth.login_intro")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {caps.isPending ? (
+            <p className="text-sm text-muted-foreground">{t("auth.login_checking")}</p>
+          ) : null}
+
+          {caps.isError ? <ErrorBanner>{t("auth.login_capabilities_failed")}</ErrorBanner> : null}
+
+          {keinWeg ? (
+            <div role="alert" className="space-y-1 rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <p className="font-medium">{t("auth.login_none_title")}</p>
+              <p className="text-muted-foreground">{t("auth.login_none_intro")}</p>
+            </div>
+          ) : null}
+
           {showOidc ? (
             <a href="/api/auth/login" className={cn(anchorButtonClasses)}>
               {t("auth.login_button")}
             </a>
           ) : null}
 
-          {showAd && showOidc ? (
-            <details>
-              <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                {t("auth.login_ad_disclosure")}
-              </summary>
-              <div className="mt-4">
-                <AdLoginForm />
-              </div>
-            </details>
-          ) : null}
-          {showAd && !showOidc ? <AdLoginForm /> : null}
-
-          {showLocal && (showOidc || showAd) ? (
+          {showLocal && showOidc ? (
             <details>
               <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                 {t("auth.login_local_disclosure")}
@@ -85,72 +111,65 @@ export function LoginPage(): JSX.Element {
               </div>
             </details>
           ) : null}
-          {showLocal && !showOidc && !showAd ? <LocalLoginForm /> : null}
+          {showLocal && !showOidc ? <LocalLoginForm /> : null}
         </CardContent>
       </Card>
     </div>
   );
 }
 
-export function AdLoginForm(): JSX.Element {
-  const { t } = useTranslation();
-  const [login_, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const login = useAdLogin();
+type LocalStep =
+  | { kind: "password" }
+  | { kind: "totp"; challenge: string }
+  | { kind: "enroll"; stage: LocalLoginStageOut }
+  | { kind: "codes"; codes: string[] };
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
-    e.preventDefault();
-    login.mutate(
-      { login: login_, password },
-      {
-        onSuccess: () => {
-          window.location.assign("/");
-        },
-      },
-    );
+/**
+ * The local break-glass login, in up to three steps (ADR-0015 D2).
+ *
+ * The password alone never yields a session: it returns a challenge plus the
+ * stage that follows — a code, or forced enrolment for an account that has no
+ * second factor yet. Only a suspended MFA requirement short-circuits to a
+ * session, which the backend signals with 204 and no body.
+ */
+export function LocalLoginForm(): JSX.Element {
+  const [step, setStep] = useState<LocalStep>({ kind: "password" });
+
+  switch (step.kind) {
+    case "totp":
+      return (
+        <LocalTotpForm challenge={step.challenge} onRestart={() => setStep({ kind: "password" })} />
+      );
+    case "enroll":
+      return (
+        <LocalEnrollForm
+          stage={step.stage}
+          onDone={(codes) => setStep({ kind: "codes", codes })}
+          onRestart={() => setStep({ kind: "password" })}
+        />
+      );
+    case "codes":
+      return <LocalRecoveryCodes codes={step.codes} />;
+    default:
+      return (
+        <LocalPasswordForm
+          onStage={(stage) =>
+            setStep(
+              stage.stage === "enroll"
+                ? { kind: "enroll", stage }
+                : { kind: "totp", challenge: stage.challenge },
+            )
+          }
+        />
+      );
   }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      {login.isError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {t(adLoginErrorKey(login.error))}
-        </div>
-      ) : null}
-      <div className="space-y-1">
-        <Label htmlFor="ad-login">{t("auth.login_ad_username")}</Label>
-        <Input
-          id="ad-login"
-          name="username"
-          autoComplete="username"
-          value={login_}
-          onChange={(e) => setLogin(e.target.value)}
-          required
-        />
-      </div>
-      <div className="space-y-1">
-        <Label htmlFor="ad-password">{t("auth.login_ad_password")}</Label>
-        <Input
-          id="ad-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-      </div>
-      <Button type="submit" className="w-full" disabled={login.isPending}>
-        {login.isPending ? t("common.loading") : t("auth.login_ad_submit")}
-      </Button>
-    </form>
-  );
 }
 
-export function LocalLoginForm(): JSX.Element {
+function LocalPasswordForm({
+  onStage,
+}: {
+  onStage: (stage: LocalLoginStageOut) => void;
+}): JSX.Element {
   const { t } = useTranslation();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -161,11 +180,14 @@ export function LocalLoginForm(): JSX.Element {
     login.mutate(
       { username, password },
       {
-        onSuccess: () => {
-          // The cookie is set; do a hard navigation so React-Query's `me`
-          // query refetches with the fresh session and the auth-guard layout
-          // sees an authenticated user on the next paint.
-          window.location.assign("/");
+        onSuccess: (stage) => {
+          // 204 with no body = the MFA requirement is suspended and the
+          // session cookies are already set.
+          if (!stage) {
+            goToApp();
+            return;
+          }
+          onStage(stage);
         },
       },
     );
@@ -173,14 +195,7 @@ export function LocalLoginForm(): JSX.Element {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      {login.isError ? (
-        <div
-          role="alert"
-          className="rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {t(localLoginErrorKey(login.error))}
-        </div>
-      ) : null}
+      {login.isError ? <ErrorBanner>{t(localLoginErrorKey(login.error))}</ErrorBanner> : null}
       <div className="space-y-1">
         <Label htmlFor="local-username">{t("auth.login_local_username")}</Label>
         <Input
@@ -208,5 +223,155 @@ export function LocalLoginForm(): JSX.Element {
         {login.isPending ? t("common.loading") : t("auth.login_local_submit")}
       </Button>
     </form>
+  );
+}
+
+function CodeInput({
+  id,
+  value,
+  onChange,
+  label,
+}: {
+  id: string;
+  value: string;
+  onChange: (next: string) => void;
+  label: string;
+}): JSX.Element {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        name="one-time-code"
+        // Lets the OS offer the code from an SMS/authenticator prompt.
+        autoComplete="one-time-code"
+        inputMode="text"
+        autoFocus
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        required
+      />
+    </div>
+  );
+}
+
+function LocalTotpForm({
+  challenge,
+  onRestart,
+}: {
+  challenge: string;
+  onRestart: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [code, setCode] = useState("");
+  const totp = useLocalTotp();
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    totp.mutate({ challenge, code }, { onSuccess: goToApp });
+  }
+
+  const expired = totp.isError && totp.error.code === "expired";
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {totp.isError ? <ErrorBanner>{t(secondFactorErrorKey(totp.error))}</ErrorBanner> : null}
+      <p className="text-sm text-muted-foreground">{t("auth.totp_intro")}</p>
+      <CodeInput id="local-totp" value={code} onChange={setCode} label={t("auth.totp_code")} />
+      <p className="text-xs text-muted-foreground">{t("auth.totp_recovery_hint")}</p>
+      {expired ? (
+        <Button type="button" variant="outline" className="w-full" onClick={onRestart}>
+          {t("auth.totp_restart")}
+        </Button>
+      ) : (
+        <Button type="submit" className="w-full" disabled={totp.isPending}>
+          {totp.isPending ? t("common.loading") : t("auth.totp_submit")}
+        </Button>
+      )}
+    </form>
+  );
+}
+
+function LocalEnrollForm({
+  stage,
+  onDone,
+  onRestart,
+}: {
+  stage: LocalLoginStageOut;
+  onDone: (codes: string[]) => void;
+  onRestart: () => void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const [code, setCode] = useState("");
+  const enroll = useLocalEnroll();
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    enroll.mutate(
+      { challenge: stage.challenge, code },
+      { onSuccess: (result) => onDone(result.recovery_codes) },
+    );
+  }
+
+  const expired = enroll.isError && enroll.error.code === "expired";
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {enroll.isError ? <ErrorBanner>{t(secondFactorErrorKey(enroll.error))}</ErrorBanner> : null}
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{t("auth.enroll_title")}</p>
+        <p className="text-sm text-muted-foreground">{t("auth.enroll_intro")}</p>
+      </div>
+      {stage.qr_data_uri ? (
+        <div className="flex justify-center">
+          <img
+            src={stage.qr_data_uri}
+            alt={t("auth.enroll_qr_alt")}
+            className="h-44 w-44 rounded-lg border bg-background p-3"
+          />
+        </div>
+      ) : null}
+      {stage.secret ? (
+        <div className="space-y-1">
+          <Label htmlFor="local-enroll-secret">{t("auth.enroll_secret_label")}</Label>
+          <Input
+            id="local-enroll-secret"
+            readOnly
+            value={stage.secret}
+            className="bg-muted font-mono text-xs"
+          />
+        </div>
+      ) : null}
+      <CodeInput id="local-enroll" value={code} onChange={setCode} label={t("auth.totp_code")} />
+      {expired ? (
+        <Button type="button" variant="outline" className="w-full" onClick={onRestart}>
+          {t("auth.totp_restart")}
+        </Button>
+      ) : (
+        <Button type="submit" className="w-full" disabled={enroll.isPending}>
+          {enroll.isPending ? t("common.loading") : t("auth.enroll_submit")}
+        </Button>
+      )}
+    </form>
+  );
+}
+
+function LocalRecoveryCodes({ codes }: { codes: string[] }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{t("auth.recovery_title")}</p>
+        <p className="text-sm text-muted-foreground">{t("auth.recovery_intro")}</p>
+      </div>
+      <ul className="grid grid-cols-2 gap-x-4 gap-y-1 rounded-md border bg-muted/40 p-3 font-mono text-xs">
+        {codes.map((code) => (
+          <li key={code}>{code}</li>
+        ))}
+      </ul>
+      <Button type="button" className="w-full" onClick={goToApp}>
+        {t("auth.recovery_continue")}
+      </Button>
+    </div>
   );
 }

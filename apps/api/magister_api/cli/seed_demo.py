@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import sys
 import uuid
 
@@ -56,15 +57,36 @@ STUDENTS_SPEC: list[tuple[str, str, str]] = [
 ]
 
 
+#: Schemanamen gehen unquotiert in die Verbindungsparameter — dieselbe Grenze
+#: wie in der Bereitstellung.
+_SCHEMA_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,62}$")
+
+
 def _new_guid() -> str:
     """Return a 36-char canonical UUID — same shape as Entra's ``oid`` claim."""
     return str(uuid.uuid4())
 
 
-async def seed_demo_data(*, force: bool) -> int:
-    """Insert the demo data set. Returns a process exit code."""
+async def seed_demo_data(*, force: bool, schema: str | None = None) -> int:
+    """Insert the demo data set. Returns a process exit code.
+
+    ``schema`` setzt den ``search_path`` der Verbindung — nötig, sobald es
+    mehrere Mandanten gibt: ohne ihn landen die Demodaten im Schema, das die
+    Anmelderolle zufällig als Vorgabe hat, und das ist bei einem Kunden
+    ``public``. Nur für Entwicklungs- und Demo-Umgebungen: der Anfragepfad
+    setzt den Pfad pro Transaktion (``SET LOCAL``, ADR-0013 D1) und verlässt
+    sich nie auf eine Verbindungs-Vorgabe.
+    """
     settings = get_settings()
-    engine = create_async_engine(settings.database_url)
+    connect_args: dict[str, object] = {}
+    if schema:
+        if not _SCHEMA_PATTERN.match(schema):
+            sys.stderr.write(f"Ungültiger Schemaname: {schema!r}\n")
+            return 2
+        # `server_settings` und kein `SET`: so gilt der Pfad ab der ersten
+        # Anweisung jeder Verbindung des Pools, auch nach einem Reconnect.
+        connect_args["server_settings"] = {"search_path": schema}
+    engine = create_async_engine(settings.database_url, connect_args=connect_args)
     sm = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with sm() as session:
@@ -254,8 +276,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Seed even if the DB already contains classes. Use with care.",
     )
+    parser.add_argument(
+        "--schema",
+        default=None,
+        help=(
+            "Schema, in das geschrieben wird (Mandanten-Schema, z.B. t_thun). "
+            "Ohne Angabe entscheidet die Vorgabe der Anmelderolle."
+        ),
+    )
     args = parser.parse_args(argv)
-    return asyncio.run(seed_demo_data(force=args.force))
+    return asyncio.run(seed_demo_data(force=args.force, schema=args.schema))
 
 
 if __name__ == "__main__":

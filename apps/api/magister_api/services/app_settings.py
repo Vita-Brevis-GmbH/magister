@@ -28,6 +28,7 @@ from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from magister_api.services import web_tls
+from magister_api.tenancy.keys import keys_for
 
 
 def _resolve_web_tls_import(
@@ -87,8 +88,6 @@ class EffectiveAppSettings:
     ad_bind_password: str | None
     ad_tls_verify: bool
     ad_tls_ca_pem: str | None
-    ad_login_enabled: bool
-    ad_login_group: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -116,7 +115,9 @@ class AppSettingsService:
     @property
     def _key(self) -> str:
         # Dedicated secrets key when configured, else the audit key (default).
-        key = self._settings.app_secrets_key()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self._settings).secrets_key
         if not key:
             raise RuntimeError(
                 "neither MAGISTER_SECRETS_KEY nor MAGISTER_AUDIT_KEY is set — "
@@ -176,8 +177,6 @@ class AppSettingsService:
             ),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
-            AppSettings.ad_login_enabled,
-            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -207,8 +206,6 @@ class AppSettingsService:
             ad_bind_password=row.ad_bind_password,
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
-            ad_login_enabled=bool(row.ad_login_enabled),
-            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -235,8 +232,6 @@ class AppSettingsService:
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
-            AppSettings.ad_login_enabled,
-            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -276,8 +271,6 @@ class AppSettingsService:
             ad_bind_password_set=bool(row.ad_bind_password_set),
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
-            ad_login_enabled=bool(row.ad_login_enabled),
-            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -311,6 +304,7 @@ class AppSettingsService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        action: str = "app_settings_updated",
     ) -> AppSettingsOut:
         """Apply non-None fields, encrypt secrets only when payload sends them.
 
@@ -332,8 +326,6 @@ class AppSettingsService:
             "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_tls_verify": payload.ad_tls_verify,
-            "ad_login_enabled": payload.ad_login_enabled,
-            "ad_login_group": payload.ad_login_group,
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
@@ -417,7 +409,13 @@ class AppSettingsService:
         )
 
         await AuditService(self.session, self._settings).emit(
-            action="app_settings_updated",
+            # ``action`` ist überschreibbar, damit der Kunde im Protokoll
+            # unterscheiden kann, ob ein Mensch im Haus das Formular ausgefüllt
+            # hat oder die Plattform ihren Soll-Zustand materialisiert hat
+            # (ADR-0017 D4). Ein gemeinsamer Name für beides wäre eine
+            # Zeitersparnis beim Schreiben und eine Frage ohne Antwort beim
+            # Lesen.
+            action=action,
             target_kind="app_settings",
             target_id="1",
             actor_upn=actor_upn,
@@ -554,10 +552,6 @@ class AppSettingsService:
             values["ad_tls_ca_pem"] = settings.ad_tls_ca_pem
         if not settings.ad_tls_verify:
             values["ad_tls_verify"] = False
-        if settings.ad_login_enabled:
-            values["ad_login_enabled"] = True
-        if settings.ad_login_group:
-            values["ad_login_group"] = settings.ad_login_group
         if settings.ad_sync_interval_minutes:
             values["ad_sync_interval_minutes"] = settings.ad_sync_interval_minutes
 
@@ -594,8 +588,6 @@ def _empty_effective() -> EffectiveAppSettings:
         ad_bind_password=None,
         ad_tls_verify=True,
         ad_tls_ca_pem=None,
-        ad_login_enabled=False,
-        ad_login_group=None,
         ad_users_search_base=None,
         ad_computers_search_base=None,
         ad_sync_interval_minutes=15,
