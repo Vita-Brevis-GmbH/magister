@@ -251,6 +251,54 @@ class TestTenantOverrides:
         }
         assert state["settings_source"] == "tenant"
 
+    def test_the_tenants_profile_reaches_its_installation(
+        self, console_client: TestClient, tenant_row: str, cockpit_database_url: str
+    ) -> None:
+        """Was in der Konsole am Kunden steht, gilt auch in seiner Installation.
+
+        Der Fall vom Dev-Host: Kunde in der Konsole auf „company", seine eigene
+        Oberflaeche auf „Schule" — und kein Hinweis darauf irgendwo. Das Profil
+        entschied bis dahin nur die Vorlagen-Zielgruppe; das Profil der
+        Installation kam aus den Plattform-Vorgaben.
+        """
+        import asyncio
+
+        async def auf_company() -> None:
+            engine = create_async_engine(cockpit_database_url, poolclass=NullPool)
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(
+                        text("UPDATE tenants SET profile = 'company' WHERE id = :id"),
+                        {"id": tenant_row},
+                    )
+            finally:
+                await engine.dispose()
+
+        # Direkt geschrieben wie in der Fixture: das Profil setzt die Konsole
+        # beim Anlegen, und dafuer braeuchte dieser Test einen zweiten Cluster.
+        asyncio.run(auf_company())
+
+        _put(
+            console_client,
+            "/api/platform/settings",
+            {"defaults": {"instance_profile": "school", "ad_sync_interval_minutes": 60}},
+        )
+        state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
+        assert state["settings"]["instance_profile"] == "company"
+        # Die Vorgabe der Plattform gilt fuer alles andere weiterhin.
+        assert state["settings"]["ad_sync_interval_minutes"] == 60
+
+    def test_an_explicit_override_still_wins_over_the_profile(
+        self, console_client: TestClient, tenant_row: str
+    ) -> None:
+        _put(
+            console_client,
+            f"/api/tenants/{tenant_row}/settings",
+            {"overrides": {"instance_profile": "neutral"}},
+        )
+        state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
+        assert state["settings"]["instance_profile"] == "neutral"
+
     def test_platform_rbac_applies_until_the_tenant_has_its_own(
         self, console_client: TestClient, tenant_row: str
     ) -> None:

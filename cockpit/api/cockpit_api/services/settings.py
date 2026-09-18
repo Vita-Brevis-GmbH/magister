@@ -259,14 +259,31 @@ class SettingsService:
         Nimmt den Kunden und nicht seine Id: die Vorlagen-Zielgruppe fragt nach
         seinem Profil (ADR-0018 D5), und ein zweites Laden derselben Zeile wäre
         eine Abfrage, die nur deshalb existiert, weil die Signatur zu eng war.
+
+        **Das Profil des Kunden gilt auch in seiner Installation.** Es steht in
+        der Konsole am Kunden selbst (`tenants.profile`) — das ist der einzige
+        Schalter, den die Oberfläche dafür anbietet. Ohne die Zeile unten blieb
+        er auf halbem Weg stehen: er entschied die Vorlagen-Zielgruppe, und die
+        Installation lief weiter im Profil aus den Plattform-Vorgaben. Auf dem
+        Dev-Host stand der Kunde in der Konsole auf „company" und in seiner
+        eigenen Oberfläche auf „Schule", ohne dass irgendwo ein Widerspruch
+        gemeldet wurde.
+
+        Rangfolge damit: **ausdrückliche Abweichung des Kunden > sein Profil in
+        der Konsole > Plattform-Vorgabe.** Die Vorgabe zuletzt, weil ein
+        globales „alle sind Schulen" sonst die Angabe am einzelnen Kunden
+        überstimmen würde — und die ist die genauere.
         """
         platform = await self.platform()
         overrides_row = await self.tenant(tenant.id)
         overrides = overrides_row.overrides if overrides_row else {}
         own_rbac = overrides_row.rbac if overrides_row else None
         rbac = own_rbac if own_rbac is not None else platform.rbac
+        settings = effective(platform.defaults, overrides)
+        if "instance_profile" not in overrides:
+            settings["instance_profile"] = str(tenant.profile)
         return {
-            "settings": effective(platform.defaults, overrides),
+            "settings": settings,
             "rbac": rbac or {},
             "templates": await TemplateService(self.session).desired_templates(tenant),
             "settings_source": "tenant" if overrides else "platform",
