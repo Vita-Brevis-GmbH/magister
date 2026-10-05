@@ -12,6 +12,7 @@ Vollständige Dokumentation für **Magister** und das interne **Vita Brevis Cock
 | Magister auf einem Schulträger-Host installieren | [`scripts/install-magister.sh`](../scripts/install-magister.sh) (`--mode prod\|dev`, empfohlen) ODER [`runbooks/install-ubuntu.md`](runbooks/install-ubuntu.md) (manuell) |
 | Das Cockpit (intern) installieren | [`runbooks/install-cockpit.md`](runbooks/install-cockpit.md) ODER [`scripts/install-cockpit.sh`](../scripts/install-cockpit.sh) |
 | Eine bestehende Magister-Instanz upgraden | [`runbooks/upgrade-to-mX.md`](runbooks/) |
+| Die Plattform vor dem ersten Fremdkunden abnehmen | [`runbooks/abnahme-testplan.md`](runbooks/abnahme-testplan.md) |
 | Verstehen wie wir entscheiden | [`adr/`](adr/) |
 | Roadmap sehen | [`../ROADMAP.md`](../ROADMAP.md) |
 
