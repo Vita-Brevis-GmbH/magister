@@ -40,7 +40,11 @@ SLUG = "abgang"
 def _create(client: TestClient, slug: str = SLUG) -> dict[str, object]:
     resp = client.post(
         "/api/tenants",
-        json={"slug": slug, "name": "Abgangsstadt", "hostname": f"{slug}.magister.test"},
+        json={
+            "slug": slug,
+            "name": "Abgangsstadt",
+            "hostname": f"{slug.replace('_', '-')}.magister.test",
+        },
     )
     assert resp.status_code in (201, 202), resp.text
     body: dict[str, object] = resp.json()

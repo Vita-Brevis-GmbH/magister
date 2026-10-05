@@ -164,6 +164,29 @@ class TestValidation:
         )
         assert resp.status_code == 422
 
+    @pytest.mark.parametrize(
+        "hostname",
+        ["konsole.magister.test", "connect.magister.test", "thun_west.magister.test"],
+    )
+    def test_a_platform_or_invalid_hostname_is_refused_with_422(
+        self, authed_client: TestClient, hostname: str
+    ) -> None:
+        # Abnahme-Testplan K-11a: geprüft, bevor irgendetwas angelegt wird.
+        resp = authed_client.post(
+            "/api/tenants", json={"slug": "thun", "name": "Thun", "hostname": hostname}
+        )
+        assert resp.status_code == 422
+
+    def test_a_hostname_outside_the_tenant_domain_is_refused(
+        self, authed_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "tenant_domain", "magister.ch")
+        resp = authed_client.post(
+            "/api/tenants", json={"slug": "thun", "name": "Thun", "hostname": "thun.example.com"}
+        )
+        assert resp.status_code == 422
+        assert "magister.ch" in resp.json()["detail"]
+
     def test_suspending_needs_a_reason(self, authed_client: TestClient) -> None:
         # Sperren ohne Begründung ist der Anfang von Willkür — der Grund ist
         # für den Kunden sichtbar und deshalb Pflichtfeld.
@@ -177,7 +200,7 @@ def _payload(slug: str) -> dict[str, str]:
     return {
         "slug": slug,
         "name": f"Gemeinde {slug}",
-        "hostname": f"{slug}.magister.test",
+        "hostname": f"{slug.replace('_', '-')}.magister.test",
     }
 
 

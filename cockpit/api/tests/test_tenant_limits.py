@@ -56,7 +56,7 @@ def _provision(client: TestClient, slug: str) -> dict[str, Any]:
         json={
             "slug": slug,
             "name": slug.title(),
-            "hostname": f"{slug}.magister.test",
+            "hostname": f"{slug.replace('_', '-')}.magister.test",
         },
     )
     assert response.status_code in (201, 202), response.text

@@ -394,6 +394,9 @@ write_env() {
 COCKPIT_BIND_ADDRESS=$BIND
 COCKPIT_HOSTNAME=$KONSOLE_HOST
 COCKPIT_CONNECTOR_HOSTNAME=connect.$DOMAIN
+# Unter dieser Domäne liegen die Kunden (<kunde>.<domäne>). Die Konsole
+# weist beim Anlegen jeden anderen Hostnamen ab — und die zwei Namen oben.
+COCKPIT_TENANT_DOMAIN=$DOMAIN
 # Die zweite Adresse desselben Listeners (IP oder FQDN der Maschine).
 # Leer heisst 'localhost' — dann ist die Konsole nur über ihren Namen
 # erreichbar, und ein Aufruf per IP endet in 421.
@@ -440,6 +443,10 @@ EOF
     setze_wert "$konsole_env" COCKPIT_BIND_ADDRESS "$BIND" && geaendert=1
     setze_wert "$konsole_env" COCKPIT_EXTRA_HOST "$gewuenscht_extra" && geaendert=1
     setze_wert "$konsole_env" COCKPIT_HOSTNAME "$KONSOLE_HOST" && geaendert=1
+    setze_wert "$konsole_env" COCKPIT_CONNECTOR_HOSTNAME "connect.$DOMAIN" && geaendert=1
+    # Nachgereicht: ohne den Wert prüft die Konsole beim Anlegen eines Kunden
+    # nur die Form des Hostnamens, nicht die Domäne.
+    setze_wert "$konsole_env" COCKPIT_TENANT_DOMAIN "$DOMAIN" && geaendert=1
     # Nachgereicht für Installationen, die vor den Agentenpaketen entstanden
     # sind: ohne den Wert hängt Compose den Vorgabepfad ein, und der liegt
     # bei einem eigenen PLATTFORM_ROOT woanders.

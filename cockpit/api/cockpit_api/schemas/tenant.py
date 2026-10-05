@@ -12,6 +12,7 @@ from cockpit_api.models.tenant import (
     TenantProfile,
     TenantStatus,
 )
+from cockpit_api.services.hostnames import HostnameError, check_syntax
 
 
 class TenantCreate(BaseModel):
@@ -36,8 +37,13 @@ class TenantCreate(BaseModel):
 
     @field_validator("hostname")
     @classmethod
-    def _normalize_hostname(cls, value: str) -> str:
-        return value.strip().lower()
+    def _check_hostname(cls, value: str) -> str:
+        # Die Form hier; ob er unter die Plattform-Domäne passt, prüft der
+        # Router — dafür braucht es die Konfiguration.
+        try:
+            return check_syntax(value)
+        except HostnameError as exc:
+            raise ValueError(str(exc)) from exc
 
 
 class TenantSuspend(BaseModel):

@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     #: Management-Marker unterscheiden, sonst gilt jeder auf beiden Kanälen.
     connector_marker: str = Field(default="")
     published_address: str = Field(default="127.0.0.1:4444")
+    #: Die Namen, unter denen die Plattform selbst erreichbar ist. Kein Kunde
+    #: darf einen davon bekommen (siehe services/hostnames.py).
+    hostname: str = Field(default="")
+    connector_hostname: str = Field(default="")
+    #: Domäne, unter der die Kunden liegen (`<kunde>.<domäne>`). Gesetzt, muss
+    #: jeder Kunden-Hostname genau eine Ebene darunter liegen; leer, wird nur
+    #: die Form geprüft (Einzelinstallation mit eigenem Namen).
+    tenant_domain: str = Field(default="")
     # --- Mandanten-Bereitstellung (ADR-0013 D2) ---------------------------
     # Verwaltungszugang in den Magister-Cluster: eine Rolle mit CREATEROLE und
     # CREATE auf der Datenbank. NICHT eine Mandantenrolle. Ohne diesen Wert

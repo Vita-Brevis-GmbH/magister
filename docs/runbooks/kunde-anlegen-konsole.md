@@ -39,6 +39,14 @@ curl -sS --cert operator.pem --key operator-key.pem \
           "hostname":"musterstadt.magister.ch","profile":"school"}'
 ```
 
+**Der Hostname wird geprüft, bevor etwas angelegt wird** (Antwort 422 mit
+Grund): ein gültiger Name (Kleinbuchstaben, Ziffern, Bindestrich — kein
+Unterstrich, keine IP), genau eine Ebene unter `COCKPIT_TENANT_DOMAIN` (das
+Platzhalter-Zertifikat deckt nur eine), und nicht `konsole`, `console`,
+`connect` oder einer der Namen in `COCKPIT_HOSTNAME` /
+`COCKPIT_CONNECTOR_HOSTNAME`. Steht `COCKPIT_TENANT_DOMAIN` leer, wird nur
+die Form geprüft.
+
 Antwort **201** heisst: alle fünf Schritte durch, Kunde `active`.
 Antwort **202** heisst: angelegt, aber der Auftrag ist nicht durch — der Kunde
 steht auf `provisioning` und ist **nicht erreichbar**. Das ist die Zusage: nie

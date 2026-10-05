@@ -38,6 +38,7 @@ from cockpit_api.schemas.tenant import (
     TenantRelocate,
     TenantSuspend,
 )
+from cockpit_api.services.hostnames import HostnameError, check_placement
 from cockpit_api.services.provisioning import (
     JobSecrets,
     ProvisioningError,
@@ -121,6 +122,14 @@ async def create_tenant(
     response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> TenantProvisionResult:
+    try:
+        check_placement(
+            payload.hostname,
+            tenant_domain=settings.tenant_domain,
+            platform_hosts=(settings.hostname, settings.connector_hostname),
+        )
+    except HostnameError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
     tenant = Tenant(
         slug=payload.slug,
         name=payload.name,

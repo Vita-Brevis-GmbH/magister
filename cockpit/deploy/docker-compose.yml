@@ -41,6 +41,12 @@ services:
       COCKPIT_REQUIRE_MANAGEMENT_LISTENER: "1"
       COCKPIT_MANAGEMENT_MARKER: ${COCKPIT_MANAGEMENT_MARKER:?COCKPIT_MANAGEMENT_MARKER is required — openssl rand -hex 32}
       COCKPIT_PUBLISHED_ADDRESS: ${COCKPIT_BIND_ADDRESS:?COCKPIT_BIND_ADDRESS is required — the management address, not 0.0.0.0}:4444
+      # Die Namen der Plattform und die Domäne der Kunden: damit weist die
+      # Konsole beim Anlegen eines Kunden einen Hostnamen ab, der der Konsole
+      # oder dem Connector-Kanal gehört oder nicht unter die Domäne passt.
+      COCKPIT_HOSTNAME: ${COCKPIT_HOSTNAME:-}
+      COCKPIT_CONNECTOR_HOSTNAME: ${COCKPIT_CONNECTOR_HOSTNAME:-}
+      COCKPIT_TENANT_DOMAIN: ${COCKPIT_TENANT_DOMAIN:-}
       # ADR-0014: der Connector-Kanal auf 46200. Eigener Marker, zwingend
       # anders als der Management-Marker.
       COCKPIT_CONNECTOR_MARKER: ${COCKPIT_CONNECTOR_MARKER:?COCKPIT_CONNECTOR_MARKER is required and must differ from COCKPIT_MANAGEMENT_MARKER}

@@ -86,7 +86,7 @@ def _tenant(client: TestClient, slug: str) -> str:
     """Kunden anlegen und aktiv setzen — die Bereitstellung ist hier nicht der Punkt."""
     created = client.post(
         "/api/tenants",
-        json={"slug": slug, "name": slug, "hostname": f"{slug}.magister.test"},
+        json={"slug": slug, "name": slug, "hostname": f"{slug.replace('_', '-')}.magister.test"},
     )
     assert created.status_code in (201, 202), created.text
     tenant_id: str = created.json()["tenant"]["id"]
