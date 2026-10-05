@@ -315,6 +315,11 @@ def build_ad_client() -> object | None:
         fields = sorted({".".join(str(p) for p in err["loc"]) for err in exc.errors()})
         sys.stderr.write(f"AD-Konfiguration ungültig in: {', '.join(fields)}\n")
         return None
+    except Exception as exc:  # pragma: no cover — alles andere, ohne den Text
+        # Dieselbe Vorsicht: nur der Typ. Der Dienst (winservice) erwartet
+        # hier `None` und meldet dann selbst, was zu tun ist.
+        sys.stderr.write(f"AD-Konfiguration nicht ladbar ({type(exc).__name__}).\n")
+        return None
     return AdClient(settings)
 
 
