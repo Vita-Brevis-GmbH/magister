@@ -49,6 +49,12 @@ else
     OUT="${2:-$HERE/magister-connector-${VERSION:-0.0.0}-x64.msi}"
 fi
 
+# Absolut machen: weiter unten läuft `msibuild` im Arbeitsverzeichnis. Mit
+# einem relativen Pfad (so ruft die CI das Skript auf) schrieb es dort in eine
+# neue, leere Datei, und dem eigentlichen MSI fehlte der PATH-Eintrag. Die
+# Prüfung unten hat es gefunden, der Stub-Bau mit absolutem Pfad nicht.
+OUT="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
+
 if [[ ! -d "$PAYLOAD" ]]; then
     echo "Payload-Verzeichnis $PAYLOAD fehlt." >&2
     exit 2
