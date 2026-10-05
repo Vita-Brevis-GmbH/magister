@@ -58,7 +58,7 @@ einmal.
 ```bash
 sudo dpkg -i magister-connector_0.1.0_amd64.deb
 sudo cp /etc/magister-connector/config.example.json /etc/magister-connector/config.json
-sudoedit /etc/magister-connector/config.json      # endpoint, allowed_ous
+sudoedit /etc/magister-connector/config.json      # endpoint (Name aus dem Zertifikat!), allowed_ous
 sudoedit /etc/magister-connector/ad.env           # MAGISTER_AD_*
 sudo runuser -u magister-connector -- magister-connector enroll
 sudo runuser -u magister-connector -- magister-connector check
@@ -83,10 +83,13 @@ msiexec /i magister-connector-0.1.0-x64.msi /qn
 Danach am Server:
 
 1. `%ProgramData%\Magister Connector\config.example.json` nach `config.json`
-   kopieren und anpassen (`endpoint`, `allowed_ous`).
+   kopieren und anpassen (`endpoint`, `allowed_ous`). Im `endpoint` steht der
+   Name, auf den das Zertifikat der Plattform ausgestellt ist — keine IP.
 2. Die `MAGISTER_AD_*`-Werte in die Umgebung des Dienstes eintragen.
-3. Eingabeaufforderung **als Administrator** (das Startmenü liefert eine):
-   `magister-connector enroll`, dann `magister-connector check`.
+3. Eingabeaufforderung **als Administrator** (der Installationsordner steht im
+   System-PATH): `magister-connector enroll`, dann `magister-connector check`.
+   `check` prüft Kanal (Name, Port, Zertifikat) und AD-Bind mit den Werten
+   des Dienstes.
 4. `sc start MagisterConnector`.
 
 Der ganze Ablauf mit Begründungen steht in

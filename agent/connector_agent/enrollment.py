@@ -38,6 +38,7 @@ from connector_agent.config import (
     save_secrets,
     write_secret_file,
 )
+from connector_agent.diagnose import explain_transport_error
 from connector_agent.tls import build_context
 
 logger = logging.getLogger(__name__)
@@ -124,9 +125,10 @@ def enroll(
                 json={"token": token, "csr_pem": csr_pem, "agent_version": agent_version},
             )
     except httpx.HTTPError as exc:
-        raise EnrollmentFailedError(
-            f"Die Plattform ist nicht erreichbar: {exc}. Ist TCP 46200 ausgehend offen?"
-        ) from exc
+        # Nicht pauschal „Port offen?": der häufigste Fall bei der ersten
+        # Anmeldung war ein offener Port und ein Endpunkt, der nicht zum
+        # Zertifikat passt (siehe diagnose.py).
+        raise EnrollmentFailedError(explain_transport_error(exc, config)) from exc
     if resp.status_code == 401:
         raise EnrollmentFailedError(
             "Das Einmal-Token wurde abgelehnt: unbekannt, abgelaufen oder schon "

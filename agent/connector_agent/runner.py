@@ -30,6 +30,7 @@ from typing import Any, cast
 import httpx
 
 from connector_agent.config import AgentConfig, AgentSecrets
+from connector_agent.diagnose import explain_transport_error
 from connector_agent.guardrails import Guardrails, GuardrailViolationError
 from connector_agent.renewal import (
     RETRY_AFTER,
@@ -303,7 +304,7 @@ class Runner:
                         # Lange warten: das behebt ein Mensch in der Konsole.
                         await _sleep_or_stop(stop, 60.0)
                     except (httpx.HTTPError, OSError) as exc:
-                        logger.warning("Plattform nicht erreichbar: %s", exc)
+                        logger.warning("%s", explain_transport_error(exc, self.config))
                         await _sleep_or_stop(stop, self.config.backoff_seconds)
 
 

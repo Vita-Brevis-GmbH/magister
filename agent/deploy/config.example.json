@@ -1,7 +1,7 @@
 {
   "_kommentar": "Konfiguration des Connector-Agenten (ADR-0014). Kopieren nach config.json und anpassen. Diese Vorlage wird bei einem Update ersetzt, Ihre config.json nie.",
 
-  "_endpoint": "Die Adresse aus der Konsole. MUSS https sein — über diesen Kanal laufen Passwörter.",
+  "_endpoint": "Die Adresse aus der Konsole. MUSS https sein — über diesen Kanal laufen Passwörter. Der Name muss der aus dem Zertifikat der Plattform sein: keine IP-Adresse, kein anderer Name desselben Servers.",
   "endpoint": "https://connect.magister.ch:46200",
 
   "_state_dir": "Wo Zertifikat, privater Schlüssel und Anmeldung liegen. HIER ABSICHTLICH NICHT GESETZT: die Vorgabe ist je Betriebssystem die richtige — unter Windows %ProgramData%\\Magister Connector, unter Linux /var/lib/magister-connector. Nur setzen, wenn es wirklich anderswo hin soll.",

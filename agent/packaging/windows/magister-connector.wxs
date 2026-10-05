@@ -197,6 +197,12 @@
     </DirectoryRef>
 
     <!--
+      An dieser Komponente hängt auch der PATH-Eintrag für den
+      Installationsordner. Er steht nicht hier, weil wixl das Element
+      `Environment` nicht kennt; build-msi.sh fügt die Tabelle nach dem Bau
+      mit `msibuild` ein und prüft, dass sie drin ist.
+    -->
+    <!--
       Wo die Konfiguration liegt, für den Dienst und für die Fehlersuche.
       HKLM, weil der Dienst als LocalSystem läuft und HKCU dort ein anderes
       ist als das des Betreibers.

@@ -6,9 +6,9 @@ Drei Befehle:
 * ``run``     — Abrufbetrieb (das macht der Dienst)
 * ``check``   — Konfiguration, Rechte und Erreichbarkeit prüfen, ohne etwas zu tun
 
-``check`` ist der Befehl für die Abnahme beim Kunden: er sagt, ob der Port
-offen ist, ob die Rechte stimmen und ob das AD antwortet — bevor irgendwer auf
-einen Passwort-Reset wartet.
+``check`` ist der Befehl für die Abnahme beim Kunden: er sagt, ob der Kanal zur
+Plattform steht (Name, Port, Zertifikat), ob die Rechte stimmen und ob das AD
+das Dienstkonto annimmt — bevor irgendwer auf einen Passwort-Reset wartet.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import logging
 import sys
 from pathlib import Path
 
+from connector_agent.adenv import apply_missing, service_environment
 from connector_agent.config import (
     DEFAULT_CONFIG_PATH,
     AgentConfig,
@@ -26,6 +27,7 @@ from connector_agent.config import (
     assert_permissions,
     load_secrets,
 )
+from connector_agent.diagnose import ip_endpoint_hint, probe_channel
 from connector_agent.enrollment import EnrollmentFailedError, enroll
 
 VERSION = "0.1.0"
@@ -136,6 +138,11 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stderr.write(f"Konfiguration: {exc}\n")
         return 1
     sys.stdout.write(f"Endpunkt:     {config.endpoint}\n")
+    hint = ip_endpoint_hint(config.endpoint)
+    if hint:
+        # Kein eigener Fehler: hat das Zertifikat ausnahmsweise die IP als
+        # Namen, geht es. Ob es geht, sagt die Kanal-Zeile unten.
+        sys.stdout.write(f"              WARNUNG — {hint}\n")
     sys.stdout.write(f"Zustand:      {config.state_dir}\n")
 
     try:
@@ -171,12 +178,15 @@ def cmd_check(args: argparse.Namespace) -> int:
     else:
         sys.stdout.write("CA-Bundle:    ok\n")
 
-    sys.stdout.write(
-        "\nErreichbarkeit von TCP 46200 bitte zusätzlich von diesem Server aus prüfen:\n"
-        f"  curl -sv --cacert {config.ca_bundle} {config.endpoint}/connector/jobs\n"
-        "Ohne Client-Zertifikat MUSS der Handshake scheitern — das ist der Beweis,\n"
-        "dass der Kanal nicht offen steht.\n"
-    )
+    probe = probe_channel(config)
+    if probe.ok:
+        sys.stdout.write(f"Kanal:        ok — {probe.message}\n")
+    else:
+        sys.stdout.write(f"Kanal:        FEHLER — {probe.message}\n")
+        problems += 1
+
+    problems += _report_ad()
+
     if problems:
         sys.stdout.write(f"\n{problems} Punkt(e) offen.\n")
         return 1
@@ -217,6 +227,63 @@ def _report_certificate(config: AgentConfig) -> int:
     return 0
 
 
+#: Was die Ursachen-Codes aus ``magister_api.ad.errors`` beim Kunden heissen.
+#: Die Codes tragen weder Host noch DN noch Passwort; die Sätze auch nicht.
+AD_REASONS: dict[str, str] = {
+    "ad_config": (
+        "AD-Zugang unvollständig: Domänencontroller, Bind-DN oder Passwort fehlen "
+        "(MAGISTER_AD_DCS, MAGISTER_AD_BIND_DN, MAGISTER_AD_BIND_PASSWORD)."
+    ),
+    "ad_unreachable": (
+        "Kein Domänencontroller auf Port 636 erreichbar. Namen in MAGISTER_AD_DCS "
+        "und die Firewall zwischen diesem Server und den DCs prüfen."
+    ),
+    "ad_tls": (
+        "LDAPS zum Domänencontroller gescheitert. Hat der DC ein Zertifikat für "
+        "LDAPS, und vertraut dieser Server der ausstellenden CA?"
+    ),
+    "ad_timeout": "Der Domänencontroller antwortet nicht rechtzeitig.",
+    "ad_auth": (
+        "Der Domänencontroller hat das Dienstkonto abgewiesen: Bind-DN oder "
+        "Passwort falsch, Konto gesperrt oder abgelaufen."
+    ),
+}
+
+
+def _report_ad() -> int:
+    """Bindet sich einmal mit dem Dienstkonto ans AD. Rückgabe: Anzahl Probleme.
+
+    Erst damit beantwortet ``check`` die Frage, die bei der Abnahme zählt:
+    kommt ein Passwort-Reset bis ins AD? Kanal und Zertifikat allein sagen
+    nur, dass der Auftrag beim Agenten ankommt.
+    """
+    service = service_environment()
+    if service is not None:
+        taken = apply_missing(service)
+        sys.stdout.write(f"AD-Umgebung:  {service.source}, {len(service.values)} Wert(e)\n")
+        if not taken and service.values:
+            sys.stdout.write("              (von Hand gesetzte Werte dieser Sitzung gehen vor)\n")
+    else:
+        sys.stdout.write(
+            "AD-Umgebung:  keine Dienst-Umgebung gefunden — es gilt nur diese Sitzung\n"
+        )
+    ad = build_ad_client()
+    if ad is None:
+        sys.stdout.write("AD:           FEHLER — AD-Schicht nicht ladbar (siehe oben)\n")
+        return 1
+    probe = getattr(ad, "probe_service_connection_detailed", None)
+    if probe is None:  # pragma: no cover — ältere AD-Schicht im Paket
+        sys.stdout.write("AD:           nicht geprüft — die AD-Schicht kennt den Test nicht\n")
+        return 0
+    ok, reason = asyncio.run(probe())
+    if ok:
+        sys.stdout.write("AD:           ok — LDAPS-Bind mit dem Dienstkonto gelungen\n")
+        return 0
+    text = AD_REASONS.get(reason, f"Bind gescheitert ({reason}).")
+    sys.stdout.write(f"AD:           FEHLER — {text}\n")
+    return 1
+
+
 def build_ad_client() -> object | None:
     """AD-Client aus ``magister_api.ad`` bauen.
 
@@ -238,10 +305,15 @@ def build_ad_client() -> object | None:
             "AD-Schicht; im Paket ist sie enthalten.\n"
         )
         return None
+    from pydantic import ValidationError
+
     try:
         settings = Settings()  # type: ignore[call-arg]
-    except Exception as exc:  # pragma: no cover — Pydantic-Validierungsfehler
-        sys.stderr.write(f"AD-Konfiguration unvollständig: {exc}\n")
+    except ValidationError as exc:
+        # Nur die Feldnamen: der Text eines Validierungsfehlers enthält den
+        # eingegebenen Wert, und einer davon ist das Bind-Passwort.
+        fields = sorted({".".join(str(p) for p in err["loc"]) for err in exc.errors()})
+        sys.stderr.write(f"AD-Konfiguration ungültig in: {', '.join(fields)}\n")
         return None
     return AdClient(settings)
 

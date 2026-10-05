@@ -66,7 +66,7 @@ if [[ "$VERSION" != "$MSI_VERSION" ]]; then
     echo "Hinweis: Agent-Version '$VERSION' wird im MSI zu '$MSI_VERSION' (Windows nimmt nur x.y.z)."
 fi
 
-for tool in wixl wixl-heat; do
+for tool in wixl wixl-heat msibuild msiinfo; do
     if ! command -v "$tool" >/dev/null; then
         echo "$tool fehlt. Auf Debian/Ubuntu: apt-get install wixl" >&2
         exit 2
@@ -144,6 +144,33 @@ if grep -qE "has no property named|unhandled child|CRITICAL|WARNING" "$WORK/wixl
 fi
 [[ -s "$WORK/wixl.err" ]] && cat "$WORK/wixl.err" >&2
 
+# Der Installationsordner kommt in den System-PATH, damit
+# `magister-connector check` in JEDER Eingabeaufforderung geht und nicht nur
+# in der aus dem Startmenü. Ohne das war der erste Befehl beim Kunden ein
+# „nicht gefunden", und die Fehlersuche begann bei der falschen Frage.
+#
+# Nachträglich und nicht in der WiX-Quelle: wixl kennt das Element
+# `Environment` nicht („unhandled child Component node Environment") und
+# bricht ab. Die Tabelle selbst ist aber schlicht — vier Spalten — und
+# Windows Installer liest sie, egal wer sie geschrieben hat. `msibuild`
+# stammt aus denselben msitools wie wixl.
+#
+#   =-*PATH   = setzen beim Installieren, - zurücknehmen beim Deinstallieren,
+#             * Systemvariable (nicht die des installierenden Benutzers)
+#   [~];[INSTALLDIR]   anhängen, nicht ersetzen — und hinten, damit kein
+#             Programm aus diesem Ordner eines aus System32 überdeckt
+#
+# Hängt an C.Registry: die Komponente wird immer installiert und hat keinen
+# anderen Grund, sich zu ändern. Die Aktionen bekommen die Nummern, die auch
+# WiX vergibt (3300 vor InstallFiles, 5200 nach WriteRegistryValues).
+printf 'Environment\tName\tValue\tComponent_\r\ns72\tl255\tL255\ts72\r\nEnvironment\tEnvironment\r\n' \
+    > "$WORK/Environment.idt"
+printf 'E.Path\t=-*PATH\t[~];[INSTALLDIR]\tC.Registry\r\n' >> "$WORK/Environment.idt"
+msiinfo export "$OUT" InstallExecuteSequence > "$WORK/InstallExecuteSequence.idt"
+printf 'RemoveEnvironmentStrings\t\t3300\r\nWriteEnvironmentStrings\t\t5200\r\n' \
+    >> "$WORK/InstallExecuteSequence.idt"
+( cd "$WORK" && msibuild "$OUT" -i Environment.idt InstallExecuteSequence.idt )
+
 echo "MSI: $OUT ($(du -h "$OUT" | cut -f1))"
 
 # Nachsehen, ob wirklich drinsteht, was drinstehen soll. wixl meldet
@@ -161,8 +188,18 @@ if ! msiinfo export "$OUT" ServiceInstall | grep -q MagisterConnector; then
     echo "FEHLER: der Dienst MagisterConnector steht nicht im MSI." >&2
     missing=1
 fi
+if ! msiinfo export "$OUT" Environment 2>/dev/null | grep -q $'=-\\*PATH\t\\[~\\];\\[INSTALLDIR\\]'; then
+    echo "FEHLER: der PATH-Eintrag für den Installationsordner fehlt im MSI." >&2
+    missing=1
+fi
+for action in WriteEnvironmentStrings RemoveEnvironmentStrings; do
+    if ! msiinfo export "$OUT" InstallExecuteSequence | grep -q "^$action"; then
+        echo "FEHLER: die Aktion $action fehlt — der PATH-Eintrag bliebe wirkungslos." >&2
+        missing=1
+    fi
+done
 [[ $missing -eq 0 ]] || exit 1
-echo "Prüfung: Dienst und Tabellen vorhanden."
+echo "Prüfung: Dienst, Tabellen und PATH-Eintrag vorhanden."
 
 # Und jetzt das, was `msiinfo` NICHT sieht: ob Windows die Datei überhaupt
 # öffnet. `msiinfo` benutzt dieselbe Bibliothek, die das MSI geschrieben hat,

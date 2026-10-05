@@ -30,6 +30,16 @@ Wichtig sind:
 
   endpoint      Die Adresse aus der Konsole, z. B.
                 "https://connect.magister.ch:46200". Muss https sein.
+
+                **Der Name muss genau der sein, auf den das Zertifikat der
+                Plattform ausgestellt ist** — so, wie er in der Konsole beim
+                Agenten-Download steht. Keine IP-Adresse und kein anderer
+                Name desselben Servers: die Verbindung kommt dann zwar an,
+                wird aber abgewiesen ("Das Zertifikat der Plattform gilt
+                nicht für ..."). Löst der Name auf diesem Server nicht auf,
+                gehört er in den DNS oder in die hosts-Datei
+                (C:\Windows\System32\drivers\etc\hosts) — nicht die IP in
+                die Konfiguration.
   allowed_ous   Die Organisationseinheiten, in denen der Agent arbeiten darf.
                 **Eine leere Liste heisst: keine Verzeichnisaufträge.** Das
                 ist Absicht und nicht "alles erlaubt".
@@ -59,9 +69,11 @@ Klartext-LDAP ist nicht vorgesehen und lässt sich nicht einschalten.
 
 Schritt 3 — Anmelden
 --------------------
-Öffnen Sie über das Startmenü ("Magister Connector" →
-"Connector-Agent — Eingabeaufforderung") eine Eingabeaufforderung **als
-Administrator** und führen Sie aus:
+Öffnen Sie eine Eingabeaufforderung **als Administrator** und führen Sie
+aus (der Installationsordner steht im Suchpfad; eine Eingabeaufforderung,
+die schon vor der Installation offen war, kennt ihn noch nicht — dann eine
+neue öffnen, oder die aus dem Startmenü: "Magister Connector" →
+"Connector-Agent — Eingabeaufforderung"):
 
     magister-connector enroll
 
@@ -83,9 +95,21 @@ Schritt 4 — Prüfen
 ------------------
     magister-connector check
 
-Der Befehl verändert nichts und sagt, was noch fehlt: Rechte, Anmeldung,
-OU-Allowlist, CA-Bündel. Er ist der Abnahmebefehl — führen Sie ihn aus, bevor
-jemand auf einen Passwort-Reset wartet.
+Der Befehl verändert nichts und sagt, was noch fehlt:
+
+  Endpunkt      warnt, wenn dort eine IP-Adresse statt des Namens steht
+  Rechte        des Zustandsverzeichnisses
+  Anmeldung     und Restlaufzeit des Zertifikats
+  OU-Allowlist  leer heisst: keine Verzeichnisaufträge
+  Kanal         Name, Port 46200 und Zertifikat der Plattform — mit einem
+                echten Verbindungsaufbau
+  AD            ein LDAPS-Bind mit dem Dienstkonto, mit denselben Werten,
+                die der Dienst aus Schritt 2 bekommt. Passwörter werden
+                nicht angezeigt.
+
+Er ist der Abnahmebefehl — führen Sie ihn aus, bevor jemand auf einen
+Passwort-Reset wartet. Steht am Ende "Alles bereit.", trägt der ganze Weg
+bis ins AD.
 
 
 Schritt 5 — Dienst starten
@@ -132,6 +156,18 @@ Häufigster Fall: "Der Agent ist nicht angemeldet." Dann fehlt Schritt 3.
 Zweithäufigster: eine Meldung über die Rechte des Zustandsverzeichnisses. Dort
 liegt der private Schlüssel, und der Agent läuft nicht, wenn andere ihn lesen
 könnten. Die Meldung enthält die icacls-Zeile, die es richtet.
+
+Die Meldungen zur Verbindung nennen die Ursache, nicht nur das Symptom:
+
+  "Das Zertifikat der Plattform gilt nicht für ..."
+        Im 'endpoint' steht eine IP oder ein anderer Name (Schritt 1).
+        Der Port ist offen; an der Firewall liegt es nicht.
+  "... stammt von einer Stelle, der dieser Server nicht vertraut"
+        'ca_bundle' prüfen — oder ein Proxy bricht TLS auf.
+  "Verbindung zu ... abgewiesen" / "Keine Antwort von ..."
+        Netz: Firewall, Port, Weiterleitung.
+  "Der Name ... lässt sich nicht auflösen"
+        DNS oder hosts-Datei.
 
 
 Was in diesem Verzeichnis liegt — und was Sie sichern sollten

@@ -68,6 +68,41 @@ class FakeCa:
             spki=hashlib.sha256(der).hexdigest(),
         )
 
+    def issue_server(self, dns_name: str) -> tuple[str, str]:
+        """Server-Zertifikat für ``dns_name``. Rückgabe: (Zertifikat-PEM, Schlüssel-PEM).
+
+        Mit SubjectAltName, wie die Plattform es hat: ohne SAN prüft keine
+        aktuelle TLS-Bibliothek den Namen mehr, und ein Test gegen ein solches
+        Zertifikat sähe nie den Fehler, um den es geht.
+        """
+        key = ec.generate_private_key(ec.SECP256R1())
+        now = dt.datetime.now(dt.UTC)
+        cert = (
+            x509.CertificateBuilder()
+            .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, dns_name)]))
+            .issuer_name(self.certificate.subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - dt.timedelta(minutes=1))
+            .not_valid_after(now + dt.timedelta(days=30))
+            .add_extension(x509.SubjectAlternativeName([x509.DNSName(dns_name)]), critical=False)
+            .add_extension(
+                x509.ExtendedKeyUsage([x509.ObjectIdentifier("1.3.6.1.5.5.7.3.1")]),
+                critical=False,
+            )
+            .sign(self._key, hashes.SHA384())
+        )
+        key_pem = key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ).decode("ascii")
+        return cert.public_bytes(serialization.Encoding.PEM).decode("ascii"), key_pem
+
+    @property
+    def certificate_pem(self) -> str:
+        return self.certificate.public_bytes(serialization.Encoding.PEM).decode("ascii")
+
 
 def write_enrolled_state(state_dir: Path, ca: FakeCa) -> str:
     """Ein angemeldetes Zustandsverzeichnis anlegen.

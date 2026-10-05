@@ -43,6 +43,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
 from connector_agent.config import AgentConfig, AgentSecrets, save_secrets, write_secret_file
+from connector_agent.diagnose import explain_transport_error
 from connector_agent.enrollment import (
     generate_key_and_csr,
     spki_fingerprint_from_certificate,
@@ -194,7 +195,7 @@ def renew(
                 json={"csr_pem": csr_pem, "agent_version": agent_version},
             )
     except httpx.HTTPError as exc:
-        raise RenewalError(f"Die Plattform ist nicht erreichbar: {exc}") from exc
+        raise RenewalError(explain_transport_error(exc, config)) from exc
 
     if resp.status_code == 401:
         raise RenewalError(
