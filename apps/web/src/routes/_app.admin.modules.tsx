@@ -37,6 +37,11 @@ export function ModulesPage(): JSX.Element {
   // "turn on" checkbox for a module with an unmet dependency — e.g. Briefe
   // needs Klassen, so it cannot be switched on in the company edition.
   const enabledIds = new Set((q.data?.modules ?? []).filter((m) => m.enabled).map((m) => m.id));
+  // Gehostet gehören Profil und Module dem Betreiber (ADR-0017): die Konsole
+  // setzt sie, der Abgleich schreibt sie hierher. Die Seite zeigt sie nur an —
+  // ein Schalter hier würde beim nächsten Abgleich still zurückspringen, und
+  // die API hat den Schreibweg dann auch nicht.
+  const readOnly = q.data?.managed_by_platform ?? false;
   const depsMet = (m: AdminModuleOut): boolean => m.depends_on.every((d) => enabledIds.has(d));
 
   const confirmSwitch = (): void => {
@@ -67,6 +72,14 @@ export function ModulesPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{t("modules.loading")}</p>
       ) : (
         <>
+          {readOnly ? (
+            <p
+              role="note"
+              className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
+            >
+              {t("modules.managed_by_platform")}
+            </p>
+          ) : null}
           <section className="space-y-3 rounded-md border bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
@@ -76,7 +89,7 @@ export function ModulesPage(): JSX.Element {
               <select
                 className="h-9 rounded-md border border-input bg-background px-3 text-sm"
                 value={q.data.instance_profile}
-                disabled={update.isPending}
+                disabled={readOnly || update.isPending}
                 onChange={(e) => {
                   const next = e.target.value;
                   if (next !== q.data?.instance_profile) setPendingProfile(next);
@@ -122,7 +135,7 @@ export function ModulesPage(): JSX.Element {
                       <input
                         type="checkbox"
                         checked={m.enabled}
-                        disabled={update.isPending || (!m.enabled && !depsMet(m))}
+                        disabled={readOnly || update.isPending || (!m.enabled && !depsMet(m))}
                         onChange={(e) =>
                           applyModule({ module_overrides: { [m.id]: e.target.checked } })
                         }

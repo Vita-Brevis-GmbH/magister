@@ -1205,7 +1205,8 @@
     "mod_imports": "Imports (synchro AD, import en masse)",
     "mod_departments": "Départements / équipes",
     "mod_reports": "Analyses et rapports",
-    "mod_devices": "Attribution d'appareils"
+    "mod_devices": "Attribution d'appareils",
+    "managed_by_platform": "Le profil et les modules sont gérés par Vita Brevis. Pour toute modification, veuillez vous adresser à Vita Brevis."
   },
   "departments": {
     "title": "Départements",

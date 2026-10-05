@@ -1205,7 +1205,8 @@
     "mod_imports": "Importazioni (sincronizzazione AD, importazione di massa)",
     "mod_departments": "Reparti / team",
     "mod_reports": "Analisi e rapporti",
-    "mod_devices": "Assegnazione dispositivi"
+    "mod_devices": "Assegnazione dispositivi",
+    "managed_by_platform": "Il profilo e i moduli sono gestiti da Vita Brevis. Per una modifica rivolgersi a Vita Brevis."
   },
   "departments": {
     "title": "Reparti",

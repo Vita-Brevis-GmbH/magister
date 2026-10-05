@@ -26,6 +26,7 @@ export type Route =
 
 export type TenantTab =
   | "uebersicht"
+  | "module"
   | "sicherungen"
   | "connector"
   | "zugriff"
@@ -33,6 +34,7 @@ export type TenantTab =
 
 const TENANT_TABS: readonly TenantTab[] = [
   "uebersicht",
+  "module",
   "sicherungen",
   "connector",
   "zugriff",

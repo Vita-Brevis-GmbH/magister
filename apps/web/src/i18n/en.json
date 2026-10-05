@@ -1202,7 +1202,8 @@
     "mod_imports": "Imports (AD sync, bulk import)",
     "mod_departments": "Departments / teams",
     "mod_reports": "Analytics & reports",
-    "mod_devices": "Device assignment"
+    "mod_devices": "Device assignment",
+    "managed_by_platform": "Profile and modules are managed by Vita Brevis. Please contact Vita Brevis to change them."
   },
   "departments": {
     "title": "Departments",

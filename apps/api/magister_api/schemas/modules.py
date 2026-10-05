@@ -43,6 +43,9 @@ class AdminModulesOut(BaseModel):
     # so the switch-confirmation preview resolves target-enabled the same way the
     # backend does: overrides[id] if set, else (target profile in default_in_profiles).
     module_overrides: dict[str, bool]
+    #: Profil und Module kommen aus der Konsole (ADR-0017); die Seite zeigt
+    #: sie dann nur an. Vorgabe `False` wie bei `ModulesOut.platform_managed`.
+    managed_by_platform: bool = False
 
 
 class ModuleSettingsUpdate(BaseModel):

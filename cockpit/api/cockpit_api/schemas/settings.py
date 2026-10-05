@@ -14,6 +14,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from cockpit_api.models.tenant import TenantProfile
+
 
 class PlatformSettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -103,3 +105,35 @@ __all__ = [
     "TenantSettingsOut",
     "TenantSettingsUpdate",
 ]
+
+
+class TenantModuleOut(BaseModel):
+    id: str
+    toggleable: bool
+    enabled: bool
+    default_in_profiles: list[str]
+    #: `true`/`false`, wenn für diesen Kunden ausdrücklich geschaltet; `null`,
+    #: wenn das Profil entscheidet.
+    override: bool | None
+
+
+class TenantModulesOut(BaseModel):
+    """Profil und Module eines Kunden, wie sie bei ihm gelten werden."""
+
+    profile: str
+    #: `tenant` — das Profil am Kunden; `override` — eine Abweichung in den
+    #: Einstellungen (`instance_profile`), die das Profil am Kunden überstimmt.
+    profile_source: str
+    known_profiles: list[str]
+    modules: list[TenantModuleOut]
+
+
+class TenantModulesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: Neues Profil des Kunden. Setzt `tenants.profile` und hebt eine
+    #: abweichende `instance_profile`-Einstellung auf — sonst änderte die
+    #: Oberfläche etwas, das nicht gilt.
+    profile: TenantProfile | None = None
+    #: Schalter je Modul; `null` hebt den Schalter auf (das Profil entscheidet).
+    module_overrides: dict[str, bool | None] | None = None

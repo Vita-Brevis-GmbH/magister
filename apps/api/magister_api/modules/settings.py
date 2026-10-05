@@ -11,6 +11,7 @@ from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
 from magister_api.routers.admin_modules import router as admin_modules_router
+from magister_api.routers.admin_modules import write_router as admin_modules_write_router
 from magister_api.routers.admin_rbac import router as admin_rbac_router
 from magister_api.routers.admin_roles import router as admin_roles_router
 from magister_api.routers.admin_settings import router as admin_settings_router
@@ -28,6 +29,7 @@ SETTINGS_MODULE = ModuleManifest(
         admin_maintenance_router,
         admin_system_router,
         admin_modules_router,
+        admin_modules_write_router,
     ),
 )
 
@@ -47,7 +49,14 @@ SETTINGS_MODULE = ModuleManifest(
 #: `admin_roles_router` steht ausdrücklich NICHT hier: das ist die
 #: Rollen*zuweisung* an Personen und bleibt beim Kunden (Entscheid E2). Nur
 #: die Rechte-*Matrix* — was eine Rolle darf — gehört dem Betreiber.
+#:
+#: `admin_modules_write_router` ist der Schreibweg für Profil und Module. Der
+#: Lesweg bleibt: der Kunden-Admin soll sehen, was freigeschaltet ist und
+#: warum er es nicht selbst ändert. Bis 2026-10 stand der Schreibweg nicht
+#: hier — der Abgleich aus der Konsole stellte das Profil dann bei jedem Lauf
+#: still zurück (Abnahme-Testplan L-01).
 PLATFORM_OWNED_ROUTERS = (
     admin_settings_router,
     admin_rbac_router,
+    admin_modules_write_router,
 )

@@ -1202,7 +1202,8 @@
     "mod_imports": "Importe (AD-Sync, Massen-Import)",
     "mod_departments": "Abteilungen / Teams",
     "mod_reports": "Auswertungen & Reports",
-    "mod_devices": "Geräte-Zuordnung"
+    "mod_devices": "Geräte-Zuordnung",
+    "managed_by_platform": "Profil und Module werden von Vita Brevis verwaltet. Für eine Änderung wenden Sie sich bitte an Vita Brevis."
   },
   "departments": {
     "title": "Abteilungen",

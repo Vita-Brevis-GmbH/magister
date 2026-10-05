@@ -375,3 +375,101 @@ class TestTenantOverrides:
             {"overrides": {"oidc_client_secret": "x"}},
         )
         assert response.status_code == 422
+
+
+class TestTenantModules:
+    """Profil und Module eines Kunden — gehostet nur hier änderbar (L-01)."""
+
+    def test_defaults_follow_the_profile(self, console_client: TestClient, tenant_row: str) -> None:
+        body = console_client.get(f"/api/tenants/{tenant_row}/modules").json()
+        assert body["profile"] == "school"
+        assert body["profile_source"] == "tenant"
+        state = {m["id"]: m["enabled"] for m in body["modules"]}
+        assert state["classes"] is True
+        assert state["departments"] is False
+        assert state["platform"] is True
+
+    def test_profile_change_reaches_the_desired_state(
+        self, console_client: TestClient, tenant_row: str
+    ) -> None:
+        response = _put(
+            console_client, f"/api/tenants/{tenant_row}/modules", {"profile": "company"}
+        )
+        assert response.status_code == 200, response.text
+        state = {m["id"]: m["enabled"] for m in response.json()["modules"]}
+        assert state["classes"] is False
+        assert state["departments"] is True
+        desired = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
+        assert desired["settings"]["instance_profile"] == "company"
+
+    def test_profile_change_lifts_a_profile_override(
+        self, console_client: TestClient, tenant_row: str
+    ) -> None:
+        _put(
+            console_client,
+            f"/api/tenants/{tenant_row}/settings",
+            {"overrides": {"instance_profile": "neutral", "ad_sync_interval_minutes": 30}},
+        )
+        assert (
+            console_client.get(f"/api/tenants/{tenant_row}/modules").json()["profile_source"]
+            == "override"
+        )
+        body = _put(
+            console_client, f"/api/tenants/{tenant_row}/modules", {"profile": "company"}
+        ).json()
+        assert body["profile"] == "company"
+        assert body["profile_source"] == "tenant"
+        overrides = console_client.get(f"/api/tenants/{tenant_row}/settings").json()["overrides"]
+        assert "instance_profile" not in overrides
+        # Was sonst an Abweichungen da war, bleibt.
+        assert overrides["ad_sync_interval_minutes"] == 30
+
+    def test_switches_are_merged_and_null_lifts_one(
+        self, console_client: TestClient, tenant_row: str
+    ) -> None:
+        url = f"/api/tenants/{tenant_row}/modules"
+        _put(console_client, url, {"module_overrides": {"devices": False, "reports": False}})
+        body = _put(console_client, url, {"module_overrides": {"reports": None}}).json()
+        by_id = {m["id"]: m for m in body["modules"]}
+        assert by_id["devices"]["override"] is False
+        assert by_id["devices"]["enabled"] is False
+        assert by_id["reports"]["override"] is None
+        assert by_id["reports"]["enabled"] is True
+        desired = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
+        assert desired["settings"]["module_overrides"] == {"devices": False}
+
+    @pytest.mark.parametrize("switches", [{"platform": False}, {"gibtsnicht": True}])
+    def test_base_or_unknown_modules_are_refused(
+        self, console_client: TestClient, tenant_row: str, switches: dict[str, bool]
+    ) -> None:
+        response = _put(
+            console_client, f"/api/tenants/{tenant_row}/modules", {"module_overrides": switches}
+        )
+        assert response.status_code == 422
+        assert "module_overrides" in response.json()["detail"]
+
+    def test_an_unknown_profile_is_refused(
+        self, console_client: TestClient, tenant_row: str
+    ) -> None:
+        response = _put(console_client, f"/api/tenants/{tenant_row}/modules", {"profile": "firma"})
+        assert response.status_code == 422
+
+
+class TestModulePolicyValidation:
+    """Läuft ohne Postgres: die Prüfung im Politik-Dokument selbst."""
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            {"instance_profile": "firma"},
+            {"module_overrides": {"settings": False}},
+            {"module_overrides": {"devices": "aus"}},
+            {"module_overrides": {"unbekannt": True}},
+        ],
+    )
+    def test_refused(self, document: dict[str, Any]) -> None:
+        with pytest.raises(SettingsError):
+            validate_policy(document)
+
+    def test_accepted(self) -> None:
+        validate_policy({"instance_profile": "company", "module_overrides": {"classes": True}})

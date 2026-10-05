@@ -17,11 +17,13 @@ import { TenantLimitsSection, TenantRelocateSection } from "../components/Tenant
 import { go, href, type TenantTab } from "../lib/nav";
 import { TenantBackups } from "./TenantBackups";
 import { TenantConnector } from "./TenantConnector";
+import { TenantModules } from "./TenantModules";
 import { TenantOperatorAccess } from "./TenantOperatorAccess";
 import { TenantOffboarding } from "./TenantOffboarding";
 
 const TABS: { id: TenantTab; label: string }[] = [
   { id: "uebersicht", label: "Übersicht" },
+  { id: "module", label: "Profil & Module" },
   { id: "sicherungen", label: "Sicherungen" },
   { id: "connector", label: "AD-Connector" },
   { id: "zugriff", label: "Zugriff" },
@@ -269,6 +271,7 @@ export function TenantDetail({ tenantId, tab }: { tenantId: string; tab: TenantT
       </nav>
 
       {tab === "uebersicht" && <Overview tenantId={tenantId} />}
+      {tab === "module" && <TenantModules tenantId={tenantId} />}
       {tab === "sicherungen" && <TenantBackups tenantId={tenantId} />}
       {tab === "connector" && <TenantConnector tenantId={tenantId} />}
       {tab === "zugriff" && <TenantOperatorAccess tenantId={tenantId} />}

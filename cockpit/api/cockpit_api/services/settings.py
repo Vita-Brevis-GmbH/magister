@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.models.settings import PlatformSettings, TenantSettings
 from cockpit_api.models.tenant import Tenant
+from cockpit_api.services.modules import ModuleSettingsError, check_overrides, check_profile
 from cockpit_api.services.templates import TemplateService
 
 #: Die Politik-Schlüssel, die die Konsole für einen Kunden setzen darf, mit
@@ -128,6 +129,16 @@ def validate_policy(document: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(value, expected):
             name = expected.__name__ if isinstance(expected, type) else str(expected)
             raise SettingsError(f"'{key}' erwartet {name}, bekam {type(value).__name__}.")
+    # Profil und Module tiefer als nach dem Typ: ein unbekanntes Modul oder
+    # ein Schalter an der Basis würde sonst erst beim Kunden verworfen — und
+    # die Konsole zeigte etwas an, das dort nie gilt.
+    try:
+        if document.get("instance_profile") is not None:
+            check_profile(document["instance_profile"])
+        if document.get("module_overrides") is not None:
+            check_overrides(document["module_overrides"])
+    except ModuleSettingsError as exc:
+        raise SettingsError(str(exc)) from exc
     return document
 
 

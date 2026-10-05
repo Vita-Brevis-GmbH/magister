@@ -89,12 +89,13 @@ def test_the_conditional_surface_appears_with_a_key() -> None:
 
 
 def test_router_count() -> None:
-    # 34 routers total. M6 #5 + the platform carve (10-container split) were pure
+    # 35 routers total. M6 #5 + the platform carve (10-container split) were pure
     # redistribution at 32; the generic /users/{guid}/password-reset router
-    # (company-user password reset) took it to 33, and the operator surface
-    # (ADR-0019) to 34.
+    # (company-user password reset) took it to 33, the operator surface
+    # (ADR-0019) to 34, and splitting the write path of /admin/modules into its
+    # own router (ADR-0017 Nachtrag 2026-10-05: not mounted when hosted) to 35.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 34
+    assert total == 35
 
 
 def test_module_ids_unique_and_expected() -> None:

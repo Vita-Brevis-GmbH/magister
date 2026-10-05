@@ -24,7 +24,7 @@ from fastapi import FastAPI
 
 from magister_api.config import Settings
 from magister_api.main import create_app
-from tests.unit._routes import paths
+from tests.unit._routes import api_routes, paths
 
 #: Pfade, die es in der gehosteten Betriebsart **nicht** geben darf.
 #: Systemkonfiguration und die Rechte-Matrix gehören dem Betreiber
@@ -83,6 +83,40 @@ def hosted_paths() -> set[str]:
 @pytest.fixture(scope="module")
 def onprem_paths() -> set[str]:
     return _paths(create_app(Settings(**BASE)))  # type: ignore[arg-type]
+
+
+def _methods(app: FastAPI, path: str) -> set[str]:
+    return {m for r in api_routes(app) if r.path == path for m in r.methods}
+
+
+@pytest.fixture(scope="module")
+def hosted_app() -> FastAPI:
+    return create_app(
+        Settings(
+            **BASE,  # type: ignore[arg-type]
+            console_registry_url="https://console.intern:4444/api/tenants/registry",
+            console_registry_token="t",  # type: ignore[arg-type]
+        )
+    )
+
+
+class TestModulesAreReadOnlyWhenHosted:
+    """Profil und Module haben gehostet genau einen Autor: die Konsole.
+
+    Vorher stand der Schreibweg auch gehostet, und der Abgleich stellte das
+    Profil bei jedem Lauf zurück — still, ohne Meldung an den Kunden
+    (Abnahme-Testplan L-01). Der Pfad bleibt, weil die Seite lesbar bleibt;
+    deshalb prüft dieser Test die **Methode** und nicht den Pfad.
+    """
+
+    def test_hosted_can_read_but_not_write(self, hosted_app: FastAPI) -> None:
+        methods = _methods(hosted_app, "/admin/modules")
+        assert "GET" in methods
+        assert "PUT" not in methods
+
+    def test_onprem_can_write(self) -> None:
+        app = create_app(Settings(**BASE))  # type: ignore[arg-type]
+        assert {"GET", "PUT"} <= _methods(app, "/admin/modules")
 
 
 class TestHostedHasNoSystemSurface:

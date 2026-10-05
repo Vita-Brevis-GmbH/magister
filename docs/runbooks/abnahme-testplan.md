@@ -1,7 +1,8 @@
 # Runbook · Abnahme-Testplan Plattform (Mandanten, Module, Connector)
 
-Stand 2026-10-05, Zweig `claude/multitenant-capability-planning-t6mygz`
-(Kopf `ea5de13`). Ziel: **alles einmal angefasst haben, bevor der erste
+Stand 2026-10-05, Zweig `claude/multitenant-capability-planning-t6mygz`.
+L-01, L-05 und L-11 sind seit dem ersten Stand dieses Plans behoben; ihre
+Fälle sind jetzt gewöhnliche Fälle mit grünem Erwartungswert. Ziel: **alles einmal angefasst haben, bevor der erste
 Fremdkunde produktiv geht** — und jeden Fehler so festhalten, dass er sich
 nachstellen lässt.
 
@@ -116,7 +117,7 @@ Jeder Fall einmal **A → B** und einmal **B → A**.
 
 - [ ] **K-10** Kunde C anlegen (Profil neutral): Bereitstellungsauftrag läuft alle fünf Schritte; Abbruch simulieren (Postgres kurz stoppen) → „weiterführen" setzt am richtigen Schritt fort, ohne Doppel-Schema.
 - [ ] **K-11** Slug-Prüfung: Grossbuchstaben, Umlaute, Bindestrich, Ziffer am Anfang → abgelehnt mit Feldname in der Meldung.
-- [ ] **K-11a** ⚠ erwartet rot (L-11): Hostname `konsole.dev-mgmt.int.vitabrevis.ch`, `connect.…`, ein Name mit `_`, ein Name ausserhalb der Plattform-Domäne (`kunde.example.com`) → sollte abgelehnt werden; heute wird der Hostname nur kleingeschrieben und auf Eindeutigkeit unter den Kunden geprüft.
+- [ ] **K-11a** Hostname `konsole.dev-mgmt.int.vitabrevis.ch`, `connect.…`, ein Name mit `_`, eine IP, ein Name ausserhalb der Plattform-Domäne (`kunde.example.com`) und einer zwei Ebenen darunter (`a.thun.dev-mgmt…`) → je 422 mit Begründung, nichts angelegt. Voraussetzung: `COCKPIT_TENANT_DOMAIN` steht in `cockpit/deploy/.env` (setzt `plattform-aufbau.sh` seit L-11 selbst).
 - [ ] **K-12** Kunde C erscheint im Registry-Feed, Hostname antwortet nach ≤ 1 min.
 
 ### 4.3 Soll-Zustand: Einstellungen, Rechte, Vorlagen
@@ -124,6 +125,7 @@ Jeder Fall einmal **A → B** und einmal **B → A**.
 Hinweis: Systemeinstellungen und Rechte-Matrix haben **keine Oberfläche** in der
 Konsole (§11, L-02); getestet wird über die API (`PUT /api/platform/settings`,
 `PUT /api/tenants/{id}/settings`, `GET /api/tenants/{id}/desired-state`).
+Profil und Module haben eine (Kunde → „Profil & Module", §6).
 
 - [ ] **K-20** Plattform-Vorgabe setzen (z.B. `ad_sync_interval_minutes`) → beide Kunden übernehmen sie; im Kundenprotokoll `settings_pushed` mit alt/neu.
 - [ ] **K-21** Abweichung bei A setzen → nur A ändert sich; `desired-state` zeigt `settings_source: tenant`.
@@ -166,14 +168,15 @@ Konsole (§11, L-02); getestet wird über die API (`PUT /api/platform/settings`,
 - [ ] **C-01** Paket in der Konsole (Kunde A → AD-Connector) herunterladen: neueste Fassung je Plattform oben, ältere aufklappbar.
 - [ ] **C-02** `msiexec /i magister-connector-*.msi /l*v install.log` → kein Fehler 1620, Dienst installiert und läuft.
 - [ ] **C-03** Deinstallieren und wieder installieren; Upgrade von älterer Fassung → Dienst bleibt angemeldet, keine doppelten Einträge.
-- [ ] **C-04** SmartScreen-Warnung erscheint (unsigniert) — ⚠ erwartet, L-04.
+- [ ] **C-04** ⚠ erwartet (L-04): SmartScreen-Warnung erscheint, weil das MSI unsigniert ist.
 
 ### 5.2 Anmeldung des Agenten
 
 - [ ] **C-10** Einmal-Token aus der Konsole, `endpoint` = Name aus dem Zertifikat → Anmeldung gelingt; Token ein zweites Mal → abgelehnt; Token nach 24 h → abgelehnt.
-- [ ] **C-11** `endpoint` als IP-Adresse → scheitert mit Zertifikatsfehler. ⚠ Meldung nennt heute fälschlich „Ist TCP 46200 ausgehend offen?" (L-05).
-- [ ] **C-12** Port 46200 blockiert → Meldung zum Netz.
-- [ ] **C-13** `magister-connector check` → Verbindung, Zertifikat, Ablaufdatum. ⚠ keine AD-Zeile (L-05).
+- [ ] **C-11** `endpoint` als IP-Adresse → `enroll` scheitert mit „Das Zertifikat der Plattform gilt nicht für '<IP>' … an der Firewall liegt es nicht"; **kein** Hinweis auf TCP 46200.
+- [ ] **C-12** Port 46200 blockiert → „Keine Antwort von …" bzw. „Verbindung … abgewiesen"; Name nicht auflösbar → „lässt sich nicht auflösen". Fremdes `ca_bundle` → Meldung nennt `ca_bundle`.
+- [ ] **C-13** `magister-connector check` in einer **neuen** Eingabeaufforderung, nicht der aus dem Startmenü (Installationsordner im PATH) → Zeilen *Endpunkt* (Warnung bei IP), *Rechte*, *Anmeldung*, *Zertifikat*, *Kanal* (echter TLS-Handshake), *AD-Umgebung* (aus der Dienst-Umgebung bzw. `ad.env`) und *AD* (LDAPS-Bind mit dem Dienstkonto). Falsches Bind-Passwort → „Dienstkonto abgewiesen", und das Passwort steht **nirgends** in der Ausgabe.
+- [ ] **C-13a** Nach Deinstallation ist der Ordner wieder aus dem System-PATH entfernt.
 - [ ] **C-14** Privater Schlüssel liegt nur auf dem Agenten (Dateirechte: nur SYSTEM/Administratoren); im Download-Paket kein Geheimnis ausser dem Einmal-Token.
 
 ### 5.3 Betrieb über den Agenten
@@ -217,8 +220,9 @@ Module: Basis (immer an) `platform`, `ad`, `users`, `settings`; schaltbar
 - [ ] **D-06** Abhängigkeit: Modul abschalten, von dem ein anderes abhängt → abgelehnt mit Name der Abhängigkeit.
 - [ ] **D-07** „Soft off": Modul mit Daten abschalten → Daten bleiben erhalten, nach Wiedereinschalten vollständig da.
 - [ ] **D-08** Firmen-MVP bei B: Abteilung anlegen, Leitung zuweisen, Mitarbeitende zuordnen, Onboarding/Offboarding, CSV-Import `company_users`, Berichte.
-- [ ] **D-09** Profilwechsel A Schule → Firma → Schule über `PUT /api/tenants/{id}/settings` mit `instance_profile` (eine Oberfläche dafür fehlt, L-02): Module und Vokabular folgen nach dem Abgleich, keine Daten verloren. Danach die Abweichung wieder entfernen → das Profil am Kunden (`tenants.profile`) gilt wieder.
-- [ ] **D-10** ⚠ erwartet rot (L-01): Kunden-Admin von A ändert unter „Module & Funktionen" das Profil oder einen Schieber → nach dem nächsten Abgleich (≤ Abgleichsintervall) **stellt die Konsole das Profil zurück**, ohne Hinweis an den Kunden. Notieren, was zurückgestellt wird (Profil sicher; `module_overrides`, sobald in der Konsole gesetzt).
+- [ ] **D-09** Profilwechsel A Schule → Firma → Schule in der Konsole (Kunde → „Profil & Module"): Module und Vokabular folgen nach dem Abgleich, im Kundenprotokoll `settings_pushed`, keine Daten verloren. Einzelnen Modul-Schalter setzen und mit „Profil entscheiden lassen" wieder aufheben.
+- [ ] **D-09a** Modul-Schalter für ein Basis-Modul oder ein unbekanntes Modul per API (`PUT /api/tenants/{id}/modules`) → 422.
+- [ ] **D-10** Gehostet: Kunden-Admin von A öffnet „Module & Funktionen" → Hinweis „von Vita Brevis verwaltet", Profil-Auswahl und Schalter gesperrt; `PUT /api/admin/modules` → 405 (Route nicht gemountet). Einzelinstallation ohne Konsole: die Seite bleibt bedienbar.
 - [ ] **D-11** Split-Betrieb (optional): `docker-compose.editions.yml --profile company` → Abteilungen laufen im eigenen Container, Rest unverändert; unbekannte Modul-Id in `MAGISTER_CONTAINER_MODULES` → Start abgewiesen.
 
 ## 7 · Stufe 6 — Fachliche Regression (Kunden-Oberfläche)
@@ -292,14 +296,14 @@ Abnahme-Issue schreiben.
 
 | ID | Lücke | Wirkung | Fall |
 |---|---|---|---|
-| L-01 | Profil und Module haben gehostet **zwei Autoren**: Kunden-Admin (`/admin/modules`) und Konsole (Abgleich). Der Abgleich stellt das Profil bei jedem Lauf zurück. | Kunde ändert etwas, es springt still zurück | D-10 |
-| L-02 | Konsole hat keine Oberfläche für Systemeinstellungen, Rechte-Matrix und Module je Kunde; das Profil lässt sich nur beim Anlegen wählen. | nur per API bedienbar | §4.3, D-09 |
+| ~~L-01~~ | **Behoben 2026-10-05.** Profil und Module haben gehostet einen Autor: die Konsole (Reiter „Profil & Module"). Beim Kunden ist die Seite nur lesbar, der Schreibweg nicht gemountet. | — | D-09, D-10 |
+| L-02 | Konsole hat keine Oberfläche für Systemeinstellungen und Rechte-Matrix je Kunde (Profil und Module schon). | nur per API bedienbar | §4.3 |
 | L-03 | Die vier Reset-Eingriffe (ADR-0015 D2) gibt es nur im CLI. | Betrieb braucht Shell | — |
 | L-04 | MSI unsigniert (E18 Schritt 2, beim ersten AppLocker-Kunden oder der dritten Windows-Installation). | SmartScreen-Warnung, AppLocker blockiert | C-04 |
-| L-05 | Connector-Onboarding: Zertifikatsfehler wird als Portproblem gemeldet; kein AD-Check in `magister-connector check`; Installationsverzeichnis nicht im PATH; INSTALL.txt sagt nicht, dass `endpoint` der Zertifikatsname sein muss. | Fehlersuche dauert | C-11, C-13 |
+| ~~L-05~~ | **Behoben 2026-10-05.** Verbindungsfehler nach Ursache benannt; `check` prüft Kanal und AD-Bind und warnt bei IP-Endpunkt; Installationsordner im System-PATH; INSTALL.txt, README und Beispielkonfiguration verlangen den Zertifikatsnamen. | — | C-11–C-13a |
 | L-06 | FR/IT/EN nicht von Muttersprachlern geprüft, einzelne Texte noch deutsch. | nicht produktiv für Romandie/Tessin | S-04 |
 | L-07 | Umschalter „auch bei Kunde X berechtigt" (E16, multitenancy.md §9.3) nicht gebaut. | Person mit zwei Kunden meldet sich zweimal an | — |
 | L-08 | `dev-pruefen.sh` läuft nur gegen die Prozess-Umgebung, nicht gegen den Container-Aufbau auf dev01. | Stufe 2 auf dev01 von Hand | A-07 |
 | L-09 | Kein Zeitplaner für Sicherung/Prüfung in der Konsole (Cron-Zeilen im Runbook). | Betrieb muss Cron pflegen | K-41 |
 | L-10 | Organisatorisch offen: CA-Zeremonie (bis dahin nur Test-CA → kein echter Agent beim Fremdkunden), externer Pentest, Wildcard-Zertifikat. | blockiert ersten gehosteten Fremdkunden | §10 Punkt 5 |
-| L-11 | Hostname eines Kunden wird beim Anlegen nicht gegen Plattform-Domäne und reservierte Namen (`konsole`, `connect`) geprüft. | Tippfehler oder Kollision mit Plattform-Namen möglich | K-11a |
+| ~~L-11~~ | **Behoben 2026-10-05.** Hostname wird beim Anlegen auf Form, Plattform-Domäne (eine Ebene) und reservierte Namen geprüft. | — | K-11a |

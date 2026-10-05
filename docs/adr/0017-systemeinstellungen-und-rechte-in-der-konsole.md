@@ -155,6 +155,22 @@ einem Contract-Test getragen, der beide prüft: in der gehosteten Betriebsart
 darf keine System- oder Rechte-Route existieren, in der Einzelinstallation
 müssen sie da sein. Ohne diesen Test wäre die Zweiteilung eine Behauptung.
 
+## Nachtrag 2026-10-05 · Profil und Module hatten zwei Autoren
+
+Die Tabelle unter D2 zählt Profil und Modul-Freischaltung zur Politik — der
+Schreibweg `PUT /admin/modules` blieb gehostet aber gemountet. Seit der
+Abgleich das Profil des Kunden bei jedem Lauf mitschreibt, stellte er jede
+Änderung des Kunden-Admins dort still zurück. Gefunden beim Schreiben des
+Abnahme-Testplans (`docs/runbooks/abnahme-testplan.md`, L-01).
+
+Jetzt: der Schreibweg ist ein eigener Router und steht in
+`PLATFORM_OWNED_ROUTERS`; der Lesweg bleibt, die Seite zeigt gehostet einen
+Hinweis und sperrt die Schalter. Geändert wird in der Konsole (Kunde →
+„Profil & Module", `GET/PUT /api/tenants/{id}/modules`). Die Konsole prüft
+Profil und Schalter gegen eine Kopie des Modulkatalogs; ein Paritätstest hält
+die Kopie am Katalog der Datenebene. Der Contract-Test prüft für diesen Pfad
+die **Methode**, nicht den Pfad — der Pfad bleibt ja.
+
 ## Verworfene Alternativen
 
 **Alles in die Konsole, Geheimnisse eingeschlossen.** Einfacher zu erklären

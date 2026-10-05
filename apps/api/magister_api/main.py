@@ -229,8 +229,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     #
     # Von der Plattform verwaltet (ADR-0017 D1): steht eine Konsolen-URL, holt
     # diese Installation ihre Mandanten von dort — dann gehören
-    # Systemeinstellungen und Rechte-Matrix dem Betreiber, und die zwei Router
-    # werden GAR NICHT gemountet. Nicht mit einer Prüfung davor: ein Endpunkt,
+    # Systemeinstellungen, Rechte-Matrix und die Modul-Schalter dem Betreiber,
+    # und ihre Router werden GAR NICHT gemountet. Nicht mit einer Prüfung davor: ein Endpunkt,
     # der antwortet „das darfst du nicht", ist noch da und kann eine Lücke
     # haben. Ohne Konsole (Einzelinstallation) bleibt alles wie bisher — dort
     # ist der Kunde der Betreiber.
@@ -255,7 +255,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     if platform_managed:
         logger.info(
             "Von der Plattform verwaltet: %d Router der Kunden-API nicht gemountet "
-            "(Systemeinstellungen, Rechte-Matrix). Sie kommen aus der Konsole.",
+            "(Systemeinstellungen, Rechte-Matrix, Schreibweg für Profil und Module). "
+            "Sie kommen aus der Konsole.",
             len(PLATFORM_OWNED_ROUTERS),
         )
 

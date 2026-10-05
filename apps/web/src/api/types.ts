@@ -322,6 +322,8 @@ export interface AdminModulesOut {
   known_profiles: string[];
   modules: AdminModuleOut[];
   module_overrides: Record<string, boolean>;
+  /** Profil und Module kommen aus der Konsole; die Seite ist dann nur lesbar. */
+  managed_by_platform?: boolean;
 }
 
 export interface ModuleSettingsUpdate {
