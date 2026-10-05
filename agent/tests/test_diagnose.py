@@ -151,8 +151,13 @@ class TestCertificateProblemsAreNamedAsSuch:
 
 class TestNetworkProblemsAreNamedAsSuch:
     def test_closed_port(self, tmp_path: Path, ca: FakeCa) -> None:
-        config = _config(tmp_path, f"https://localhost:{_free_port()}", ca.certificate_pem)
-        result = probe_channel(config, timeout=2.0)
+        # 127.0.0.1 statt localhost und die Frist des Produktivcodes: Windows
+        # weist einen geschlossenen Port nicht sofort ab, sondern wiederholt
+        # den Aufbau rund zwei Sekunden lang — je Adresse, und localhost hat
+        # zwei (::1, 127.0.0.1). Mit zwei Sekunden Frist kam dort „keine
+        # Antwort" heraus, obwohl der Port abgewiesen hätte.
+        config = _config(tmp_path, f"https://127.0.0.1:{_free_port()}", ca.certificate_pem)
+        result = probe_channel(config)
         assert not result.ok
         assert "abgewiesen" in result.message
         assert "Zertifikat" not in result.message
