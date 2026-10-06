@@ -7,12 +7,16 @@
 #   ./scripts/plattform-aufbau.sh up --ui-neu   # Oberfläche zwingend neu bauen
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
 #   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
+#   ./scripts/plattform-aufbau.sh restart # beide Stacks neu starten (ohne Neubau)
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
 #   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
 #   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
 #   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
+#
+#   ./scripts/plattform-aufbau.sh ops-agent      # Neustart/Update aus der Konsole (root)
+#   ./scripts/plattform-aufbau.sh backup-pruefer # Prüfer für Sicherungen (root)
 #
 # Der Unterschied zu `dev-umgebung.sh`: dort laufen die Dienste als nackte
 # Prozesse auf der Maschine, damit man mit einem Breakpoint hineinkommt.
@@ -384,7 +388,7 @@ zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
 # Die beiden `.env`-Dateien sind dieselben wie in Produktion — nur die Werte
 # entstehen hier per Zufall statt aus dem Passwortspeicher.
 write_env() {
-  mkdir -p "$ZIEL" "$PAKETE"
+  mkdir -p "$ZIEL" "$PAKETE" "$ZIEL/ops/requests"
   local konsole_env="$REPO/cockpit/deploy/.env" daten_env="$REPO/deploy/compose/.env"
 
   if [ ! -f "$konsole_env" ]; then
@@ -422,6 +426,10 @@ COCKPIT_BACKUP_AGE_RECIPIENT=$( [ -f "$CERTS/backup-age.pub" ] && cat "$CERTS/ba
 # Paket ausliefern will, legt es hier ab. Leer bleibt es, bis die CI etwas
 # hineinlegt — die Oberfläche sagt dann „nicht eingerichtet".
 COCKPIT_AGENT_PACKAGE_DIR=$PAKETE
+# Austausch mit dem Host-Agenten für Neustart und Update aus der Konsole
+# (ADR-0024 D5). Der Agent selbst wird mit 'plattform-aufbau.sh ops-agent'
+# eingerichtet; ohne ihn bleiben die Aufträge liegen, und die Konsole sagt das.
+COCKPIT_OPS_DIR=$ZIEL/ops
 PLATTFORM_NETZ=$NETZ
 EOF
     chmod 600 "$konsole_env"
@@ -451,6 +459,9 @@ EOF
     # sind: ohne den Wert hängt Compose den Vorgabepfad ein, und der liegt
     # bei einem eigenen PLATTFORM_ROOT woanders.
     setze_wert "$konsole_env" COCKPIT_AGENT_PACKAGE_DIR "$PAKETE" && geaendert=1
+    # Nachgereicht für Installationen vor ADR-0024: ohne den Wert gibt es
+    # in der Konsole keinen Neustart und kein Update.
+    setze_wert "$konsole_env" COCKPIT_OPS_DIR "$ZIEL/ops" && geaendert=1
     if [ "$geaendert" -eq 1 ]; then
       say "Umgebung der Konsole nachgeführt (Adressen geändert)"
     else
@@ -843,6 +854,60 @@ cmd_down() {
   dc_konsole down 2>/dev/null || true
 }
 
+cmd_restart() {
+  say "Beide Stacks neu starten"
+  dc_daten restart
+  dc_konsole restart
+}
+
+# Ein systemd-Dienst mit Timer, der alle 20 Sekunden einen Blick in das
+# Austauschverzeichnis wirft. Als root, weil er Docker steuert; was er
+# ausführen darf, steht fest im Skript und nicht im Auftrag.
+systemd_einheit() {  # $1 = Name, $2 = Beschreibung, $3 = ExecStart, $4 = Intervall
+  [ "$(id -u)" -eq 0 ] || die "Das braucht root: sudo $0 $BEFEHL"
+  command -v systemctl >/dev/null || die "systemd fehlt auf diesem Host"
+  cat > "/etc/systemd/system/$1.service" <<UNIT
+[Unit]
+Description=$2
+After=docker.service
+
+[Service]
+Type=oneshot
+Environment=REPO=$REPO
+Environment=OPS_DIR=$ZIEL/ops
+Environment=PLATTFORM_ROOT=$ZIEL
+ExecStart=$3
+UNIT
+  cat > "/etc/systemd/system/$1.timer" <<UNIT
+[Unit]
+Description=$2 (Takt)
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=$4
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target
+UNIT
+  systemctl daemon-reload
+  systemctl enable --now "$1.timer"
+  say "Eingerichtet: $1.timer (alle $4) — Protokoll: journalctl -u $1"
+}
+
+cmd_ops_agent() {
+  mkdir -p "$ZIEL/ops/requests"
+  systemd_einheit magister-plattform-ops "Magister: Neustart/Update aus der Konsole" \
+    "$REPO/scripts/plattform-ops-agent.sh" 20s
+}
+
+cmd_backup_pruefer() {
+  [ -f "$CERTS/backup-age.key" ] || die "Privater Backup-Schlüssel $CERTS/backup-age.key fehlt"
+  systemd_einheit magister-backup-pruefer \
+    "Magister: Sicherungen prüfen, Wiederherstellungen einspielen" \
+    "$REPO/scripts/plattform-backup-pruefer.sh" 5min
+}
+
 cmd_purge() {
   cmd_down
   say "Daten, Netze und Geheimnisse löschen"
@@ -942,8 +1007,11 @@ case "$BEFEHL" in up|update) konf_speichern ;; esac
 case "$BEFEHL" in
   up|update) cmd_up ;;
   status) cmd_status ;;
+  restart) cmd_restart ;;
   down)   cmd_down ;;
   purge)  cmd_purge ;;
   konfig) cmd_konfig ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, konfig, down, purge, operator, totp)" ;;
+  ops-agent) cmd_ops_agent ;;
+  backup-pruefer) cmd_backup_pruefer ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer)" ;;
 esac

@@ -17,13 +17,16 @@ from cockpit_api.routers import (
     health,
     instances,
     offboarding,
+    operations,
     operator_access,
+    platform_ops,
     service_tokens,
     templates,
     tenants,
     update_requests,
 )
 from cockpit_api.routers import settings as settings_router
+from cockpit_api.services.backup_scheduler import backup_scheduler_loop
 from cockpit_api.services.health_poller import health_poller_loop
 from cockpit_api.services.release_poller import release_poller_loop
 
@@ -42,6 +45,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     tasks = [
         asyncio.create_task(health_poller_loop()),
         asyncio.create_task(release_poller_loop()),
+        asyncio.create_task(backup_scheduler_loop()),
     ]
     try:
         yield
@@ -102,6 +106,8 @@ app.include_router(fleet.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(console_auth.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
+app.include_router(operations.router, prefix="/api")
+app.include_router(platform_ops.router, prefix="/api")
 app.include_router(connector.console, prefix="/api")
 # Agentenpakete zum Herunterladen (ADR-0014). Plattformweit und nicht je
 # Kunde: es ist dieselbe Datei für alle.

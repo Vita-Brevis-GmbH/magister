@@ -467,6 +467,11 @@
         "ad_config": "AD configuration incomplete. Check the domain controllers and bind account.",
         "ad_unavailable": "AD unreachable."
       },
+      "sync_ad_reason_managed": {
+        "ad_search_base_missing": "The user search base is not yet set for this installation. The AD settings are managed by Vita Brevis — please contact Vita Brevis.",
+        "ad_search_base_not_found": "The configured search base does not exist in your AD (noSuchObject). The AD settings are managed by Vita Brevis — please send them the correct OU path.",
+        "ad_config": "The AD connection of this installation is incomplete. Please contact Vita Brevis."
+      },
       "save": "Save",
       "success": "Settings saved.",
       "error_invalid": "Input is invalid. Please review.",
@@ -841,7 +846,8 @@
       "state_error": "error",
       "state_running": "running",
       "state_queued": "queued"
-    }
+    },
+    "managed_by_platform": "Restart, update and deleting data or activities are carried out by Vita Brevis for this installation. Please contact Vita Brevis."
   },
   "letters": {
     "button": "Letter",

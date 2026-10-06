@@ -21,11 +21,13 @@ export type Route =
   | { view: "instances" }
   | { view: "templates" }
   | { view: "fleet" }
+  | { view: "platform" }
   | { view: "tenants" }
   | { view: "tenant"; id: string; tab: TenantTab };
 
 export type TenantTab =
   | "uebersicht"
+  | "einstellungen"
   | "module"
   | "sicherungen"
   | "connector"
@@ -34,6 +36,7 @@ export type TenantTab =
 
 const TENANT_TABS: readonly TenantTab[] = [
   "uebersicht",
+  "einstellungen",
   "module",
   "sicherungen",
   "connector",
@@ -56,6 +59,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "instances") return { view: "instances" };
   if (parts[0] === "templates") return { view: "templates" };
   if (parts[0] === "fleet") return { view: "fleet" };
+  if (parts[0] === "platform") return { view: "platform" };
   // Vorgabe: die Kundenliste. Die Konsole ist für Kunden da; die Instanzen
   // sind der ältere Zweck und stehen jetzt daneben.
   return { view: "tenants" };
@@ -79,6 +83,8 @@ export function href(route: Route): string {
       return "#/templates";
     case "fleet":
       return "#/fleet";
+    case "platform":
+      return "#/platform";
     case "tenants":
       return "#/tenants";
     case "tenant":

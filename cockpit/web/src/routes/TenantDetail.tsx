@@ -12,17 +12,21 @@ import {
 import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 import { ProvisioningLog } from "../components/ProvisioningLog";
+import { MaintenanceSection } from "../components/MaintenanceSection";
 import { SecretOnce } from "../components/SecretOnce";
+import { TenantStatusPanel } from "../components/TenantStatusPanel";
 import { TenantLimitsSection, TenantRelocateSection } from "../components/TenantLoad";
 import { go, href, type TenantTab } from "../lib/nav";
 import { TenantBackups } from "./TenantBackups";
 import { TenantConnector } from "./TenantConnector";
 import { TenantModules } from "./TenantModules";
+import { TenantSettings } from "./TenantSettings";
 import { TenantOperatorAccess } from "./TenantOperatorAccess";
 import { TenantOffboarding } from "./TenantOffboarding";
 
 const TABS: { id: TenantTab; label: string }[] = [
   { id: "uebersicht", label: "Übersicht" },
+  { id: "einstellungen", label: "Einstellungen" },
   { id: "module", label: "Profil & Module" },
   { id: "sicherungen", label: "Sicherungen" },
   { id: "connector", label: "AD-Connector" },
@@ -121,6 +125,8 @@ function Overview({ tenantId }: { tenantId: string }) {
           onAcknowledged={() => setNewRolePassword(null)}
         />
       )}
+
+      <TenantStatusPanel tenantId={tenantId} />
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Stammdaten</h2>
@@ -226,6 +232,8 @@ function Overview({ tenantId }: { tenantId: string }) {
       </section>
 
       <TenantRelocateSection tenant={tenant} />
+
+      <MaintenanceSection tenantId={tenantId} slug={tenant.slug} />
     </div>
   );
 }
@@ -271,6 +279,7 @@ export function TenantDetail({ tenantId, tab }: { tenantId: string; tab: TenantT
       </nav>
 
       {tab === "uebersicht" && <Overview tenantId={tenantId} />}
+      {tab === "einstellungen" && <TenantSettings tenantId={tenantId} />}
       {tab === "module" && <TenantModules tenantId={tenantId} />}
       {tab === "sicherungen" && <TenantBackups tenantId={tenantId} />}
       {tab === "connector" && <TenantConnector tenantId={tenantId} />}

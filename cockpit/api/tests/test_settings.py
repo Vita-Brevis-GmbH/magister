@@ -248,6 +248,9 @@ class TestTenantOverrides:
         assert state["settings"] == {
             "ad_sync_interval_minutes": 15,
             "instance_profile": "school",
+            # Immer eine Aussage über die Modul-Schalter (ADR-0024): ohne sie
+            # blieben alte, beim Kunden gesetzte Schalter stehen.
+            "module_overrides": {},
         }
         assert state["settings_source"] == "tenant"
 

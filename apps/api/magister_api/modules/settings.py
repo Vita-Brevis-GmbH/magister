@@ -55,8 +55,16 @@ SETTINGS_MODULE = ModuleManifest(
 #: warum er es nicht selbst ändert. Bis 2026-10 stand der Schreibweg nicht
 #: hier — der Abgleich aus der Konsole stellte das Profil dann bei jedem Lauf
 #: still zurück (Abnahme-Testplan L-01).
+#:
+#: `admin_system_router` (Neustart, Update) und `admin_maintenance_router`
+#: (Demodaten entfernen, Protokoll zurücksetzen) gehören gehostet ebenfalls
+#: dem Betreiber (ADR-0024 D5/D4): ein Neustart trifft alle Kunden auf dem
+#: Host, nicht nur den, dessen Admin ihn auslöst; die Wartung läuft als
+#: Auftrag aus der Konsole.
 PLATFORM_OWNED_ROUTERS = (
     admin_settings_router,
     admin_rbac_router,
     admin_modules_write_router,
+    admin_system_router,
+    admin_maintenance_router,
 )

@@ -68,6 +68,13 @@ Also die Trennung:
 | **Politik** — Issuer, Client-Id, DC-Namen, Suchbasen, Intervalle, Modul-Freischaltung, Profil, Rechte-Matrix | Konsole; wird ins Kundenschema materialisiert | Betreiber in der Konsole |
 | **Geheimnisse** — `oidc_client_secret`, `ad_bind_password`, `ninja_client_secret`, `web_tls_key` | ausschliesslich im Kundenschema, mit dem **Kundenschlüssel** verschlüsselt | Betreiber über `magister-cli` auf dem Anwendungsserver |
 
+> **Nachtrag 2026-10-06 ([ADR-0024](0024-betrieb-aus-der-konsole.md) D3):**
+> Das CLI für die Geheimnisse wurde nie gebaut. `oidc_client_secret` und
+> `ninja_client_secret` werden jetzt in der Konsole **versiegelt** — mit dem
+> öffentlichen Schlüssel der Datenebene, sodass die Konsole nur ein Chiffrat
+> hält, das sie selbst nicht öffnen kann. Die Zusage dieses Abschnitts gilt
+> damit weiter, gelesen als „keine Geheimnisse, die die Konsole lesen kann".
+
 Der Preis ist ehrlich zu benennen: **das Einrichten eines Kunden ist damit
 zweigeteilt.** Die Politik kommt aus der Konsole, die drei bis vier
 Geheimnisse werden auf dem Anwendungsserver gesetzt. Ein Handgriff mehr pro

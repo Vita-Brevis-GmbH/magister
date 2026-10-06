@@ -41,6 +41,35 @@ def console_base(registry_url: str) -> str:
     return registry_url.rstrip("/")
 
 
+def ad_backend(base: Settings, tenant: Tenant) -> str:
+    """Welcher Rücken für diesen Kunden gilt: `rpc`, `connector`, `mock` oder `ldap`.
+
+    Dieselbe Reihenfolge wie in :func:`build_ad_client` — die Frage „welcher
+    Weg?" hat genau eine Antwort, und die steht hier.
+    """
+    if base.ad_rpc_url and base.ad_rpc_secret is not None:
+        return "rpc"
+    if base.ad_connector_enabled and base.console_registry_url and tenant.console_id:
+        return "connector"
+    return "mock" if base.ad_use_mock else "ldap"
+
+
+def ad_missing_settings(effective: Settings, backend: str) -> list[str]:
+    """Was für einen Abgleich fehlt, als Namen der Einstellungen.
+
+    Über den Connector braucht die Datenebene **keinen** Domänencontroller:
+    den kennt der Agent beim Kunden (ADR-0014). Gefragt war er trotzdem — und
+    ohne ihn übersprang der wiederkehrende Abgleich einen gehosteten Kunden
+    still, auch wenn die Suchbasis stand.
+    """
+    missing: list[str] = []
+    if not effective.ad_users_search_base:
+        missing.append("ad_users_search_base")
+    if backend in ("ldap", "rpc") and not effective.ad_dcs:
+        missing.append("ad_dcs")
+    return missing
+
+
 def build_ad_client(base: Settings, effective: Settings, tenant: Tenant) -> AdClient:
     """Den AD-Rücken für diesen Kunden bauen.
 
@@ -76,4 +105,4 @@ def build_ad_client(base: Settings, effective: Settings, tenant: Tenant) -> AdCl
     return AdClient(effective)
 
 
-__all__ = ["build_ad_client", "console_base"]
+__all__ = ["ad_backend", "ad_missing_settings", "build_ad_client", "console_base"]

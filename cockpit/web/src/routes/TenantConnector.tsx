@@ -5,9 +5,11 @@ import {
   certificateIsWorrying,
   createEnrollment,
   daysUntilExpiry,
+  getConnectorJob,
   listAgents,
   listConnectorJobs,
   revokeAgent,
+  startConnectionTest,
   type Agent,
   type Enrollment,
 } from "../api/agents";
@@ -19,8 +21,10 @@ import {
   type AgentPackage,
 } from "../api/agentPackages";
 import { ApiError } from "../api/client";
+import { getTenantStatus } from "../api/operations";
 import { Badge, StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
+import { AdSyncSummary } from "../components/TenantStatusPanel";
 
 /**
  * Das Einmal-Token für die Anmeldung.
@@ -237,6 +241,107 @@ function AgentRow({
   );
 }
 
+const AD_REASON: Record<string, string> = {
+  ad_ok: "AD antwortet, Anmeldung des Dienstkontos über LDAPS gelungen.",
+  ad_config: "AD-Zugang beim Agenten unvollständig (DCs, Bind-DN oder Passwort fehlen).",
+  ad_unreachable: "Der Agent erreicht keinen Domänencontroller auf Port 636.",
+  ad_tls: "LDAPS zum Domänencontroller gescheitert (Zertifikat des DC).",
+  ad_timeout: "Der Domänencontroller antwortet nicht rechtzeitig.",
+  ad_auth: "Der DC weist das Dienstkonto ab (Bind-DN oder Passwort).",
+};
+
+/**
+ * Verbindungstest über den Agenten (ADR-0024).
+ *
+ * „Angemeldet" sagt nur, dass sich der Agent einmal gemeldet hat. Dieser Test
+ * schickt einen echten Auftrag den ganzen Weg: Konsole → Warteschlange →
+ * Agent → LDAPS → AD und zurück. Holt der Agent ihn nicht ab, verfällt er —
+ * auch das ist eine Antwort.
+ */
+function ConnectionTest({ tenantId }: { tenantId: string }) {
+  const [jobId, setJobId] = useState<string | null>(null);
+  const startM = useMutation({
+    mutationFn: () => startConnectionTest(tenantId),
+    onSuccess: (job) => setJobId(job.id),
+  });
+  const jobQ = useQuery({
+    queryKey: ["connector-test", tenantId, jobId],
+    queryFn: () => getConnectorJob(tenantId, jobId ?? ""),
+    enabled: jobId !== null,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state;
+      return state === "queued" || state === "claimed" || state === undefined ? 2000 : false;
+    },
+  });
+  const job = jobQ.data;
+  let verdict: { tone: string; text: string } | null = null;
+  if (job) {
+    if (job.state === "queued") {
+      verdict = { tone: "text-slate-600", text: "Wartet darauf, dass der Agent den Auftrag abholt …" };
+    } else if (job.state === "claimed") {
+      verdict = { tone: "text-slate-600", text: "Der Agent arbeitet daran …" };
+    } else if (job.state === "expired") {
+      verdict = {
+        tone: "text-red-700",
+        text: "Der Agent hat den Auftrag nicht abgeholt. Läuft der Dienst beim Kunden, und ist TCP 46200 ausgehend offen?",
+      };
+    } else if (job.state === "failed") {
+      verdict = { tone: "text-red-700", text: `Fehlgeschlagen: ${job.error ?? "?"}` };
+    } else {
+      const result = Array.isArray(job.result) ? (job.result as unknown[]) : [];
+      const ok = result[0] === true;
+      const reason = typeof result[1] === "string" ? result[1] : ok ? "ad_ok" : "?";
+      verdict = {
+        tone: ok ? "text-emerald-700" : "text-red-700",
+        text: AD_REASON[reason] ?? `AD meldet: ${reason}`,
+      };
+    }
+  }
+  return (
+    <section className="rounded border bg-white p-4">
+      <h2 className="mb-2 font-semibold">Verbindungstest</h2>
+      <p className="mb-3 text-xs text-slate-500">
+        Schickt einen Prüfauftrag über den Agenten ins AD des Kunden: Anmeldung des Dienstkontos,
+        keine Benutzerdaten.
+      </p>
+      <button
+        type="button"
+        onClick={() => {
+          setJobId(null);
+          startM.mutate();
+        }}
+        disabled={startM.isPending || job?.state === "queued" || job?.state === "claimed"}
+        className="rounded border px-3 py-1 text-sm disabled:opacity-50"
+      >
+        Verbindung testen
+      </button>
+      {startM.isError && <ErrorBox error={startM.error} />}
+      {verdict && <p className={`mt-2 text-sm ${verdict.tone}`}>{verdict.text}</p>}
+    </section>
+  );
+}
+
+function AdSyncState({ tenantId }: { tenantId: string }) {
+  const q = useQuery({
+    queryKey: ["tenant-status", tenantId],
+    queryFn: () => getTenantStatus(tenantId),
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  return (
+    <section className="rounded border bg-white p-4">
+      <h2 className="mb-2 font-semibold">AD-Abgleich (gemeldet von der Installation)</h2>
+      {q.isError && <ErrorBox error={q.error} />}
+      {q.data && !q.data.report && (
+        <p className="text-sm text-amber-700">
+          Die Installation hat sich noch nie gemeldet (siehe Übersicht → Zustand).
+        </p>
+      )}
+      {q.data?.report && <AdSyncSummary ad={q.data.report.ad} />}
+    </section>
+  );
+}
+
 export function TenantConnector({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [agentName, setAgentName] = useState("");
@@ -278,6 +383,10 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
       {enrollment && (
         <EnrollmentCard enrollment={enrollment} onDone={() => setEnrollment(null)} />
       )}
+
+      <ConnectionTest tenantId={tenantId} />
+
+      <AdSyncState tenantId={tenantId} />
 
       <AgentPackages />
 

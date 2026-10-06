@@ -13,9 +13,10 @@ nicht Nachvollziehbarkeit, das ist ihr Gegenteil.
 
 Zwei Grenzen, die der Reconciler nicht überschreitet:
 
-* **Keine Geheimnisse** (ADR-0017 D2). Der Soll-Zustand enthält keine, und
-  dieser Code würde sie auch nicht schreiben: er baut den Payload aus einer
-  Allowlist.
+* **Keine Geheimnisse im Klartext** (ADR-0017 D2). Der Soll-Zustand enthält
+  keine; die Einstellungen kommen aus einer Allowlist. Die einzige Ausnahme
+  sind **versiegelte** Geheimnisse (ADR-0024 D3): die Konsole kann sie nicht
+  lesen, geöffnet werden sie erst hier, mit dem Schlüssel dieses Kunden.
 * **Keine Plattform-Capabilities an Kundenrollen** (ADR-0017 D5). Die Prüfung
   liegt im RBAC-Dienst, nicht hier — sie muss auch für ein CLI gelten.
 """
@@ -26,29 +27,39 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.auth.capabilities import Capability
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
+from magister_api.models.audit import AuditEvent
 from magister_api.models.base import utcnow
 from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.demo_data import DemoDataService
 from magister_api.services.document_templates import (
     DocumentTemplateService,
     TemplateRenderError,
     sample_context,
 )
+from magister_api.services.imports import purge_import_history
 from magister_api.services.rbac import (
     PlatformCapabilityError,
     RbacService,
     RoleImmutableError,
     RoleNotFoundError,
 )
-from magister_api.tenancy.desired_state import DesiredState, DesiredTemplate
+from magister_api.tenancy.desired_state import (
+    MAINTENANCE_ACTIONS,
+    DesiredMaintenance,
+    DesiredState,
+    DesiredTemplate,
+)
+from magister_api.tenancy.keys import keys_for
+from magister_api.tenancy.sealing import SEALABLE, UnsealError, unseal
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +67,10 @@ logger = logging.getLogger(__name__)
 #: leere Spalte: wer im Protokoll des Kunden liest, soll sehen, dass die
 #: Änderung von der Plattform kam und nicht von einer Person im Haus.
 RECONCILER_ACTOR = "platform-reconciler@vitabrevis.ch"
+
+#: Das Audit-Ereignis, das die Ausführung eines Wartungsauftrags belegt. Sein
+#: Ziel ist die Auftrags-Id — daran erkennt der nächste Lauf „schon erledigt".
+MAINTENANCE_EVENT = "platform_maintenance_executed"
 
 #: Die Felder, die der Abgleich schreiben darf. Dieselben Namen wie in der
 #: Konsole (`cockpit_api.services.settings.POLICY_KEYS`) — bewusst identisch,
@@ -115,13 +130,28 @@ class ReconcileResult:
     #: materialisiert wurden: {key/language: Grund}.
     rejected_templates: dict[str, str] = field(default_factory=dict)
 
+    #: Versiegelte Geheimnisse, die neu ins Kundenschema geschrieben wurden.
+    changed_secrets: list[str] = field(default_factory=list)
+    #: {name: Grund} — ließ sich nicht öffnen oder ist nicht versiegelbar.
+    rejected_secrets: dict[str, str] = field(default_factory=dict)
+    #: Ergebnisse der Wartungsaufträge, für die Zustandsmeldung an die Konsole.
+    maintenance_results: list[dict[str, Any]] = field(default_factory=list)
+    #: Ob in diesem Lauf ein Wartungsauftrag tatsächlich ausgeführt wurde.
+    maintenance_executed: bool = False
+
     @property
     def changed_templates(self) -> bool:
         return bool(self.added_templates or self.updated_templates or self.removed_templates)
 
     @property
     def touched(self) -> bool:
-        return bool(self.changed_settings or self.changed_roles or self.changed_templates)
+        return bool(
+            self.changed_settings
+            or self.changed_roles
+            or self.changed_templates
+            or self.changed_secrets
+            or self.maintenance_executed
+        )
 
 
 #: Listenfelder, deren **Reihenfolge Bedeutung hat**. `ad_dcs` ist die
@@ -146,6 +176,17 @@ def settings_diff(current: dict[str, Any], desired: dict[str, Any]) -> dict[str,
         if differs:
             diff[key] = (have, want)
     return diff
+
+
+def _flat(result: dict[str, Any]) -> dict[str, int | str]:
+    """Ein Wartungsergebnis meldefähig machen: nur Zahlen und kurze Texte."""
+    out: dict[str, int | str] = {}
+    for key, value in result.items():
+        if isinstance(value, bool | int):
+            out[key] = int(value)
+        elif isinstance(value, str):
+            out[key] = value[:200]
+    return out
 
 
 class Reconciler:
@@ -176,7 +217,12 @@ class Reconciler:
         return dict(zip(sorted(RECONCILABLE), row, strict=True))
 
     async def reconcile(
-        self, desired: DesiredState, *, tenant_slug: str, dry_run: bool = False
+        self,
+        desired: DesiredState,
+        *,
+        tenant_slug: str,
+        dry_run: bool = False,
+        tenant_ref: str | None = None,
     ) -> ReconcileResult:
         result = ReconcileResult()
 
@@ -219,6 +265,15 @@ class Reconciler:
             await self._reconcile_templates(
                 desired.templates, result, tenant_slug=tenant_slug, dry_run=dry_run
             )
+
+        if desired.sealed_secrets and tenant_ref and not dry_run:
+            await self._reconcile_sealed(
+                desired.sealed_secrets, result, tenant_ref=tenant_ref, tenant_slug=tenant_slug
+            )
+
+        if desired.maintenance and not dry_run:
+            for request in desired.maintenance:
+                await self._run_maintenance(request, result, tenant_slug=tenant_slug)
 
         if result.touched:
             logger.info(
@@ -383,6 +438,144 @@ class Reconciler:
                 )
                 return False
         return True
+
+    async def _reconcile_sealed(
+        self,
+        sealed: dict[str, str],
+        result: ReconcileResult,
+        *,
+        tenant_ref: str,
+        tenant_slug: str,
+    ) -> None:
+        """Versiegelte Geheimnisse öffnen und, wenn sie abweichen, schreiben (ADR-0024 D3).
+
+        Verglichen wird mit dem entschlüsselten geltenden Wert, damit nicht
+        jeder Lauf das Geheimnis neu schreibt und ein Audit-Ereignis erzeugt.
+        Geschrieben wird über denselben einen Weg wie am Formular
+        (`AppSettingsService.update`) — dort wird verschlüsselt, und das
+        Audit-Ereignis trägt nur „gedreht", nie den Wert.
+        """
+        secrets_key = keys_for(self.session, self.settings).secrets_key
+        current = await AppSettingsService(self.session, self.settings).get_effective()
+        have = {
+            "oidc_client_secret": current.oidc_client_secret,
+            "ninja_client_secret": current.ninja_client_secret,
+        }
+        updates: dict[str, str] = {}
+        for name, blob in sorted(sealed.items()):
+            if name not in SEALABLE:
+                result.rejected_secrets[name] = "nicht versiegelbar"
+                continue
+            try:
+                plain = unseal(secrets_key, blob, tenant_ref=tenant_ref, name=name)
+            except UnsealError as exc:
+                result.rejected_secrets[name] = str(exc)
+                logger.warning("Geheimnis %s für %s nicht geöffnet: %s", name, tenant_slug, exc)
+                continue
+            if plain != have.get(name):
+                updates[name] = plain
+        if not updates:
+            return
+        await AppSettingsService(self.session, self.settings).update(
+            AppSettingsUpdate(
+                oidc_client_secret=updates.get("oidc_client_secret"),
+                ninja_client_secret=updates.get("ninja_client_secret"),
+            ),
+            actor_upn=RECONCILER_ACTOR,
+            actor_object_guid=None,
+            ip=None,
+            request_id=f"reconcile:{tenant_slug}"[:36],
+            action="platform_secret_reconciled",
+        )
+        result.changed_secrets.extend(sorted(updates))
+
+    async def _maintenance_done(self, request_id: str) -> int | None:
+        """Id des Ausführungs-Ereignisses zu diesem Auftrag, falls es eines gibt.
+
+        `# scope-bypass: gelesen werden nur Aktion und Ziel eines
+        Plattform-Ereignisses, keine Personendaten.`
+        """
+        stmt = (
+            select(func.max(AuditEvent.id))
+            .where(AuditEvent.action == MAINTENANCE_EVENT)
+            .where(AuditEvent.target_id == request_id)
+        )
+        found = (await self.session.execute(stmt)).scalar_one_or_none()
+        return int(found) if found is not None else None
+
+    async def _run_maintenance(
+        self, request: DesiredMaintenance, result: ReconcileResult, *, tenant_slug: str
+    ) -> None:
+        """Einen Wartungsauftrag genau einmal ausführen (ADR-0024 D4).
+
+        Zwei Container gleichen denselben Kunden ab. Damit derselbe Auftrag
+        nicht zweimal läuft, sperrt ein Advisory-Lock auf die Auftrags-Id bis
+        zum Ende der Transaktion; geprüft wird danach, ob es das
+        Ausführungs-Ereignis schon gibt. Der zweite Container findet es und
+        meldet nur noch das Ergebnis.
+        """
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtext(:k))"), {"k": f"maint:{request.id}"}
+        )
+        audit = AuditService(self.session, self.settings)
+        done = await self._maintenance_done(request.id)
+        if done is not None:
+            record = await audit.read(done)
+            payload = record.payload if record is not None else {}
+            result.maintenance_results.append(
+                {"id": request.id, "ok": bool(payload.get("ok", True)), "result": _flat(payload)}
+            )
+            return
+        if request.action not in MAINTENANCE_ACTIONS:
+            result.maintenance_results.append(
+                {"id": request.id, "ok": False, "result": {"error": "unknown_action"}}
+            )
+            return
+
+        # Im Protokoll des Kunden steht, wer bei Vita Brevis es ausgelöst hat.
+        actor = f"vita-brevis:{request.requested_by}"[:320]
+        request_id = request.id.replace("-", "")[:36]
+        outcome: dict[str, Any]
+        if request.action == "demo_purge":
+            purged = await DemoDataService(self.session, self.settings).purge(
+                actor_upn=actor, actor_object_guid=None, ip=None, request_id=request_id
+            )
+            outcome = {
+                "ok": True,
+                "found": int(purged.found),
+                "schools": purged.schools,
+                "classes": purged.classes,
+                "users": purged.users,
+            }
+        else:  # audit_reset
+            imports_deleted = await purge_import_history(self.session)
+            deleted = await audit.purge(
+                actor_upn=actor,
+                actor_object_guid=None,
+                ip=None,
+                request_id=request_id,
+                extra={"imports_deleted": imports_deleted},
+            )
+            outcome = {"ok": True, "deleted": deleted, "imports_deleted": imports_deleted}
+
+        # Das Ausführungs-Ereignis zuletzt: beim Zurücksetzen des Protokolls
+        # muss es die Löschung überleben, und es ist der Beleg für „einmal".
+        await audit.emit(
+            action=MAINTENANCE_EVENT,
+            target_kind="platform_maintenance",
+            target_id=request.id,
+            actor_upn=actor,
+            actor_object_guid=None,
+            school_id=None,
+            ip=None,
+            request_id=request_id,
+            payload={**outcome, "action": request.action, "reason": request.reason[:500]},
+        )
+        result.maintenance_results.append({"id": request.id, "ok": True, "result": _flat(outcome)})
+        result.maintenance_executed = True
+        logger.info(
+            "Wartungsauftrag %s (%s) für %s ausgeführt", request.id, request.action, tenant_slug
+        )
 
     async def _apply_settings(self, diff: dict[str, tuple[Any, Any]], *, tenant_slug: str) -> None:
         """Nur die geänderten Felder schreiben.

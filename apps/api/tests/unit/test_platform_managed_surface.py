@@ -32,6 +32,11 @@ from tests.unit._routes import api_routes, paths
 FORBIDDEN_WHEN_HOSTED = (
     re.compile(r"^/admin/app-settings"),
     re.compile(r"^/admin/rbac"),
+    # ADR-0024: Neustart/Update betreffen den ganzen Host, die Wartung läuft
+    # als Auftrag aus der Konsole.
+    re.compile(r"^/admin/system"),
+    re.compile(r"^/admin/demo-data"),
+    re.compile(r"^/admin/audit/reset"),
 )
 
 #: Pfade, die in **beiden** Betriebsarten da sein müssen. Die Gegenprobe:
@@ -152,7 +157,7 @@ class TestOnPremKeepsEverything:
         assert missing == []
 
 
-class TestTheDifferenceIsExactlyTheTwoRouters:
+class TestTheDifferenceIsExactlyThePlatformRouters:
     def test_nothing_else_disappears(self, hosted_paths: set[str], onprem_paths: set[str]) -> None:
         """Der Filter nimmt genau das weg, was er wegnehmen soll.
 
@@ -163,10 +168,15 @@ class TestTheDifferenceIsExactlyTheTwoRouters:
         removed = sorted(onprem_paths - hosted_paths)
         assert removed == [
             "/admin/app-settings",
+            "/admin/audit/reset",
+            "/admin/demo-data/purge",
             "/admin/rbac",
             "/admin/rbac/roles",
             "/admin/rbac/roles/{key}",
             "/admin/rbac/roles/{key}/capabilities",
+            "/admin/system/restart",
+            "/admin/system/status",
+            "/admin/system/update",
         ]
 
     def test_hosted_adds_nothing(self, hosted_paths: set[str], onprem_paths: set[str]) -> None:

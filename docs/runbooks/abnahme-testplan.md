@@ -122,10 +122,15 @@ Jeder Fall einmal **A → B** und einmal **B → A**.
 
 ### 4.3 Soll-Zustand: Einstellungen, Rechte, Vorlagen
 
-Hinweis: Systemeinstellungen und Rechte-Matrix haben **keine Oberfläche** in der
-Konsole (§11, L-02); getestet wird über die API (`PUT /api/platform/settings`,
-`PUT /api/tenants/{id}/settings`, `GET /api/tenants/{id}/desired-state`).
-Profil und Module haben eine (Kunde → „Profil & Module", §6).
+Die Einstellungen eines Kunden haben seit ADR-0024 einen Reiter
+(Kunde → „Einstellungen"); die Rechte-Matrix und die Plattform-Vorgaben noch
+nicht (§11, L-02) — dafür die API (`PUT /api/platform/settings`,
+`GET /api/tenants/{id}/desired-state`).
+
+- [ ] **K-19** Zustand: Kunde → Übersicht → „Zustand der Installation" zeigt eine Meldung jünger als 5 Minuten, Abgleich „in Ordnung", Profil wie in der Konsole. Datenebene anhalten → nach 15 Minuten der Hinweis „seit … keine Meldung".
+- [ ] **K-19a** Reiter „Einstellungen": Entra (Tenant-Id, Client-Id) speichern → Umleitungs-URI `https://<host>/api/auth/callback` wird angezeigt und mitgespeichert; nach dem Abgleich meldet sich ein Benutzer aus `bootstrap_admins` über Entra an.
+- [ ] **K-19b** Client-Secret versiegeln → Antwort und Konsolen-DB enthalten den Klartext **nicht** (`select ciphertext from tenant_sealed_secrets`); Zustand wechselt auf „angekommen"; Anmeldung über Entra funktioniert. Ohne Meldung der Installation → 409.
+- [ ] **K-19c** AD-Suchbasis im Reiter setzen → Zustand „AD eingerichtet: ja", AD-Sync im Kundenportal läuft durch. Ohne Suchbasis zeigt das Kundenportal gehostet „pflegt Vita Brevis" statt „oben eintragen".
 
 - [ ] **K-20** Plattform-Vorgabe setzen (z.B. `ad_sync_interval_minutes`) → beide Kunden übernehmen sie; im Kundenprotokoll `settings_pushed` mit alt/neu.
 - [ ] **K-21** Abweichung bei A setzen → nur A ändert sich; `desired-state` zeigt `settings_source: tenant`.
@@ -150,7 +155,9 @@ Profil und Module haben eine (Kunde → „Profil & Module", §6).
   `$DC exec api sh -lc 'pg_dump --version; pg_restore --version; age --version'`.
 - [ ] **K-41** Sicherung von A auslösen → Datei auf dem Share, beginnt mit `age-encryption.org/v1`; ohne Schlüssel nicht lesbar.
 - [ ] **K-42** Prüf-Wiederherstellung auf dem Backup-Host (`cockpit_api.cli.verify_backup`) → Prüfabfragen grün, Audit-Payloads mit dem Kundenschlüssel entschlüsselbar.
-- [ ] **K-43** Wiederherstellung erfassen → braucht Freigabe durch **zweiten** Operator; derselbe Operator kann nicht selbst freigeben.
+- [ ] **K-43** Wiederherstellung in der Oberfläche erfassen (Knopf „Wiederherstellen" an der Sicherung) → Prüfer spielt sie ein (Zustand `restored`), Freigabe nur durch eine **zweite** Person, danach „Umschaltung vermerken".
+- [ ] **K-47** Tägliche Sicherung: ohne Zutun steht nach `COCKPIT_BACKUP_DAILY_AT` (UTC) je aktivem Kunden genau eine neue Sicherung; ein Neustart der Konsole danach zieht keine zweite.
+- [ ] **K-48** Prüfer (`sudo ./scripts/plattform-aufbau.sh backup-pruefer`): Plattform-Seite zeigt sein Lebenszeichen; geschriebene Sicherungen wechseln innerhalb von 5 Minuten auf `verified`. Im laufenden Konsolen-Container liegt **kein** privater Schlüssel (`docker compose exec api ls /run` ohne `backup-age.key`).
 - [ ] **K-44** PITR-Übung `scripts/pitr-drill.sh` → Stand vor dem Zeitpunkt zurück, Zeilen danach korrekt nicht.
 - [ ] **K-45** Export für A → CSV + Manifest, Prüfsumme stimmt, Download nach Ablauf → 404/410.
 - [ ] **K-46** Kündigung von Kunde C: Reihenfolgeschranken (kein Löschen vor Export/Frist) werden durchgesetzt; danach Schema und Rolle weg, Hostname 404, Monatskopien mit `.offboarding` markiert.
@@ -160,6 +167,13 @@ Profil und Module haben eine (Kunde → „Profil & Module", §6).
 - [ ] **K-50** `python -m cockpit_api.cli.fleet_check` → Exit-Code passt zu den Befunden; Reiter „Flotte" zeigt dieselben.
 - [ ] **K-51** `/healthz/stack` mit Token → JSON; ohne Token → 404.
 - [ ] **K-52** PRTG-Sonde der Konsole mit Monitor-Zertifikat → `status`.
+
+### 4.7 Plattform und Wartung (ADR-0024)
+
+- [ ] **K-60** `sudo ./scripts/plattform-aufbau.sh ops-agent`, dann Plattform → „Neu starten": innerhalb von 20 s läuft der Auftrag, Protokoll erscheint, Zustand `success`, bestellt von <eigener UPN>. „Update einspielen" ebenso (git pull + Neubau).
+- [ ] **K-61** Im Kundenportal gibt es gehostet keinen Menüpunkt „System"; `POST /api/admin/system/restart` → 404, `POST /api/admin/demo-data/purge` → 404.
+- [ ] **K-62** Wartung bei Kunde C: „Aktivitäten zurücksetzen" mit Grund und Kürzel erfassen → nach dem nächsten Abgleich `done` mit Zählern; im Kundenprotokoll steht genau ein Eintrag mit `vita-brevis:<UPN>` und dem Grund. Falscher Kürzel → 422; zweiter offener Auftrag gleicher Art → 409.
+- [ ] **K-63** AD-Connector → „Verbindung testen": mit laufendem Agenten „Anmeldung des Dienstkontos gelungen"; Agent gestoppt → Auftrag verfällt mit Hinweis auf Dienst/Port; falsches Bind-Passwort → „Dienstkonto abgewiesen".
 
 ## 5 · Stufe 4 — AD-Connector-Agent (echter Agent, echtes AD)
 
@@ -292,18 +306,18 @@ Der Stand ist **abnahmefähig für den ersten Fremdkunden**, wenn:
 Ergebnis mit Datum, Commit (`git log -1`) und Name in den PR oder ein
 Abnahme-Issue schreiben.
 
-## 11 · Bekannte Lücken (Stand 2026-10-05)
+## 11 · Bekannte Lücken (Stand 2026-10-06)
 
 | ID | Lücke | Wirkung | Fall |
 |---|---|---|---|
 | ~~L-01~~ | **Behoben 2026-10-05.** Profil und Module haben gehostet einen Autor: die Konsole (Reiter „Profil & Module"). Beim Kunden ist die Seite nur lesbar, der Schreibweg nicht gemountet. | — | D-09, D-10 |
-| L-02 | Konsole hat keine Oberfläche für Systemeinstellungen und Rechte-Matrix je Kunde (Profil und Module schon). | nur per API bedienbar | §4.3 |
+| L-02 | Konsole hat keine Oberfläche für die Rechte-Matrix und die Plattform-Vorgaben (Einstellungen je Kunde, Profil und Module schon, ADR-0024). | nur per API bedienbar | §4.3 |
 | L-03 | Die vier Reset-Eingriffe (ADR-0015 D2) gibt es nur im CLI. | Betrieb braucht Shell | — |
 | L-04 | MSI unsigniert (E18 Schritt 2, beim ersten AppLocker-Kunden oder der dritten Windows-Installation). | SmartScreen-Warnung, AppLocker blockiert | C-04 |
 | ~~L-05~~ | **Behoben 2026-10-05.** Verbindungsfehler nach Ursache benannt; `check` prüft Kanal und AD-Bind und warnt bei IP-Endpunkt; Installationsordner im System-PATH; INSTALL.txt, README und Beispielkonfiguration verlangen den Zertifikatsnamen. | — | C-11–C-13a |
 | L-06 | FR/IT/EN nicht von Muttersprachlern geprüft, einzelne Texte noch deutsch. | nicht produktiv für Romandie/Tessin | S-04 |
 | L-07 | Umschalter „auch bei Kunde X berechtigt" (E16, multitenancy.md §9.3) nicht gebaut. | Person mit zwei Kunden meldet sich zweimal an | — |
 | L-08 | `dev-pruefen.sh` läuft nur gegen die Prozess-Umgebung, nicht gegen den Container-Aufbau auf dev01. | Stufe 2 auf dev01 von Hand | A-07 |
-| L-09 | Kein Zeitplaner für Sicherung/Prüfung in der Konsole (Cron-Zeilen im Runbook). | Betrieb muss Cron pflegen | K-41 |
+| ~~L-09~~ | **Behoben 2026-10-06 (ADR-0024 D6).** Tägliche Sicherung in der Konsole, Prüfer als Timer. | — | K-47, K-48 |
 | L-10 | Organisatorisch offen: CA-Zeremonie (bis dahin nur Test-CA → kein echter Agent beim Fremdkunden), externer Pentest, Wildcard-Zertifikat. | blockiert ersten gehosteten Fremdkunden | §10 Punkt 5 |
 | ~~L-11~~ | **Behoben 2026-10-05.** Hostname wird beim Anlegen auf Form, Plattform-Domäne (eine Ebene) und reservierte Namen geprüft. | — | K-11a |

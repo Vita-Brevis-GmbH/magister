@@ -166,9 +166,13 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
  * verschwand (ADR-0017 D1), war ein Nebeneffekt der Verlagerung, kein
  * Entscheid — `POST /ad/sync` ist auch gehostet gemountet.
  */
-export function SyncAdAction(): JSX.Element {
+export function SyncAdAction({ managed = false }: { managed?: boolean }): JSX.Element {
   const { t } = useTranslation();
   const syncAd = useTriggerAdSync();
+  // `managed` kommt von der Seite und wird nicht hier abgefragt (dieselbe
+  // Regel wie beim Profil oben): gehostet stehen die AD-Einstellungen nicht
+  // auf dieser Seite, sondern in der Konsole von Vita Brevis. Eine Meldung
+  // „oben eintragen" schickte den Kunden zu einem Feld, das es hier nicht gibt.
 
   return (
     <>
@@ -195,6 +199,9 @@ export function SyncAdAction(): JSX.Element {
           <span className="text-sm text-destructive">
             {syncAd.error instanceof ApiError && syncAd.error.status === 503
               ? t([
+                  ...(managed
+                    ? [`admin.settings.sync_ad_reason_managed.${syncAd.error.code}`]
+                    : []),
                   `admin.settings.sync_ad_reason.${syncAd.error.code}`,
                   "admin.settings.sync_ad_unavailable",
                 ])
@@ -239,7 +246,7 @@ function AppSettingsPage(): JSX.Element {
               <CardDescription>{t("admin.settings.ad_actions_desc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <SyncAdAction />
+              <SyncAdAction managed />
             </CardContent>
           </Card>
         </>

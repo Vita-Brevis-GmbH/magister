@@ -82,3 +82,28 @@ export function daysUntilExpiry(agent: Agent, now: Date = new Date()): number {
 export function certificateIsWorrying(agent: Agent, now: Date = new Date()): boolean {
   return agent.status !== "revoked" && daysUntilExpiry(agent, now) < 7;
 }
+
+/** Ein Auftrag samt Ergebnis (ohne Payload). */
+export interface ConnectorJobDetail {
+  id: string;
+  method: string;
+  state: JobState;
+  result: unknown;
+  error: string | null;
+}
+
+/**
+ * Verbindungstest: ein Auftrag `probe_service_connection_detailed` an den
+ * Agenten. Er bindet sich mit dem Dienstkonto ans AD und meldet, ob es ging
+ * und wenn nicht, warum — ohne Benutzerdaten zu lesen.
+ */
+export function startConnectionTest(tenantId: string): Promise<ConnectorJob> {
+  return post(`/api/tenants/${tenantId}/jobs`, {
+    method: "probe_service_connection_detailed",
+    payload: {},
+  });
+}
+
+export function getConnectorJob(tenantId: string, jobId: string): Promise<ConnectorJobDetail> {
+  return get(`/api/tenants/${tenantId}/jobs/${jobId}`);
+}

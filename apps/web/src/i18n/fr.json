@@ -470,6 +470,11 @@
         "ad_config": "Configuration AD incomplète. Vérifiez les contrôleurs de domaine et le compte de bind.",
         "ad_unavailable": "AD injoignable."
       },
+      "sync_ad_reason_managed": {
+        "ad_search_base_missing": "La base de recherche (utilisateurs) n'est pas encore définie pour cette installation. Les réglages AD sont gérés par Vita Brevis — veuillez vous adresser à Vita Brevis.",
+        "ad_search_base_not_found": "La base de recherche configurée n'existe pas dans votre AD (noSuchObject). Les réglages AD sont gérés par Vita Brevis — veuillez lui communiquer le bon chemin d'OU.",
+        "ad_config": "La connexion AD de cette installation est incomplète. Veuillez vous adresser à Vita Brevis."
+      },
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",
       "error_invalid": "Entrée invalide. Veuillez vérifier.",
@@ -844,7 +849,8 @@
       "state_error": "erreur",
       "state_running": "en cours",
       "state_queued": "en file"
-    }
+    },
+    "managed_by_platform": "Le redémarrage, la mise à jour et la suppression de données ou d'activités sont effectués par Vita Brevis pour cette installation. Veuillez vous adresser à Vita Brevis."
   },
   "letters": {
     "button": "Lettre",

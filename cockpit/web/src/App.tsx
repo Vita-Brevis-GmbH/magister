@@ -6,6 +6,7 @@ import { ConsoleLogin } from "./components/ConsoleLogin";
 import { href, useRoute } from "./lib/nav";
 import { Fleet } from "./routes/Fleet";
 import { Instances } from "./routes/Instances";
+import { Platform } from "./routes/Platform";
 import { Templates } from "./routes/Templates";
 import { TenantDetail } from "./routes/TenantDetail";
 import { Tenants } from "./routes/Tenants";
@@ -206,6 +207,11 @@ export function App() {
               label="Flotte"
               active={route.view === "fleet"}
             />
+            <NavLink
+              to={href({ view: "platform" })}
+              label="Plattform"
+              active={route.view === "platform"}
+            />
           </nav>
         </div>
         {signedIn && who ? (
@@ -243,6 +249,7 @@ export function App() {
       {route.view === "instances" && <Instances />}
       {route.view === "templates" && <Templates />}
       {route.view === "fleet" && <Fleet />}
+      {route.view === "platform" && <Platform />}
       {route.view === "tenant" && <TenantDetail tenantId={route.id} tab={route.tab} />}
     </div>
   );

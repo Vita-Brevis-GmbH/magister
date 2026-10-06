@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import {
   useAppSettings,
+  usePlatformManaged,
   useRequestRestart,
   useRequestUpdate,
   useSystemStatus,
@@ -23,6 +24,24 @@ export const Route = createFileRoute("/_app/admin/system")({
 function SystemPage(): JSX.Element {
   const { t } = useTranslation();
   const settings = useAppSettings();
+  const managed = usePlatformManaged().data ?? false;
+  if (managed) {
+    // Über ein Lesezeichen erreichbar, auch ohne Menüpunkt. Eine Seite mit
+    // Knöpfen, deren Endpunkte fehlen, wäre schlimmer als dieser Hinweis.
+    return (
+      <div className="space-y-6">
+        <header className="space-y-1">
+          <h1 className="font-serif text-2xl font-semibold">{t("system.title")}</h1>
+        </header>
+        <p
+          role="note"
+          className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground"
+        >
+          {t("system.managed_by_platform")}
+        </p>
+      </div>
+    );
+  }
   return (
     <div className="space-y-6">
       <header className="space-y-1">

@@ -465,6 +465,11 @@
         "ad_config": "AD-Konfiguration unvollständig. Domain-Controller und Bind-Zugang prüfen.",
         "ad_unavailable": "AD nicht erreichbar."
       },
+      "sync_ad_reason_managed": {
+        "ad_search_base_missing": "Die Such-Basis (User) ist für diese Installation noch nicht gesetzt. Die AD-Einstellungen pflegt Vita Brevis — bitte dort melden.",
+        "ad_search_base_not_found": "Die eingestellte Such-Basis gibt es in Ihrem AD nicht (noSuchObject). Die AD-Einstellungen pflegt Vita Brevis — bitte den richtigen OU-Pfad dorthin melden.",
+        "ad_config": "Die AD-Anbindung dieser Installation ist unvollständig. Bitte Vita Brevis melden."
+      },
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",
       "save": "Speichern",
@@ -841,7 +846,8 @@
       "state_error": "Fehler",
       "state_running": "läuft",
       "state_queued": "eingereiht"
-    }
+    },
+    "managed_by_platform": "Neustart, Update und das Löschen von Daten oder Aktivitäten führt Vita Brevis für diese Installation aus. Wenden Sie sich dafür bitte an Vita Brevis."
   },
   "letters": {
     "button": "Brief",

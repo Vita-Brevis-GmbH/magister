@@ -275,7 +275,13 @@ export function Layout() {
                         {t("nav.document_templates")}
                       </Link>
                     ) : null}
-                    {navAsAdmin ? (
+                    {/*
+                      Gehostet gehören Neustart, Update und das Löschen von
+                      Daten der Konsole (ADR-0024): ein Neustart trifft alle
+                      Kunden auf dem Host. Die Endpunkte sind dann nicht
+                      gemountet, die Seite hätte nichts zu bieten.
+                    */}
+                    {navAsAdmin && !managedByPlatform ? (
                       <Link
                         to="/admin/system"
                         role="menuitem"

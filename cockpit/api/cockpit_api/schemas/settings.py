@@ -95,6 +95,12 @@ class DesiredStateOut(BaseModel):
     templates: list[DesiredTemplateOut] = []
     settings_source: str
     rbac_source: str
+    #: {name: chiffrat} — versiegelte Geheimnisse (ADR-0024 D3). Die Konsole
+    #: kann sie nicht öffnen.
+    sealed_secrets: dict[str, str] = {}
+    #: Offene Wartungsaufträge (ADR-0024 D4); die Datenebene führt jeden genau
+    #: einmal aus.
+    maintenance: list[dict[str, str]] = []
 
 
 __all__ = [

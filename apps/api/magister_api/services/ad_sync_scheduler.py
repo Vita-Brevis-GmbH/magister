@@ -48,7 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
-from magister_api.ad.factory import build_ad_client
+from magister_api.ad.factory import ad_backend, ad_missing_settings, build_ad_client
 from magister_api.auth.effective_settings import load_effective_settings
 from magister_api.config import Settings
 from magister_api.services.ad_sync import AdSyncService
@@ -79,16 +79,14 @@ SessionFactoryFor = Callable[[Tenant], async_sessionmaker[AsyncSession]]
 AdClientFactory = Callable[[Settings, Settings, Tenant], AdClient]
 
 
-def _ad_configured(settings: Settings) -> bool:
+def _ad_configured(base: Settings, settings: Settings, tenant: Tenant) -> bool:
     """True, wenn ein Abgleich überhaupt versucht werden kann.
 
-    Beide Betriebsarten brauchen eine Suchbasis — ohne sie wirft
-    ``search_users`` sofort. Der Live-Betrieb braucht zusätzlich einen DC; der
-    Mock-Betrieb (Tests) nicht.
+    Alle Wege brauchen eine Suchbasis — ohne sie wirft ``search_users``
+    sofort. Einen Domänencontroller braucht nur der direkte LDAP-Weg; über
+    den Connector kennt ihn der Agent (siehe ``ad_missing_settings``).
     """
-    if not settings.ad_users_search_base:
-        return False
-    return settings.ad_use_mock or bool(settings.ad_dcs)
+    return not ad_missing_settings(settings, ad_backend(base, tenant))
 
 
 def _default_session_factory(tenant: Tenant) -> async_sessionmaker[AsyncSession]:
@@ -154,7 +152,7 @@ async def sync_tenant(
         await apply_tenant_scope(session, tenant, extension_schema=base_settings.extension_schema)
         settings = await load_effective_settings(session, base_settings)
         interval = max(1, settings.ad_sync_interval_minutes)
-        if not _ad_configured(settings):
+        if not _ad_configured(base_settings, settings, tenant):
             logger.debug("AD für %s nicht konfiguriert — Runde übersprungen", tenant.slug)
             await session.rollback()
             return interval

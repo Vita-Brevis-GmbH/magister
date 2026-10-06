@@ -90,6 +90,12 @@ services:
       # eingerichtet" — die Oberfläche sagt das, statt eine leere Liste zu
       # zeigen.
       COCKPIT_AGENT_PACKAGE_DIR: ${COCKPIT_AGENT_PACKAGE_DIR:-}
+      # --- Neustart und Update der Plattform (ADR-0024 D5) ---------------
+      # Austausch mit dem Host-Agenten (scripts/plattform-ops-agent.sh). Die
+      # Konsole legt Aufträge ab, der Agent führt sie aus. Leer = aus.
+      COCKPIT_OPS_DIR: ${COCKPIT_OPS_DIR:-}
+      # Tägliche Sicherung aller aktiven Kunden, Uhrzeit in UTC (ADR-0024 D6).
+      COCKPIT_BACKUP_DAILY_AT: ${COCKPIT_BACKUP_DAILY_AT:-01:30}
     depends_on: [postgres]
     volumes:
       # Die Zertifikate der Connector-CA (ADR-0014) liest die API selbst —
@@ -105,6 +111,8 @@ services:
       # Die Agentenpakete NUR lesend: die Konsole liefert sie aus, sie legt
       # keine ab.
       - ${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:${COCKPIT_AGENT_PACKAGE_DIR:-/var/lib/magister/agent-packages}:ro
+      # Aufträge für den Host-Agenten. Schreibend: die Konsole legt Dateien ab.
+      - ${COCKPIT_OPS_DIR:-/var/lib/magister/ops}:${COCKPIT_OPS_DIR:-/var/lib/magister/ops}
     # Deliberately no `ports:` — everything goes through caddy below.
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health', timeout=3).status==200 else 1)\""]

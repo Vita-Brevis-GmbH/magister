@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     # Leer heisst „nicht eingerichtet": die Oberfläche sagt das dann, statt
     # eine leere Liste zu zeigen.
     agent_package_dir: str = Field(default="")
+    #: Austauschverzeichnis mit dem Host-Agenten für Neustart und Update der
+    #: Plattform (ADR-0024 D5). Leer heisst „nicht eingerichtet".
+    ops_dir: str = Field(default="")
+    #: Uhrzeit (UTC, HH:MM) der täglichen Sicherung aller aktiven Kunden.
+    #: Leer schaltet den Zeitplaner ab (ADR-0024 D6).
+    backup_daily_at: str = Field(default="01:30")
 
     # Vorlage für den DSN-Verweis eines neuen Kunden. Die Konsole speichert
     # NUR diesen Verweis, nie den DSN mit Passwort.

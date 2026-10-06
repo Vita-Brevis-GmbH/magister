@@ -32,6 +32,11 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from cockpit_api.models.operations import (
+    MaintenanceState,
+    TenantMaintenanceRequest,
+    TenantSealedSecret,
+)
 from cockpit_api.models.settings import PlatformSettings, TenantSettings
 from cockpit_api.models.tenant import Tenant
 from cockpit_api.services.modules import ModuleSettingsError, check_overrides, check_profile
@@ -293,13 +298,47 @@ class SettingsService:
         settings = effective(platform.defaults, overrides)
         if "instance_profile" not in overrides:
             settings["instance_profile"] = str(tenant.profile)
+        # Immer eine Aussage über die Modul-Schalter, auch eine leere. Ohne sie
+        # blieb beim Kunden stehen, was dort vor der Konsole geschaltet wurde —
+        # etwa „Klassen an" bei einem Kunden, der in der Konsole auf Firma
+        # steht. Gehostet hat die Konsole das Feld allein (ADR-0017 Nachtrag).
+        settings.setdefault("module_overrides", {})
         return {
             "settings": settings,
             "rbac": rbac or {},
             "templates": await TemplateService(self.session).desired_templates(tenant),
             "settings_source": "tenant" if overrides else "platform",
             "rbac_source": "tenant" if own_rbac is not None else "platform",
+            "sealed_secrets": await self._sealed(tenant.id),
+            "maintenance": await self._open_maintenance(tenant.id),
         }
+
+    async def _sealed(self, tenant_id: UUID) -> dict[str, str]:
+        rows = (
+            await self.session.execute(
+                select(TenantSealedSecret).where(TenantSealedSecret.tenant_id == tenant_id)
+            )
+        ).scalars()
+        return {row.name: row.ciphertext for row in rows}
+
+    async def _open_maintenance(self, tenant_id: UUID) -> list[dict[str, str]]:
+        rows = (
+            await self.session.execute(
+                select(TenantMaintenanceRequest)
+                .where(TenantMaintenanceRequest.tenant_id == tenant_id)
+                .where(TenantMaintenanceRequest.state == MaintenanceState.requested)
+                .order_by(TenantMaintenanceRequest.requested_at)
+            )
+        ).scalars()
+        return [
+            {
+                "id": str(row.id),
+                "action": row.action.value,
+                "requested_by": row.requested_by,
+                "reason": row.reason,
+            }
+            for row in rows
+        ]
 
 
 __all__ = [

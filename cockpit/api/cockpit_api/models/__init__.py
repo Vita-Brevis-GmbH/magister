@@ -18,6 +18,14 @@ from cockpit_api.models.connector import (
 )
 from cockpit_api.models.instance import Instance, InstanceChannel
 from cockpit_api.models.offboarding import OffboardingState, TenantOffboarding
+from cockpit_api.models.operations import (
+    MaintenanceAction,
+    MaintenanceState,
+    PlatformHeartbeat,
+    TenantMaintenanceRequest,
+    TenantSealedSecret,
+    TenantStatusReport,
+)
 from cockpit_api.models.operator import ConsoleOperator, ConsoleSession
 from cockpit_api.models.operator_access import OperatorAccessGrant
 from cockpit_api.models.provisioning_job import (
@@ -61,8 +69,11 @@ __all__ = [
     "IsolationMode",
     "JobState",
     "JobStatus",
+    "MaintenanceAction",
+    "MaintenanceState",
     "OffboardingState",
     "OperatorAccessGrant",
+    "PlatformHeartbeat",
     "PlatformSettings",
     "PlatformTemplate",
     "PlatformTemplateTenant",
@@ -75,10 +86,13 @@ __all__ = [
     "Tenant",
     "TenantBackup",
     "TenantBackupPolicy",
+    "TenantMaintenanceRequest",
     "TenantOffboarding",
     "TenantProfile",
+    "TenantSealedSecret",
     "TenantSettings",
     "TenantStatus",
+    "TenantStatusReport",
     "UpdateRequest",
     "UpdateRequestStatus",
 ]

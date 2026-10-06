@@ -156,3 +156,28 @@ export async function downloadExport(exportId: string, filename: string): Promis
     URL.revokeObjectURL(url);
   }
 }
+
+export function requestRestore(
+  tenantId: string,
+  body: { backup_id: string; reason: string; requested_by: string },
+): Promise<RestoreJob> {
+  return post(`/api/tenants/${tenantId}/restore-jobs`, body);
+}
+
+export function approveRestore(jobId: string, approvedBy: string): Promise<RestoreJob> {
+  return post(`/api/restore-jobs/${jobId}/approve`, { approved_by: approvedBy });
+}
+
+export function markRestoreSwitched(jobId: string): Promise<RestoreJob> {
+  return post(`/api/restore-jobs/${jobId}/switched`);
+}
+
+/** Lebenszeichen des Prüfers auf dem Backup-Host (ADR-0024 D6). */
+export interface BackupWorkerStatus {
+  last_seen_at: string | null;
+  detail: string | null;
+}
+
+export function getBackupWorker(): Promise<BackupWorkerStatus> {
+  return get("/api/backups/worker");
+}

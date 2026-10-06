@@ -2,16 +2,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  approveRestore,
   createBackup,
   downloadExport,
   getBackupPolicy,
+  getBackupWorker,
   listBackups,
   listExports,
   listRestoreJobs,
+  markRestoreSwitched,
   requestExport,
+  requestRestore,
   updateBackupPolicy,
   type Backup,
   type BackupPolicy,
+  type RestoreJob,
 } from "../api/backups";
 import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
@@ -36,7 +41,15 @@ function bytes(value: number | null): string {
  * gegen denselben Augenblick beurteilt, und die Anzeige ändert sich nicht
  * zwischen zwei Neuzeichnungen ohne neue Daten.
  */
-function BackupRow({ backup, asOf }: { backup: Backup; asOf: number }) {
+function BackupRow({
+  backup,
+  asOf,
+  onRestore,
+}: {
+  backup: Backup;
+  asOf: number;
+  onRestore: (backup: Backup) => void;
+}) {
   const stale =
     backup.status === "written" && asOf - new Date(backup.started_at).getTime() > 8 * 86_400_000;
   return (
@@ -60,8 +73,146 @@ function BackupRow({ backup, asOf }: { backup: Backup; asOf: number }) {
         {backup.verified_at ? new Date(backup.verified_at).toLocaleDateString() : "—"}
       </td>
       <td className="p-2 text-xs text-red-700">{backup.error ?? backup.verify_detail ?? ""}</td>
+      <td className="p-2">
+        {(backup.status === "written" || backup.status === "verified") && (
+          <button
+            type="button"
+            onClick={() => onRestore(backup)}
+            className="rounded border px-2 py-0.5 text-xs"
+          >
+            Wiederherstellen
+          </button>
+        )}
+      </td>
     </tr>
   );
+}
+
+/**
+ * Eine Wiederherstellung erfassen (ADR-0016 D5).
+ *
+ * Eingespielt wird sie vom Prüfer auf dem Backup-Host, in eine **eigene**
+ * Datenbank daneben — der Kunde läuft weiter. Umgeschaltet wird erst nach der
+ * Freigabe einer zweiten Person.
+ */
+function RestoreForm({
+  tenantId,
+  backup,
+  onDone,
+}: {
+  tenantId: string;
+  backup: Backup;
+  onDone: () => void;
+}) {
+  const qc = useQueryClient();
+  const [reason, setReason] = useState("");
+  const [by, setBy] = useState("");
+  const m = useMutation({
+    mutationFn: () =>
+      requestRestore(tenantId, { backup_id: backup.id, reason, requested_by: by }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["restore-jobs", tenantId] });
+      onDone();
+    },
+  });
+  return (
+    <form
+      className="mt-3 space-y-2 rounded border border-amber-300 bg-amber-50 p-3 text-sm"
+      onSubmit={(e) => {
+        e.preventDefault();
+        m.mutate();
+      }}
+    >
+      <p>
+        Sicherung vom {new Date(backup.started_at).toLocaleString()} wiederherstellen. Sie wird
+        in eine eigene Datenbank daneben eingespielt; der Kunde läuft bis zur Umschaltung weiter.
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <input
+          required
+          minLength={3}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Grund oder Ticket"
+          className="w-80 rounded border px-2 py-1"
+        />
+        <input
+          required
+          value={by}
+          onChange={(e) => setBy(e.target.value)}
+          placeholder="Bestellt von (UPN)"
+          className="w-64 rounded border px-2 py-1"
+        />
+        <button type="submit" disabled={m.isPending} className="rounded border px-3 py-1">
+          Erfassen
+        </button>
+        <button type="button" onClick={onDone} className="rounded px-3 py-1 text-slate-500">
+          Abbrechen
+        </button>
+      </div>
+      {m.isError && <ErrorBox error={m.error} />}
+    </form>
+  );
+}
+
+function RestoreActions({ tenantId, job }: { tenantId: string; job: RestoreJob }) {
+  const qc = useQueryClient();
+  const [by, setBy] = useState("");
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["restore-jobs", tenantId] });
+  const approveM = useMutation({
+    mutationFn: () => approveRestore(job.id, by),
+    onSuccess: () => void invalidate(),
+  });
+  const switchM = useMutation({
+    mutationFn: () => markRestoreSwitched(job.id),
+    onSuccess: () => void invalidate(),
+  });
+  if (job.state === "requested") {
+    return <span className="text-xs text-slate-500">wartet auf den Prüfer</span>;
+  }
+  if (job.state === "restored" && !job.approved_at) {
+    return (
+      <form
+        className="flex gap-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          approveM.mutate();
+        }}
+      >
+        <input
+          required
+          value={by}
+          onChange={(e) => setBy(e.target.value)}
+          placeholder="Freigabe durch (zweite Person)"
+          className="w-56 rounded border px-2 py-0.5 text-xs"
+        />
+        <button type="submit" className="rounded border px-2 py-0.5 text-xs">
+          Freigeben
+        </button>
+        {approveM.isError && <ErrorBox error={approveM.error} />}
+      </form>
+    );
+  }
+  if (job.approved_at && !job.switched_at) {
+    return (
+      <div className="text-xs">
+        <p className="mb-1 text-slate-600">
+          Umschalten auf dem Anwendungsserver (DSN des Kunden auf die Datenbank{" "}
+          <code className="font-mono">{job.target_schema}</code>, Runbook
+          sicherung-wiederherstellung §4.4), danach hier vermerken:
+        </p>
+        <button
+          type="button"
+          onClick={() => switchM.mutate()}
+          className="rounded border px-2 py-0.5"
+        >
+          Umschaltung vermerken
+        </button>
+        {switchM.isError && <ErrorBox error={switchM.error} />}
+      </div>
+    );
+  }
+  return <span className="text-xs text-red-700">{job.error ?? ""}</span>;
 }
 
 function PolicyForm({ tenantId, policy }: { tenantId: string; policy: BackupPolicy }) {
@@ -151,6 +302,8 @@ function PolicyForm({ tenantId, policy }: { tenantId: string; policy: BackupPoli
 export function TenantBackups({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [exportBy, setExportBy] = useState("");
+  const [restoring, setRestoring] = useState<Backup | null>(null);
+  const workerQ = useQuery({ queryKey: ["backup-worker"], queryFn: getBackupWorker, retry: false });
 
   const backupsQ = useQuery({
     queryKey: ["backups", tenantId],
@@ -218,15 +371,21 @@ export function TenantBackups({ tenantId }: { tenantId: string }) {
                 <th className="p-2">Schlüssel-Id</th>
                 <th className="p-2">Geprüft</th>
                 <th className="p-2">Befund</th>
+                <th className="p-2" />
               </tr>
             </thead>
             <tbody>
               {backupsQ.data.map((b) => (
-                <BackupRow key={b.id} backup={b} asOf={backupsQ.dataUpdatedAt} />
+                <BackupRow
+                  key={b.id}
+                  backup={b}
+                  asOf={backupsQ.dataUpdatedAt}
+                  onRestore={setRestoring}
+                />
               ))}
               {backupsQ.data.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="p-4 text-center text-slate-500">
+                  <td colSpan={9} className="p-4 text-center text-slate-500">
                     Noch keine Sicherung.
                   </td>
                 </tr>
@@ -234,10 +393,20 @@ export function TenantBackups({ tenantId }: { tenantId: string }) {
             </tbody>
           </table>
         )}
+        {restoring && (
+          <RestoreForm tenantId={tenantId} backup={restoring} onDone={() => setRestoring(null)} />
+        )}
         <p className="mt-2 text-xs text-slate-500">
-          Die Prüf-Wiederherstellung läuft auf dem Backup-Host — dort liegt der private
-          Schlüssel. Diese Ansicht <em>erfasst</em> Aufträge und <em>nimmt Ergebnisse
-          entgegen</em>; sie führt nichts aus.
+          Täglich um 01:30 UTC sichert die Konsole selbst. Geprüft und wiederhergestellt wird
+          auf dem Backup-Host — dort liegt der private Schlüssel.{" "}
+          {workerQ.data?.last_seen_at ? (
+            <>Prüfer zuletzt gemeldet: {new Date(workerQ.data.last_seen_at).toLocaleString()}.</>
+          ) : (
+            <span className="text-amber-700">
+              Der Prüfer hat sich nie gemeldet — deshalb bleibt „written“ stehen. Einrichten:
+              Plattform → Sicherungen.
+            </span>
+          )}
         </p>
       </section>
 
@@ -256,6 +425,7 @@ export function TenantBackups({ tenantId }: { tenantId: string }) {
                 <th className="p-2">Grund</th>
                 <th className="p-2">Angefragt von</th>
                 <th className="p-2">Freigegeben von</th>
+                <th className="p-2" />
               </tr>
             </thead>
             <tbody>
@@ -269,6 +439,9 @@ export function TenantBackups({ tenantId }: { tenantId: string }) {
                   <td className="p-2 text-xs">{j.reason}</td>
                   <td className="p-2 text-xs">{j.requested_by}</td>
                   <td className="p-2 text-xs">{j.approved_by ?? "—"}</td>
+                  <td className="p-2">
+                    <RestoreActions tenantId={tenantId} job={j} />
+                  </td>
                 </tr>
               ))}
             </tbody>

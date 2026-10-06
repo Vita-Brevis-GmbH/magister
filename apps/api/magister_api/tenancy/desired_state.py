@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 import httpx
 
@@ -33,6 +33,27 @@ class DesiredTemplate:
     body_html: str
     may_override: bool
     version: int
+
+
+@dataclass(frozen=True)
+class DesiredMaintenance:
+    """Ein Wartungsauftrag aus der Konsole (ADR-0024 D4).
+
+    Wird genau einmal ausgeführt: die Ausführung hinterlässt ein
+    Audit-Ereignis mit der Auftrags-Id als Ziel, und ein Auftrag, zu dem es
+    das schon gibt, wird nur noch gemeldet.
+    """
+
+    id: str
+    action: str
+    requested_by: str
+    reason: str
+
+
+#: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
+#: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
+#: als Fehler zurückgemeldet.
+MAINTENANCE_ACTIONS: frozenset[str] = frozenset({"demo_purge", "audit_reset"})
 
 
 @dataclass(frozen=True)
@@ -57,6 +78,11 @@ class DesiredState:
     templates: tuple[DesiredTemplate, ...] | None = None
     settings_source: str = "platform"
     rbac_source: str = "platform"
+    #: {name: chiffrat} — versiegelte Geheimnisse (ADR-0024 D3). Fehlt ein
+    #: Name, wird nichts angefasst: entfernt wird ein Geheimnis nicht über
+    #: den Abgleich.
+    sealed_secrets: dict[str, str] = field(default_factory=dict)
+    maintenance: tuple[DesiredMaintenance, ...] = ()
 
     @property
     def has_rbac(self) -> bool:
@@ -96,7 +122,50 @@ def parse_desired_state(payload: object) -> DesiredState:
         templates=_parse_templates(payload),
         settings_source=str(payload.get("settings_source") or "platform"),
         rbac_source=str(payload.get("rbac_source") or "platform"),
+        sealed_secrets=_parse_sealed(payload),
+        maintenance=_parse_maintenance(payload),
     )
+
+
+def _parse_sealed(payload: dict[str, Any]) -> dict[str, str]:
+    raw = payload.get("sealed_secrets")
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise DesiredStateUnavailableError("'sealed_secrets' ist kein Objekt.")
+    out: dict[str, str] = {}
+    for name, value in cast(dict[object, object], raw).items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise DesiredStateUnavailableError("'sealed_secrets' hat die falsche Form.")
+        out[name] = value
+    return out
+
+
+def _parse_maintenance(payload: dict[str, Any]) -> tuple[DesiredMaintenance, ...]:
+    raw = payload.get("maintenance")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise DesiredStateUnavailableError("'maintenance' ist keine Liste.")
+    parsed: list[DesiredMaintenance] = []
+    for index, entry in enumerate(cast(list[object], raw)):
+        if not isinstance(entry, dict):
+            raise DesiredStateUnavailableError(f"Wartungsauftrag {index} ist kein Objekt.")
+        item = cast(dict[str, object], entry)
+        try:
+            parsed.append(
+                DesiredMaintenance(
+                    id=str(item["id"]),
+                    action=str(item["action"]),
+                    requested_by=str(item.get("requested_by") or ""),
+                    reason=str(item.get("reason") or ""),
+                )
+            )
+        except KeyError as exc:
+            raise DesiredStateUnavailableError(
+                f"Wartungsauftrag {index} hat nicht die erwartete Form: {exc}"
+            ) from exc
+    return tuple(parsed)
 
 
 def _parse_templates(payload: dict[str, Any]) -> tuple[DesiredTemplate, ...] | None:

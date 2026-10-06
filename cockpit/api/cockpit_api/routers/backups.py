@@ -32,6 +32,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -39,16 +40,15 @@ from cockpit_api.auth import require_bootstrap_token
 from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.models import (
-    BackupKind,
     BackupStatus,
     ExportJob,
     ExportState,
+    PlatformHeartbeat,
     RestoreJob,
     RestoreState,
     Tenant,
     TenantBackup,
     TenantBackupPolicy,
-    TenantOffboarding,
 )
 from cockpit_api.schemas.backup import (
     BackupCreate,
@@ -61,8 +61,11 @@ from cockpit_api.schemas.backup import (
     RestoreJobOut,
     RestoreRequest,
 )
-from cockpit_api.services.backup import BackupError, create_backup, write_retention_hint
-from cockpit_api.services.backup_policy import keep_for, monthly_exists, resolve_kind
+from cockpit_api.services.backup_run import (
+    BackupSetupError,
+    perform_backup,
+    tenant_dsn_for_reading,
+)
 from cockpit_api.services.export import ExportError, create_export
 from cockpit_api.services.restore import RESTORE_DB_PATTERN, scratch_database_name
 
@@ -79,31 +82,10 @@ async def _tenant(session: AsyncSession, tenant_id: UUID) -> Tenant:
 
 
 def _tenant_dsn_for_reading(tenant: Tenant) -> str:
-    """Verwaltungszugang in den Cluster des Kunden.
-
-    Für Sicherung und Export wird als Administrator gelesen, nicht als
-    Mandantenrolle: ``pg_dump --schema=`` braucht Leserechte auf allen
-    Objekten des Schemas, und der Export liest quer über alle Tabellen. Die
-    Mandantenrolle hätte sie, aber ihr Passwort liegt nicht in der Konsole —
-    genau so ist es gedacht (ADR-0013 D2).
-    """
-    if not settings.tenant_admin_dsn:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "COCKPIT_TENANT_ADMIN_DSN ist nicht gesetzt.",
-        )
-    _ = tenant
-    return settings.tenant_admin_dsn
-
-
-def _share_root(policy: TenantBackupPolicy | None) -> Path:
-    root = (policy.share_root if policy and policy.share_root else "") or settings.backup_share_root
-    if not root:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "COCKPIT_BACKUP_SHARE_ROOT ist nicht gesetzt.",
-        )
-    return Path(root)
+    try:
+        return tenant_dsn_for_reading(tenant)
+    except BackupSetupError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
 
 # --- Sicherungen ----------------------------------------------------------
@@ -145,87 +127,10 @@ async def run_backup(
     Stunden ist eine Information, ein stilles Verschwinden nicht.
     """
     tenant = await _tenant(session, tenant_id)
-    policy = await session.get(TenantBackupPolicy, tenant_id)
-    root = _share_root(policy)
-    # Die erste geglückte Sicherung eines Kalendermonats wird zur Monatskopie
-    # (E15). Kein zweiter Dump: derselbe Dump, nur mit längerer Frist. Der
-    # Aufrufer bekommt in der Antwort die tatsächliche Art — die Cron-Zeile
-    # bleibt unverändert `{"kind":"daily"}`.
-    kind = resolve_kind(
-        body.kind,
-        policy=policy,
-        monthly_present=await monthly_exists(session, tenant_id),
-    )
-    if kind is not body.kind:
-        logger.info(
-            "Sicherung für %s wird als %s geschrieben (%s), nicht als %s: "
-            "erste Sicherung dieses Monats.",
-            tenant.slug,
-            kind.value,
-            keep_for(kind, policy),
-            body.kind.value,
-        )
-    row = TenantBackup(
-        tenant_id=tenant.id,
-        kind=kind,
-        status=BackupStatus.running,
-        path="",
-        audit_key_id=tenant.audit_key_id,
-        schema_version=tenant.schema_version,
-    )
-    session.add(row)
-    await session.flush()
     try:
-        artifact = await create_backup(
-            dsn=_tenant_dsn_for_reading(tenant),
-            schema_name=tenant.schema_name,
-            slug=tenant.slug,
-            kind=kind.value,
-            share_root=root,
-            recipient=settings.backup_age_recipient,
-        )
-    except BackupError as exc:
-        row.status = BackupStatus.failed
-        row.error = str(exc)[:2000]
-        row.finished_at = datetime.now(UTC)
-        await session.commit()
-        await session.refresh(row)
-        # 201 mit failed und nicht 500: die Zeile *existiert* und trägt den
-        # Grund. Ein 500 ohne Spur wäre die schlechtere Antwort.
-        return row
-    row.path = str(artifact.path)
-    row.size_bytes = artifact.size_bytes
-    row.checksum_sha256 = artifact.checksum_sha256
-    row.status = BackupStatus.written
-    row.finished_at = datetime.now(UTC)
-    # Die Fristen neben die Dumps, damit der Aufräumjob auf dem Fileserver sie
-    # nicht raten muss. Scheitert es, ist die Sicherung trotzdem gut — also
-    # nur eine Warnung.
-    try:
-        write_retention_hint(
-            root,
-            tenant.slug,
-            retention_days=policy.retention_days if policy else 10,
-            pre_migration_retention_days=(policy.pre_migration_retention_days if policy else 30),
-            monthly_keep=policy.monthly_keep if policy else 12,
-        )
-    except (BackupError, OSError) as exc:
-        logger.warning(
-            "Aufbewahrungs-Hinweis für %s nicht geschrieben (%s). Der "
-            "Aufräumjob benutzt dann seine Vorgabewerte.",
-            tenant.slug,
-            exc,
-        )
-    if kind is BackupKind.offboarding:
-        # Der letzte Stand vor dem Löschen gehört an die Offboarding-Zeile:
-        # dort sucht man ihn, wenn ein gekündigter Kunde ein Jahr später
-        # anruft. Ohne diese Zuordnung wäre er eine Datei unter vielen.
-        off = await session.get(TenantOffboarding, tenant.id)
-        if off is not None:
-            off.final_backup_id = row.id
-    await session.commit()
-    await session.refresh(row)
-    return row
+        return await perform_backup(session, tenant, body.kind)
+    except BackupSetupError as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc)) from exc
 
 
 @router.post("/backups/{backup_id}/verify-result", response_model=BackupOut)
@@ -254,6 +159,114 @@ async def report_verify_result(
     await session.commit()
     await session.refresh(row)
     return row
+
+
+# --- Prüfer auf dem Backup-Host (ADR-0024 D6) ------------------------------
+
+#: Name des Lebenszeichens, unter dem sich der Prüfer meldet.
+WORKER_HEARTBEAT = "backup-worker"
+
+
+class WorkerVerifyItem(BaseModel):
+    backup_id: UUID
+    tenant_slug: str
+    schema_name: str
+    path: str
+    checksum_sha256: str | None
+    schema_version: str | None
+
+
+class WorkerRestoreItem(BaseModel):
+    job_id: UUID
+    tenant_slug: str
+    path: str
+    checksum_sha256: str | None
+    target_database: str
+
+
+class WorkerQueue(BaseModel):
+    verify: list[WorkerVerifyItem]
+    restore: list[WorkerRestoreItem]
+
+
+class WorkerHeartbeatOut(BaseModel):
+    last_seen_at: datetime | None
+    detail: str | None
+
+
+@router.get("/backups/worker-queue", response_model=WorkerQueue)
+async def worker_queue(
+    detail: str = "", session: AsyncSession = Depends(get_session)
+) -> WorkerQueue:
+    """Was der Prüfer tun soll — und zugleich sein Lebenszeichen.
+
+    Der Prüfer läuft dort, wo der private Backup-Schlüssel liegt (ADR-0016
+    D2), und holt sich hier seine Arbeit: geschriebene, noch ungeprüfte
+    Sicherungen und erfasste Wiederherstellungen. Die Ergebnisse meldet er
+    über die bestehenden Endpunkte. Die Konsole führt weiterhin nichts aus.
+
+    Der Abruf vermerkt das Lebenszeichen. Ohne ihn hiesse „nie geprüft"
+    entweder „noch nicht dran" oder „Prüfer läuft gar nicht" — die Oberfläche
+    zeigt jetzt, welches von beiden.
+    """
+    beat = await session.get(PlatformHeartbeat, WORKER_HEARTBEAT)
+    if beat is None:
+        session.add(PlatformHeartbeat(name=WORKER_HEARTBEAT, detail=detail[:2000] or None))
+    else:
+        beat.last_seen_at = datetime.now(UTC)
+        beat.detail = detail[:2000] or None
+
+    pending = (
+        await session.execute(
+            select(TenantBackup, Tenant)
+            .join(Tenant, Tenant.id == TenantBackup.tenant_id)
+            .where(TenantBackup.status == BackupStatus.written)
+            .order_by(TenantBackup.started_at)
+            .limit(5)
+        )
+    ).all()
+    restores = (
+        await session.execute(
+            select(RestoreJob, TenantBackup, Tenant)
+            .join(TenantBackup, TenantBackup.id == RestoreJob.backup_id)
+            .join(Tenant, Tenant.id == RestoreJob.tenant_id)
+            .where(RestoreJob.state == RestoreState.requested)
+            .order_by(RestoreJob.created_at)
+            .limit(3)
+        )
+    ).all()
+    await session.commit()
+    return WorkerQueue(
+        verify=[
+            WorkerVerifyItem(
+                backup_id=b.id,
+                tenant_slug=t.slug,
+                schema_name=t.schema_name,
+                path=b.path,
+                checksum_sha256=b.checksum_sha256,
+                schema_version=b.schema_version,
+            )
+            for b, t in pending
+        ],
+        restore=[
+            WorkerRestoreItem(
+                job_id=j.id,
+                tenant_slug=t.slug,
+                path=b.path,
+                checksum_sha256=b.checksum_sha256,
+                target_database=j.target_schema,
+            )
+            for j, b, t in restores
+        ],
+    )
+
+
+@router.get("/backups/worker", response_model=WorkerHeartbeatOut)
+async def worker_status(session: AsyncSession = Depends(get_session)) -> WorkerHeartbeatOut:
+    beat = await session.get(PlatformHeartbeat, WORKER_HEARTBEAT)
+    return WorkerHeartbeatOut(
+        last_seen_at=beat.last_seen_at if beat else None, detail=beat.detail if beat else None
+    )
 
 
 # --- Aufbewahrung ---------------------------------------------------------

@@ -162,14 +162,28 @@ describe("SettingsForm", () => {
 // D1), verschwand er mit ihnen aus der Kunden-Oberfläche — ohne dass das
 // jemand entschieden hätte. Beim ersten Kunden ist es aufgefallen.
 describe("SyncAdAction", () => {
-  function renderAction(): void {
+  function renderAction(managed = false): void {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={qc}>
-        <SyncAdAction />
+        <SyncAdAction managed={managed} />
       </QueryClientProvider>,
     );
   }
+
+  it("points hosted customers to Vita Brevis instead of a missing form field", async () => {
+    fetchMock.mockResolvedValue(
+      // So schickt es `routers/admin_sync.py`: der Ursachen-Code als `detail`.
+      jsonResponse({ detail: "ad_search_base_missing" }, { status: 503 }),
+    );
+    renderAction(true);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /synchronisieren/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/pflegt Vita Brevis/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/oben eine gültige DN/i)).toBeNull();
+  });
 
   it("triggers a full sync and reports the counts", async () => {
     fetchMock.mockResolvedValue(

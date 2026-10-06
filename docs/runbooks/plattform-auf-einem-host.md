@@ -336,6 +336,36 @@ das apt-Repository nicht (siehe `agent/packaging/apt/`). Sie beantwortet die
 eine Frage, die beim Onboarding am Telefon steht: „ist die Datei, die ich
 hier habe, dieselbe wie bei euch?"
 
+## 5c · Neustart, Update und Sicherungsprüfung aus der Konsole (ADR-0024)
+
+Zwei Host-Helfer, beide als systemd-Timer und beide einmalig als root
+einzurichten:
+
+```bash
+sudo ./scripts/plattform-aufbau.sh ops-agent       # Neustart/Update (Konsole → Plattform)
+sudo ./scripts/plattform-aufbau.sh backup-pruefer  # Sicherungen prüfen, Wiederherstellungen einspielen
+```
+
+* **Ops-Agent** (`magister-plattform-ops.timer`, alle 20 s): führt Aufträge aus
+  der Seite *Plattform* der Konsole aus — `restart` (beide Stacks neu starten)
+  oder `update` (`git pull --ff-only`, dann `plattform-aufbau.sh update`).
+  Mehr kann er nicht; was er tut, steht im Skript, nicht im Auftrag.
+* **Prüfer** (`magister-backup-pruefer.timer`, alle 5 min): holt bei der
+  Konsole geschriebene, ungeprüfte Sicherungen und erfasste
+  Wiederherstellungen, prüft bzw. spielt ein und meldet zurück. Er läuft in
+  einem eigenen, kurzlebigen Container; der private Backup-Schlüssel wird nur
+  dort eingehängt, nicht in den Konsolen-Container (ADR-0016 D2). Auf einem
+  echten Backup-Host läuft dasselbe Werkzeug dort:
+  `python -m cockpit_api.cli.backup_worker --identity … --console https://konsole…:4444`.
+
+Die **tägliche Sicherung** braucht keinen Helfer: sie läuft in der Konsole
+selbst, Uhrzeit `COCKPIT_BACKUP_DAILY_AT` (UTC, Vorgabe `01:30`).
+
+Ob alles läuft, zeigt die Konsole: *Plattform* (letzter Auftrag, Protokoll,
+Lebenszeichen des Prüfers) und beim Kunden *Übersicht → Zustand der
+Installation* (meldet sich die Installation, kommt der Abgleich an, gilt das
+richtige Profil).
+
 ## 6 · Anhalten und Abbauen
 
 ```bash
