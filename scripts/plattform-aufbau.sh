@@ -500,6 +500,9 @@ MAGISTER_CONSOLE_REGISTRY_URL=https://$KONSOLE_HOST:4444/api/tenants/registry
 MAGISTER_CONSOLE_REGISTRY_TOKEN=$token
 MAGISTER_CONSOLE_MANAGEMENT_MARKER=$marker
 MAGISTER_CONSOLE_REGISTRY_INTERVAL_S=30
+# Die Wurzel, aus der das Zertifikat der Konsole stammt. Ohne sie traut die
+# Datenebene der Konsole nicht — und bekam bis 2026-10-06 nie einen Kunden.
+MAGISTER_CONSOLE_CA_PATH=$CERTS/root.pem
 # OIDC: je Kunde eine eigene Einbindung (Entscheid aus der Prod-Planung).
 # Hier leer — im Dev meldet man sich lokal an.
 MAGISTER_OIDC_ISSUER=
@@ -521,6 +524,9 @@ EOF
     setze_wert "$daten_env" MAGISTER_TENANT_CERT_DIR "$CERTS" && geaendert=1
     setze_wert "$daten_env" MAGISTER_CONSOLE_REGISTRY_URL \
       "https://$KONSOLE_HOST:4444/api/tenants/registry" && geaendert=1
+    # Nachtrag für Installationen von vor 2026-10-06: ohne den Anker scheiterte
+    # jeder Abruf der Konsole an der Zertifikatsprüfung.
+    setze_wert "$daten_env" MAGISTER_CONSOLE_CA_PATH "$CERTS/root.pem" && geaendert=1
     if [ "$geaendert" -eq 1 ]; then
       say "Umgebung der Datenebene nachgeführt (Namen geändert)"
     else

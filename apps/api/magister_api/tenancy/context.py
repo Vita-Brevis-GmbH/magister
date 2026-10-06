@@ -25,6 +25,7 @@ from magister_api.tenancy.registry import (
     Tenant,
     TenantConfigError,
     TenantRegistry,
+    TenantStatus,
     registry_from_json,
     single_tenant_registry,
 )
@@ -59,6 +60,20 @@ def build_registry(settings: Settings | None = None) -> TenantRegistry:
     """
     s = settings or get_settings()
     raw = (s.tenants or "").strip()
+    if not raw and s.console_registry_url:
+        # Gehostet, und die Konsole hat noch nicht geantwortet. Der Ersatz-
+        # Mandant auf `public` darf dann **niemanden** bedienen: er fängt jeden
+        # Hostnamen auf, und ein Kunde landete in einem Schema, das nicht
+        # seines ist. Genau das lief auf dem Dev-Host, solange die Datenebene
+        # der Konsole nicht traute — Einstellungen aus der Konsole kamen nie
+        # an, weil das Portal gar nicht im Schema des Kunden lief.
+        # `provisioning` heisst: 503 Wartung, bis die Kundenliste da ist.
+        logger.warning(
+            "Gehosteter Betrieb ohne Kundenliste: bis die Konsole antwortet, wird "
+            "kein Mandant bedient (503). MAGISTER_CONSOLE_REGISTRY_URL=%s",
+            s.console_registry_url,
+        )
+        return single_tenant_registry(dsn=s.database_url, status=TenantStatus.PROVISIONING)
     if not raw:
         registry = single_tenant_registry(dsn=s.database_url)
         logger.info(

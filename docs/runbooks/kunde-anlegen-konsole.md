@@ -104,6 +104,16 @@ MAGISTER_CONSOLE_REGISTRY_URL=https://console.magister.ch:4444/api/tenants/regis
 MAGISTER_CONSOLE_REGISTRY_TOKEN=<Service-Token der Konsole>
 MAGISTER_CONSOLE_MANAGEMENT_MARKER=<derselbe Marker wie in der Konsole>
 MAGISTER_CONSOLE_REGISTRY_INTERVAL_S=300
+# Wurzel der Plattform-CA (PEM) auf dem Host. Ohne sie traut die Datenebene
+# dem Zertifikat der Konsole nicht und bedient keinen Kunden (503).
+MAGISTER_CONSOLE_CA_PATH=/etc/magister/platform-root.pem
+```
+
+Prüfen, ob die Kette steht (zeigt je Kunde Konsole → Kundenschema):
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.plattform.yml \
+  exec magister-api python -m magister_api.cli.abgleich --nur-zeigen
 ```
 
 Die Datenebene holt die Liste beim Start und danach im Intervall und hält sie

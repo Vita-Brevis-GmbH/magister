@@ -132,7 +132,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # aus der Konsole (Einstellungen und Rechte-Matrix, ADR-0017) oder aus der
     # Bereitstellung — und ein Notkonto aus einer prozessweiten
     # Umgebungsvariable wäre bei zwanzig Kunden zwanzigmal dasselbe Passwort.
-    if len(registry.tenants) == 1:
+    if len(registry.tenants) == 1 and registry.tenants[0].status.serves_requests:
+        # Nur für einen Mandanten, der bedient wird: der gehostete Ersatz bis
+        # zur ersten Antwort der Konsole (`provisioning`, Schema public) ist
+        # niemandes Installation und bekommt auch keine Seeds.
         await _run_seeds(settings, registry.tenants[0])
     else:
         logger.info(

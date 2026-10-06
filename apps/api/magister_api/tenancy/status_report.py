@@ -34,6 +34,7 @@ from magister_api.models.audit import AuditEvent
 from magister_api.modules import catalog
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.tenancy.console_report import ReportRejectedError, console_base
+from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 from magister_api.tenancy.keys import keys_for
 from magister_api.tenancy.registry import Tenant
 from magister_api.tenancy.sealing import key_id, public_key_b64
@@ -125,9 +126,9 @@ async def post_status(
     if management_marker:
         headers["X-Magister-Management"] = management_marker
     try:
-        async with httpx.AsyncClient(timeout=timeout_s) as client:
+        async with httpx.AsyncClient(timeout=timeout_s, verify=console_verify()) as client:
             response = await client.post(url, headers=headers, json=report)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ConsoleTlsError) as exc:
         raise ReportRejectedError(f"Konsole nicht erreichbar: {exc}") from exc
     if response.status_code not in (200, 204):
         raise ReportRejectedError(

@@ -339,7 +339,11 @@ def registry_from_json(payload: str, *, default_dsn: str) -> TenantRegistry:
 
 
 def single_tenant_registry(
-    *, dsn: str, slug: str = "default", schema_name: str = "public"
+    *,
+    dsn: str,
+    slug: str = "default",
+    schema_name: str = "public",
+    status: TenantStatus = TenantStatus.ACTIVE,
 ) -> TenantRegistry:
     """Registry mit genau einem Mandanten — der noch nicht umgezogene Bestand.
 
@@ -356,7 +360,7 @@ def single_tenant_registry(
                 schema_name=schema_name,
                 db_role=None,
                 schema_version="",
-                status=TenantStatus.ACTIVE,
+                status=status,
                 hostname=None,
             )
         ]

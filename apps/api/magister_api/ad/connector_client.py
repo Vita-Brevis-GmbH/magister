@@ -37,6 +37,7 @@ from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.remote_base import RemoteAdClient
 from magister_api.ad.rpc import ad_user_record_from_jsonable
 from magister_api.config import Settings
+from magister_api.tenancy.console_tls import console_verify
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,12 @@ class AdConnectorClient(RemoteAdClient):
             # Die Konsole verwirft alles ohne diesen Marker (ADR-0015 D1). Die
             # Datenebene spricht sie über das Management-Netz an.
             headers["X-Magister-Management"] = management_marker
-        self._http = httpx.AsyncClient(timeout=HTTP_TIMEOUT_S, headers=headers, transport=transport)
+        self._http = httpx.AsyncClient(
+            timeout=HTTP_TIMEOUT_S,
+            headers=headers,
+            transport=transport,
+            verify=console_verify(settings),
+        )
 
     async def aclose(self) -> None:
         await self._http.aclose()

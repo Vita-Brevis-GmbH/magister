@@ -33,6 +33,7 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 from magister_api.tenancy.scope import quote_identifier
 
 logger = logging.getLogger(__name__)
@@ -99,11 +100,11 @@ async def report_schema_version(
     if management_marker:
         headers["X-Magister-Management"] = management_marker
     try:
-        async with httpx.AsyncClient(timeout=timeout_s) as client:
+        async with httpx.AsyncClient(timeout=timeout_s, verify=console_verify()) as client:
             response = await client.post(
                 url, headers=headers, json={"head_revision": head_revision}
             )
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ConsoleTlsError) as exc:
         raise ReportRejectedError(f"Konsole nicht erreichbar: {exc}") from exc
     if response.status_code not in (200, 204):
         # Kein Token und kein Antwortkörper im Text: das geht in den Log.

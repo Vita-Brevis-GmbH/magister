@@ -28,6 +28,7 @@ from typing import Any
 
 import httpx
 
+from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 from magister_api.tenancy.registry import (
     Tenant,
     TenantConfigError,
@@ -136,9 +137,9 @@ async def fetch_registry(
         # Internet.
         headers["X-Magister-Management"] = management_marker
     try:
-        async with httpx.AsyncClient(timeout=timeout_s) as client:
+        async with httpx.AsyncClient(timeout=timeout_s, verify=console_verify()) as client:
             response = await client.get(url, headers=headers)
-    except httpx.HTTPError as exc:
+    except (httpx.HTTPError, ConsoleTlsError) as exc:
         raise ConsoleUnavailableError(f"Konsole nicht erreichbar: {exc}") from exc
     if response.status_code != 200:
         # Kein Token im Text: die Antwort geht in den Log.

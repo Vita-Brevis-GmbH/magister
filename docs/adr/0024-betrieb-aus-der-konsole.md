@@ -177,3 +177,28 @@ Die beiden Felder gehen jetzt über `AppSettingsService.set_module_settings`
 (Audit-Aktion `platform_settings_reconciled`, wie die übrigen Felder). Ein
 Test verlangt, dass jedes abgleichbare Feld einen Schreibweg hat; ein zweiter
 spielt den Fall vom Dev-Host gegen eine echte Datenbank nach.
+
+## Nachtrag 2026-10-06 (2) · Die Datenebene erreichte die Konsole nie
+
+Das Abgleich-Werkzeug (`python -m magister_api.cli.abgleich`) zeigte auf dem
+Dev-Host die eigentliche Ursache: **jeder** Abruf der Konsole scheiterte an
+`CERTIFICATE_VERIFY_FAILED`. Die Konsole hat ihr Zertifikat aus der
+Plattform-CA. Die httpx-Clients der Datenebene prüften gegen die öffentlichen
+Wurzeln. Die Datenebene fiel daraufhin still auf ihren Ersatz-Mandanten
+`default` zurück: Schema `public`, Auffang für jeden Hostnamen. Der Kunde lief
+also gar nicht in seinem Schema, und nichts aus der Konsole kam je an — kein
+Profil, keine Einstellungen, keine Zustandsmeldung.
+
+Zwei Korrekturen:
+
+* **Vertrauen.** `MAGISTER_CONSOLE_CA_FILE` (im Container
+  `/run/magister/console-ca.pem`, vom Host `MAGISTER_CONSOLE_CA_PATH`) ist der
+  Anker für alle Wege zur Konsole: Registry, Soll-Zustand, Zustandsmeldung,
+  Schemastand, Connector-Aufträge. Gesetzt gilt nur diese Datei.
+  `plattform-aufbau.sh` trägt sie bei bestehenden Installationen nach.
+* **Kein Kunde im falschen Schema.** Gehostet und ohne Kundenliste der Konsole
+  ist der Ersatz-Mandant jetzt `provisioning`: 503 statt Bedienung, keine
+  Seeds, kein AD-Abgleich. Ein Ausfall der Konsole beim Start ist damit eine
+  Wartungsseite und keine Verwechslung von Schemas. Bestand **vor** dem Start
+  bleibt unberührt: ist die Kundenliste einmal geladen, gilt sie weiter, auch
+  wenn die Konsole danach ausfällt (ADR-0013 D4).

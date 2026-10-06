@@ -220,6 +220,11 @@ async def run_ad_sync_loop(
                     break
                 if now < due.get(tenant.slug, 0.0):
                     continue
+                if not tenant.status.serves_requests:
+                    # Nicht bedient heisst auch nicht abgeglichen: ein
+                    # gesperrter Kunde oder der gehostete Ersatz-Mandant, bevor
+                    # die Konsole geantwortet hat.
+                    continue
                 try:
                     interval = await sync_tenant(
                         base_settings,

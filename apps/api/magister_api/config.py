@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     # Wie oft im Hintergrund nachgeladen wird. Ein Ausfall der Konsole ändert
     # nichts am Betrieb — der letzte gute Stand bleibt gültig.
     console_registry_interval_s: int = Field(default=300, ge=30)
+    # Vertrauensanker für das Serverzertifikat der Konsole (PEM, Pfad im
+    # Container). Die Konsole hat ihr Zertifikat aus der Plattform-CA, und
+    # die steht in keinem öffentlichen Zertifikatsspeicher. Leer heisst:
+    # öffentliche Wurzeln — richtig nur für eine Konsole mit öffentlichem
+    # Zertifikat. Gesetzt gilt NUR diese Datei: die Datenebene redet mit
+    # genau einer Konsole und braucht dafür keine 150 Wurzeln.
+    console_ca_file: str = Field(default="")
 
     # --- Operator-Zugriff (ADR-0019) --------------------------------------
     # ÖFFENTLICHER Ed25519-Schlüssel (PEM), gegen den ein Einlöseschein der
