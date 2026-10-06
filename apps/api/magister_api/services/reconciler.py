@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,6 +109,10 @@ RECONCILABLE: frozenset[str] = frozenset(
         "web_tls_cert_pem",
     }
 )
+
+#: Die zwei Felder, die nicht über `AppSettingsUpdate` geschrieben werden,
+#: sondern über `AppSettingsService.set_module_settings`.
+MODULE_KEYS: frozenset[str] = frozenset({"instance_profile", "module_overrides"})
 
 
 @dataclass
@@ -585,15 +589,39 @@ class Reconciler:
         Versionszählung und das Audit-Ereignis. Ein zweiter Weg wäre einer, der
         beim nächsten Umbau vergessen wird.
         """
-        payload = AppSettingsUpdate(**{key: new for key, (_, new) in diff.items()})
-        await AppSettingsService(self.session, self.settings).update(
-            payload,
-            actor_upn=RECONCILER_ACTOR,
-            actor_object_guid=None,
-            ip=None,
-            request_id=f"reconcile:{tenant_slug}",
-            action="platform_settings_reconciled",
-        )
+        svc = AppSettingsService(self.session, self.settings)
+        request_id = f"reconcile:{tenant_slug}"
+        plain = {key: new for key, (_, new) in diff.items() if key not in MODULE_KEYS}
+        if plain:
+            await svc.update(
+                AppSettingsUpdate(**plain),
+                actor_upn=RECONCILER_ACTOR,
+                actor_object_guid=None,
+                ip=None,
+                request_id=request_id,
+                action="platform_settings_reconciled",
+            )
+        # Profil und Modul-Schalter haben ihren eigenen Schreibweg. Über
+        # `AppSettingsUpdate` gingen sie still verloren: das Schema kennt sie
+        # nicht, Pydantic verwirft unbekannte Felder. Der Abgleich sah den
+        # Unterschied bei jedem Lauf, schrieb ihn nie, und der Kunde blieb auf
+        # „Schule", obwohl die Konsole „Firma" sagte.
+        if "instance_profile" in diff or "module_overrides" in diff:
+            profile = diff.get("instance_profile", (None, None))[1]
+            switches = diff.get("module_overrides", (None, None))[1]
+            await svc.set_module_settings(
+                instance_profile=str(profile) if profile is not None else None,
+                module_overrides=(
+                    {str(k): bool(v) for k, v in cast(dict[object, object], switches).items()}
+                    if isinstance(switches, dict)
+                    else None
+                ),
+                actor_upn=RECONCILER_ACTOR,
+                actor_object_guid=None,
+                ip=None,
+                request_id=request_id,
+                action="platform_settings_reconciled",
+            )
 
     async def _reconcile_rbac(
         self,

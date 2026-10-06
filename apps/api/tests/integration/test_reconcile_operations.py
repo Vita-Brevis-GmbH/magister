@@ -58,6 +58,39 @@ async def _count(session: AsyncSession, action: str) -> int:
     return (await session.execute(stmt)).scalar_one()
 
 
+class TestProfileAndModules:
+    async def test_the_console_profile_reaches_the_portal(
+        self, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        """Der Fall vom Dev-Host: Konsole auf Firma, Portal blieb auf Schule."""
+        svc = AppSettingsService(db_session, app_settings)
+        await svc.set_module_settings(
+            instance_profile="school",
+            module_overrides={"classes": True},
+            actor_upn="vorher@kunde.ch",
+            actor_object_guid=None,
+            ip=None,
+            request_id="t",
+        )
+        await db_session.commit()
+
+        desired = DesiredState(settings={"instance_profile": "company", "module_overrides": {}})
+        reconciler = Reconciler(db_session, app_settings)
+        first = await reconciler.reconcile(desired, tenant_slug="alpha")
+        await db_session.commit()
+        assert set(first.changed_settings) == {"instance_profile", "module_overrides"}
+
+        cfg = await svc.get_module_settings()
+        assert cfg.instance_profile == "company"
+        assert cfg.module_overrides == {}
+
+        # Und nur einmal: der nächste Lauf findet nichts mehr zu tun.
+        second = await reconciler.reconcile(desired, tenant_slug="alpha")
+        await db_session.commit()
+        assert second.changed_settings == {}
+        assert not second.touched
+
+
 class TestSealedSecrets:
     async def test_written_encrypted_once_and_not_again(
         self, db_session: AsyncSession, app_settings: Settings

@@ -437,6 +437,7 @@ class AppSettingsService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        action: str = "modules_configured",
     ) -> ModuleConfig:
         """Update the M6 profile and/or per-module overrides; bump version + audit.
 
@@ -459,7 +460,7 @@ class AppSettingsService:
                 sqla_update(AppSettings).where(AppSettings.id == 1).values(**values)
             )
             await AuditService(self.session, self._settings).emit(
-                action="modules_configured",
+                action=action,
                 target_kind="app_settings",
                 target_id="1",
                 actor_upn=actor_upn,

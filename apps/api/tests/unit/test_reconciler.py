@@ -18,7 +18,9 @@ from typing import Any
 
 import pytest
 
+from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.reconciler import (
+    MODULE_KEYS,
     ORDER_MATTERS,
     RECONCILABLE,
     settings_diff,
@@ -96,6 +98,18 @@ class TestSettingsDiff:
     def test_a_missing_current_value_is_a_change(self) -> None:
         diff = settings_diff({}, {"oidc_issuer": "https://login.example"})
         assert diff == {"oidc_issuer": (None, "https://login.example")}
+
+
+class TestEveryReconcilableFieldHasAWritePath:
+    def test_no_field_is_dropped_on_the_way_in(self) -> None:
+        """Was der Abgleich als Unterschied erkennt, muss er auch schreiben können.
+
+        `instance_profile` und `module_overrides` standen in `RECONCILABLE`,
+        aber nicht in `AppSettingsUpdate` — Pydantic verwarf sie still. Der
+        Abgleich meldete bei jedem Lauf eine Änderung und schrieb nie eine.
+        """
+        writable = set(AppSettingsUpdate.model_fields) | MODULE_KEYS
+        assert sorted(RECONCILABLE - writable) == []
 
 
 class TestReconcilableIsSafe:

@@ -164,3 +164,16 @@ der AD-Sync-Zustand aus der Zustandsmeldung.
   Datenebene zieht, die Konsole hat keinen Datenbankzugang zum Kunden).
 * **Prüfen in der Konsole.** Hiesse, den privaten Backup-Schlüssel neben die
   Anwendung zu legen (ADR-0016 D2).
+
+## Nachtrag 2026-10-06 · Profil kam trotzdem nicht an
+
+Nach dem Einspielen stand der Kunde weiterhin auf „Schule". Die Ursache lag
+nicht in der Konsole, sondern im Schreibweg der Datenebene: der Abgleich
+schrieb `instance_profile` und `module_overrides` über `AppSettingsUpdate`,
+und dieses Schema kennt die beiden Felder nicht — Pydantic verwarf sie still.
+Der Abgleich erkannte den Unterschied bei jedem Lauf und schrieb ihn nie.
+
+Die beiden Felder gehen jetzt über `AppSettingsService.set_module_settings`
+(Audit-Aktion `platform_settings_reconciled`, wie die übrigen Felder). Ein
+Test verlangt, dass jedes abgleichbare Feld einen Schreibweg hat; ein zweiter
+spielt den Fall vom Dev-Host gegen eine echte Datenbank nach.
