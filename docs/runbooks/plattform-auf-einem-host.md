@@ -366,6 +366,33 @@ Lebenszeichen des Prüfers) und beim Kunden *Übersicht → Zustand der
 Installation* (meldet sich die Installation, kommt der Abgleich an, gilt das
 richtige Profil).
 
+## 5d · Kommt eine Einstellung aus der Konsole nicht an?
+
+Profil, Module oder Einstellungen stehen in der Konsole richtig, das Portal
+zeigt etwas anderes. Ein Befehl zeigt die ganze Kette je Kunde und gleicht
+danach einmal ab — genau so, wie es die Schleife alle 30 Sekunden tut:
+
+```bash
+cd /opt/magister/deploy/compose
+docker compose -f docker-compose.yml -f docker-compose.plattform.yml \
+  exec magister-api python -m magister_api.cli.abgleich
+```
+
+`--nur-zeigen` schreibt nichts, `--kunde <kürzel>` nimmt nur einen Kunden.
+Die Ausgabe enthält Profile, Modul-Schalter und Feldnamen, nie Werte von
+Einstellungen und nie Geheimnisse. Was die Zeilen bedeuten:
+
+| Zeile | Wenn sie fehlt oder `!!` zeigt |
+|---|---|
+| `Konsolen-Id` | Der Kunde kommt aus `MAGISTER_TENANTS` statt aus der Konsole und wird nie abgeglichen. |
+| `Konsole will` | Soll-Zustand nicht abholbar: Token, Marker oder Netz zur Konsole. |
+| `Kundenschema hat` | Schema oder Kundenschlüssel fehlt auf dieser Datenebene. |
+| `Abweichende Felder` | Was der nächste Abgleich schreiben wird. |
+| `Nach dem Abgleich` | Steht hier noch das alte Profil, ist die Datenebene älter als der Code im Arbeitsstand: `./scripts/plattform-aufbau.sh` erneut ausführen. |
+
+Danach im Browser die Seite neu laden: das Portal fragt Profil und Module
+höchstens alle fünf Minuten neu ab.
+
 ## 6 · Anhalten und Abbauen
 
 ```bash

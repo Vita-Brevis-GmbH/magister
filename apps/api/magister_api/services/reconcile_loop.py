@@ -69,7 +69,7 @@ async def reconcile_tenant(settings: Settings, tenant: Tenant) -> bool:
         await _report(settings, tenant, reconcile_outcome(ok=False, error=str(exc)), None)
         return False
 
-    keys = _keys(settings, tenant)
+    keys = tenant_keys(settings, tenant)
     sm = get_engines().sessionmaker_for(tenant)
     touched = False
     maintenance: list[dict[str, Any]] = []
@@ -101,7 +101,7 @@ async def reconcile_tenant(settings: Settings, tenant: Tenant) -> bool:
     return touched
 
 
-def _keys(settings: Settings, tenant: Tenant) -> TenantKeys:
+def tenant_keys(settings: Settings, tenant: Tenant) -> TenantKeys:
     return resolve_tenant_keys(
         tenant.slug,
         fallback_audit_key=settings.audit_key.get_secret_value(),
@@ -123,7 +123,7 @@ async def _report(
     try:
         sm = get_engines().sessionmaker_for(tenant)
         async with sm() as session:
-            attach_keys(session, _keys(settings, tenant))
+            attach_keys(session, tenant_keys(settings, tenant))
             await apply_tenant_scope(session, tenant, extension_schema=settings.extension_schema)
             report = await collect_status(
                 session, settings, tenant, reconcile=outcome, maintenance=maintenance
@@ -189,4 +189,4 @@ async def reconcile_loop(
             continue
 
 
-__all__ = ["reconcile_all", "reconcile_loop", "reconcile_tenant"]
+__all__ = ["reconcile_all", "reconcile_loop", "reconcile_tenant", "tenant_keys"]
