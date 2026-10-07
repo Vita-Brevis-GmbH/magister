@@ -5,6 +5,9 @@
 # — vom systemd-Timer aus `plattform-aufbau.sh ops-agent` aufgerufen — führt
 # sie aus und schreibt das Ergebnis nach $OPS_DIR/status.json und last.log.
 #
+# Nebenbei erhebt er einmal je Minute den Zustand des Hosts für die
+# Überwachung in der Konsole (scripts/plattform_zustand.py → health.json).
+#
 # Es kennt genau drei Aufträge und liest aus der Datei nichts anderes als den
 # Namen des Auftrags und — beim Anbinden — das Kürzel des Kunden, geprüft
 # gegen dasselbe Muster wie in der Konsole. Eine übernommene Konsole kann
@@ -60,6 +63,14 @@ gueltiges_kuerzel() { [[ "$1" =~ ^[a-z][a-z0-9_]{1,30}$ ]]; }
 # darf nicht von einem zweiten überholt werden.
 exec 9>"$OPS_DIR/.lock"
 flock -n 9 || exit 0
+
+# Zustand für die Überwachung in der Konsole (Seite „Plattform"), höchstens
+# einmal je Minute — auch wenn kein Auftrag wartet. Scheitert die Erhebung,
+# bleibt die alte Datei liegen und die Konsole zeigt ihr Alter.
+if [ -z "$(find "$OPS_DIR/health.json" -newermt '-55 seconds' 2>/dev/null)" ]; then
+  timeout 90 python3 "$REPO/scripts/plattform_zustand.py" --ops "$OPS_DIR" \
+    >/dev/null 2>"$OPS_DIR/health.err" || true
+fi
 
 for req in $(ls -1tr "$REQ_DIR"/*.json 2>/dev/null); do
   action="$(feld "$req" action)"

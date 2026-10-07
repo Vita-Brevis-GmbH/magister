@@ -32,6 +32,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
@@ -131,6 +132,86 @@ async def ops_request(
     )
 
 
+#: Ab diesem Alter gilt der Zustandsbericht als veraltet. Der Ops-Agent
+#: schreibt ihn einmal je Minute; drei verpasste Läufe heissen: er läuft nicht.
+HEALTH_STALE_SECONDS = 180
+
+
+class PlatformHealth(BaseModel):
+    """Zustand des Plattform-Hosts, wie der Ops-Agent ihn zuletzt erhoben hat."""
+
+    configured: bool
+    #: Gibt es überhaupt einen Bericht? Fehlt er, läuft der Ops-Agent nicht
+    #: oder ist älter als die Überwachung.
+    present: bool
+    age_seconds: int | None = None
+    stale: bool = False
+    report: dict[str, Any] | None = None
+    #: Letzte Fehlermeldung der Erhebung selbst (stderr des Skripts), gekürzt.
+    error: str | None = None
+
+
+def _write_targets(ops: Path, targets: list[dict[str, str]]) -> None:
+    tmp = ops / ".probe-targets.json.tmp"
+    tmp.write_text(json.dumps(targets), encoding="utf-8")
+    os.replace(tmp, ops / "probe-targets.json")
+
+
+def _read_health(ops: Path) -> PlatformHealth:
+    error: str | None
+    try:
+        error = (ops / "health.err").read_text(encoding="utf-8", errors="replace")[-2000:] or None
+    except OSError:
+        error = None
+    path = ops / "health.json"
+    try:
+        raw: object = json.loads(path.read_text(encoding="utf-8"))
+        mtime = path.stat().st_mtime
+    except (OSError, ValueError):
+        return PlatformHealth(configured=True, present=False, error=error)
+    report = (
+        {str(k): v for k, v in cast(dict[object, Any], raw).items()}
+        if isinstance(raw, dict)
+        else None
+    )
+    age = int(datetime.now(UTC).timestamp() - mtime)
+    return PlatformHealth(
+        configured=True,
+        present=report is not None,
+        age_seconds=age,
+        stale=age > HEALTH_STALE_SECONDS,
+        report=report,
+        error=error,
+    )
+
+
+@router.get("/health", response_model=PlatformHealth)
+async def platform_health(session: AsyncSession = Depends(get_session)) -> PlatformHealth:
+    """Dienste, Ports, Proben, Zertifikate und Platte des Plattform-Hosts.
+
+    Erhoben vom Ops-Agenten auf dem Host (``scripts/plattform_zustand.py``),
+    nicht von hier: die Konsole hat keinen Zugang zu Docker und zu den Ports
+    des Hosts, und eine Überwachung ist kein Grund, ihr einen zu geben.
+
+    Nebenbei legt der Aufruf die Liste der Kunden-Hostnamen für die Proben
+    ab. Der Agent prüft jeden Eintrag gegen ein Hostnamen-Muster, bevor er
+    ihn benutzt — die Liste kommt von hier, und hier könnte übernommen sein.
+    """
+    if not settings.ops_dir:
+        return PlatformHealth(configured=False, present=False)
+    ops = Path(settings.ops_dir)
+    rows = (
+        await session.execute(
+            select(Tenant.slug, Tenant.hostname).where(
+                Tenant.status.in_((TenantStatus.active, TenantStatus.suspended))
+            )
+        )
+    ).all()
+    targets = [{"slug": slug, "hostname": hostname} for slug, hostname in rows]
+    await run_in_threadpool(_write_targets, ops, targets)
+    return await run_in_threadpool(_read_health, ops)
+
+
 @tenant_router.post(
     "/{tenant_id}/attach", response_model=OpsRequested, status_code=status.HTTP_202_ACCEPTED
 )
@@ -175,4 +256,4 @@ async def attach_request(
     )
 
 
-__all__ = ["ALLOWED", "router", "tenant_router"]
+__all__ = ["ALLOWED", "HEALTH_STALE_SECONDS", "router", "tenant_router"]

@@ -37,3 +37,6 @@ jobs:
 
       - name: Rangfolge der Installations-Angaben
         run: ./scripts/tests/plattform-konfig.test.sh
+
+      - name: Zustandsbericht für die Überwachung
+        run: ./scripts/tests/plattform-zustand.test.sh

@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 import json
+import os
 import sys
 import uuid
 from datetime import UTC, datetime
@@ -246,6 +247,48 @@ class TestPlatformOps:
     ) -> None:
         monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
         assert console_client.post("/api/platform/ops/rm-rf").status_code == 422
+
+
+class TestPlatformHealth:
+    def test_not_configured(
+        self, console_client: TestClient, cockpit_schema: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", "")
+        body = console_client.get("/api/platform/ops/health").json()
+        assert body["configured"] is False
+
+    def test_no_report_yet_but_targets_are_handed_over(
+        self,
+        console_client: TestClient,
+        tenant_id: str,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        body = console_client.get("/api/platform/ops/health").json()
+        assert body["configured"] is True
+        assert body["present"] is False
+        targets = json.loads((tmp_path / "probe-targets.json").read_text())
+        assert {"slug": SLUG, "hostname": f"{SLUG}.example.ch"} in targets
+
+    def test_report_with_age(
+        self,
+        console_client: TestClient,
+        cockpit_schema: str,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        report = {"ok": True, "services": [], "ports": [], "probes": []}
+        (tmp_path / "health.json").write_text(json.dumps(report))
+        body = console_client.get("/api/platform/ops/health").json()
+        assert body["present"] is True
+        assert body["stale"] is False
+        assert body["report"]["ok"] is True
+
+        old = datetime.now(UTC).timestamp() - 3600
+        os.utime(tmp_path / "health.json", (old, old))
+        assert console_client.get("/api/platform/ops/health").json()["stale"] is True
 
 
 class TestAttach:

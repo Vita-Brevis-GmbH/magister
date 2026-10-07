@@ -4,6 +4,7 @@ import { getBackupWorker } from "../api/backups";
 import { getOpsStatus, requestOps } from "../api/platform";
 import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
+import { PlatformHealthPanel } from "../components/PlatformHealthPanel";
 
 /**
  * Die Plattform als Ganzes (ADR-0024 D5, D6).
@@ -42,6 +43,8 @@ export function Platform() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Plattform</h1>
+
+      <PlatformHealthPanel />
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-2 font-semibold">Neustart und Update</h2>

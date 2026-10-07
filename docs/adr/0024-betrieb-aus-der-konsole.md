@@ -225,3 +225,28 @@ niemand. Das Aufbau-Skript tat es nur für seine eigenen Demo-Kunden.
 Verworfen: ein „Neu ausrollen"-Knopf. Schema und Daten waren in Ordnung; es
 fehlte nur die Verbindung. Ein Neuausrollen hätte das Risiko getragen,
 Daten zu überschreiben, ohne das eigentliche Problem zu lösen.
+
+## Nachtrag 2026-10-07 (2) · Überwachung des Plattform-Hosts
+
+Auf dem Dev-Host lief Caddy der Datenebene nicht, weil der Caddy aus dem
+Debian-Paket Port 80 hielt — sichtbar war das nur in einer Shell. Die
+Konsole zeigt jetzt unter *Plattform → Überwachung*:
+
+* jeden Container beider Stacks (läuft, gesund);
+* wer auf 80, 443, 4444 und 46200 lauscht, und ob es dieser Stack ist;
+* echte Anfragen durch Caddy: Umleitung auf 80, Kundenportal auf 443,
+  Konsole auf 4444, Connector-Kanal auf 46200, und je Kunde, ob er bedient
+  wird (401 ohne Anmeldung), in Wartung steht (503) oder der Datenebene
+  unbekannt ist (404);
+* Restlaufzeit der Serverzertifikate und Plattenbelegung.
+
+Erhoben wird auf dem Host, vom Ops-Agenten (D5), einmal je Minute
+(`scripts/plattform_zustand.py` → `ops/health.json`). Die Konsole bekommt
+dafür keinen Zugang zu Docker und zu den Ports; sie liest den Bericht und
+zeigt sein Alter — ein Bericht älter als drei Minuten ist selbst der Befund
+„Ops-Agent läuft nicht". Die Hostnamen für die Kunden-Proben legt die
+Konsole ab (`ops/probe-targets.json`); der Agent prüft jeden gegen ein
+Hostnamen-Muster, bevor er ihn benutzt.
+
+Offen: Benachrichtigung. Die Ansicht zeigt eine Störung, sie meldet sie
+nicht. Für Alarme ist weiterhin PRTG zuständig (ADR-0021 D6).

@@ -365,6 +365,16 @@ sudo ./scripts/plattform-aufbau.sh backup-pruefer  # Sicherungen prüfen, Wieder
 Die **tägliche Sicherung** braucht keinen Helfer: sie läuft in der Konsole
 selbst, Uhrzeit `COCKPIT_BACKUP_DAILY_AT` (UTC, Vorgabe `01:30`).
 
+**Überwachung.** Der Ops-Agent erhebt nebenbei einmal je Minute den Zustand
+des Hosts (`scripts/plattform_zustand.py` → `ops/health.json`): jeder
+Container beider Stacks (läuft, gesund), wer auf 80/443/4444/46200 lauscht
+(ein fremder Dienst wird mit Namen genannt), echte Anfragen durch Caddy an
+jeden Listener und an jeden Kunden (401 = bedient, 503 = Wartung, 404 =
+nicht angebunden), Restlaufzeit der Serverzertifikate und Plattenbelegung.
+Die Konsole zeigt das oben auf *Plattform* unter *Überwachung*; ein Bericht,
+der älter als drei Minuten ist, heisst: der Ops-Agent läuft nicht. Von Hand:
+`sudo python3 scripts/plattform_zustand.py --ops plattform/ops`.
+
 Ob alles läuft, zeigt die Konsole: *Plattform* (letzter Auftrag, Protokoll,
 Lebenszeichen des Prüfers) und beim Kunden *Übersicht → Zustand der
 Installation* (meldet sich die Installation, kommt der Abgleich an, gilt das
