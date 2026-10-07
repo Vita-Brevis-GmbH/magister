@@ -31,6 +31,7 @@ import logging
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -107,7 +108,9 @@ def deregister(
 
 def is_admin() -> bool:
     """Läuft der Befehl mit Administratorrechten?"""
-    if IS_WINDOWS:
+    # `sys.platform` und nicht IS_WINDOWS: nur so erkennt pyright auf beiden
+    # Systemen, dass `os.geteuid` unter Windows nie erreicht wird.
+    if sys.platform == "win32":
         import ctypes
 
         windll: Any = getattr(ctypes, "windll")  # noqa: B009 - nur unter Windows vorhanden
