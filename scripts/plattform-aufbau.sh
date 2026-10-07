@@ -249,9 +249,31 @@ preflight() {
     [ "$port" = "4444" ] && ziel="$BIND"
     if (exec 3<>"/dev/tcp/$ziel/$port") 2>/dev/null; then
       exec 3<&- 3>&-
-      warn "Port $port ist belegt — wenn das nicht dieser Stack ist, scheitert Caddy beim Start."
+      port_pruefen "$port"
     fi
   done
+}
+
+# Wer hält diesen Port? Ein Container dieses Stacks ist in Ordnung (er wird
+# gleich ersetzt). Alles andere hält Caddy mitten im Lauf auf — und dann
+# fehlt alles, was danach käme (Kunden anbinden). Deshalb hier abbrechen,
+# mit Namen, statt nach dem Umbau mit "address already in use".
+port_pruefen() {  # $1 = Port
+  local port="$1" container prozess
+  container="$(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null | head -1)"
+  case "$container" in
+    magister-*|deploy-*) return 0 ;;
+    "") ;;
+    *) die "Port $port hält der Container '$container' — nicht dieser Stack. Anhalten: docker stop $container" ;;
+  esac
+  prozess="$(ss -ltnpH "sport = :$port" 2>/dev/null | grep -o 'users:(([^)]*' | head -1 | sed 's/users:((//')"
+  if [ -n "$prozess" ]; then
+    case "$prozess" in
+      *docker-proxy*) return 0 ;;  # Container ohne publish-Filtertreffer: Docker selbst
+      *) die "Port $port hält ein anderer Dienst auf diesem Host: $prozess. Caddy bekäme ihn nicht. Den Dienst anhalten (z. B. systemctl disable --now nginx apache2) und erneut aufrufen." ;;
+    esac
+  fi
+  warn "Port $port ist belegt, Besitzer nicht feststellbar (ss braucht root) — ist es nicht dieser Stack, scheitert Caddy beim Start."
 }
 
 # --- Plattform-CA ------------------------------------------------------------
@@ -651,7 +673,13 @@ start_konsole() {
 start_daten() {
   say "Datenebene starten (Container, Kundenseiten auf 443)"
   if [ "$ZIEHEN" -eq 1 ]; then dc_daten pull --quiet; else dc_daten build --quiet; fi
-  dc_daten up -d
+  # Scheitert nur ein Dienst (meist Caddy an einem belegten Port), laufen die
+  # übrigen trotzdem — und das Anbinden der Kunden danach braucht nur sie.
+  # Der Fehler wird am Ende von `up` gemeldet, nicht verschluckt.
+  if ! dc_daten up -d; then
+    DATEN_FEHLER=1
+    warn "Datenebene nicht vollständig gestartet — Kunden werden trotzdem angebunden, Abbruch am Ende."
+  fi
 }
 
 warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
@@ -900,6 +928,10 @@ cmd_up() {
   make_kunden
   kunden_anbinden
   cmd_status
+  if [ "${DATEN_FEHLER:-0}" -eq 1 ]; then
+    dc_daten ps -a --format '  {{.Service}}  {{.Status}}' 2>/dev/null || true
+    die "Die Datenebene lief nicht vollständig an (siehe Meldung von docker oben). Ursache beheben, dann erneut aufrufen."
+  fi
   cat <<EOF
 
 $(printf '\033[1mNächste Schritte\033[0m')
