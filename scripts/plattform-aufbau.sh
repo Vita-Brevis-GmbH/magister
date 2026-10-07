@@ -270,7 +270,17 @@ port_pruefen() {  # $1 = Port
   if [ -n "$prozess" ]; then
     case "$prozess" in
       *docker-proxy*) return 0 ;;  # Container ohne publish-Filtertreffer: Docker selbst
-      *) die "Port $port hält ein anderer Dienst auf diesem Host: $prozess. Caddy bekäme ihn nicht. Den Dienst anhalten (z. B. systemctl disable --now nginx apache2) und erneut aufrufen." ;;
+      *)
+        local pid einheit
+        pid="$(echo "$prozess" | grep -o 'pid=[0-9]*' | head -1 | cut -d= -f2)"
+        einheit="$(ps -o unit= -p "$pid" 2>/dev/null | tr -d '[:space:]')"
+        # Häufigster Fall: das Debian-Paket `caddy` startet beim Booten eine
+        # Begrüssungsseite auf :80 — und ist nach einem Neustart des Hosts
+        # schneller als der Container.
+        if [ -n "$einheit" ] && [ "${einheit%.service}" != "$einheit" ]; then
+          die "Port $port hält $einheit auf diesem Host ($prozess). Caddy des Stacks bekäme ihn nicht. Wenn dort nichts Eigenes läuft: systemctl disable --now $einheit — dann erneut aufrufen."
+        fi
+        die "Port $port hält ein anderer Dienst auf diesem Host: $prozess. Caddy des Stacks bekäme ihn nicht. Den Dienst anhalten und erneut aufrufen." ;;
     esac
   fi
   warn "Port $port ist belegt, Besitzer nicht feststellbar (ss braucht root) — ist es nicht dieser Stack, scheitert Caddy beim Start."
