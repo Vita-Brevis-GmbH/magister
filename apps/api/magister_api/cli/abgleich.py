@@ -140,6 +140,10 @@ async def _run(args: argparse.Namespace) -> int:
     try:
         if not await refresh_from_console(settings):
             _out("!! Kundenliste der Konsole nicht geholt — es gilt die aus der Umgebung.")
+            _out(
+                '   Steht oben „fehlt MAGISTER_TENANT_DSN_…": auf dem Host '
+                "./scripts/plattform-aufbau.sh kunde-anbinden ausführen."
+            )
         tenants = [t for t in get_registry().tenants if not args.kunde or t.slug == args.kunde]
         if not tenants:
             _out(f"Kein Kunde {args.kunde!r} in der Kundenliste.")

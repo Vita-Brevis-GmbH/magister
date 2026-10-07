@@ -8,6 +8,8 @@
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
 #   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
 #   ./scripts/plattform-aufbau.sh restart # beide Stacks neu starten (ohne Neubau)
+#   ./scripts/plattform-aufbau.sh kunde-anbinden [kürzel]  # in der Konsole angelegte
+#                                     # Kunden auf der Datenebene nachtragen (Daten bleiben)
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
@@ -218,10 +220,10 @@ konf_speichern() {
   mkdir -p "$(dirname "$KONF")"
   cat > "$KONF" <<EOF
 # Die Angaben zu DIESER Installation. Erzeugt von plattform-aufbau.sh,
-# gelesen von jedem weiteren Aufruf. Von Hand änderbar; ein `up` mit
+# gelesen von jedem weiteren Aufruf. Von Hand änderbar; ein 'up' mit
 # --domaene/--bind/--zusatzname schreibt die neuen Werte hierher zurück.
 #
-# Diese Datei überlebt ein `purge` (sie enthält keine Geheimnisse und keine
+# Diese Datei überlebt ein 'purge' (sie enthält keine Geheimnisse und keine
 # Kundendaten). Wirklich alles weg: purge --auch-konfiguration
 PLATTFORM_DOMAIN=$DOMAIN
 PLATTFORM_BIND=$BIND
@@ -773,6 +775,115 @@ PY
   dc_daten up -d --force-recreate magister-api >/dev/null
 }
 
+# --- Kunden aus der Konsole anbinden ----------------------------------------
+# Ein Kunde, der in der Konsole angelegt wurde (Oberfläche oder API), braucht
+# auf der Datenebene drei Dinge, die die Konsole absichtlich NICHT speichert
+# (ADR-0013 D4, ADR-0016 D8): den DSN seiner Rolle und seinen Kundenschlüssel.
+# Beides gibt sie beim Anlegen genau einmal aus. Wer es dort nicht abschreibt,
+# hat einen Kunden, den die Datenebene überspringt ("fehlt
+# MAGISTER_TENANT_DSN_…") — bis 2026-10-06 auf dem Dev-Host genau so passiert.
+#
+# Hier wird nachgeholt, was fehlt, OHNE Daten anzufassen:
+#   * DSN fehlt  -> Rollenpasswort in der Konsole drehen, DSN eintragen.
+#     Schema und Daten bleiben, wie sie sind.
+#   * Schlüssel fehlt -> neuen erzeugen, aber NUR, wenn im Schema noch nichts
+#     damit verschlüsselt ist. Sonst Abbruch: ein neuer Schlüssel machte
+#     vorhandene Daten unlesbar, der alte gehört aus dem Passwortspeicher.
+kunde_anbinden() {  # $1 = Slug -> 0 wenn etwas eingetragen wurde, 1 wenn nichts fehlte
+  local slug="$1" daten_env="$REPO/deploy/compose/.env" liste eintrag ref slug_ref
+  local id db_role schema key_id status geaendert=1
+  liste="$(konsole_api GET "/api/tenants")"
+  eintrag="$(echo "$liste" | python3 -c '
+import json, sys
+zeilen = sys.stdin.read().rsplit("\n", 1)[0]
+for t in json.loads(zeilen or "[]"):
+    if t["slug"] == sys.argv[1]:
+        print(t["id"], t["dsn_ref"], t["db_role"], t["schema_name"],
+              t.get("audit_key_id") or (t["slug"] + "-v1"), t["status"])
+' "$slug" 2>/dev/null)"
+  [ -n "$eintrag" ] || die "Die Konsole kennt keinen Kunden '$slug'."
+  read -r id ref db_role schema key_id status <<<"$eintrag"
+  [ "$status" = "provisioning" ] && die "Kunde $slug ist noch in Bereitstellung — erst in der Konsole fertigstellen."
+  ref="${ref^^}"
+  slug_ref="$(echo "${slug^^}" | tr '-' '_')"
+
+  if ! grep -q "^MAGISTER_TENANT_DSN_${ref}=." "$daten_env"; then
+    say "Kunde $slug: Datenbankzugang fehlt — Rollenpasswort in der Konsole neu setzen"
+    local antwort
+    antwort="$(konsole_api POST "/api/tenants/$id/rotate-role-password")"
+    python3 - "$antwort" "$daten_env" "$ref" "$db_role" <<'PY' || die "Rollenpasswort für $slug nicht gesetzt."
+import json, pathlib, re, sys
+rumpf, code = sys.argv[1].rsplit("\n", 1)
+if code != "200":
+    print(f"  ! Die Konsole antwortete mit HTTP {code}: {rumpf[:160]}")
+    sys.exit(3)
+pw = json.loads(rumpf).get("role_password")
+if not pw:
+    print("  ! Die Konsole gab kein Passwort zurück.")
+    sys.exit(3)
+env = pathlib.Path(sys.argv[2])
+name = f"MAGISTER_TENANT_DSN_{sys.argv[3]}"
+inhalt = re.sub(rf"^{name}=.*\n", "", env.read_text(), flags=re.M)
+zeile = f"{name}=postgresql+asyncpg://{sys.argv[4]}:{pw}@postgres:5432/magister"
+env.write_text(inhalt.rstrip("\n") + "\n" + zeile + "\n")
+PY
+    geaendert=0
+  fi
+
+  if ! grep -q "^MAGISTER_TENANT_AUDIT_KEY_${slug_ref}=." "$daten_env"; then
+    local verschluesselt
+    # Zählt jede Zeile mit Chiffrat im Schema: alle *_enc-Spalten und die
+    # Audit-Nutzlast. Gelesen wird nichts davon, nur gezählt.
+    verschluesselt="$(dc_daten exec -T postgres psql -U magister -d magister -tAc "
+      SELECT CASE WHEN NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = '$schema')
+      THEN -1 ELSE (SELECT coalesce(sum((xpath('/row/c/text()', query_to_xml(format(
+        'SELECT count(*) AS c FROM %I.%I WHERE %I IS NOT NULL',
+        table_schema, table_name, column_name), false, true, '')))[1]::text::int), 0)
+      FROM information_schema.columns
+      WHERE table_schema = '$schema'
+        AND (column_name LIKE '%\_enc' OR (table_name = 'audit_events' AND column_name = 'payload'))) END
+    " 2>/dev/null | tr -d '[:space:]')"
+    case "$verschluesselt" in
+      0) ;;
+      ''|*[!0-9]*) die "Kunde $slug: Schema $schema nicht lesbar — kein neuer Schlüssel ohne Gewissheit, dass nichts verschlüsselt ist." ;;
+      *) die "Kunde $slug: Schlüssel fehlt, aber im Schema $schema liegen $verschluesselt verschlüsselte Einträge. Ein neuer Schlüssel machte sie unlesbar — den bisherigen aus dem Passwortspeicher als MAGISTER_TENANT_AUDIT_KEY_${slug_ref} und MAGISTER_TENANT_SECRETS_KEY_${slug_ref} eintragen." ;;
+    esac
+    say "Kunde $slug: Kundenschlüssel fehlt — neuen erzeugen (Schema ist noch leer an Chiffrat)"
+    local schluessel
+    schluessel="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+    {
+      echo "MAGISTER_TENANT_AUDIT_KEY_${slug_ref}=$schluessel"
+      echo "MAGISTER_TENANT_AUDIT_KEY_ID_${slug_ref}=$key_id"
+      echo "MAGISTER_TENANT_SECRETS_KEY_${slug_ref}=$schluessel"
+    } >> "$daten_env"
+    warn "Den Kundenschlüssel von $slug jetzt in den Passwortspeicher übernehmen (steht in $daten_env)."
+    geaendert=0
+  fi
+  [ "$geaendert" -eq 1 ] && say "Kunde $slug ist angebunden"
+  return "$geaendert"
+}
+
+# Alle aktiven oder gesperrten Kunden der Konsole, denen auf der Datenebene
+# etwas fehlt. Läuft bei jedem 'up': ein in der Oberfläche angelegter Kunde
+# ist damit nach dem nächsten Aufruf erreichbar.
+kunden_anbinden() {
+  local slugs slug neu=1
+  slugs="$(konsole_api GET "/api/tenants" | python3 -c '
+import json, sys
+zeilen = sys.stdin.read().rsplit("\n", 1)[0]
+for t in json.loads(zeilen or "[]"):
+    if t["status"] in ("active", "suspended"):
+        print(t["slug"])
+' 2>/dev/null)"
+  for slug in $slugs; do
+    if kunde_anbinden "$slug"; then neu=0; fi
+  done
+  if [ "$neu" -eq 0 ]; then
+    say "Datenebene mit den neuen Kundenwerten neu starten"
+    dc_daten up -d --force-recreate magister-api >/dev/null
+  fi
+}
+
 # --- Befehle -----------------------------------------------------------------
 cmd_up() {
   # Prüfhilfe: die Angaben festschreiben und aufhören. Damit lässt sich die
@@ -787,6 +898,7 @@ cmd_up() {
   start_konsole
   start_daten
   make_kunden
+  kunden_anbinden
   cmd_status
   cat <<EOF
 
@@ -991,6 +1103,11 @@ case "$BEFEHL" in
   totp)     konf_anwenden; cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
 esac
 
+# `kunde-anbinden` nimmt optional ein Kürzel — ohne alle Kunden der Konsole.
+if [ "$BEFEHL" = "kunde-anbinden" ] && [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  KUNDE_SLUG="$1"; shift
+fi
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --ziehen)  ZIEHEN=1; shift ;;
@@ -1019,5 +1136,11 @@ case "$BEFEHL" in
   konfig) cmd_konfig ;;
   ops-agent) cmd_ops_agent ;;
   backup-pruefer) cmd_backup_pruefer ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer)" ;;
+  kunde-anbinden)
+    if [ -n "${KUNDE_SLUG:-}" ]; then
+      kunde_anbinden "$KUNDE_SLUG" && dc_daten up -d --force-recreate magister-api >/dev/null || true
+    else
+      kunden_anbinden
+    fi ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
 esac

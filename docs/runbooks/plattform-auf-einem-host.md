@@ -384,6 +384,7 @@ Einstellungen und nie Geheimnisse. Was die Zeilen bedeuten:
 
 | Zeile | Wenn sie fehlt oder `!!` zeigt |
 |---|---|
+| `Kundenliste … nicht geholt` | Steht darüber `CERTIFICATE_VERIFY_FAILED`: `MAGISTER_CONSOLE_CA_PATH` fehlt. Steht `fehlt MAGISTER_TENANT_DSN_…`: der Kunde ist in der Konsole angelegt, aber nicht angebunden — siehe unten. |
 | `Konsolen-Id` | Der Kunde kommt aus `MAGISTER_TENANTS` statt aus der Konsole und wird nie abgeglichen. |
 | `Konsole will` | Soll-Zustand nicht abholbar: Token, Marker oder Netz zur Konsole. |
 | `Kundenschema hat` | Schema oder Kundenschlüssel fehlt auf dieser Datenebene. |
@@ -392,6 +393,24 @@ Einstellungen und nie Geheimnisse. Was die Zeilen bedeuten:
 
 Danach im Browser die Seite neu laden: das Portal fragt Profil und Module
 höchstens alle fünf Minuten neu ab.
+
+### In der Konsole angelegte Kunden anbinden
+
+Die Konsole gibt Rollenpasswort und Kundenschlüssel beim Anlegen **einmal**
+aus und speichert beides nicht. Auf diesem Host trägt das Skript nach, was
+der Datenebene fehlt — bei jedem `up` für alle Kunden, oder gezielt:
+
+```bash
+sudo ./scripts/plattform-aufbau.sh kunde-anbinden          # alle
+sudo ./scripts/plattform-aufbau.sh kunde-anbinden gmp      # einer
+```
+
+Schema und Daten bleiben unberührt. Fehlt der DSN, dreht die Konsole das
+Rollenpasswort und das Skript trägt den neuen DSN ein. Fehlt der
+Kundenschlüssel, wird ein neuer erzeugt — **nur** wenn im Schema noch nichts
+damit verschlüsselt ist; sonst bricht es ab und verlangt den bisherigen aus
+dem Passwortspeicher. Einen neu erzeugten Schlüssel danach in den
+Passwortspeicher übernehmen.
 
 ## 6 · Anhalten und Abbauen
 
