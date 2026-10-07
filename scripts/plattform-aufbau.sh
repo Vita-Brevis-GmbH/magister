@@ -99,7 +99,11 @@ KONF_LOESCHEN=0
 
 say()  { printf '\033[1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33m !  %s\033[0m\n' "$*"; }
-die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; exit 1; }
+die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; DIE_GERUFEN=1; exit 1; }
+# Auffangnetz für `set -e`: bricht ein Befehl ohne eigene Meldung ab, steht
+# wenigstens da, welcher. Vorher endete `up` nach einem gescheiterten
+# Konsolen-Aufruf wortlos — und sah aus wie fertig.
+trap 'rc=$?; if [ "$rc" -ne 0 ] && [ -z "${DIE_GERUFEN:-}" ]; then printf "\033[31m !! Abbruch (Code %s) bei: %s\033[0m\n" "$rc" "$BASH_COMMAND" >&2; fi' EXIT
 
 dc_konsole() {
   docker compose --project-directory "$REPO/cockpit/deploy" \
@@ -726,20 +730,59 @@ konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
         -X "$1" "https://$KONSOLE_HOST:4444$2"
         -H "Authorization: Bearer $token")
   [ $# -ge 3 ] && args+=(-H "Content-Type: application/json" -d "$3")
-  curl "${args[@]}" 2>/dev/null
+  # Ausgabe: Rumpf, Zeilenumbruch, HTTP-Code. Verbindungsfehler (Code 000)
+  # werden laut, mit curls eigener Meldung — vorher verschwanden sie in
+  # /dev/null, und der nächste Schritt scheiterte an einer leeren Antwort.
+  local out rc=0 fehler
+  fehler="$(mktemp)"
+  out="$(curl "${args[@]}" 2>"$fehler")" || rc=$?
+  if [ "${out##*$'\n'}" = "000" ] || { [ "$rc" -ne 0 ] && [ -z "$out" ]; }; then
+    printf '\033[31m !! Konsole nicht erreichbar (%s %s): %s\033[0m\n' \
+      "$1" "$2" "$(tr '\n' ' ' <"$fehler")" >&2
+    rm -f "$fehler"
+    return 1
+  fi
+  rm -f "$fehler"
+  printf '%s' "$out"
+}
+
+# Die Kunden der Konsole, eine Zeile je Kunde:
+#   slug id dsn_ref db_role schema key_id status schema_version
+# Scheitert laut (HTTP-Code und Anfang der Antwort), statt eine leere Liste
+# zu liefern. EIN Ort, der die Antwort zerlegt: vorher taten es drei, und
+# zwei davon schnitten den HTTP-Code falsch ab (`echo` hängt ein Zeilenende
+# an) — `up` endete deshalb wortlos nach „Datenebene starten".
+konsole_kunden() {
+  local antwort
+  antwort="$(konsole_api GET "/api/tenants")" || return 1
+  python3 -c '
+import json, sys
+rumpf, _, code = sys.argv[1].rstrip("\n").rpartition("\n")
+if code != "200":
+    sys.exit(f"  ! Die Konsole antwortete auf GET /api/tenants mit HTTP {code}: {rumpf[:200]}")
+for t in json.loads(rumpf):
+    print(t["slug"], t["id"], t["dsn_ref"], t["db_role"], t["schema_name"],
+          t.get("audit_key_id") or t["slug"] + "-v1", t["status"],
+          t.get("schema_version") or "-")
+' "$antwort"
 }
 
 make_kunden() {
   local daten_env="$REPO/deploy/compose/.env" liste antwort id
-  liste="$(konsole_api GET "/api/tenants")"
+  liste="$(konsole_kunden)" || die "Kundenliste der Konsole nicht abrufbar (Grund oben)."
+  # Die Demo-Kunden nur auf einer frischen Installation — oder wenn einer
+  # davon schon angefangen ist und fertig werden soll. Hat die Konsole eigene
+  # Kunden, legt dieses Skript keine zusätzlichen an: auf dem Dev-Host wären
+  # sonst neben den echten plötzlich zwei Demo-Kunden entstanden.
+  local demo
+  demo="$(awk -v k=" ${KUNDEN[*]} " 'index(k, " " $1 " ")' <<<"$liste")"
+  if [ -n "$liste" ] && [ -z "$demo" ]; then
+    say "Demo-Kunden (${KUNDEN[*]}) übersprungen: die Konsole hat eigene Kunden"
+    return 0
+  fi
   for slug in "${KUNDEN[@]}"; do
-    id="$(echo "$liste" | python3 -c '
-import json, sys
-zeilen = sys.stdin.read().rsplit("\n", 1)[0]
-for t in json.loads(zeilen or "[]"):
-    if t["slug"] == sys.argv[1]:
-        print(t["id"] if not t.get("schema_version") else "fertig")
-' "$slug" 2>/dev/null)"
+    # Feld 8 ist der Schemastand: steht er, ist der Kunde fertig bereitgestellt.
+    id="$(awk -v s="$slug" '$1 == s { print ($8 != "-" ? "fertig" : $2) }' <<<"$liste")"
     if [ "$id" = "fertig" ]; then
       say "Kunde $slug besteht bereits"
       continue
@@ -827,21 +870,10 @@ PY
 #   * Schlüssel fehlt -> neuen erzeugen, aber NUR, wenn im Schema noch nichts
 #     damit verschlüsselt ist. Sonst Abbruch: ein neuer Schlüssel machte
 #     vorhandene Daten unlesbar, der alte gehört aus dem Passwortspeicher.
-kunde_anbinden() {  # $1 = Slug -> 0 wenn etwas eingetragen wurde, 1 wenn nichts fehlte
-  local slug="$1" daten_env="$REPO/deploy/compose/.env" liste eintrag ref slug_ref
-  local id db_role schema key_id status geaendert=1
-  liste="$(konsole_api GET "/api/tenants")"
-  eintrag="$(echo "$liste" | python3 -c '
-import json, sys
-zeilen = sys.stdin.read().rsplit("\n", 1)[0]
-for t in json.loads(zeilen or "[]"):
-    if t["slug"] == sys.argv[1]:
-        print(t["id"], t["dsn_ref"], t["db_role"], t["schema_name"],
-              t.get("audit_key_id") or (t["slug"] + "-v1"), t["status"])
-' "$slug" 2>/dev/null)"
-  [ -n "$eintrag" ] || die "Die Konsole kennt keinen Kunden '$slug'."
-  read -r id ref db_role schema key_id status <<<"$eintrag"
-  [ "$status" = "provisioning" ] && die "Kunde $slug ist noch in Bereitstellung — erst in der Konsole fertigstellen."
+kunde_anbinden() {  # $@ = eine Zeile aus konsole_kunden -> 0 wenn etwas eingetragen wurde
+  local slug="$1" id="$2" ref="$3" db_role="$4" schema="$5" key_id="$6" status="$7"
+  local daten_env="$REPO/deploy/compose/.env" slug_ref geaendert=1
+  [ "$status" = "provisioning" ] && die "Kunde $slug ist noch in Bereitstellung — erst in der Konsole fertigstellen (Kunde → Übersicht → Auftrag fortsetzen)."
   ref="${ref^^}"
   slug_ref="$(echo "${slug^^}" | tr '-' '_')"
 
@@ -880,7 +912,7 @@ PY
       FROM information_schema.columns
       WHERE table_schema = '$schema'
         AND (column_name LIKE '%\_enc' OR (table_name = 'audit_events' AND column_name = 'payload'))) END
-    " 2>/dev/null | tr -d '[:space:]')"
+    " </dev/null 2>/dev/null | tr -d '[:space:]')"
     case "$verschluesselt" in
       0) ;;
       ''|*[!0-9]*) die "Kunde $slug: Schema $schema nicht lesbar — kein neuer Schlüssel ohne Gewissheit, dass nichts verschlüsselt ist." ;;
@@ -905,18 +937,35 @@ PY
 # etwas fehlt. Läuft bei jedem 'up': ein in der Oberfläche angelegter Kunde
 # ist damit nach dem nächsten Aufruf erreichbar.
 kunden_anbinden() {
-  local slugs slug neu=1
-  slugs="$(konsole_api GET "/api/tenants" | python3 -c '
-import json, sys
-zeilen = sys.stdin.read().rsplit("\n", 1)[0]
-for t in json.loads(zeilen or "[]"):
-    if t["status"] in ("active", "suspended"):
-        print(t["slug"])
-' 2>/dev/null)"
-  for slug in $slugs; do
-    if kunde_anbinden "$slug"; then neu=0; fi
+  local liste zeile neu=1
+  local -a felder zeilen
+  liste="$(konsole_kunden)" || die "Kundenliste der Konsole nicht abrufbar (Grund oben)."
+  mapfile -t zeilen <<<"$liste"
+  for zeile in "${zeilen[@]}"; do
+    [ -n "$zeile" ] || continue
+    read -r -a felder <<<"$zeile"
+    case "${felder[6]}" in
+      active|suspended)
+        if kunde_anbinden "${felder[@]}"; then neu=0; fi ;;
+      provisioning)
+        warn "Kunde ${felder[0]} steht in der Konsole auf 'provisioning' — die Bereitstellung ist nicht durch. Bis sie es ist, bedient die Datenebene ihn nicht (Konsole: Kunde → Übersicht → Auftrag fortsetzen)." ;;
+    esac
   done
   if [ "$neu" -eq 0 ]; then
+    say "Datenebene mit den neuen Kundenwerten neu starten"
+    dc_daten up -d --force-recreate magister-api >/dev/null
+  fi
+}
+
+# Ein einzelner Kunde, nach Kürzel.
+kunde_anbinden_kuerzel() {  # $1 = Kürzel
+  local liste zeile
+  local -a felder
+  liste="$(konsole_kunden)" || die "Kundenliste der Konsole nicht abrufbar (Grund oben)."
+  zeile="$(awk -v s="$1" '$1 == s' <<<"$liste")"
+  [ -n "$zeile" ] || die "Die Konsole kennt keinen Kunden '$1'. Bekannt: $(awk '{printf "%s ", $1}' <<<"$liste")"
+  read -r -a felder <<<"$zeile"
+  if kunde_anbinden "${felder[@]}"; then
     say "Datenebene mit den neuen Kundenwerten neu starten"
     dc_daten up -d --force-recreate magister-api >/dev/null
   fi
@@ -1180,7 +1229,7 @@ case "$BEFEHL" in
   backup-pruefer) cmd_backup_pruefer ;;
   kunde-anbinden)
     if [ -n "${KUNDE_SLUG:-}" ]; then
-      kunde_anbinden "$KUNDE_SLUG" && dc_daten up -d --force-recreate magister-api >/dev/null || true
+      kunde_anbinden_kuerzel "$KUNDE_SLUG"
     else
       kunden_anbinden
     fi ;;
