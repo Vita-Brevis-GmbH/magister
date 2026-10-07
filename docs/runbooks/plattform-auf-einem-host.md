@@ -348,8 +348,12 @@ sudo ./scripts/plattform-aufbau.sh backup-pruefer  # Sicherungen prüfen, Wieder
 
 * **Ops-Agent** (`magister-plattform-ops.timer`, alle 20 s): führt Aufträge aus
   der Seite *Plattform* der Konsole aus — `restart` (beide Stacks neu starten)
-  oder `update` (`git pull --ff-only`, dann `plattform-aufbau.sh update`).
-  Mehr kann er nicht; was er tut, steht im Skript, nicht im Auftrag.
+  oder `update` (`git pull --ff-only`, dann `plattform-aufbau.sh update`) —
+  und je Kunde `attach` aus *Übersicht → Anbindung an die Datenebene*
+  (`plattform-aufbau.sh kunde-anbinden <kürzel>`, siehe §5d). Mehr kann er
+  nicht; was er tut, steht im Skript, nicht im Auftrag. Aus der Auftragsdatei
+  übernimmt er nur den Namen des Auftrags und das Kürzel, geprüft gegen das
+  Kürzel-Muster der Konsole.
 * **Prüfer** (`magister-backup-pruefer.timer`, alle 5 min): holt bei der
   Konsole geschriebene, ungeprüfte Sicherungen und erfasste
   Wiederherstellungen, prüft bzw. spielt ein und meldet zurück. Er läuft in
@@ -404,6 +408,10 @@ der Datenebene fehlt — bei jedem `up` für alle Kunden, oder gezielt:
 sudo ./scripts/plattform-aufbau.sh kunde-anbinden          # alle
 sudo ./scripts/plattform-aufbau.sh kunde-anbinden gmp      # einer
 ```
+
+Ohne Shell: in der Konsole beim Kunden *Übersicht → Anbindung an die
+Datenebene → Auf der Datenebene anbinden*. Der Ops-Agent (§5c) führt dann
+denselben Befehl aus; Ergebnis und Protokoll stehen darunter.
 
 Schema und Daten bleiben unberührt. Fehlt der DSN, dreht die Konsole das
 Rollenpasswort und das Skript trägt den neuen DSN ein. Fehlt der

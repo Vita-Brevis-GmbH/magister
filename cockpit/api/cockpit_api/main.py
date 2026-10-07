@@ -108,6 +108,7 @@ app.include_router(console_auth.router, prefix="/api")
 app.include_router(settings_router.tenant_scoped, prefix="/api")
 app.include_router(operations.router, prefix="/api")
 app.include_router(platform_ops.router, prefix="/api")
+app.include_router(platform_ops.tenant_router, prefix="/api")
 app.include_router(connector.console, prefix="/api")
 # Agentenpakete zum Herunterladen (ADR-0014). Plattformweit und nicht je
 # Kunde: es ist dieselbe Datei für alle.

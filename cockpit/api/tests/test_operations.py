@@ -248,6 +248,55 @@ class TestPlatformOps:
         assert console_client.post("/api/platform/ops/rm-rf").status_code == 422
 
 
+class TestAttach:
+    def test_request_carries_only_the_slug(
+        self,
+        console_client: TestClient,
+        tenant_id: str,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        resp = console_client.post(f"/api/tenants/{tenant_id}/attach")
+        assert resp.status_code == 202, resp.text
+        assert resp.json()["slug"] == SLUG
+        (request,) = list((tmp_path / "requests").glob("*.json"))
+        payload = json.loads(request.read_text())
+        assert payload["action"] == "attach"
+        assert payload["slug"] == SLUG
+        # Kein DSN, kein Schlüssel, kein Passwort: die Konsole hat keines.
+        assert set(payload) == {"id", "action", "slug", "requested_by", "requested_at"}
+
+    def test_not_while_provisioning(
+        self,
+        console_client: TestClient,
+        tenant_id: str,
+        cockpit_database_url: str,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        async def set_provisioning() -> None:
+            engine = create_async_engine(cockpit_database_url, poolclass=NullPool)
+            try:
+                async with engine.begin() as conn:
+                    await conn.execute(
+                        text("UPDATE tenants SET status = 'provisioning' WHERE id = :id"),
+                        {"id": tenant_id},
+                    )
+            finally:
+                await engine.dispose()
+
+        asyncio.run(set_provisioning())
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        assert console_client.post(f"/api/tenants/{tenant_id}/attach").status_code == 409
+
+    def test_not_configured(
+        self, console_client: TestClient, tenant_id: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", "")
+        assert console_client.post(f"/api/tenants/{tenant_id}/attach").status_code == 503
+
+
 class TestBackupWorker:
     def test_queue_records_the_heartbeat(
         self, console_client: TestClient, cockpit_schema: str

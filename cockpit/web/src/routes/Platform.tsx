@@ -80,7 +80,7 @@ export function Platform() {
           <dl className="grid grid-cols-[10rem_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-slate-500">Letzter Auftrag</dt>
             <dd>
-              {last.action} <StatusBadge status={last.state ?? "?"} />
+              {last.action}{last.slug ? ` (${last.slug})` : ""} <StatusBadge status={last.state ?? "?"} />
             </dd>
             <dt className="text-slate-500">Bestellt von</dt>
             <dd>{last.requested_by || "—"}</dd>

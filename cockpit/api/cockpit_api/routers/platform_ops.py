@@ -8,9 +8,16 @@ Endpunkte gehostet nicht mehr.
 Dasselbe Sicherheitsmodell wie vorher: die API startet nichts selbst. Sie legt
 einen Auftrag als Datei in ``COCKPIT_OPS_DIR/requests/`` ab; ein Agent auf dem
 Host (``scripts/plattform-ops-agent.sh``, systemd-Timer) führt ihn aus und
-schreibt das Ergebnis nach ``status.json``. Der Agent kennt genau zwei
+schreibt das Ergebnis nach ``status.json``. Der Agent kennt genau drei
 Aufträge — eine übernommene Konsole kann einen Neustart bestellen, aber keinen
 beliebigen Befehl auf dem Host.
+
+Der dritte ist **„anbinden"** je Kunde: ein in der Konsole angelegter Kunde
+braucht auf der Datenebene seinen DSN und seinen Kundenschlüssel, und beides
+gibt die Konsole nur einmal aus und speichert es nicht. Der Agent führt dafür
+``plattform-aufbau.sh kunde-anbinden <kürzel>`` aus; Schema und Daten bleiben
+unberührt. Aus der Auftragsdatei liest er nur das Kürzel und prüft es gegen
+dasselbe Muster wie hier.
 """
 
 from __future__ import annotations
@@ -21,14 +28,18 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
 from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.config import settings
+from cockpit_api.db import get_session
+from cockpit_api.models import Tenant
+from cockpit_api.models.tenant import SLUG_PATTERN, TenantStatus
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +47,11 @@ router = APIRouter(
     prefix="/platform/ops", tags=["platform"], dependencies=[Depends(require_identity)]
 )
 
-ALLOWED: tuple[str, ...] = ("restart", "update")
+tenant_router = APIRouter(
+    prefix="/tenants", tags=["platform"], dependencies=[Depends(require_identity)]
+)
+
+ALLOWED: tuple[str, ...] = ("restart", "update", "attach")
 
 
 class OpsStatus(BaseModel):
@@ -50,6 +65,7 @@ class OpsRequested(BaseModel):
     id: str
     action: str
     requested_at: str
+    slug: str | None = None
 
 
 def _ops_dir() -> Path:
@@ -115,4 +131,48 @@ async def ops_request(
     )
 
 
-__all__ = ["ALLOWED", "router"]
+@tenant_router.post(
+    "/{tenant_id}/attach", response_model=OpsRequested, status_code=status.HTTP_202_ACCEPTED
+)
+async def attach_request(
+    tenant_id: UUID,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> OpsRequested:
+    """Den Kunden auf der Datenebene anbinden lassen (DSN und Schlüssel nachtragen).
+
+    Dreht dabei das Rollenpasswort, wenn der Datenebene der DSN fehlt — ein
+    neues Passwort ohne den neuen DSN daneben hiesse Ausfall, deshalb macht
+    beides derselbe Agent in einem Lauf. Ein vorhandener DSN bleibt stehen.
+    """
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
+    if tenant.status not in (TenantStatus.active, TenantStatus.suspended):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Kunde steht auf {tenant.status.value}: erst die Bereitstellung abschliessen.",
+        )
+    if not SLUG_PATTERN.match(tenant.slug):
+        # Kann aus der Datenbank nicht kommen (geprüft beim Anlegen); der Agent
+        # prüft trotzdem ein zweites Mal.
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "ungültiges Kürzel")
+    ops = _ops_dir()
+    payload: dict[str, Any] = {
+        "id": uuid4().hex,
+        "action": "attach",
+        "slug": tenant.slug,
+        "requested_by": caller.actor,
+        "requested_at": datetime.now(UTC).isoformat(),
+    }
+    await run_in_threadpool(_write_request, ops, payload)
+    logger.info("Anbinden von %s bestellt von %s (%s)", tenant.slug, caller.actor, payload["id"])
+    return OpsRequested(
+        id=str(payload["id"]),
+        action="attach",
+        requested_at=str(payload["requested_at"]),
+        slug=tenant.slug,
+    )
+
+
+__all__ = ["ALLOWED", "router", "tenant_router"]

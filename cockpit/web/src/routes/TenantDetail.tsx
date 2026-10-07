@@ -9,6 +9,7 @@ import {
   unsuspendTenant,
   type Tenant,
 } from "../api/tenants";
+import { AttachToDataPlane } from "../components/AttachToDataPlane";
 import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 import { ProvisioningLog } from "../components/ProvisioningLog";
@@ -127,6 +128,10 @@ function Overview({ tenantId }: { tenantId: string }) {
       )}
 
       <TenantStatusPanel tenantId={tenantId} />
+
+      {tenant.status !== "provisioning" && (
+        <AttachToDataPlane tenantId={tenantId} slug={tenant.slug} />
+      )}
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Stammdaten</h2>

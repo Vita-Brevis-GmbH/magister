@@ -202,3 +202,26 @@ Zwei Korrekturen:
   Wartungsseite und keine Verwechslung von Schemas. Bestand **vor** dem Start
   bleibt unberührt: ist die Kundenliste einmal geladen, gilt sie weiter, auch
   wenn die Konsole danach ausfällt (ADR-0013 D4).
+
+## Nachtrag 2026-10-07 · Kunden aus der Konsole auf der Datenebene anbinden
+
+Nach der TLS-Korrektur übersprang die Datenebene den ersten in der
+Oberfläche angelegten Kunden: `fehlt MAGISTER_TENANT_DSN_…`. Die Konsole gibt
+Rollenpasswort und Kundenschlüssel beim Anlegen genau einmal aus und
+speichert beides nicht (ADR-0013 D4, ADR-0016 D8) — eingetragen hatte sie
+niemand. Das Aufbau-Skript tat es nur für seine eigenen Demo-Kunden.
+
+* `plattform-aufbau.sh kunde-anbinden [kürzel]`, auch bei jedem `up`: fehlt
+  der DSN, dreht die Konsole das Rollenpasswort und das Skript trägt den DSN
+  ein. Fehlt der Kundenschlüssel, entsteht ein neuer — nur wenn im Schema
+  kein Chiffrat liegt, sonst Abbruch mit Verweis auf den Passwortspeicher.
+  Schema und Daten bleiben unberührt.
+* Knopf in der Konsole (*Übersicht → Anbindung an die Datenebene*): ein
+  dritter Auftrag `attach` für den Ops-Agenten (D5), mit dem Kürzel als
+  einzigem Parameter, vom Agenten gegen das Kürzel-Muster geprüft. Die
+  Konsole bekommt dabei weder DSN noch Schlüssel zu sehen: beide entstehen
+  und bleiben auf dem Host.
+
+Verworfen: ein „Neu ausrollen"-Knopf. Schema und Daten waren in Ordnung; es
+fehlte nur die Verbindung. Ein Neuausrollen hätte das Risiko getragen,
+Daten zu überschreiben, ohne das eigentliche Problem zu lösen.
