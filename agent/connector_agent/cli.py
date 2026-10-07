@@ -1,10 +1,11 @@
 """``magister-connector`` — Kommandozeile des Agenten (ADR-0014).
 
-Drei Befehle:
+Vier Befehle:
 
-* ``enroll``  — Einmal-Token einlösen, Schlüssel lokal erzeugen, Zustand anlegen
-* ``run``     — Abrufbetrieb (das macht der Dienst)
-* ``check``   — Konfiguration, Rechte und Erreichbarkeit prüfen, ohne etwas zu tun
+* ``enroll``    — Einmal-Token einlösen, Schlüssel lokal erzeugen, Zustand anlegen
+* ``run``       — Abrufbetrieb (das macht der Dienst)
+* ``check``     — Konfiguration, Rechte und Erreichbarkeit prüfen, ohne etwas zu tun
+* ``uninstall`` — bei der Plattform abmelden, Schlüssel löschen, Programm entfernen
 
 ``check`` ist der Befehl für die Abnahme beim Kunden: er sagt, ob der Kanal zur
 Plattform steht (Name, Port, Zertifikat), ob die Rechte stimmen und ob das AD
@@ -323,6 +324,83 @@ def build_ad_client() -> object | None:
     return AdClient(settings)
 
 
+def cmd_uninstall(args: argparse.Namespace) -> int:
+    """Abmelden, Zugang löschen, Programm entfernen — in dieser Reihenfolge."""
+    from connector_agent import uninstall as un
+
+    if not un.is_admin():
+        sys.stderr.write(
+            "Dafür braucht es Administratorrechte (Zustandsverzeichnis, Dienst, "
+            "Installationsprogramm). Nichts verändert.\n"
+            "Windows: Eingabeaufforderung per Rechtsklick „Als Administrator "
+            "ausführen“. Linux: mit sudo.\n"
+        )
+        return 1
+
+    config_path = Path(args.config)
+    try:
+        config: AgentConfig | None = _load(args)
+    except ConfigError as exc:
+        config = None
+        sys.stderr.write(
+            f"Konfiguration nicht lesbar ({exc}). Abmelden bei der Plattform geht so "
+            "nicht; das Programm wird trotzdem entfernt.\n"
+        )
+
+    if not args.ja:
+        sys.stdout.write(
+            "Der Agent wird bei der Plattform abgemeldet, sein Schlüssel gelöscht und\n"
+            "das Programm entfernt. Danach braucht es für diesen Server ein neues\n"
+            "Einmal-Token aus der Konsole.\n"
+            "Fortfahren? Mit 'ja' bestätigen: "
+        )
+        sys.stdout.flush()
+        if sys.stdin.readline().strip().lower() != "ja":
+            sys.stdout.write("Abgebrochen. Nichts verändert.\n")
+            return 1
+
+    report = un.UninstallReport()
+    report.service = un.stop_service()
+    sys.stdout.write(f"Dienst:        {report.service}\n")
+
+    if config is not None:
+        secrets = load_secrets(config)
+        if args.ohne_plattform:
+            report.deregister_problem = "übersprungen (--ohne-plattform)"
+        elif secrets is None:
+            report.deregister_problem = "nicht angemeldet — nichts abzumelden"
+            report.deregistered = True
+        else:
+            try:
+                un.deregister(config, secrets)
+                report.deregistered = True
+            except un.DeregisterError as exc:
+                report.deregister_problem = str(exc)
+        if report.deregistered and not report.deregister_problem:
+            sys.stdout.write("Plattform:     abgemeldet (in der Konsole jetzt widerrufen)\n")
+        elif report.deregistered:
+            sys.stdout.write(f"Plattform:     {report.deregister_problem}\n")
+        else:
+            sys.stdout.write(
+                f"Plattform:     NICHT abgemeldet — {report.deregister_problem}\n"
+                "               In der Konsole beim Kunden unter „AD-Connector“ den Agenten\n"
+                "               widerrufen. Der Schlüssel wird trotzdem gelöscht; benutzen\n"
+                "               kann die Anmeldung danach niemand mehr.\n"
+            )
+        report.removed = un.wipe(config, everything=args.alles, config_path=config_path)
+        for path in report.removed:
+            sys.stdout.write(f"Gelöscht:      {path}\n")
+        if not args.alles:
+            sys.stdout.write(
+                f"Behalten:      Konfiguration und Protokoll in {config.state_dir} "
+                "(mit --alles auch diese)\n"
+            )
+
+    report.package = un.remove_package(keep=args.paket_behalten)
+    sys.stdout.write(f"Programm:      {report.package}\n")
+    return 0 if report.deregistered or args.ohne_plattform else 2
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="magister-connector", description=__doc__)
     parser.add_argument(
@@ -348,6 +426,27 @@ def main(argv: list[str] | None = None) -> int:
 
     check_cmd = sub.add_parser("check", help="Konfiguration und Rechte prüfen")
     check_cmd.set_defaults(func=cmd_check)
+
+    uninstall_cmd = sub.add_parser(
+        "uninstall", help="Bei der Plattform abmelden, Schlüssel löschen, Programm entfernen"
+    )
+    uninstall_cmd.add_argument("--ja", action="store_true", help="ohne Rückfrage")
+    uninstall_cmd.add_argument(
+        "--alles",
+        action="store_true",
+        help="auch Konfiguration und Protokoll löschen (das ganze Zustandsverzeichnis)",
+    )
+    uninstall_cmd.add_argument(
+        "--ohne-plattform",
+        action="store_true",
+        help="nicht bei der Plattform abmelden (dann in der Konsole widerrufen)",
+    )
+    uninstall_cmd.add_argument(
+        "--paket-behalten",
+        action="store_true",
+        help="nur abmelden und Schlüssel löschen, das Programm bleibt installiert",
+    )
+    uninstall_cmd.set_defaults(func=cmd_uninstall)
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)

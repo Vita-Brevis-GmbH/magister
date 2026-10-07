@@ -156,6 +156,25 @@ der Prozess dazwischen, passen sie nicht zusammen — der Agent legt deshalb das
 alte Paar als `.prev` daneben und stellt es beim Start wieder her, wenn das
 aktive Paar nicht zusammengehört.
 
+## Deinstallieren
+
+```bash
+magister-connector uninstall            # Windows: als Administrator; Linux: mit sudo
+magister-connector uninstall --alles    # auch Konfiguration und Protokoll
+```
+
+In dieser Reihenfolge: Dienst anhalten, bei der Plattform abmelden
+(`POST /connector/decommission`, beglaubigt mit Zertifikat und API-Key — der
+Agent steht danach in der Konsole als widerrufen), Schlüssel, Zertifikat und
+Geheimnisse löschen, Programm entfernen (Windows: `msiexec /x` mit dem
+Produktcode aus der Programmliste; Linux: der `apt purge`-Befehl wird
+genannt). Abgemeldet wird **vor** dem Löschen, weil der Agent danach nicht
+mehr beweisen kann, wer er ist. Ist die Plattform nicht erreichbar, wird
+trotzdem gelöscht und der Widerruf in der Konsole verlangt (Exit-Code 2).
+
+Unter Windows steht dafür im Startmenü „Connector-Agent deinstallieren".
+Über „Apps & Features" bleiben Anmeldung und Schlüssel zurück.
+
 ## Voraussetzungen beim Kunden
 
 * **Ausgehend TCP 46200** zu `connect.magister.ch`. Kein Rückfall auf 443

@@ -388,6 +388,30 @@ async def renew(
     )
 
 
+@agent_api.post("/decommission", status_code=status.HTTP_204_NO_CONTENT)
+async def decommission(
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Der Agent meldet sich selbst ab — beim Deinstallieren.
+
+    Vorher blieb nach einer Deinstallation eine gültige Anmeldung zurück, zu
+    der es keinen Agenten mehr gab, bis jemand in der Konsole widerrief. Jetzt
+    widerruft ``magister-connector uninstall`` sich selbst, bevor es den
+    Schlüssel löscht.
+
+    Beglaubigt wie die Erneuerung (Zertifikat plus API-Key). Ein Agent kann
+    damit nur sich selbst widerrufen, nie einen anderen — und nichts, was er
+    hier tut, macht einen widerrufenen Agenten wieder gültig.
+    """
+    agent, tenant = identity
+    agent.status = AgentStatus.revoked
+    agent.revoked_at = datetime.now(UTC)
+    agent.revoked_reason = "Vom Agenten selbst abgemeldet (Deinstallation)"
+    await session.commit()
+    logger.info("Agent %s (%s) hat sich selbst abgemeldet", agent.id, tenant.slug)
+
+
 @agent_api.get("/jobs", response_model=list[JobForAgent])
 async def poll_jobs(
     identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),

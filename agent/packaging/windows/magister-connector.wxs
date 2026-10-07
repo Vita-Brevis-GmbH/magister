@@ -182,6 +182,19 @@
                   Target="[System64Folder]cmd.exe"
                   Arguments="/K cd /d &quot;[INSTALLDIR]&quot;"
                   WorkingDirectory="INSTALLDIR"/>
+        <!--
+          Deinstallieren über den Agenten selbst, nicht über „Apps &amp; Features“:
+          nur `magister-connector uninstall` meldet den Agenten bei der Plattform
+          ab und löscht den Schlüssel, bevor das Programm geht. Wie bei der
+          Eingabeaufforderung: per Rechtsklick „Als Administrator ausführen“ —
+          ohne Administratorrechte bricht der Befehl ab, bevor er etwas ändert.
+        -->
+        <Shortcut Id="S.Uninstall"
+                  Name="Connector-Agent deinstallieren"
+                  Description="Bei der Plattform abmelden, Schluessel loeschen, Programm entfernen (als Administrator)"
+                  Target="[System64Folder]cmd.exe"
+                  Arguments="/K magister-connector.exe uninstall"
+                  WorkingDirectory="INSTALLDIR"/>
         <Shortcut Id="S.Readme"
                   Name="Installationsanleitung"
                   Description="Einrichten, Anmelden, Pruefen"

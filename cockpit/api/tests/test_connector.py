@@ -900,3 +900,44 @@ def _age_rotation(agent_id: str, age: dt.timedelta) -> None:
             await engine.dispose()
 
     asyncio.run(shift())
+
+
+@pytest.mark.usefixtures("connector_ca")
+class TestSelfDecommission:
+    """``magister-connector uninstall`` widerruft den Agenten selbst."""
+
+    def test_the_agent_revokes_itself_and_stays_revoked(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "decom1")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+
+        resp = db_client.post("/connector/decommission", headers=_auth(agent, agent_headers))
+        assert resp.status_code == 204, resp.text
+
+        listed = db_client.get(f"/api/tenants/{tenant_id}/agents").json()
+        (row,) = [a for a in listed if a["id"] == agent["agent_id"]]
+        assert row["status"] == "revoked"
+        assert "Deinstallation" in (row["revoked_reason"] or "")
+
+        # Danach kommt er nirgends mehr durch — auch nicht über die Erneuerung.
+        assert (
+            db_client.get(
+                "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+            ).status_code
+            == 401
+        )
+        assert (
+            db_client.post(
+                "/connector/renew", headers=_auth(agent, agent_headers), json={"csr_pem": _csr()}
+            ).status_code
+            == 401
+        )
+
+    def test_not_without_the_agents_credentials(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        # Über den Connector-Kanal, aber ohne Zertifikat und API-Key.
+        resp = db_client.post("/connector/decommission", headers=agent_headers)
+        assert resp.status_code == 401

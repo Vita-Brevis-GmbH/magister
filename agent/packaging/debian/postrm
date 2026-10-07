@@ -24,8 +24,11 @@ purge)
     if [ -d "$STATE" ]; then
         echo "Das Zustandsverzeichnis $STATE bleibt stehen."
         echo "  Darin: privater Schlüssel, Anmeldung, Protokoll."
-        echo "  Wenn es weg soll:  rm -rf $STATE"
-        echo "  Und den Agenten in der Konsole widerrufen."
+        echo "  Sauber entfernen geht VOR dem Purge mit:"
+        echo "    sudo magister-connector uninstall --alles"
+        echo "  (meldet den Agenten bei der Plattform ab und löscht den Schlüssel)."
+        echo "  Jetzt nur noch von Hand: rm -rf $STATE"
+        echo "  und den Agenten in der Konsole widerrufen."
     fi
     if [ -d /run/systemd/system ]; then
         systemctl daemon-reload || true

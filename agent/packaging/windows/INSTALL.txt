@@ -191,13 +191,33 @@ nicht in ein Ticket.
 
 Deinstallieren
 --------------
-Über "Apps & Features". Das Zustandsverzeichnis bleibt absichtlich stehen —
-darin liegen Ihre Konfiguration und das Protokoll. Wenn es weg soll:
+Startmenü → "Magister Connector" → "Connector-Agent deinstallieren", per
+Rechtsklick "Als Administrator ausführen". Oder in einer Eingabeaufforderung
+als Administrator:
+
+    magister-connector uninstall
+
+Der Befehl macht vier Dinge, in dieser Reihenfolge:
+
+  1. Dienst anhalten.
+  2. Den Agenten bei der Plattform abmelden. In der Konsole steht er danach
+     als widerrufen ("Vom Agenten selbst abgemeldet").
+  3. Schlüssel, Zertifikat und API-Key löschen.
+  4. Das Programm entfernen (das Installationsprogramm öffnet sich).
+
+Konfiguration und Protokoll bleiben stehen — für eine Neuinstallation auf
+demselben Server und für die Frage, warum deinstalliert wurde. Ganz weg:
+
+    magister-connector uninstall --alles
+
+Ist die Plattform nicht erreichbar, löscht der Befehl den Schlüssel trotzdem
+und sagt, dass der Agent in der Konsole noch von Hand zu widerrufen ist.
+Benutzen kann die Anmeldung dann ohnehin niemand mehr.
+
+Über "Apps & Features" geht es weiterhin, aber dann bleiben Anmeldung und
+Schlüssel zurück: danach in der Konsole widerrufen und
 
     rmdir /s "C:\ProgramData\Magister Connector"
-
-Und den Agenten in der Konsole widerrufen; sonst bleibt eine Anmeldung
-gültig, zu der es keinen Agenten mehr gibt.
 
 
 Vita Brevis GmbH — Schola Levis
