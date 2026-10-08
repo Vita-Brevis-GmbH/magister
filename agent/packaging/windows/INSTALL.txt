@@ -120,24 +120,36 @@ reichen, zeigt der Verbindungstest und der erste Auftrag im Cockpit.
 
 Aktualisieren
 -------------
-Das neue MSI einfach über das alte installieren (Eingabeaufforderung als
-Administrator):
+Ein Befehl, in einer Eingabeaufforderung als Administrator (oder Startmenü →
+"Magister Connector" → "Connector-Agent aktualisieren", Rechtsklick "Als
+Administrator ausführen"):
 
-    msiexec /i magister-connector-0.2.NNN-x64.msi /l*v C:\Temp\magister-msi.log
-    sc start MagisterConnector
+    magister-connector update
 
-Anmeldung, Schlüssel und Einstellungen bleiben erhalten. Das Update hält den
-Dienst an; danach von Hand starten (zweite Zeile).
-
-Welche Fassung läuft:
+Der Agent fragt die Plattform, welche Fassung bereitliegt, lädt sie nur, wenn
+sie neuer ist, prüft die Prüfsumme, spielt das MSI still ein und startet den
+Dienst wieder. Anmeldung, Schlüssel und Einstellungen bleiben erhalten. Nach
+etwa einer Minute:
 
     magister-connector --version
 
-Im Cockpit steht dieselbe Nummer beim Agenten unter "AD-Connector".
+Nur nachsehen, ob es ein Update gibt:
 
-Hinweis für Pakete vor 0.2.100: sie hiessen alle "0.2.0". Wer ein solches
-installiert hat, entfernt es einmal über "Apps & Features" (Anmeldung und
-Schlüssel bleiben dabei liegen), installiert das neue und startet den Dienst.
+    magister-connector update --nur-pruefen
+
+Das Cockpit zeigt beim Agenten "Update auf … bereit", sobald eine neuere
+Fassung im Paketverzeichnis liegt.
+
+Der Agent aktualisiert sich nie von selbst. Er läuft auf dem DC als
+LocalSystem; ein Update, das die Plattform auslösen könnte, gäbe einer
+übernommenen Plattform Code auf Tier 0. Ausgelöst wird es von Ihnen.
+
+Von Hand geht es weiterhin: neues MSI über das alte installieren, danach
+"sc start MagisterConnector".
+
+Hinweis für Pakete, die "0.2.0" heissen (vor der Nummerierung): einmal über
+"Apps & Features" entfernen (Anmeldung und Schlüssel bleiben liegen), das neue
+MSI installieren, Dienst starten. Danach gilt der Weg oben.
 
 
 Das Zertifikat erneuert sich selbst

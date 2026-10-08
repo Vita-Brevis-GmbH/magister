@@ -24,10 +24,12 @@ import json
 import logging
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +45,8 @@ from cockpit_api.models import (
     TenantConnectorSettings,
     TenantStatus,
 )
+from cockpit_api.routers.agent_packages import newest_update
+from cockpit_api.schemas.agent_package import AgentUpdateOut
 from cockpit_api.schemas.connector import (
     AgentAdSettings,
     AgentEnrollRequest,
@@ -539,6 +543,42 @@ async def agent_config(
         ad=ad,
         poll_seconds=settings.connector_poll_seconds,
         revision=revision,
+    )
+
+
+@agent_api.get("/update", response_model=AgentUpdateOut)
+async def agent_update_info(
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+) -> AgentUpdateOut:
+    """Welche Fassung bereitliegt — für ``magister-connector update`` auf dem DC.
+
+    Dieselbe Datei, die das Cockpit unter „Agent herunterladen“ anbietet, über
+    den beglaubigten Kanal. Ob aktualisiert wird, entscheidet ein Mensch auf
+    dem DC: der Agent installiert nie von sich aus (Tier 0).
+    """
+    _agent, _tenant = identity
+    latest = newest_update()
+    if latest is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kein Agenten-MSI bereitgestellt.")
+    return latest
+
+
+@agent_api.get("/update/package")
+async def agent_update_package(
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+) -> FileResponse:
+    """Das MSI aus :func:`agent_update_info` — der Agent prüft danach die SHA-256."""
+    agent, tenant = identity
+    latest = newest_update()
+    if latest is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kein Agenten-MSI bereitgestellt.")
+    logger.info(
+        "Agenten-MSI %s an Agent %s (%s) ausgeliefert", latest.filename, agent.name, tenant.slug
+    )
+    return FileResponse(
+        Path(settings.agent_package_dir) / latest.filename,
+        filename=latest.filename,
+        media_type="application/octet-stream",
     )
 
 

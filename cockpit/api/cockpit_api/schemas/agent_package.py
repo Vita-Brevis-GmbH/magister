@@ -25,3 +25,12 @@ class PlatformCaOut(BaseModel):
     #: SHA-256 über das DER-Zertifikat (nicht über die Datei). Auf dem DC in
     #: PowerShell: ``(Get-PfxCertificate root.pem).GetCertHashString('SHA256')``.
     sha256: str
+
+
+class AgentUpdateOut(BaseModel):
+    """Das neueste Agenten-MSI — Anzeige im Cockpit und Grundlage für ``update``."""
+
+    filename: str
+    version: str
+    sha256: str
+    size_bytes: int

@@ -141,3 +141,33 @@ export async function downloadPlatformCa(): Promise<void> {
     URL.revokeObjectURL(url);
   }
 }
+
+/** Das neueste Agenten-MSI mit Fassung im Namen (für „Update verfügbar“). */
+export interface LatestAgent {
+  filename: string;
+  version: string;
+  sha256: string;
+  size_bytes: number;
+}
+
+export function getLatestAgent(): Promise<LatestAgent> {
+  return get("/api/agent-packages/latest");
+}
+
+/** `0.2.190` oder `0.2.190 (abc1234)` → [0, 2, 190]; sonst null. */
+export function parseVersion(text: string | null | undefined): number[] | null {
+  const match = /^\s*(\d+)\.(\d+)\.(\d+)/.exec(text ?? "");
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+/** Ist `available` neuer als `running`? Unbekannte laufende Fassung zählt als alt. */
+export function isNewer(available: string, running: string | null | undefined): boolean {
+  const neu = parseVersion(available);
+  const alt = parseVersion(running);
+  if (!neu) return false;
+  if (!alt) return true;
+  for (let i = 0; i < 3; i++) {
+    if (neu[i]! !== alt[i]!) return neu[i]! > alt[i]!;
+  }
+  return false;
+}

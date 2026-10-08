@@ -88,6 +88,20 @@ in anderer Schreibweise:
   die MSI setzt, fehlt genau bei der Handinstallation, die dann drei Jahre
   läuft.
 
+## Aktualisieren
+
+```
+magister-connector update               # als Administrator auf dem DC
+magister-connector update --nur-pruefen # nur nachsehen
+```
+
+Holt die neueste Fassung über den beglaubigten Kanal aus dem Paketverzeichnis
+der Konsole, nur wenn sie neuer ist, prüft die SHA-256, spielt das MSI still ein
+und startet den Dienst. Das Cockpit zeigt beim Agenten „Update bereit“. Der
+Agent aktualisiert sich **nie von selbst** — ein von der Plattform auslösbares
+Update wäre Code auf Tier 0 aus einer Quelle, der der Agent sonst ausdrücklich
+nicht traut (ADR-0014, Nachtrag E7).
+
 ## Zertifikatserneuerung
 
 Das Agentenzertifikat gilt 90 Tage. Der Dienst erneuert es **selbständig**, 30

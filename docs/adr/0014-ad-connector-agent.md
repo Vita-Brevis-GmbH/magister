@@ -457,3 +457,19 @@ liegende Basen lehnt er weiter ab. Eine solche Ablehnung erscheint im Portal
 als eigene Meldung (`ad_connector_scope`), Fehlercodes der AD-Schicht
 (`ldap_search_failed:noSuchObject`) kommen in fester Form durch.
 
+**E7 · Aktualisieren mit einem Befehl, nie von selbst.** `magister-connector
+update` fragt über den beglaubigten Kanal (`GET /connector/update`), welche
+Fassung im Paketverzeichnis der Konsole liegt — die Fassung steht im
+Dateinamen (`magister-connector-0.2.<N>-x64[-<commit>].msi`), Pakete ohne sie
+gelten nie als Update. Ist sie neuer, lädt der Agent das MSI
+(`/connector/update/package`) ins abgedichtete Zustandsverzeichnis, prüft die
+SHA-256 und startet abgekoppelt `msiexec /qn` und danach den Dienst. Das
+Cockpit zeigt beim Agenten „Update bereit“.
+
+Verworfen: der Agent aktualisiert sich selbst. Er läuft als LocalSystem auf
+dem DC; ein Update, das die Plattform auslösen kann, gäbe einer übernommenen
+Plattform beliebigen Code auf Tier 0 und höbe jede Grenze aus E3 auf. Solange
+das MSI unsigniert ist (L-04), bleibt der Auslöser ein Mensch auf dem DC. Mit
+signiertem MSI und einer im Agenten festgelegten Herausgeber-Prüfung lässt
+sich ein automatisches Update als Option pro Kunde neu entscheiden.
+

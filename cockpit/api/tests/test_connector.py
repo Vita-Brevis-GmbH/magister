@@ -1143,3 +1143,40 @@ class TestInteractiveBeforeBulk:
             "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
         ).json()
         assert [j["method"] for j in idle] == ["search_users"]
+
+
+@pytest.mark.usefixtures("connector_ca")
+class TestAgentUpdate:
+    """``magister-connector update`` holt das MSI über den beglaubigten Kanal."""
+
+    def test_the_agent_gets_the_newest_msi(
+        self, db_client: TestClient, agent_headers: dict[str, str], tmp_path: Path
+    ) -> None:
+        import hashlib
+
+        inhalt = b"MSI " * 500
+        (tmp_path / "magister-connector-0.2.190-x64-aaaaaaa.msi").write_bytes(b"alt")
+        (tmp_path / "magister-connector-0.2.250-x64-bbbbbbb.msi").write_bytes(inhalt)
+        vorher = settings.agent_package_dir
+        settings.agent_package_dir = str(tmp_path)
+        try:
+            tenant_id = _tenant(db_client, "update1")
+            _activate(db_client, tenant_id)
+            agent = _enroll(db_client, tenant_id, agent_headers)
+
+            info = db_client.get("/connector/update", headers=_auth(agent, agent_headers))
+            assert info.status_code == 200, info.text
+            assert info.json()["version"] == "0.2.250"
+            assert info.json()["sha256"] == hashlib.sha256(inhalt).hexdigest()
+
+            paket = db_client.get("/connector/update/package", headers=_auth(agent, agent_headers))
+            assert paket.status_code == 200
+            assert paket.content == inhalt
+
+            # Ohne Zertifikat und API-Key kein Paket.
+            assert db_client.get("/connector/update", headers=agent_headers).status_code == 401
+            assert (
+                db_client.get("/connector/update/package", headers=agent_headers).status_code == 401
+            )
+        finally:
+            settings.agent_package_dir = vorher

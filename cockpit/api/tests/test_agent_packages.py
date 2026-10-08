@@ -190,3 +190,41 @@ class TestStammzertifikat:
     ) -> None:
         assert client.get("/api/agent-packages/platform-ca").status_code == 401
         assert public_client.get("/api/agent-packages/platform-ca").status_code == 404
+
+
+class TestNeuesteFassung:
+    """Welches MSI als Update gilt — die Fassung steht im Dateinamen."""
+
+    def test_die_hoechste_fassung_gewinnt(self, tmp_path: Path) -> None:
+        from cockpit_api.services.agent_update import newest_msi
+
+        for name in (
+            "magister-connector-0.2.190-x64-abc1234.msi",
+            "magister-connector-0.2.250-x64-def5678.msi",
+            "magister-connector-0.2.31-x64.msi",
+            # Aus der Zeit, als jedes MSI „0.2.0“ hiess: nie ein Update.
+            "magister-connector-x64-2767b3f5.msi",
+            "notizen.txt",
+        ):
+            (tmp_path / name).write_bytes(INHALT)
+        neueste = newest_msi(tmp_path)
+        assert neueste is not None
+        assert neueste.version_text == "0.2.250"
+        assert neueste.sha256() == hashlib.sha256(INHALT).hexdigest()
+
+    def test_ohne_fassung_im_namen_kein_update(self, tmp_path: Path) -> None:
+        from cockpit_api.services.agent_update import newest_msi
+
+        (tmp_path / "magister-connector-x64-2767b3f5.msi").write_bytes(INHALT)
+        assert newest_msi(tmp_path) is None
+
+    def test_cockpit_zeigt_die_neueste(
+        self, authed_client: TestClient, paketverzeichnis: Path
+    ) -> None:
+        # Im Verzeichnis liegt bisher nur ein MSI ohne Fassung: also keines.
+        assert authed_client.get("/api/agent-packages/latest").status_code == 404
+        (paketverzeichnis / "magister-connector-0.2.250-x64-def5678.msi").write_bytes(INHALT)
+        antwort = authed_client.get("/api/agent-packages/latest")
+        assert antwort.status_code == 200, antwort.text
+        assert antwort.json()["version"] == "0.2.250"
+        assert antwort.json()["filename"] == "magister-connector-0.2.250-x64-def5678.msi"

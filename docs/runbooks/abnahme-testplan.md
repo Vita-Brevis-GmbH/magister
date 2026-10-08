@@ -189,7 +189,8 @@ Cockpit (ADR-0014, Nachtrag „Agent auf dem DC“). Vorbereitung: Gruppe
 
 - [ ] **C-01** Auf dev01 `./scripts/agentenpakete.sh holen` (bzw. `plattform-aufbau.sh update` mit Token) → Cockpit, Kunde A → AD-Connector → „Agent herunterladen“ zeigt oben `magister-connector-0.2.<N>-x64-<commit>.msi`, darunter „Stammzertifikat der Plattform“ mit Fingerprint.
 - [ ] **C-02** Auf dem DC `msiexec /i magister-connector-0.2.<N>-x64-….msi /l*v C:\Temp\msi.log` → kein Fehler, Dienst `MagisterConnector` installiert (gestoppt), `magister-connector --version` = `0.2.<N> (<commit>)`.
-- [ ] **C-03** Update: ein neueres MSI über das installierte → Version steigt, Anmeldung bleibt, keine zwei Einträge in „Apps & Features“; danach `sc start MagisterConnector`.
+- [ ] **C-03** Update: Cockpit zeigt beim Agenten „Update auf 0.2.<N> bereit“. Auf dem DC `magister-connector update --nur-pruefen` → nennt beide Fassungen, ändert nichts. `magister-connector update` (als Administrator) → nach ~1 Minute `--version` = neue Fassung, Dienst läuft, Anmeldung bleibt, ein Eintrag in „Apps & Features“, Cockpit-Hinweis verschwindet.
+- [ ] **C-03a** `magister-connector update` ohne Administratorrechte → „braucht Administratorrechte“, nichts verändert; bei aktueller Fassung → „Der Agent ist aktuell.“
 - [ ] **C-04** ⚠ erwartet (L-04): SmartScreen-Warnung erscheint, weil das MSI unsigniert ist.
 - [ ] **C-05** root.pem aus dem Cockpit: Fingerprint auf dem DC mit `(Get-PfxCertificate root.pem).GetCertHashString('SHA256')` = Anzeige im Cockpit.
 
@@ -343,4 +344,4 @@ Abnahme-Issue schreiben.
 | L-10 | Organisatorisch offen: CA-Zeremonie (bis dahin nur Test-CA → kein echter Agent beim Fremdkunden), externer Pentest, Wildcard-Zertifikat. | blockiert ersten gehosteten Fremdkunden | §10 Punkt 5 |
 | ~~L-11~~ | **Behoben 2026-10-05.** Hostname wird beim Anlegen auf Form, Plattform-Domäne (eine Ebene) und reservierte Namen geprüft. | — | K-11a |
 | ~~L-12~~ | **Behoben 2026-10-08.** Agent auf dem DC (Kerberos als Maschinenkonto), Einstellungen aus dem Cockpit, ganzer Abgleich über den Agenten, Reset ohne Warten auf den Abgleich, eindeutige MSI-Fassung, eigenes Passwort ohne Probe-Anmeldung. | — | C-01–C-24a |
-| L-13 | Nach einem MSI-Update startet der Dienst nicht von selbst (`sc start MagisterConnector`). | ein Handgriff je Update | C-03 |
+| ~~L-13~~ | **Behoben 2026-10-08.** `magister-connector update` holt, prüft und spielt die neue Fassung ein und startet den Dienst; das Cockpit zeigt „Update bereit“. Nur das MSI von Hand braucht weiter `sc start`. | — | C-03 |

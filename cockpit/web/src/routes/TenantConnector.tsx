@@ -16,7 +16,9 @@ import {
 import {
   downloadAgentPackage,
   downloadPlatformCa,
+  getLatestAgent,
   getPlatformCa,
+  isNewer,
   listAgentPackages,
   nachPlattform,
   readableSize,
@@ -250,11 +252,14 @@ function AgentPackages() {
 function AgentRow({
   agent,
   asOf,
+  latestVersion,
   onRevoke,
 }: {
   agent: Agent;
   /** Zeitpunkt des Datenabrufs — nicht „jetzt", siehe TenantBackups. */
   asOf: number;
+  /** Neueste Fassung im Paketverzeichnis, falls bekannt. */
+  latestVersion: string | null;
   onRevoke: (agent: Agent) => void;
 }) {
   const reference = new Date(asOf);
@@ -266,6 +271,14 @@ function AgentRow({
         <span className="font-medium">{agent.name}</span>
         <br />
         <span className="font-mono text-xs text-slate-400">{agent.agent_version ?? "—"}</span>
+        {agent.status !== "revoked" &&
+          latestVersion &&
+          isNewer(latestVersion, agent.agent_version) && (
+            <span className="mt-1 block text-xs text-amber-700">
+              Update auf {latestVersion} bereit — auf dem DC als Administrator:{" "}
+              <span className="font-mono">magister-connector update</span>
+            </span>
+          )}
       </td>
       <td className="p-2">
         <StatusBadge status={agent.status} />
@@ -420,6 +433,13 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
     retry: false,
     refetchInterval: 30_000,
   });
+  // Kein Fehler, wenn es keines gibt (404) — dann gibt es eben keinen Hinweis.
+  const latestQ = useQuery({
+    queryKey: ["agent-latest"],
+    queryFn: getLatestAgent,
+    retry: false,
+    staleTime: 5 * 60_000,
+  });
   const jobsQ = useQuery({
     queryKey: ["connector-jobs", tenantId],
     queryFn: () => listConnectorJobs(tenantId),
@@ -479,6 +499,7 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
                   key={a.id}
                   agent={a}
                   asOf={agentsQ.dataUpdatedAt}
+                  latestVersion={latestQ.data?.version ?? null}
                   onRevoke={(agent) => setRevoking({ agent, reason: "" })}
                 />
               ))}

@@ -4,13 +4,14 @@ Der Agent läuft **auf dem Domänencontroller**, als LocalSystem, und bindet sic
 als Maschinenkonto des DC per Kerberos ans AD. Eingestellt wird er im Cockpit;
 auf dem DC steht nur der Weg zur Plattform.
 
-Vier Befehle:
+Fünf Befehle:
 
 * ``enroll``    — Endpunkt festhalten, Einmal-Token einlösen, Schlüssel lokal
                   erzeugen, Konfiguration holen, Dienst starten
 * ``run``       — Abrufbetrieb (das macht der Dienst)
 * ``check``     — Kanal, Anmeldung, Konfiguration aus dem Cockpit und AD prüfen,
                   ohne etwas zu verändern
+* ``update``    — die neueste Fassung von der Plattform holen und einspielen
 * ``uninstall`` — bei der Plattform abmelden, Schlüssel löschen, Programm entfernen
 """
 
@@ -461,6 +462,71 @@ def build_ad_client(remote: remote_cfg.RemoteConfig) -> object | None:
     return AdClient(settings)
 
 
+def cmd_update(args: argparse.Namespace) -> int:
+    """Neueste Fassung von der Plattform holen, prüfen, still einspielen, Dienst starten."""
+    import httpx
+
+    from connector_agent import update as up
+    from connector_agent.diagnose import explain_transport_error
+    from connector_agent.uninstall import is_admin
+
+    try:
+        config = _load(args)
+    except ConfigError as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
+    secrets = load_secrets(config)
+    if secrets is None:
+        sys.stderr.write("Der Agent ist nicht angemeldet — zuerst 'enroll'.\n")
+        return 1
+    try:
+        info = up.check(config, secrets, agent_version=VERSION)
+    except httpx.HTTPError as exc:
+        sys.stderr.write(f"Update nicht geprüft: {explain_transport_error(exc, config)}\n")
+        return 1
+    except (up.UpdateError, OSError, ValueError) as exc:
+        sys.stderr.write(f"Update nicht geprüft: {exc}\n")
+        return 1
+    sys.stdout.write(f"Installiert:  {VERSION}\n")
+    if info is None:
+        sys.stdout.write("Bereit:       keine Fassung auf der Plattform — nichts zu tun.\n")
+        return 0
+    sys.stdout.write(f"Bereit:       {info.version} ({info.filename})\n")
+    if not up.is_newer(info.version, VERSION):
+        sys.stdout.write("Der Agent ist aktuell.\n")
+        return 0
+    if args.nur_pruefen:
+        sys.stdout.write("Update verfügbar: 'magister-connector update' ohne --nur-pruefen.\n")
+        return 0
+    if not is_admin():
+        sys.stderr.write(
+            "Dafür braucht es Administratorrechte (Programmordner und Dienst). Nichts verändert.\n"
+        )
+        return 1
+    if not args.ja:
+        sys.stdout.write(f"Auf {info.version} aktualisieren? Der Dienst startet danach neu. [ja] ")
+        sys.stdout.flush()
+        if sys.stdin.readline().strip().lower() != "ja":
+            sys.stdout.write("Abgebrochen. Nichts verändert.\n")
+            return 1
+    try:
+        msi = up.download(config, secrets, info, agent_version=VERSION)
+        sys.stdout.write(f"Geladen:      {msi} (Prüfsumme stimmt)\n")
+        log = up.launch_install(msi)
+    except httpx.HTTPError as exc:
+        sys.stderr.write(f"Update nicht geladen: {explain_transport_error(exc, config)}\n")
+        return 1
+    except (up.UpdateError, OSError) as exc:
+        sys.stderr.write(f"Update nicht eingespielt: {exc}\n")
+        return 1
+    sys.stdout.write(
+        "Installation läuft im Hintergrund; der Dienst startet danach von selbst.\n"
+        f"Protokoll:    {log}\n"
+        "In etwa einer Minute prüfen: magister-connector --version\n"
+    )
+    return 0
+
+
 def cmd_uninstall(args: argparse.Namespace) -> int:
     """Abmelden, Zugang löschen, Programm entfernen — in dieser Reihenfolge."""
     from connector_agent import uninstall as un
@@ -583,6 +649,15 @@ def main(argv: list[str] | None = None) -> int:
 
     check_cmd = sub.add_parser("check", help="Kanal, Konfiguration aus dem Cockpit und AD prüfen")
     check_cmd.set_defaults(func=cmd_check)
+
+    update_cmd = sub.add_parser(
+        "update", help="Neueste Fassung von der Plattform holen und einspielen"
+    )
+    update_cmd.add_argument("--ja", action="store_true", help="ohne Rückfrage")
+    update_cmd.add_argument(
+        "--nur-pruefen", action="store_true", help="nur sagen, ob ein Update bereitliegt"
+    )
+    update_cmd.set_defaults(func=cmd_update)
 
     uninstall_cmd = sub.add_parser(
         "uninstall", help="Bei der Plattform abmelden, Schlüssel löschen, Programm entfernen"

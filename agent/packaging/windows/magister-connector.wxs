@@ -198,6 +198,17 @@
                   Target="[System64Folder]cmd.exe"
                   Arguments="/K magister-connector.exe uninstall"
                   WorkingDirectory="INSTALLDIR"/>
+        <!--
+          Aktualisieren in einem Schritt: neueste Fassung von der Plattform
+          holen, Pruefsumme pruefen, still einspielen, Dienst starten. Wie die
+          anderen: Rechtsklick und als Administrator ausfuehren.
+        -->
+        <Shortcut Id="S.Update"
+                  Name="Connector-Agent aktualisieren"
+                  Description="Neueste Fassung von der Plattform holen und einspielen (als Administrator)"
+                  Target="[System64Folder]cmd.exe"
+                  Arguments="/K magister-connector.exe update"
+                  WorkingDirectory="INSTALLDIR"/>
         <Shortcut Id="S.Readme"
                   Name="Installationsanleitung"
                   Description="Einrichten, Anmelden, Pruefen"

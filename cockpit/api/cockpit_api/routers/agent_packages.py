@@ -32,7 +32,8 @@ from fastapi.responses import FileResponse
 
 from cockpit_api.auth import Caller, require_person
 from cockpit_api.config import settings
-from cockpit_api.schemas.agent_package import AgentPackageOut, PlatformCaOut
+from cockpit_api.schemas.agent_package import AgentPackageOut, AgentUpdateOut, PlatformCaOut
+from cockpit_api.services.agent_update import newest_msi
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +115,29 @@ def _platform_ca() -> tuple[Path, x509.Certificate]:
     return pfad, cert
 
 
+def newest_update() -> AgentUpdateOut | None:
+    """Das neueste MSI mit Fassung im Namen, oder ``None``. Für Cockpit und Agent."""
+    msi = newest_msi(_verzeichnis())
+    if msi is None:
+        return None
+    return AgentUpdateOut(
+        filename=msi.path.name,
+        version=msi.version_text,
+        sha256=msi.sha256(),
+        size_bytes=msi.path.stat().st_size,
+    )
+
+
 # Vor `/{filename}`: sonst finge jene Route diesen Pfad ab.
+@router.get("/latest", response_model=AgentUpdateOut)
+async def latest_package(_: Caller = Depends(require_person)) -> AgentUpdateOut:
+    """Die neueste Agenten-Fassung — das Cockpit zeigt daran „Update verfügbar“."""
+    latest = newest_update()
+    if latest is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Kein MSI mit Fassung im Namen.")
+    return latest
+
+
 @router.get("/platform-ca/info", response_model=PlatformCaOut)
 async def platform_ca_info(_: Caller = Depends(require_person)) -> PlatformCaOut:
     """Wem das Stammzertifikat gehört und sein Fingerprint — zum Vergleich auf dem DC."""
