@@ -6,6 +6,7 @@
 #   ./scripts/plattform-aufbau.sh update  # dasselbe — nach einem `git pull`
 #   ./scripts/plattform-aufbau.sh up --ui-neu   # Oberfläche zwingend neu bauen
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
+#   ./scripts/plattform-aufbau.sh schritte  # alle Einrichtungsschritte, auch erledigte
 #   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
 #   ./scripts/plattform-aufbau.sh restart # beide Stacks neu starten (ohne Neubau)
 #   ./scripts/plattform-aufbau.sh kunde-anbinden [kürzel]  # in der Konsole angelegte
@@ -993,41 +994,105 @@ cmd_up() {
     dc_daten ps -a --format '  {{.Service}}  {{.Status}}' 2>/dev/null || true
     die "Die Datenebene lief nicht vollständig an (siehe Meldung von docker oben). Ursache beheben, dann erneut aufrufen."
   fi
-  cat <<EOF
+  naechste_schritte
+}
 
-$(printf '\033[1mNächste Schritte\033[0m')
+# --- Nächste Schritte --------------------------------------------------------
+# Nur was noch offen ist. Vorher stand nach jedem `up` dieselbe Liste da, auch
+# wenn alles längst erledigt war — und eine Liste, die immer erscheint, liest
+# irgendwann niemand mehr, auch dann nicht, wenn wirklich etwas fehlt.
+# `./scripts/plattform-aufbau.sh schritte` zeigt alle, erledigt oder nicht.
 
-  1. Namen auflösbar machen (einmalig, als root) — in Produktion macht das
-     der DNS, hier reicht die Datei:
-       echo "$BIND $KONSOLE_HOST ${KUNDEN[0]}.$DOMAIN ${KUNDEN[1]}.$DOMAIN" >> /etc/hosts
+#: Die Namen, die auflösen müssen: Konsole, Connector und jeder Kunde, den die
+#: Konsole kennt (nicht die Demo-Liste — die gibt es nur auf einer frischen).
+namen_der_plattform() {
+  local liste
+  printf '%s\n' "$KONSOLE_HOST" "connect.$DOMAIN"
+  # Ist die Konsole nicht erreichbar, werden nur die beiden Plattformnamen
+  # geprüft — ein Kundenname aus einer Liste, die es nicht gibt, wäre geraten.
+  if liste="$(konsole_kunden 2>/dev/null)" && [ -n "$liste" ]; then
+    awk -v d="$DOMAIN" 'NF {print $1 "." d}' <<<"$liste"
+  fi
+}
 
-  2. Ersten Operator anlegen (Passwort wird abgefragt, ADR-0023 D5):
-       docker compose --project-directory $REPO/cockpit/deploy \\
-         -f $REPO/cockpit/deploy/docker-compose.yml \\
-         -f $REPO/cockpit/deploy/docker-compose.plattform.yml \\
-         exec api python -m cockpit_api.cli.add_operator \\
-           --upn vorname.nachname@vitabrevis.ch --name "Vorname Nachname" --set-password
+schritt_namen_offen() {  # gibt die nicht auflösbaren Namen aus; leer = erledigt
+  local name
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    getent hosts "$name" >/dev/null 2>&1 || printf '%s ' "$name"
+  done < <(namen_der_plattform)
+}
 
-  3. Konsole öffnen: https://$KONSOLE_HOST:4444${ZUSATZNAME:+ (oder https://$ZUSATZNAME:4444)}
-     Anmeldung mit Benutzername, Passwort und Code. Ein Client-Zertifikat
-     ist möglich, aber nicht nötig (ADR-0023 D3) — wer eines benutzen will,
-     nimmt $CERTS/operator.pem (+ -key.pem), als PKCS#12 für den Browser:
-       openssl pkcs12 -export -inkey $CERTS/operator-key.pem \\
-         -in $CERTS/operator.pem -certfile $CERTS/platform-ca.pem \\
-         -out $CERTS/operator.p12 -passout pass:dev
+schritt_operator_offen() {  # 0 = offen (noch kein Operator), 1 = erledigt
+  local anzahl
+  anzahl="$(dc_konsole exec -T postgres psql -U cockpit -d cockpit -tAc \
+    'SELECT count(*) FROM console_operators' 2>/dev/null | tr -d '[:space:]')"
+  # Nicht feststellbar (Konsole aus, Tabelle fehlt) zählt als offen: lieber
+  # einmal zu viel erinnert als einen fehlenden Zugang verschwiegen.
+  [ -z "$anzahl" ] || [ "$anzahl" = "0" ]
+}
 
-  4. Kundenseite öffnen: https://${KUNDEN[0]}.$DOMAIN
-     (Die Plattform-CA $CERTS/root.pem im Browser als vertrauenswürdig
-     eintragen, sonst warnt er — in Produktion kommt sie über die GPO.)
+schritt_pakete_offen() {  # 0 = offen (kein MSI im Paketverzeichnis)
+  ! compgen -G "$PAKETE/*.msi" >/dev/null
+}
 
-  5. Agentenpakete bereitstellen (sonst sagt die Konsole „Verzeichnis leer"):
-       ./scripts/agentenpakete.sh holen     # MSI + .deb aus der CI
-       ./scripts/agentenpakete.sh bauen     # nur .deb, hier gebaut
-       ./scripts/agentenpakete.sh zeigen    # $PAKETE
+naechste_schritte() {  # $1 = "alle", um auch Erledigtes zu zeigen
+  local alle="${1:-}" offen=0 nr=0 namen
+  namen="$(schritt_namen_offen)"
+  namen="${namen% }"
+  local op=1 pk=1
+  schritt_operator_offen && op=0
+  schritt_pakete_offen && pk=0
 
-  6. Prüfen: die drei Handgriffe in
-     docs/runbooks/plattform-auf-einem-host.md §5
+  if [ -z "$alle" ] && [ -z "$namen" ] && [ "$op" -eq 1 ] && [ "$pk" -eq 1 ]; then
+    say "Einrichtung vollständig — keine offenen Schritte (alle zeigen: $0 schritte)"
+    return 0
+  fi
+  printf '\n\033[1mNächste Schritte\033[0m\n'
+
+  if [ -n "$namen" ] || [ -n "$alle" ]; then
+    nr=$((nr + 1)); offen=1
+    cat <<EOF
+
+  $nr. Namen auflösbar machen${namen:+ — es fehlen: $namen}
+     In Produktion macht das der DNS, hier reicht (als root) /etc/hosts:
+       echo "$BIND ${namen:-$KONSOLE_HOST connect.$DOMAIN}" >> /etc/hosts
 EOF
+  fi
+
+  if [ "$op" -eq 0 ] || [ -n "$alle" ]; then
+    nr=$((nr + 1)); offen=1
+    cat <<EOF
+
+  $nr. Ersten Operator anlegen (Passwort wird abgefragt, ADR-0023 D5):
+       $0 operator --upn vorname.nachname@vitabrevis.ch \\
+         --name "Vorname Nachname" --set-password
+
+     Danach: https://$KONSOLE_HOST:4444${ZUSATZNAME:+ (oder https://$ZUSATZNAME:4444)}
+     Anmeldung mit Benutzername, Passwort und Code.
+     Die Plattform-CA $CERTS/root.pem im Browser als vertrauenswürdig
+     eintragen, sonst warnt er (in Produktion kommt sie über die GPO).
+EOF
+  fi
+
+  if [ "$pk" -eq 0 ] || [ -n "$alle" ]; then
+    nr=$((nr + 1)); offen=1
+    cat <<EOF
+
+  $nr. Agenten-MSI bereitstellen (sonst sagt die Konsole „Verzeichnis leer“):
+       ./scripts/agentenpakete.sh holen     # aus der CI (Token: agentenpakete.sh token)
+     oder das Artefakt magister-connector-msi von Hand nach $PAKETE legen.
+EOF
+  fi
+
+  if [ -n "$alle" ]; then
+    cat <<EOF
+
+  Prüfen: die drei Handgriffe in docs/runbooks/plattform-auf-einem-host.md §5
+EOF
+  fi
+  [ "$offen" -eq 1 ] && printf '\n'
+  return 0
 }
 
 cmd_status() {
@@ -1223,6 +1288,7 @@ case "$BEFEHL" in up|update) konf_speichern ;; esac
 case "$BEFEHL" in
   up|update) cmd_up ;;
   status) cmd_status ;;
+  schritte) naechste_schritte alle ;;
   restart) cmd_restart ;;
   down)   cmd_down ;;
   purge)  cmd_purge ;;
@@ -1235,5 +1301,5 @@ case "$BEFEHL" in
     else
       kunden_anbinden
     fi ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
 esac
