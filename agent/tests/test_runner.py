@@ -624,6 +624,9 @@ class TestBulkDoesNotBlock:
             # Der Reset ist durch, der Abgleich liest noch.
             assert [r["_job_id"] for r in platform.results] == ["job-b2"]
             assert "bulk=false" in platform.polls[-1]
+            # Kurz fragen, solange die Suche läuft — sonst käme die nächste
+            # Suche des Abgleichs erst nach einem vollen Long-Poll.
+            assert "wait_seconds=1" in platform.polls[-1]
             release.set()
             await runner.drain()
         assert [r["_job_id"] for r in platform.results] == ["job-b2", "job-b1"]

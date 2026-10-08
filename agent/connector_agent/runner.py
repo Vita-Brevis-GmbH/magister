@@ -56,6 +56,9 @@ BULK_METHODS: frozenset[str] = frozenset(
     {"search_users", "search_groups", "search_computers", "search_managed_computers"}
 )
 
+#: Wartezeit eines Polls, solange eine Suche läuft.
+BUSY_POLL_SECONDS = 1
+
 #: Methoden ohne Argumente. Sie werden ohne Nutzlast aufgerufen.
 _NO_ARG_METHODS = frozenset({"probe_service_connection", "probe_service_connection_detailed"})
 
@@ -279,7 +282,11 @@ class Runner:
         Agent mit ``bulk=false`` nur nach interaktiven Aufträgen.
         """
         busy = self.bulk_running
-        resp = await client.get("/connector/jobs", params={"bulk": "false"} if busy else None)
+        # Solange eine Suche läuft, kurz fragen: ist sie fertig, soll die
+        # nächste Suche des Abgleichs sofort kommen und nicht erst nach dem
+        # Ende eines 25-Sekunden-Polls, der sie nicht ausliefern darf.
+        params = {"bulk": "false", "wait_seconds": str(BUSY_POLL_SECONDS)} if busy else None
+        resp = await client.get("/connector/jobs", params=params)
         if resp.status_code == 401:
             # Widerrufen, gesperrt oder falscher Key. Kein Grund für einen
             # schnellen Wiederholungslauf — das behebt sich nicht von selbst.

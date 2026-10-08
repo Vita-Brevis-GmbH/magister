@@ -1105,6 +1105,24 @@ class TestInteractiveBeforeBulk:
         ).json()
         assert [j["method"] for j in first] == ["find_user_dn"]
 
+    def test_a_busy_agent_can_shorten_the_long_poll(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        import time
+
+        tenant_id = _tenant(db_client, "vorrang3")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        started = time.monotonic()
+        resp = db_client.get(
+            "/connector/jobs",
+            headers=_auth(agent, agent_headers),
+            params={"bulk": False, "wait_seconds": 1},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+        assert time.monotonic() - started < 5
+
     def test_a_busy_agent_gets_no_second_bulk_job(
         self, db_client: TestClient, agent_headers: dict[str, str]
     ) -> None:

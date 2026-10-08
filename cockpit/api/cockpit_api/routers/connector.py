@@ -578,6 +578,7 @@ async def poll_jobs(
     session: AsyncSession = Depends(get_session),
     wait: bool = True,
     bulk: bool = True,
+    wait_seconds: float | None = None,
 ) -> list[JobForAgent]:
     """Long-Poll: offene Aufträge des eigenen Kunden abholen.
 
@@ -592,9 +593,16 @@ async def poll_jobs(
     ``bulk=false`` schickt der Agent, solange er einen Abgleich abarbeitet: er
     will dann nur interaktive Aufträge, damit ein Passwort-Reset nicht hinter
     dem Abgleich wartet.
+
+    ``wait_seconds`` kürzt die Wartezeit — der Agent fragt so, solange eine
+    Suche läuft. Sonst hinge er nach deren Ende noch bis zu 25 Sekunden in
+    einer Abfrage, die die nächste Suche nicht ausliefern darf, und ein voller
+    Abgleich (vier Suchen nacheinander) dauerte Minuten statt Sekunden.
     """
     agent, _tenant_row = identity
-    deadline = settings.connector_poll_seconds if wait else 0
+    deadline = float(settings.connector_poll_seconds) if wait else 0.0
+    if wait_seconds is not None:
+        deadline = min(deadline, max(0.0, wait_seconds))
     waited = 0.0
     while True:
         jobs = await claim_next(session, agent, include_bulk=bulk)
