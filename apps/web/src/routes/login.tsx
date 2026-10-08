@@ -11,9 +11,44 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+/** Grund eines abgewiesenen Entra-Rückwegs (`/login?error=…&entra=…`). */
+interface LoginSearch {
+  error?: string;
+  entra?: string;
+}
+
 export const Route = createFileRoute("/login")({
   component: LoginPage,
+  validateSearch: (search: Record<string, unknown>): LoginSearch => ({
+    error: typeof search.error === "string" ? search.error : undefined,
+    entra: typeof search.entra === "string" ? search.entra : undefined,
+  }),
 });
+
+/** Nur Codes in fester Form — die Adresse kann jeder bauen. */
+const OIDC_CODE = /^[a-z][a-z0-9_]{1,63}$/;
+
+export function OidcErrorBanner({
+  query = window.location.search,
+}: {
+  query?: string;
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  const search = new URLSearchParams(query);
+  const code = search.get("error") ?? "";
+  if (!OIDC_CODE.test(code)) return null;
+  const entra = search.get("entra") ?? "";
+  return (
+    <ErrorBanner>
+      <p className="font-medium">{t("auth.oidc_errors.title")}</p>
+      <p>
+        {t([`auth.oidc_errors.${code}`, "auth.oidc_errors.generic"], {
+          entra: OIDC_CODE.test(entra) ? entra : "—",
+        })}
+      </p>
+    </ErrorBanner>
+  );
+}
 
 // Anchor-as-button: a <a> can't use the <Button> component (which is a
 // <button>) — and doing OIDC redirects via <button onClick> blocks the
@@ -85,6 +120,8 @@ export function LoginPage(): JSX.Element {
           {caps.isPending ? (
             <p className="text-sm text-muted-foreground">{t("auth.login_checking")}</p>
           ) : null}
+
+          <OidcErrorBanner />
 
           {caps.isError ? <ErrorBanner>{t("auth.login_capabilities_failed")}</ErrorBanner> : null}
 

@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import { LocalLoginForm, LoginPage } from "./login";
+import { LocalLoginForm, LoginPage, OidcErrorBanner } from "./login";
 
 beforeAll(async () => {
   await i18n.changeLanguage("de");
@@ -78,6 +78,26 @@ describe("LoginPage", () => {
     fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
     renderWithQuery(<LoginPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent(/anmeldewege/i);
+  });
+
+  it("explains a refused Entra sign-in instead of showing raw JSON", () => {
+    render(<OidcErrorBanner query="?error=user_not_synced" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/noch nicht bekannt/i);
+  });
+
+  it("names Entra's own reason and ignores foreign text in the address", () => {
+    render(<OidcErrorBanner query="?error=oidc_error&entra=%3Cb%3Ex%3C%2Fb%3E" />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/Entra hat die Anmeldung abgebrochen \(—\)/);
+    expect(alert.innerHTML).not.toContain("<b>");
+  });
+
+  it("falls back to a general message for an unknown code and ignores junk", () => {
+    const { unmount } = render(<OidcErrorBanner query="?error=etwas_neues" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/fehlgeschlagen/i);
+    unmount();
+    render(<OidcErrorBanner query="?error=%3Cscript%3E" />);
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("shows a hint while the capabilities are still loading", () => {

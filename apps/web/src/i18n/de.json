@@ -64,7 +64,23 @@
     "enroll_submit": "Einrichtung abschliessen",
     "recovery_title": "Wiederherstellungscodes",
     "recovery_intro": "Bewahren Sie diese Codes sicher auf. Jeder ist einmal verwendbar und ersetzt den Einmalcode, wenn Sie kein Telefon zur Hand haben. Sie werden nur jetzt angezeigt.",
-    "recovery_continue": "Codes gesichert, weiter"
+    "recovery_continue": "Codes gesichert, weiter",
+    "oidc_errors": {
+      "title": "Anmeldung über Entra ID nicht möglich",
+      "user_not_synced": "Dein Konto ist in Magister noch nicht bekannt. Es muss im AD in einer freigegebenen OU liegen und einmal abgeglichen sein — oder als erster Administrator eingetragen. Wende dich an die IT.",
+      "user_disabled": "Dein Konto ist im AD deaktiviert.",
+      "oidc_no_oid_for_bootstrap": "Entra hat keine Objekt-ID (oid) mitgeschickt. Ist die App-Registrierung für Geschäftskonten dieses Verzeichnisses eingerichtet?",
+      "oidc_missing_upn": "Entra hat keinen Benutzernamen (preferred_username) mitgeschickt. Scopes „openid profile email“ prüfen.",
+      "oidc_state_mismatch": "Der Anmeldevorgang passt nicht zusammen (abgelaufen oder in einem anderen Fenster gestartet). Bitte erneut anmelden.",
+      "oidc_callback_invalid": "Der Anmeldevorgang ist abgelaufen oder unvollständig. Bitte erneut anmelden.",
+      "oidc_flow_tampered": "Der Anmeldevorgang wurde verändert und deshalb abgebrochen. Bitte erneut anmelden.",
+      "oidc_error": "Entra hat die Anmeldung abgebrochen ({{entra}}). Häufig: Benutzer ist der App nicht zugewiesen oder hat die Zustimmung verweigert.",
+      "oidc_discovery_failed": "Entra ist für diese Installation nicht erreichbar oder die Tenant-Id stimmt nicht. Die IT prüft die Einstellungen.",
+      "oidc_token_exchange_failed": "Entra hat die Anmeldung von Magister abgewiesen — meist ein falsches oder abgelaufenes Client-Secret oder eine abweichende Umleitungs-URI. Die IT prüft die App-Registrierung.",
+      "oidc_token_invalid": "Das Anmeldetoken von Entra war nicht gültig (Aussteller oder Client-Id stimmen nicht). Die IT prüft die Einstellungen.",
+      "oidc_no_id_token": "Entra hat kein ID-Token geliefert. Scope „openid“ prüfen.",
+      "generic": "Die Anmeldung über Entra ID ist fehlgeschlagen. Bitte erneut versuchen; bleibt es dabei, die IT verständigen."
+    }
   },
   "me": {
     "title": "Mein Profil",

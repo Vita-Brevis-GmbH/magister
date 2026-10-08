@@ -67,7 +67,23 @@
     "enroll_submit": "Concludi la configurazione",
     "recovery_title": "Codici di ripristino",
     "recovery_intro": "Conservare questi codici in un luogo sicuro. Ognuno è utilizzabile una sola volta e sostituisce il codice monouso quando non si ha il telefono. Vengono mostrati solo ora.",
-    "recovery_continue": "Codici salvati, continua"
+    "recovery_continue": "Codici salvati, continua",
+    "oidc_errors": {
+      "title": "Accesso con Entra ID non riuscito",
+      "user_not_synced": "Il tuo account non è ancora noto a Magister. Deve trovarsi in un’UO autorizzata dell’AD ed essere stato sincronizzato una volta — oppure essere registrato come primo amministratore. Rivolgiti all’informatica.",
+      "user_disabled": "Il tuo account è disattivato nell’AD.",
+      "oidc_no_oid_for_bootstrap": "Entra non ha trasmesso un ID oggetto (oid). La registrazione dell’app è configurata per gli account aziendali di questa directory?",
+      "oidc_missing_upn": "Entra non ha trasmesso un nome utente (preferred_username). Verificare gli scope «openid profile email».",
+      "oidc_state_mismatch": "L’accesso non corrisponde (scaduto o avviato in un’altra finestra). Accedi di nuovo.",
+      "oidc_callback_invalid": "L’accesso è scaduto o incompleto. Accedi di nuovo.",
+      "oidc_flow_tampered": "L’accesso è stato alterato e quindi interrotto. Accedi di nuovo.",
+      "oidc_error": "Entra ha interrotto l’accesso ({{entra}}). Spesso: l’utente non è assegnato all’app o ha rifiutato il consenso.",
+      "oidc_discovery_failed": "Entra non è raggiungibile per questa installazione oppure l’ID tenant è errato. L’informatica verifica le impostazioni.",
+      "oidc_token_exchange_failed": "Entra ha rifiutato l’accesso di Magister — di solito un client secret errato o scaduto oppure un URI di reindirizzamento diverso. L’informatica verifica la registrazione dell’app.",
+      "oidc_token_invalid": "Il token di Entra non era valido (emittente o ID client non corrispondono). L’informatica verifica le impostazioni.",
+      "oidc_no_id_token": "Entra non ha fornito un token ID. Verificare lo scope «openid».",
+      "generic": "L’accesso con Entra ID non è riuscito. Riprova; se persiste, rivolgiti all’informatica."
+    }
   },
   "me": {
     "title": "Il mio profilo",

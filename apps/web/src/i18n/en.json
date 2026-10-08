@@ -64,7 +64,23 @@
     "enroll_submit": "Finish setup",
     "recovery_title": "Recovery codes",
     "recovery_intro": "Keep these codes somewhere safe. Each works once and stands in for the one-time code when you do not have your phone. They are shown only now.",
-    "recovery_continue": "Codes saved, continue"
+    "recovery_continue": "Codes saved, continue",
+    "oidc_errors": {
+      "title": "Sign-in with Entra ID failed",
+      "user_not_synced": "Your account is not known to Magister yet. It has to be in an approved OU in AD and synchronised once — or listed as a first administrator. Please contact IT.",
+      "user_disabled": "Your account is disabled in AD.",
+      "oidc_no_oid_for_bootstrap": "Entra did not send an object ID (oid). Is the app registration set up for work accounts in this directory?",
+      "oidc_missing_upn": "Entra did not send a user name (preferred_username). Check the scopes “openid profile email”.",
+      "oidc_state_mismatch": "The sign-in did not match (expired or started in another window). Please sign in again.",
+      "oidc_callback_invalid": "The sign-in expired or was incomplete. Please sign in again.",
+      "oidc_flow_tampered": "The sign-in was altered and therefore stopped. Please sign in again.",
+      "oidc_error": "Entra cancelled the sign-in ({{entra}}). Common causes: the user is not assigned to the app or declined consent.",
+      "oidc_discovery_failed": "Entra cannot be reached for this installation or the tenant ID is wrong. IT will check the settings.",
+      "oidc_token_exchange_failed": "Entra rejected Magister's sign-in — usually a wrong or expired client secret or a different redirect URI. IT will check the app registration.",
+      "oidc_token_invalid": "The token from Entra was not valid (issuer or client ID do not match). IT will check the settings.",
+      "oidc_no_id_token": "Entra did not return an ID token. Check the “openid” scope.",
+      "generic": "Sign-in with Entra ID failed. Please try again; if it persists, contact IT."
+    }
   },
   "me": {
     "title": "My profile",

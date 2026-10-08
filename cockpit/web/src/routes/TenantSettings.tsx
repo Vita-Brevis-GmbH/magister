@@ -2,13 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { getTenant } from "../api/tenants";
-import { listSealedSecrets, putSealedSecret, type SealedSecret } from "../api/operations";
+import {
+  listSealedSecrets,
+  putSealedSecret,
+  type SealedSecret,
+} from "../api/operations";
 import {
   getPlatformSettings,
   getTenantSettings,
   putTenantSettings,
 } from "../api/tenantSettings";
 import { ErrorBox } from "../components/ErrorBox";
+import { EntraHelp, EntraHelpButton } from "../components/EntraHelp";
 import { LocalAdminSection } from "../components/LocalAdminSection";
 
 type Kind = "text" | "lines" | "number" | "bool";
@@ -32,7 +37,11 @@ const AD_FIELDS: Field[] = [
     placeholder: "OU=Benutzer,DC=schule,DC=local",
     hint: "Pflicht für den AD-Abgleich. Ohne sie läuft kein Sync.",
   },
-  { key: "ad_computers_search_base", label: "Such-Basis Computer", kind: "text" },
+  {
+    key: "ad_computers_search_base",
+    label: "Such-Basis Computer",
+    kind: "text",
+  },
   {
     key: "ad_groups_search_base",
     label: "Such-Basis Gruppen",
@@ -83,11 +92,13 @@ const NINJA_FIELDS: Field[] = [
 
 const ALL_FIELDS = [...ACCESS_FIELDS, ...AD_FIELDS, ...NINJA_FIELDS];
 
-const ENTRA_ISSUER = /^https:\/\/login\.microsoftonline\.com\/([0-9a-fA-F-]{36})\/v2\.0\/?$/;
+const ENTRA_ISSUER =
+  /^https:\/\/login\.microsoftonline\.com\/([0-9a-fA-F-]{36})\/v2\.0\/?$/;
 
 function toText(value: unknown, kind: Kind): string {
   if (value === undefined || value === null) return "";
-  if (kind === "lines" && Array.isArray(value)) return value.map(String).join("\n");
+  if (kind === "lines" && Array.isArray(value))
+    return value.map(String).join("\n");
   if (kind === "bool") return value ? "true" : "";
   return String(value);
 }
@@ -140,29 +151,35 @@ function SecretField({
       >
         {state}
       </p>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          m.mutate();
-        }}
-      >
+      {/*
+        Kein eigenes <form>: das Feld steht im Formular der Einstellungen,
+        und ein Formular im Formular löste mit „Versiegeln“ (oder Enter) auch
+        „Einstellungen speichern“ aus.
+      */}
+      <div className="flex gap-2">
         <input
           type="password"
           autoComplete="off"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              if (value && !m.isPending) m.mutate();
+            }
+          }}
           placeholder={secret.sealed ? "neuen Wert eingeben" : "Wert eingeben"}
           className="w-80 rounded border px-2 py-1 text-sm"
         />
         <button
-          type="submit"
+          type="button"
+          onClick={() => m.mutate()}
           disabled={!value || m.isPending}
           className="rounded border px-3 py-1 text-sm disabled:opacity-50"
         >
           Versiegeln
         </button>
-      </form>
+      </div>
       {m.isError && <ErrorBox error={m.error} />}
     </div>
   );
@@ -180,7 +197,10 @@ function SecretField({
  * Konsole sie danach selbst nicht mehr lesen kann.
  */
 export function TenantSettings({ tenantId }: { tenantId: string }) {
-  const tenantQ = useQuery({ queryKey: ["tenant", tenantId], queryFn: () => getTenant(tenantId) });
+  const tenantQ = useQuery({
+    queryKey: ["tenant", tenantId],
+    queryFn: () => getTenant(tenantId),
+  });
   const settingsQ = useQuery({
     queryKey: ["tenant-settings", tenantId],
     queryFn: () => getTenantSettings(tenantId),
@@ -241,11 +261,14 @@ function SettingsForm({
   const [entraTenant, setEntraTenant] = useState(
     () => ENTRA_ISSUER.exec(String(overrides.oidc_issuer ?? ""))?.[1] ?? "",
   );
-  const [clientId, setClientId] = useState(String(overrides.oidc_client_id ?? ""));
+  const [clientId, setClientId] = useState(
+    String(overrides.oidc_client_id ?? ""),
+  );
   const [scopes, setScopes] = useState(
     Array.isArray(overrides.oidc_scopes) ? overrides.oidc_scopes.join(" ") : "",
   );
   const [saved, setSaved] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const redirectUri = hostname ? `https://${hostname}/api/auth/callback` : "";
 
   const saveM = useMutation({
@@ -316,7 +339,9 @@ function SettingsForm({
             className="w-full rounded border px-2 py-1 font-mono text-xs"
           />
         )}
-        {f.hint && <span className="mt-0.5 block text-xs text-slate-500">{f.hint}</span>}
+        {f.hint && (
+          <span className="mt-0.5 block text-xs text-slate-500">{f.hint}</span>
+        )}
       </label>
     );
   };
@@ -330,15 +355,32 @@ function SettingsForm({
       }}
     >
       <section className="rounded border bg-white p-4">
-        <h2 className="mb-1 font-semibold">Entra ID (Anmeldung)</h2>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <h2 className="font-semibold">Entra ID (Anmeldung)</h2>
+          <EntraHelpButton
+            open={helpOpen}
+            onToggle={() => setHelpOpen((v) => !v)}
+          />
+        </div>
+        {helpOpen && (
+          <EntraHelp
+            redirectUri={redirectUri}
+            hostname={hostname}
+            tenantId={entraTenant}
+            clientId={clientId}
+          />
+        )}
         <p className="mb-3 text-xs text-slate-500">
-          In Entra eine App-Registrierung für diesen Kunden anlegen (Plattform „Web“), als
-          Umleitungs-URI die Adresse unten eintragen und ein Client-Secret erzeugen. Tenant-Id
-          und Client-Id stehen auf der Übersichtsseite der App-Registrierung.
+          In Entra eine App-Registrierung für diesen Kunden anlegen (Plattform
+          „Web“), als Umleitungs-URI die Adresse unten eintragen und ein
+          Client-Secret erzeugen. Tenant-Id und Client-Id stehen auf der
+          Übersichtsseite der App-Registrierung.
         </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-600">Verzeichnis-(Tenant-)Id</span>
+            <span className="mb-1 block text-slate-600">
+              Verzeichnis-(Tenant-)Id
+            </span>
             <input
               value={entraTenant}
               onChange={(e) => {
@@ -350,7 +392,9 @@ function SettingsForm({
             />
           </label>
           <label className="block text-sm">
-            <span className="mb-1 block text-slate-600">Anwendungs-(Client-)Id</span>
+            <span className="mb-1 block text-slate-600">
+              Anwendungs-(Client-)Id
+            </span>
             <input
               value={clientId}
               onChange={(e) => {
@@ -362,7 +406,9 @@ function SettingsForm({
             />
           </label>
           <div className="text-sm">
-            <span className="mb-1 block text-slate-600">Umleitungs-URI (in Entra eintragen)</span>
+            <span className="mb-1 block text-slate-600">
+              Umleitungs-URI (in Entra eintragen)
+            </span>
             <code className="block rounded bg-slate-100 px-2 py-1 font-mono text-xs">
               {redirectUri || "—"}
             </code>
@@ -391,17 +437,23 @@ function SettingsForm({
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Zugang</h2>
-        <div className="grid gap-3 sm:grid-cols-2">{ACCESS_FIELDS.map(renderField)}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {ACCESS_FIELDS.map(renderField)}
+        </div>
       </section>
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Active Directory</h2>
-        <div className="grid gap-3 sm:grid-cols-2">{AD_FIELDS.map(renderField)}</div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {AD_FIELDS.map(renderField)}
+        </div>
       </section>
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">NinjaOne (optional)</h2>
-        <div className="grid gap-3 sm:grid-cols-3">{NINJA_FIELDS.map(renderField)}</div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {NINJA_FIELDS.map(renderField)}
+        </div>
         <div className="mt-3">
           <SecretField
             tenantId={tenantId}
@@ -421,8 +473,8 @@ function SettingsForm({
         </button>
         {saved && (
           <span className="text-sm text-emerald-700">
-            Gespeichert. Die Installation übernimmt es beim nächsten Abgleich (Übersicht →
-            Zustand).
+            Gespeichert. Die Installation übernimmt es beim nächsten Abgleich
+            (Übersicht → Zustand).
           </span>
         )}
       </div>

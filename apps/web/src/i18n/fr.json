@@ -67,7 +67,23 @@
     "enroll_submit": "Terminer la configuration",
     "recovery_title": "Codes de récupération",
     "recovery_intro": "Conservez ces codes en lieu sûr. Chacun est utilisable une seule fois et remplace le code à usage unique si vous n'avez pas votre téléphone. Ils ne sont affichés que maintenant.",
-    "recovery_continue": "Codes sauvegardés, continuer"
+    "recovery_continue": "Codes sauvegardés, continuer",
+    "oidc_errors": {
+      "title": "Connexion via Entra ID impossible",
+      "user_not_synced": "Votre compte n’est pas encore connu de Magister. Il doit se trouver dans une UO autorisée de l’AD et avoir été synchronisé une fois — ou être inscrit comme premier administrateur. Veuillez contacter l’informatique.",
+      "user_disabled": "Votre compte est désactivé dans l’AD.",
+      "oidc_no_oid_for_bootstrap": "Entra n’a pas transmis d’ID d’objet (oid). L’inscription d’application est-elle configurée pour les comptes professionnels de cet annuaire ?",
+      "oidc_missing_upn": "Entra n’a pas transmis de nom d’utilisateur (preferred_username). Vérifier les scopes « openid profile email ».",
+      "oidc_state_mismatch": "La connexion ne correspond pas (expirée ou démarrée dans une autre fenêtre). Veuillez vous reconnecter.",
+      "oidc_callback_invalid": "La connexion a expiré ou est incomplète. Veuillez vous reconnecter.",
+      "oidc_flow_tampered": "La connexion a été modifiée et donc interrompue. Veuillez vous reconnecter.",
+      "oidc_error": "Entra a interrompu la connexion ({{entra}}). Souvent : l’utilisateur n’est pas attribué à l’application ou a refusé le consentement.",
+      "oidc_discovery_failed": "Entra n’est pas joignable pour cette installation ou l’ID de locataire est incorrect. L’informatique vérifie les paramètres.",
+      "oidc_token_exchange_failed": "Entra a refusé la connexion de Magister — en général un secret client erroné ou expiré, ou une URI de redirection différente. L’informatique vérifie l’inscription d’application.",
+      "oidc_token_invalid": "Le jeton d’Entra n’était pas valide (émetteur ou ID client incorrects). L’informatique vérifie les paramètres.",
+      "oidc_no_id_token": "Entra n’a pas fourni de jeton d’ID. Vérifier le scope « openid ».",
+      "generic": "La connexion via Entra ID a échoué. Veuillez réessayer ; si cela persiste, contactez l’informatique."
+    }
   },
   "me": {
     "title": "Mon profil",

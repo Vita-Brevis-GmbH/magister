@@ -129,6 +129,7 @@ nicht (§11, L-02) — dafür die API (`PUT /api/platform/settings`,
 - [ ] **K-19** Zustand: Kunde → Übersicht → „Zustand der Installation" zeigt eine Meldung jünger als 5 Minuten, Abgleich „in Ordnung", Profil wie in der Konsole. Datenebene anhalten → nach 15 Minuten der Hinweis „seit … keine Meldung".
 - [ ] **K-19a** Reiter „Einstellungen": Entra (Tenant-Id, Client-Id) speichern → Umleitungs-URI `https://<host>/api/auth/callback` wird angezeigt und mitgespeichert; nach dem Abgleich meldet sich ein Benutzer aus `bootstrap_admins` über Entra an.
 - [ ] **K-19b** Client-Secret versiegeln → Antwort und Konsolen-DB enthalten den Klartext **nicht** (`select ciphertext from tenant_sealed_secrets`); Zustand wechselt auf „angekommen"; Anmeldung über Entra funktioniert. Ohne Meldung der Installation → 409.
+- [ ] **K-19c** Knopf „Hilfe / Help“ neben „Entra ID (Anmeldung)“: Anleitung DE/EN mit der Umleitungs-URI und Host dieses Kunden; App-Registrierung danach Schritt für Schritt einrichten. Fehler landen auf `/login?error=<code>` mit verständlicher Meldung statt als JSON (z. B. falsches Secret → `oidc_token_exchange_failed`, AADSTS-Code im Log von `magister-api`).
 - [ ] **K-19c** AD-Suchbasis im Reiter setzen → Zustand „AD eingerichtet: ja", AD-Sync im Kundenportal läuft durch. Ohne Suchbasis zeigt das Kundenportal gehostet „pflegt Vita Brevis" statt „oben eintragen".
 
 - [ ] **K-20** Plattform-Vorgabe setzen (z.B. `ad_sync_interval_minutes`) → beide Kunden übernehmen sie; im Kundenprotokoll `settings_pushed` mit alt/neu.

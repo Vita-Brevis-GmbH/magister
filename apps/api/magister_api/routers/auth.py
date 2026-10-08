@@ -7,8 +7,11 @@ lives in :mod:`magister_api.services.auth`.
 
 from __future__ import annotations
 
+import logging
+import re
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -52,6 +55,8 @@ from magister_api.services.local_admin_mfa import (
 OIDC_FLOW_COOKIE = "magister_oidc_flow"
 
 limiter = Limiter(key_func=get_remote_address)
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
@@ -104,6 +109,25 @@ def _set_csrf_cookie(response: Response, value: str, settings: Settings) -> None
     )
 
 
+#: Form eines Fehlercodes, der in die Adresse der Anmeldeseite darf. Fremder
+#: Text (etwa eine Entra-Beschreibung) kommt dort nicht hinein.
+_CODE = re.compile(r"[a-z][a-z0-9_]{1,63}")
+
+
+def _back_to_login(code: str, *, entra: str | None = None) -> RedirectResponse:
+    """Zurück auf die Anmeldeseite, mit dem Grund als Code in der Adresse."""
+    safe = code if _CODE.fullmatch(code) else "oidc_failed"
+    logger.warning("Anmeldung über Entra abgewiesen: %s%s", safe, f" ({entra})" if entra else "")
+    params = {"error": safe}
+    if entra and _CODE.fullmatch(entra):
+        params["entra"] = entra
+    response = RedirectResponse(
+        url=f"/login?{urlencode(params)}", status_code=status.HTTP_303_SEE_OTHER
+    )
+    response.delete_cookie(OIDC_FLOW_COOKIE, path="/")
+    return response
+
+
 @router.get("/login")
 async def login(
     request: Request,
@@ -112,7 +136,10 @@ async def login(
 ) -> RedirectResponse:
     if not settings.oidc_issuer or not settings.oidc_client_id:
         raise HTTPException(status_code=503, detail="oidc_not_configured")
-    auth_req = oidc.build_authorize_request()
+    try:
+        auth_req = await oidc.build_authorize_request()
+    except ValueError as exc:
+        return _back_to_login(str(exc))
     flow_state = _flow_serializer(settings).dumps(
         {
             "state": auth_req.state,
@@ -147,14 +174,17 @@ async def callback(
     oidc: OidcClient = Depends(get_oidc_client),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
+    # Der Rückweg von Entra ist eine Navigation des Browsers, kein API-Aufruf:
+    # ein Fehler als JSON stand roh im Fenster. Jetzt geht es zurück auf die
+    # Anmeldeseite, die den Code übersetzt (`auth.oidc_errors.*`).
     if error:
-        raise HTTPException(status_code=400, detail=f"oidc_error:{error}")
+        return _back_to_login("oidc_error", entra=error)
     if not code or not state or not flow_cookie:
-        raise HTTPException(status_code=400, detail="oidc_callback_invalid")
+        return _back_to_login("oidc_callback_invalid")
     try:
         flow = _flow_serializer(settings).loads(flow_cookie)
-    except BadSignature as exc:
-        raise HTTPException(status_code=400, detail="oidc_flow_tampered") from exc
+    except BadSignature:
+        return _back_to_login("oidc_flow_tampered")
     try:
         userinfo = await oidc.exchange_code(
             code=code,
@@ -164,7 +194,7 @@ async def callback(
             nonce=flow["nonce"],
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return _back_to_login(str(exc))
 
     auth_service = AuthService(session, settings)
     request_id = getattr(request.state, "request_id", "")
@@ -178,7 +208,7 @@ async def callback(
             request_id=request_id,
         )
     except LoginRefusedError as exc:
-        raise HTTPException(status_code=403, detail=exc.code) from exc
+        return _back_to_login(exc.code)
 
     response = RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     response.delete_cookie(OIDC_FLOW_COOKIE, path="/")
