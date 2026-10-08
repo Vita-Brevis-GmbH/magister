@@ -45,6 +45,18 @@ class MaintenanceResult(BaseModel):
     result: dict[str, int | str] = Field(default_factory=dict)
 
 
+class LocalAdminStatus(BaseModel):
+    """Das lokale Admin-Konto im Kundenschema — ob es das gibt, nie wie es heisst ins Log."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    exists: bool
+    enabled: bool | None = None
+    username: str | None = Field(default=None, max_length=64)
+    mfa_enrolled: bool | None = None
+    locked: bool | None = None
+
+
 class StatusReport(BaseModel):
     """Was die Datenebene je Kunde meldet. Keine Personendaten, keine Geheimnisse."""
 
@@ -64,6 +76,8 @@ class StatusReport(BaseModel):
     maintenance: list[MaintenanceResult] = Field(
         default_factory=list[MaintenanceResult], max_length=50
     )
+    #: Ältere Datenebenen melden es nicht — dann fehlt das Feld.
+    local_admin: LocalAdminStatus | None = None
 
 
 class StatusOut(BaseModel):
@@ -97,6 +111,21 @@ class MaintenanceRequestOut(BaseModel):
     requested_at: datetime
     finished_at: datetime | None
     result: dict[str, Any] | None
+
+
+class LocalAdminSetupIn(BaseModel):
+    """Lokales Admin-Konto einrichten oder Passwort neu setzen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(pattern=r"^[a-z][a-z0-9._-]{2,63}$")
+    #: Klartext, genau einmal über TLS. Wird sofort für die Datenebene dieses
+    #: Kunden versiegelt; nicht gespeichert, nicht protokolliert.
+    password: str = Field(min_length=12, max_length=256)
+    #: Zweiten Faktor zurücksetzen: die nächste Anmeldung verlangt eine neue
+    #: TOTP-Einrichtung. Für den Fall „Handy verloren".
+    reset_mfa: bool = False
+    reason: str = Field(default="Lokales Administrationskonto einrichten", max_length=500)
 
 
 class SealedSecretIn(BaseModel):

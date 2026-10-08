@@ -24,6 +24,7 @@ Zwei Grenzen, die der Reconciler nicht überschreitet:
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, cast
 
@@ -46,6 +47,8 @@ from magister_api.services.document_templates import (
     sample_context,
 )
 from magister_api.services.imports import purge_import_history
+from magister_api.services.local_admin import LocalAdminService
+from magister_api.services.local_admin_mfa import LocalAdminMfaService
 from magister_api.services.rbac import (
     PlatformCapabilityError,
     RbacService,
@@ -67,6 +70,10 @@ logger = logging.getLogger(__name__)
 #: leere Spalte: wer im Protokoll des Kunden liest, soll sehen, dass die
 #: Änderung von der Plattform kam und nicht von einer Person im Haus.
 RECONCILER_ACTOR = "platform-reconciler@vitabrevis.ch"
+
+#: Benutzername des lokalen Admin-Kontos: kurz, ohne Leer- und Sonderzeichen.
+#: Er wird Teil eines UPN (`<name>@magister.local`).
+LOCAL_ADMIN_USERNAME = re.compile(r"^[a-z][a-z0-9._-]{2,63}$")
 
 #: Das Audit-Ereignis, das die Ausführung eines Wartungsauftrags belegt. Sein
 #: Ziel ist die Auftrags-Id — daran erkennt der nächste Lauf „schon erledigt".
@@ -277,7 +284,9 @@ class Reconciler:
 
         if desired.maintenance and not dry_run:
             for request in desired.maintenance:
-                await self._run_maintenance(request, result, tenant_slug=tenant_slug)
+                await self._run_maintenance(
+                    request, result, tenant_slug=tenant_slug, tenant_ref=tenant_ref
+                )
 
         if result.touched:
             logger.info(
@@ -508,7 +517,12 @@ class Reconciler:
         return int(found) if found is not None else None
 
     async def _run_maintenance(
-        self, request: DesiredMaintenance, result: ReconcileResult, *, tenant_slug: str
+        self,
+        request: DesiredMaintenance,
+        result: ReconcileResult,
+        *,
+        tenant_slug: str,
+        tenant_ref: str | None = None,
     ) -> None:
         """Einen Wartungsauftrag genau einmal ausführen (ADR-0024 D4).
 
@@ -551,6 +565,8 @@ class Reconciler:
                 "classes": purged.classes,
                 "users": purged.users,
             }
+        elif request.action == "local_admin_setup":
+            outcome = await self._local_admin_setup(request, actor=actor, tenant_ref=tenant_ref)
         else:  # audit_reset
             imports_deleted = await purge_import_history(self.session)
             deleted = await audit.purge(
@@ -575,11 +591,54 @@ class Reconciler:
             request_id=request_id,
             payload={**outcome, "action": request.action, "reason": request.reason[:500]},
         )
-        result.maintenance_results.append({"id": request.id, "ok": True, "result": _flat(outcome)})
+        result.maintenance_results.append(
+            {"id": request.id, "ok": bool(outcome.get("ok")), "result": _flat(outcome)}
+        )
         result.maintenance_executed = True
         logger.info(
             "Wartungsauftrag %s (%s) für %s ausgeführt", request.id, request.action, tenant_slug
         )
+
+    async def _local_admin_setup(
+        self, request: DesiredMaintenance, *, actor: str, tenant_ref: str | None
+    ) -> dict[str, Any]:
+        """Lokales Admin-Konto anlegen oder Passwort setzen (ADR-0024, Nachtrag).
+
+        Das Passwort kommt versiegelt — gebunden an diesen Kunden und an den
+        Namen ``local_admin_password``. Öffnen kann es nur diese Datenebene;
+        es landet als argon2id-Hash im Kundenschema und nirgends sonst, auch
+        nicht im Ergebnis, das an die Konsole zurückgeht.
+
+        Ein Fehlschlag wird als Ergebnis festgehalten und nicht wiederholt:
+        ein Siegel, das sich nicht öffnen lässt, öffnet sich auch beim
+        nächsten Lauf nicht. Dann einen neuen Auftrag stellen.
+        """
+        username = request.params.get("username", "")
+        if not LOCAL_ADMIN_USERNAME.match(username):
+            return {"ok": False, "error": "invalid_username"}
+        if not tenant_ref:
+            return {"ok": False, "error": "no_tenant_ref"}
+        try:
+            password = unseal(
+                keys_for(self.session, self.settings).secrets_key,
+                request.params.get("sealed_password", ""),
+                tenant_ref=tenant_ref,
+                name="local_admin_password",
+            )
+        except UnsealError:
+            return {"ok": False, "error": "unseal_failed"}
+        created = await LocalAdminService(self.session).set_account(
+            username=username, password=password
+        )
+        mfa_reset = False
+        if request.params.get("reset_mfa") == "1" and not created:
+            mfa_reset = await LocalAdminMfaService(self.session, self.settings).reset(actor=actor)
+        return {
+            "ok": True,
+            "username": username,
+            "created": int(created),
+            "mfa_reset": int(mfa_reset),
+        }
 
     async def _apply_settings(self, diff: dict[str, tuple[Any, Any]], *, tenant_slug: str) -> None:
         """Nur die geänderten Felder schreiben.

@@ -142,6 +142,72 @@ class LocalAdminService:
         await self.session.flush()
         return admin
 
+    async def _create(self, username: str, password_hash: str) -> None:
+        """Konto-Zeile samt Stub im AD-Cache und Admin-Rolle anlegen (ohne Commit)."""
+        now = utcnow()
+        admin = LocalAdmin(
+            id=1,
+            username=username,
+            password_hash=password_hash,
+            enabled=True,
+            failed_login_count=0,
+            locked_until=None,
+            last_login_at=None,
+            password_changed_at=now,
+            created_at=now,
+        )
+        self.session.add(admin)
+
+        # Seed the AdUserCache + RoleAssignment rows so the existing
+        # current_user.get_optional_user / RBAC pipeline keeps working
+        # unchanged for local sessions.
+        cache_repo = AdUserCacheRepository(self.session)
+        existing_cache = await self.session.get(AdUserCache, LOCAL_ADMIN_GUID)
+        if existing_cache is None:
+            await cache_repo.upsert_admin(
+                ad_object_guid=LOCAL_ADMIN_GUID,
+                upn=f"{username}@magister.local",
+                ms_ds_consistency_guid=None,
+            )
+        roles_repo = RoleAssignmentRepository(self.session)
+        await roles_repo.grant(
+            ad_object_guid=LOCAL_ADMIN_GUID,
+            role="admin",
+            school_id=None,
+            granted_by="bootstrap",
+        )
+        await self.session.flush()
+
+    async def set_account(self, *, username: str, password: str) -> bool:
+        """Konto anlegen oder Passwort neu setzen und entsperren (ADR-0024, Nachtrag).
+
+        Der Weg der Konsole für gehostete Kunden: dort gibt es keine
+        Umgebungsvariable je Kunde, aus der ein Seed käme. Gibt ``True``
+        zurück, wenn das Konto neu angelegt wurde. Kein Commit — der Aufrufer
+        schreibt das Audit-Ereignis in dieselbe Transaktion.
+
+        Der zweite Faktor bleibt, wie er ist; zurücksetzen ist ein eigener
+        Schritt (``LocalAdminMfaService.reset``). Ein neues Konto hat keinen
+        und muss ihn bei der ersten Anmeldung einrichten.
+        """
+        repo = LocalAdminRepository(self.session)
+        admin = await repo.get()
+        password_hash = hash_password(password)
+        if admin is None:
+            await self._create(username, password_hash)
+            return True
+        admin.username = username
+        admin.password_hash = password_hash
+        admin.password_changed_at = utcnow()
+        admin.enabled = True
+        admin.failed_login_count = 0
+        admin.locked_until = None
+        cache = await self.session.get(AdUserCache, LOCAL_ADMIN_GUID)
+        if cache is not None:
+            cache.upn = f"{username}@magister.local"
+        await self.session.flush()
+        return False
+
     # ---------- bootstrap ----------
 
     async def seed_from_env_if_empty(self, settings: Settings) -> bool:
@@ -177,38 +243,7 @@ class LocalAdminService:
             )
             return False
 
-        now = utcnow()
-        admin = LocalAdmin(
-            id=1,
-            username=username,
-            password_hash=password_hash,
-            enabled=True,
-            failed_login_count=0,
-            locked_until=None,
-            last_login_at=None,
-            password_changed_at=now,
-            created_at=now,
-        )
-        self.session.add(admin)
-
-        # Seed the AdUserCache + RoleAssignment rows so the existing
-        # current_user.get_optional_user / RBAC pipeline keeps working
-        # unchanged for local sessions.
-        cache_repo = AdUserCacheRepository(self.session)
-        existing_cache = await self.session.get(AdUserCache, LOCAL_ADMIN_GUID)
-        if existing_cache is None:
-            await cache_repo.upsert_admin(
-                ad_object_guid=LOCAL_ADMIN_GUID,
-                upn=f"{username}@magister.local",
-                ms_ds_consistency_guid=None,
-            )
-        roles_repo = RoleAssignmentRepository(self.session)
-        await roles_repo.grant(
-            ad_object_guid=LOCAL_ADMIN_GUID,
-            role="admin",
-            school_id=None,
-            granted_by="bootstrap",
-        )
+        await self._create(username, password_hash)
         await self.session.flush()
         await self.session.commit()
         logger.warning(

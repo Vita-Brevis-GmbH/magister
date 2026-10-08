@@ -9,6 +9,7 @@ import {
   putTenantSettings,
 } from "../api/tenantSettings";
 import { ErrorBox } from "../components/ErrorBox";
+import { LocalAdminSection } from "../components/LocalAdminSection";
 
 type Kind = "text" | "lines" | "number" | "bool";
 
@@ -204,16 +205,19 @@ export function TenantSettings({ tenantId }: { tenantId: string }) {
   if (settingsQ.isError) return <ErrorBox error={settingsQ.error} />;
   if (!settingsQ.data) return null;
   return (
-    <SettingsForm
-      // Neu aufbauen, wenn gespeichert wurde: der Formularzustand beginnt
-      // dann beim gespeicherten Stand statt ihn per Effekt nachzuziehen.
-      key={settingsQ.data.updated_at ?? "neu"}
-      tenantId={tenantId}
-      overrides={settingsQ.data.overrides}
-      hostname={tenantQ.data?.tenant.hostname ?? ""}
-      defaults={platformQ.data?.defaults ?? {}}
-      sealed={sealedQ.data ?? []}
-    />
+    <div className="space-y-6">
+      <LocalAdminSection tenantId={tenantId} />
+      <SettingsForm
+        // Neu aufbauen, wenn gespeichert wurde: der Formularzustand beginnt
+        // dann beim gespeicherten Stand statt ihn per Effekt nachzuziehen.
+        key={settingsQ.data.updated_at ?? "neu"}
+        tenantId={tenantId}
+        overrides={settingsQ.data.overrides}
+        hostname={tenantQ.data?.tenant.hostname ?? ""}
+        defaults={platformQ.data?.defaults ?? {}}
+        sealed={sealedQ.data ?? []}
+      />
+    </div>
   );
 }
 

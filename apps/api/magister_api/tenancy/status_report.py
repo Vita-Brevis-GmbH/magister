@@ -32,7 +32,9 @@ from magister_api.config import Settings
 from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.audit import AuditEvent
 from magister_api.modules import catalog
+from magister_api.repositories.local_admin import LocalAdminRepository
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.local_admin_mfa import LocalAdminMfaService
 from magister_api.tenancy.console_report import ReportRejectedError, console_base
 from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 from magister_api.tenancy.keys import keys_for
@@ -58,6 +60,26 @@ async def _last_event(session: AsyncSession, action: str) -> datetime | None:
     """
     stmt = select(func.max(AuditEvent.ts)).where(AuditEvent.action == action)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _local_admin(session: AsyncSession, base: Settings) -> dict[str, Any]:
+    """Gibt es das lokale Admin-Konto, und hat es einen zweiten Faktor?
+
+    Ohne Konto und ohne Entra kommt niemand ins Portal ("Kein Anmeldeweg
+    eingerichtet") — das soll die Konsole sehen, bevor der Kunde anruft.
+    Nur Name und Zustand; kein Hash, kein TOTP-Geheimnis.
+    """
+    admin = await LocalAdminRepository(session).get()
+    if admin is None:
+        return {"exists": False}
+    mfa = await LocalAdminMfaService(session, base).status()
+    return {
+        "exists": True,
+        "enabled": bool(admin.enabled),
+        "username": admin.username,
+        "mfa_enrolled": bool(mfa and mfa.enrolled),
+        "locked": admin.locked_until is not None,
+    }
 
 
 async def collect_status(
@@ -102,6 +124,7 @@ async def collect_status(
             "ninja_client_secret": bool(secrets.ninja_client_secret),
         },
         "maintenance": maintenance or [],
+        "local_admin": await _local_admin(session, base),
     }
     secrets_key = keys_for(session, base).secrets_key
     if secrets_key:

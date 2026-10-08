@@ -250,3 +250,32 @@ Hostnamen-Muster, bevor er ihn benutzt.
 
 Offen: Benachrichtigung. Die Ansicht zeigt eine Störung, sie meldet sie
 nicht. Für Alarme ist weiterhin PRTG zuständig (ADR-0021 D6).
+
+## Nachtrag 2026-10-08 · Lokales Administrationskonto aus der Konsole
+
+Ein gehosteter Kunde ohne Entra ID zeigte „Kein Anmeldeweg eingerichtet":
+das lokale Notkonto (ADR-0015 D2) entsteht sonst nur aus
+`MAGISTER_LOCAL_ADMIN_*` beim Start — und das ist gehostet ab zwei Kunden
+ausdrücklich abgeschaltet (sonst teilten zwanzig Kunden ein Passwort).
+
+Jetzt: *Kunde → Einstellungen → Lokales Administrationskonto*.
+
+* Benutzername und Passwort werden in der Konsole eingegeben; das Passwort
+  wird sofort für die Installation dieses Kunden versiegelt (D3, Name
+  `local_admin_password`, eigene Liste `ONE_TIME_SEALABLE` neben den
+  Einstellungs-Geheimnissen) und reist als Wartungsauftrag
+  `local_admin_setup` (D4). Die Datenebene wendet ihn **genau einmal** an:
+  Konto anlegen oder Passwort setzen und entsperren, auf Wunsch den zweiten
+  Faktor zurücksetzen. Ist er abgeschlossen, löscht die Konsole das Siegel.
+* Einmal und nicht als Soll-Zustand: ändert der Kunde das Passwort im
+  Portal, stellt der nächste Abgleich es nicht zurück.
+* Den zweiten Faktor richtet die Person bei der ersten Anmeldung im Portal
+  selbst ein (TOTP, erzwungen, wie bisher). Das TOTP-Geheimnis entsteht in
+  der Datenebene und erreicht die Konsole nie — eine Konsole, die das
+  Passwort beim Eintippen sah, kann sich damit allein nicht anmelden.
+* Die Zustandsmeldung (D1) sagt, ob es das Konto gibt, ob es gesperrt ist
+  und ob TOTP eingerichtet ist.
+
+Nebenbei: ein Wartungsauftrag, dessen Ergebnis `ok: false` ist, wurde der
+Konsole bisher trotzdem als erfolgreich gemeldet. Die bisherigen zwei Arten
+konnten nicht scheitern; der neue kann es (Siegel lässt sich nicht öffnen).

@@ -17,6 +17,14 @@ export interface StatusReport {
   sealed_public_key: string | null;
   sealed_key_id: string | null;
   secrets_present: Record<string, boolean>;
+  /** Fehlt bei älteren Datenebenen. */
+  local_admin?: {
+    exists: boolean;
+    enabled?: boolean | null;
+    username?: string | null;
+    mfa_enrolled?: boolean | null;
+    locked?: boolean | null;
+  } | null;
 }
 
 export interface TenantStatus {
@@ -44,7 +52,7 @@ export const listSealedSecrets = (tenantId: string) =>
 export const putSealedSecret = (tenantId: string, name: string, value: string) =>
   put<SealedSecret[]>(`/api/tenants/${tenantId}/sealed-secrets/${name}`, { value });
 
-export type MaintenanceAction = "demo_purge" | "audit_reset";
+export type MaintenanceAction = "demo_purge" | "audit_reset" | "local_admin_setup";
 export type MaintenanceState = "requested" | "done" | "failed" | "cancelled";
 
 export interface MaintenanceRequest {
@@ -68,3 +76,9 @@ export const requestMaintenance = (
 
 export const cancelMaintenance = (tenantId: string, requestId: string) =>
   post<MaintenanceRequest>(`/api/tenants/${tenantId}/maintenance/${requestId}/cancel`);
+
+/** Lokales Admin-Konto im Portal einrichten oder Passwort setzen (versiegelt, einmalig). */
+export const setupLocalAdmin = (
+  tenantId: string,
+  body: { username: string; password: string; reset_mfa: boolean },
+) => post<MaintenanceRequest>(`/api/tenants/${tenantId}/local-admin`, body);

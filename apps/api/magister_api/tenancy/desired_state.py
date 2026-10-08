@@ -50,12 +50,17 @@ class DesiredMaintenance:
     action: str
     requested_by: str
     reason: str
+    #: Auftragsparameter, nur Zeichenketten. Beim lokalen Admin-Konto:
+    #: Benutzername, das **versiegelte** Passwort und ob der zweite Faktor
+    #: zurückgesetzt wird. Nie Klartext — das versiegelte Passwort kann nur
+    #: diese Datenebene öffnen.
+    params: dict[str, str] = field(default_factory=dict[str, str])
 
 
 #: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
 #: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
 #: als Fehler zurückgemeldet.
-MAINTENANCE_ACTIONS: frozenset[str] = frozenset({"demo_purge", "audit_reset"})
+MAINTENANCE_ACTIONS: frozenset[str] = frozenset({"demo_purge", "audit_reset", "local_admin_setup"})
 
 
 @dataclass(frozen=True)
@@ -161,6 +166,7 @@ def _parse_maintenance(payload: dict[str, Any]) -> tuple[DesiredMaintenance, ...
                     action=str(item["action"]),
                     requested_by=str(item.get("requested_by") or ""),
                     reason=str(item.get("reason") or ""),
+                    params=_parse_params(item.get("params"), index),
                 )
             )
         except KeyError as exc:
@@ -168,6 +174,21 @@ def _parse_maintenance(payload: dict[str, Any]) -> tuple[DesiredMaintenance, ...
                 f"Wartungsauftrag {index} hat nicht die erwartete Form: {exc}"
             ) from exc
     return tuple(parsed)
+
+
+def _parse_params(raw: object, index: int) -> dict[str, str]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise DesiredStateUnavailableError(f"Wartungsauftrag {index}: 'params' ist kein Objekt.")
+    out: dict[str, str] = {}
+    for key, value in cast(dict[object, object], raw).items():
+        if not isinstance(key, str) or not isinstance(value, str) or len(value) > 4096:
+            raise DesiredStateUnavailableError(
+                f"Wartungsauftrag {index}: 'params' hat die falsche Form."
+            )
+        out[key] = value
+    return out
 
 
 def _parse_templates(payload: dict[str, Any]) -> tuple[DesiredTemplate, ...] | None:

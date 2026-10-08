@@ -137,6 +137,25 @@ nicht als Fehler behandelt — sonst hielte ein unfertiger Eintrag die ganze
 Installation an. Er antwortet danach mit 404, was zutrifft: erreichen könnte
 man ihn ohnehin nicht.
 
+## 5a · Erster Zugang: lokales Administrationskonto
+
+Ohne Entra ID zeigt das Portal „Kein Anmeldeweg eingerichtet". Der erste
+Zugang ist das lokale Administrationskonto:
+
+1. Konsole → Kunde → *Einstellungen* → *Lokales Administrationskonto*:
+   Benutzername (Vorgabe `admin`) und Passwort (mind. 12 Zeichen) eingeben,
+   *Konto einrichten*. Voraussetzung: die Installation hat sich gemeldet
+   (Übersicht → Zustand); sonst erst anbinden.
+2. Innerhalb einer Minute steht unter *Letzter Auftrag* „angewandt (neu
+   angelegt)".
+3. Im Portal mit Benutzername und Passwort anmelden. Beim ersten Mal wird
+   der Einmalcode eingerichtet: QR-Code mit einer Authenticator-App scannen,
+   Code bestätigen, die Wiederherstellungscodes sicher ablegen.
+
+Handy verloren oder gesperrt: dasselbe Formular, neues Passwort, Haken bei
+*Einmalcode zurücksetzen*. Das Passwort ist danach in der Konsole nicht mehr
+lesbar; geändert werden kann es im Portal selbst.
+
 ## 6 · Abnahme eines neuen Kunden
 
 ```sql

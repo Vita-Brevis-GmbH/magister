@@ -321,7 +321,7 @@ class SettingsService:
         ).scalars()
         return {row.name: row.ciphertext for row in rows}
 
-    async def _open_maintenance(self, tenant_id: UUID) -> list[dict[str, str]]:
+    async def _open_maintenance(self, tenant_id: UUID) -> list[dict[str, Any]]:
         rows = (
             await self.session.execute(
                 select(TenantMaintenanceRequest)
@@ -336,6 +336,7 @@ class SettingsService:
                 "action": row.action.value,
                 "requested_by": row.requested_by,
                 "reason": row.reason,
+                "params": dict(row.params or {}),
             }
             for row in rows
         ]

@@ -203,6 +203,100 @@ class TestMaintenance:
         assert resp.json()["state"] == "cancelled"
 
 
+class TestLocalAdmin:
+    URL = "/api/tenants/{}/local-admin"
+
+    def _with_key(self, console_client: TestClient, tenant_id: str) -> tuple[ModuleType, str]:
+        dp = _dataplane_sealing()
+        key = "kundenschluessel-" + "y" * 32
+        public = dp.public_key_b64(key)
+        console_client.post(
+            f"/api/tenants/{tenant_id}/status",
+            json=_report(sealed_public_key=public, sealed_key_id=dp.key_id(public)),
+        )
+        return dp, key
+
+    def test_needs_a_reported_key(self, console_client: TestClient, tenant_id: str) -> None:
+        resp = console_client.post(
+            self.URL.format(tenant_id), json={"username": "vbadmin", "password": "x" * 16}
+        )
+        assert resp.status_code == 409
+
+    def test_password_is_sealed_travels_once_and_is_dropped(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        dp, key = self._with_key(console_client, tenant_id)
+        resp = console_client.post(
+            self.URL.format(tenant_id),
+            json={"username": "vbadmin", "password": "Geheim-und-lang-2026", "reset_mfa": True},
+        )
+        assert resp.status_code == 201, resp.text
+        assert "Geheim-und-lang" not in resp.text
+        request_id = resp.json()["id"]
+
+        desired = console_client.get(f"/api/tenants/{tenant_id}/desired-state").json()
+        assert "Geheim-und-lang" not in json.dumps(desired)
+        (order,) = desired["maintenance"]
+        assert order["action"] == "local_admin_setup"
+        assert order["params"]["username"] == "vbadmin"
+        assert order["params"]["reset_mfa"] == "1"
+        assert (
+            dp.unseal(
+                key,
+                order["params"]["sealed_password"],
+                tenant_ref=tenant_id,
+                name="local_admin_password",
+            )
+            == "Geheim-und-lang-2026"
+        )
+        # Zweiter Auftrag, solange der erste offen ist: abgewiesen.
+        again = console_client.post(
+            self.URL.format(tenant_id), json={"username": "vbadmin", "password": "y" * 16}
+        )
+        assert again.status_code == 409
+
+        console_client.post(
+            f"/api/tenants/{tenant_id}/status",
+            json=_report(
+                maintenance=[{"id": request_id, "ok": True, "result": {"created": 1}}],
+                local_admin={
+                    "exists": True,
+                    "enabled": True,
+                    "username": "vbadmin",
+                    "mfa_enrolled": False,
+                    "locked": False,
+                },
+            ),
+        )
+        desired = console_client.get(f"/api/tenants/{tenant_id}/desired-state").json()
+        assert desired["maintenance"] == []
+        status_body = console_client.get(f"/api/tenants/{tenant_id}/status").json()
+        assert status_body["report"]["local_admin"]["username"] == "vbadmin"
+
+    def test_weak_or_odd_input_is_refused(self, console_client: TestClient, tenant_id: str) -> None:
+        self._with_key(console_client, tenant_id)
+        url = self.URL.format(tenant_id)
+        assert (
+            console_client.post(url, json={"username": "vbadmin", "password": "kurz"}).status_code
+            == 422
+        )
+        assert (
+            console_client.post(
+                url, json={"username": "Admin Root", "password": "x" * 16}
+            ).status_code
+            == 422
+        )
+
+    def test_not_through_the_generic_maintenance(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        resp = console_client.post(
+            f"/api/tenants/{tenant_id}/maintenance",
+            json={"action": "local_admin_setup", "reason": "ohne Passwort?", "confirm_slug": SLUG},
+        )
+        assert resp.status_code == 422
+
+
 class TestDesiredStateCorrectsExistingPortals:
     def test_module_overrides_are_always_stated(
         self, console_client: TestClient, tenant_id: str

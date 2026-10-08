@@ -75,6 +75,9 @@ class MaintenanceAction(enum.StrEnum):
     demo_purge = "demo_purge"
     #: Aktivitätsprotokoll und Importverlauf leeren (vor der Übergabe).
     audit_reset = "audit_reset"
+    #: Lokales Admin-Konto anlegen oder Passwort setzen. Eigener Endpunkt
+    #: (POST …/local-admin), nicht über die allgemeine Wartung bestellbar.
+    local_admin_setup = "local_admin_setup"
 
 
 class MaintenanceState(enum.StrEnum):
@@ -110,6 +113,10 @@ class TenantMaintenanceRequest(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     #: Was die Datenebene zurückmeldet: Zählerstände oder ein Fehlercode.
     result: Mapped[dict[str, Any] | None] = mapped_column(JSONB, default=None)
+    #: Auftragsparameter für die Datenebene (nur Zeichenketten). Beim lokalen
+    #: Admin-Konto steht darin das **versiegelte** Passwort — öffnen kann es
+    #: nur die Datenebene. Wird geleert, sobald der Auftrag abgeschlossen ist.
+    params: Mapped[dict[str, str] | None] = mapped_column(JSONB, default=None)
 
 
 class PlatformHeartbeat(Base):

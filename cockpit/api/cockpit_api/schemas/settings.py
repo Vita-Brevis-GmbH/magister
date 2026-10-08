@@ -100,7 +100,7 @@ class DesiredStateOut(BaseModel):
     sealed_secrets: dict[str, str] = {}
     #: Offene Wartungsaufträge (ADR-0024 D4); die Datenebene führt jeden genau
     #: einmal aus.
-    maintenance: list[dict[str, str]] = []
+    maintenance: list[dict[str, Any]] = []
 
 
 __all__ = [

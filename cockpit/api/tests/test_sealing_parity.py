@@ -15,7 +15,13 @@ from types import ModuleType
 
 import pytest
 
-from cockpit_api.services.sealing import SEALABLE, SealingError, key_id, seal
+from cockpit_api.services.sealing import (
+    ONE_TIME_SEALABLE,
+    SEALABLE,
+    SealingError,
+    key_id,
+    seal,
+)
 
 
 def _load() -> ModuleType:
@@ -44,6 +50,7 @@ TENANT = "11111111-2222-3333-4444-555555555555"
 
 def test_same_allowlist() -> None:
     assert dp.SEALABLE == SEALABLE
+    assert dp.ONE_TIME_SEALABLE == ONE_TIME_SEALABLE
 
 
 def test_roundtrip() -> None:

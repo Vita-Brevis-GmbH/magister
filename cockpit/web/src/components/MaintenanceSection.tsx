@@ -130,7 +130,8 @@ export function MaintenanceSection({ tenantId, slug }: { tenantId: string; slug:
             {listQ.data.map((r) => (
               <tr key={r.id} className="border-b">
                 <td className="p-2 text-xs">{new Date(r.requested_at).toLocaleString()}</td>
-                <td className="p-2">{ACTIONS.find((a) => a.id === r.action)?.label ?? r.action}</td>
+                <td className="p-2">{ACTIONS.find((a) => a.id === r.action)?.label ??
+                    (r.action === "local_admin_setup" ? "Lokales Admin-Konto" : r.action)}</td>
                 <td className="p-2">
                   <StatusBadge status={r.state} />
                 </td>

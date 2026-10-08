@@ -23,12 +23,14 @@ from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.db import get_session
 from cockpit_api.models import Tenant
 from cockpit_api.models.operations import (
+    MaintenanceAction,
     MaintenanceState,
     TenantMaintenanceRequest,
     TenantSealedSecret,
     TenantStatusReport,
 )
 from cockpit_api.schemas.operations import (
+    LocalAdminSetupIn,
     MaintenanceRequestIn,
     MaintenanceRequestOut,
     SealedSecretIn,
@@ -91,6 +93,9 @@ async def accept_status(
         request.state = MaintenanceState.done if item.ok else MaintenanceState.failed
         request.finished_at = datetime.now(UTC)
         request.result = dict(item.result)
+        # Das versiegelte Passwort eines Kontoauftrags wird nicht mehr
+        # gebraucht. Nichts aufbewahren, was nicht gebraucht wird.
+        request.params = None
         logger.info("Wartungsauftrag %s für %s: %s", request.id, tenant.slug, request.state.value)
     await session.commit()
 
@@ -239,6 +244,11 @@ async def request_maintenance(
     Ein zweiter offener Auftrag derselben Art ist nicht möglich.
     """
     tenant = await _tenant(session, tenant_id)
+    if body.action is MaintenanceAction.local_admin_setup:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Das lokale Admin-Konto hat einen eigenen Weg: POST …/local-admin.",
+        )
     if body.confirm_slug.strip() != tenant.slug:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -275,6 +285,86 @@ async def request_maintenance(
     return row
 
 
+@router.post(
+    "/local-admin", response_model=MaintenanceRequestOut, status_code=status.HTTP_201_CREATED
+)
+async def setup_local_admin(
+    tenant_id: UUID,
+    body: LocalAdminSetupIn,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> TenantMaintenanceRequest:
+    """Lokales Admin-Konto im Portal des Kunden einrichten oder Passwort setzen.
+
+    Für gehostete Kunden ohne Entra ID der einzige Weg hinein ("Kein
+    Anmeldeweg eingerichtet"). Das Passwort wird sofort für die Datenebene
+    dieses Kunden versiegelt (ADR-0024 D3) und als Wartungsauftrag genau
+    einmal angewandt (D4); danach kann der Kunde es im Portal ändern, ohne
+    dass ein Abgleich es zurückstellt. Den zweiten Faktor richtet die Person
+    bei der ersten Anmeldung selbst ein — dieses TOTP-Geheimnis sieht die
+    Konsole nie.
+    """
+    tenant = await _tenant(session, tenant_id)
+    if body.password.strip().lower() == body.username:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY, "Das Passwort darf nicht der Benutzername sein."
+        )
+    row = await _report(session, tenant_id)
+    report = StatusReport.model_validate(row.payload) if row else None
+    if report is None or not report.sealed_public_key:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Die Installation dieses Kunden hat sich noch nicht gemeldet, also gibt es keinen "
+            "Schlüssel, mit dem sich das Passwort versiegeln liesse. Erst den Kunden auf der "
+            "Datenebene anbinden (Übersicht → Anbindung an die Datenebene).",
+        )
+    open_same = (
+        await session.execute(
+            select(TenantMaintenanceRequest.id)
+            .where(TenantMaintenanceRequest.tenant_id == tenant.id)
+            .where(TenantMaintenanceRequest.action == MaintenanceAction.local_admin_setup)
+            .where(TenantMaintenanceRequest.state == MaintenanceState.requested)
+        )
+    ).first()
+    if open_same is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Für diesen Kunden ist schon ein Kontoauftrag offen. Abwarten oder zurückziehen.",
+        )
+    try:
+        sealed = seal(
+            report.sealed_public_key,
+            body.password,
+            tenant_ref=str(tenant.id),
+            name="local_admin_password",
+        )
+    except SealingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    request = TenantMaintenanceRequest(
+        tenant_id=tenant.id,
+        action=MaintenanceAction.local_admin_setup,
+        reason=body.reason.strip() or "Lokales Administrationskonto einrichten",
+        requested_by=caller.actor,
+        params={
+            "username": body.username,
+            "sealed_password": sealed,
+            "reset_mfa": "1" if body.reset_mfa else "0",
+        },
+    )
+    session.add(request)
+    await session.commit()
+    await session.refresh(request)
+    # Kein Passwort, kein Siegel im Log — nur wer, für wen, welcher Name.
+    logger.info(
+        "Lokales Admin-Konto %s für %s bestellt von %s (Auftrag %s)",
+        body.username,
+        tenant.slug,
+        caller.actor,
+        request.id,
+    )
+    return request
+
+
 @router.post("/maintenance/{request_id}/cancel", response_model=MaintenanceRequestOut)
 async def cancel_maintenance(
     tenant_id: UUID,
@@ -289,6 +379,7 @@ async def cancel_maintenance(
         raise HTTPException(status.HTTP_409_CONFLICT, f"Der Auftrag ist {row.state.value}.")
     row.state = MaintenanceState.cancelled
     row.finished_at = datetime.now(UTC)
+    row.params = None
     await session.commit()
     await session.refresh(row)
     logger.info("Wartungsauftrag %s zurückgezogen von %s", row.id, caller.actor)

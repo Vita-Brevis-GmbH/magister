@@ -41,6 +41,11 @@ INFO = b"magister-sealed-secret-v1"
 #: neues Geheimnis ist eine bewusste Entscheidung, kein freies Feld.
 SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret"})
 
+#: Versiegelt, aber nicht als Einstellung gespeichert: reist in einem
+#: Wartungsauftrag und wird einmal angewandt (lokales Admin-Konto). Dieselbe
+#: Liste wie in der Datenebene.
+ONE_TIME_SEALABLE: frozenset[str] = frozenset({"local_admin_password"})
+
 
 class SealingError(ValueError):
     """Versiegeln nicht möglich (kein oder ungültiger Schlüssel)."""
@@ -81,4 +86,4 @@ def seal(public_key_b64: str, plaintext: str, *, tenant_ref: str, name: str) -> 
     return f"{VERSION}.{_b64e(eph_pub + nonce + ct)}"
 
 
-__all__ = ["SEALABLE", "SealingError", "key_id", "seal"]
+__all__ = ["ONE_TIME_SEALABLE", "SEALABLE", "SealingError", "key_id", "seal"]

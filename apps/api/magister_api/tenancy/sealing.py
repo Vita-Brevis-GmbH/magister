@@ -37,6 +37,13 @@ _DERIVE_INFO = b"magister-sealed-secret-keypair-v1"
 #: geöffnet — auch wenn die Konsole es schickt.
 SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret"})
 
+#: Versiegelt, aber **kein** Einstellungs-Geheimnis: es reist in einem
+#: Wartungsauftrag und wird genau einmal angewandt (lokales Admin-Konto).
+#: Getrennt von SEALABLE, damit der Abgleich der Einstellungen es nie
+#: anfasst — er würde sonst ein Passwort, das der Kunde geändert hat, bei
+#: jedem Lauf zurückstellen.
+ONE_TIME_SEALABLE: frozenset[str] = frozenset({"local_admin_password"})
+
 
 class UnsealError(ValueError):
     """Öffnen gescheitert. Die Meldung enthält nie Klartext oder Schlüssel."""
@@ -71,7 +78,7 @@ def key_id(public_key: str) -> str:
 
 def unseal(secrets_key: str, sealed: str, *, tenant_ref: str, name: str) -> str:
     """Ein Chiffrat aus der Konsole öffnen."""
-    if name not in SEALABLE:
+    if name not in SEALABLE | ONE_TIME_SEALABLE:
         raise UnsealError(f"'{name}' ist kein versiegelbares Geheimnis.")
     version, _, body = sealed.partition(".")
     if version != VERSION or not body:
