@@ -30,7 +30,7 @@
     in `enroll` — dafür ist der Befehl so gebaut.
 
   * **Es schreibt keine Konfiguration.** Auf dem DC steht nur der Endpunkt,
-    und den legt `magister-connector enroll --endpoint …` an. Alles andere
+    und den legt `magister-connector enroll` (Option endpoint) an. Alles andere
     (OU-Freigabe, DCs, Suchbasen) holt der Agent aus dem Cockpit (ADR-0014,
     Nachtrag „Agent auf dem DC"). Die Vorlage `config.example.json` liegt nur
     zur Ansicht daneben; ein Update überschreibt nie eine `config.json`.
