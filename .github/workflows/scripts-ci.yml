@@ -40,3 +40,6 @@ jobs:
 
       - name: Zustandsbericht für die Überwachung
         run: ./scripts/tests/plattform-zustand.test.sh
+
+      - name: Nächste Schritte nur, solange etwas offen ist
+        run: ./scripts/tests/plattform-schritte.test.sh

@@ -38,9 +38,8 @@ Der Plan ergänzt die bestehenden Prüfungen, er ersetzt sie nicht:
 | Kunde A | Profil **Schule**, Slug z.B. `thun` |
 | Kunde B | Profil **Firma**, Slug z.B. `bern` |
 | Kunde C (nur §6) | Profil **neutral**, wird im Test angelegt und wieder gekündigt |
-| Windows-Testserver | Mitglied der Test-Domäne, Ausgang TCP 46200 zur Plattform |
-| Debian/Ubuntu-VM | für das `.deb` (§5.8) |
-| Test-AD | eigene OU-Struktur je Kunde, ein Dienstkonto mit delegierten Rechten |
+| Domänencontroller | Test-DC (Windows Server 2012 R2+), Ausgang TCP 46200 zur Plattform; dort läuft der Agent |
+| Test-AD | eigene OU-Struktur je Kunde; Gruppe `Magister-Connector` mit dem DC-Computerkonto und delegierten Rechten auf den freigegebenen OUs (kein Dienstkonto) |
 | Entra | Test-Tenant mit einer App-Registrierung je Kunde |
 | Personen | 2 Operatoren (für Vier-Augen-Schritte), je Kunde: Admin, Schulleitung/Abteilungsleitung, Klassenlehrer, Fachlehrer, 3 Schüler |
 | Browser | zwei getrennte Profile (oder ein privates Fenster), damit Sitzungen von A und B gleichzeitig offen sind |
@@ -55,16 +54,16 @@ git log -1 --format=%h                   # im Protokoll notieren
 
 ## 2 · Stufe 1 — Automatisch
 
-- [ ] **A-01** CI auf dem PR-Kopf: alle Checks grün (heute 12/12).
+- [ ] **A-01** CI auf dem PR-Kopf: alle Checks grün (heute 11/11, inkl. MSI-Bau mit Prüfung der Bau-Fassung).
 - [ ] **A-02** Lokal, Datenebene:
   `cd apps/api && uv sync && uv run ruff check && uv run ruff format --check && uv run pyright && uv run pytest`
   — Erwartet: grün; DB-gestützte Tests laufen **mit** Testcluster, nicht übersprungen.
 - [ ] **A-03** Lokal, Konsole: dasselbe in `cockpit/api`.
-- [ ] **A-04** Lokal, Agent: `cd agent && uv run pytest`.
+- [ ] **A-04** Lokal, Agent: `cd agent && uv run ruff check connector_agent tests && uv run pyright && uv run pyright --pythonplatform Windows && uv run pytest`.
 - [ ] **A-05** Frontends: in `apps/web`
   `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`,
   in `cockpit/web` `pnpm lint && pnpm build` (mehr Skripte hat sie nicht).
-- [ ] **A-06** Skripte: `bash scripts/tests/plattform-konfig.test.sh` — 27/27.
+- [ ] **A-06** Skripte: `bash scripts/tests/plattform-konfig.test.sh`, `bash scripts/tests/plattform-zustand.test.sh`, `bash scripts/tests/plattform-schritte.test.sh` — alle bestanden.
 - [ ] **A-07** Prüfer gegen die Prozess-Umgebung (auf einer Entwicklermaschine):
   `./scripts/dev-umgebung.sh up && ./scripts/dev-pruefen.sh` — **38 bestanden, 0 gescheitert**.
 - [ ] **A-08** Integrations-Test der Trennung:
@@ -173,44 +172,66 @@ nicht (§11, L-02) — dafür die API (`PUT /api/platform/settings`,
 - [ ] **K-60** `sudo ./scripts/plattform-aufbau.sh ops-agent`, dann Plattform → „Neu starten": innerhalb von 20 s läuft der Auftrag, Protokoll erscheint, Zustand `success`, bestellt von <eigener UPN>. „Update einspielen" ebenso (git pull + Neubau).
 - [ ] **K-61** Im Kundenportal gibt es gehostet keinen Menüpunkt „System"; `POST /api/admin/system/restart` → 404, `POST /api/admin/demo-data/purge` → 404.
 - [ ] **K-62** Wartung bei Kunde C: „Aktivitäten zurücksetzen" mit Grund und Kürzel erfassen → nach dem nächsten Abgleich `done` mit Zählern; im Kundenprotokoll steht genau ein Eintrag mit `vita-brevis:<UPN>` und dem Grund. Falscher Kürzel → 422; zweiter offener Auftrag gleicher Art → 409.
-- [ ] **K-63** AD-Connector → „Verbindung testen": mit laufendem Agenten „Anmeldung des Dienstkontos gelungen"; Agent gestoppt → Auftrag verfällt mit Hinweis auf Dienst/Port; falsches Bind-Passwort → „Dienstkonto abgewiesen".
+- [ ] **K-63** AD-Connector → „Verbindung testen": mit laufendem Agenten „Kerberos-Anmeldung als Maschinenkonto des DC über LDAPS gelungen"; Agent gestoppt → Auftrag verfällt mit Hinweis auf Dienst/Port.
+- [ ] **K-64** Einstellungen → Active Directory: nur Suchbasen (Benutzer, Gruppen, Computer), Intervall und DCs — keine OU-Felder für Schüler/Lehrpersonen, unabhängig vom Profil.
+- [ ] **K-65** „Zugriff“: Erklärkasten vorhanden; Schein öffnen → Portal lesend, Hinweisbalken beim Kunden, Schreibversuch abgewiesen.
 
-## 5 · Stufe 4 — AD-Connector-Agent (echter Agent, echtes AD)
+## 5 · Stufe 4 — AD-Connector-Agent auf dem DC (echter Agent, echtes AD)
 
-### 5.1 Windows-MSI
+Der Agent läuft **auf dem Domänencontroller** (LocalSystem) und bindet sich per
+Kerberos als **Maschinenkonto des DC** ans AD; alle Einstellungen stehen im
+Cockpit (ADR-0014, Nachtrag „Agent auf dem DC“). Vorbereitung: Gruppe
+`Magister-Connector` mit dem Computerkonto des DC, auf den freizugebenden OUs
+„Kennwörter zurücksetzen“, „Benutzerkonten verwalten“, „Gruppenmitgliedschaft
+ändern“ delegiert, danach `klist -li 0x3e7 purge` (INSTALL.txt, Schritt 1).
 
-- [ ] **C-01** Paket in der Konsole (Kunde A → AD-Connector) herunterladen: neueste Fassung je Plattform oben, ältere aufklappbar.
-- [ ] **C-02** `msiexec /i magister-connector-*.msi /l*v install.log` → kein Fehler 1620, Dienst installiert und läuft.
-- [ ] **C-03** Deinstallieren und wieder installieren; Upgrade von älterer Fassung → Dienst bleibt angemeldet, keine doppelten Einträge.
+### 5.1 Paket und Installation
+
+- [ ] **C-01** Auf dev01 `./scripts/agentenpakete.sh holen` (bzw. `plattform-aufbau.sh update` mit Token) → Cockpit, Kunde A → AD-Connector → „Agent herunterladen“ zeigt oben `magister-connector-0.2.<N>-x64-<commit>.msi`, darunter „Stammzertifikat der Plattform“ mit Fingerprint.
+- [ ] **C-02** Auf dem DC `msiexec /i magister-connector-0.2.<N>-x64-….msi /l*v C:\Temp\msi.log` → kein Fehler, Dienst `MagisterConnector` installiert (gestoppt), `magister-connector --version` = `0.2.<N> (<commit>)`.
+- [ ] **C-03** Update: ein neueres MSI über das installierte → Version steigt, Anmeldung bleibt, keine zwei Einträge in „Apps & Features“; danach `sc start MagisterConnector`.
 - [ ] **C-04** ⚠ erwartet (L-04): SmartScreen-Warnung erscheint, weil das MSI unsigniert ist.
+- [ ] **C-05** root.pem aus dem Cockpit: Fingerprint auf dem DC mit `(Get-PfxCertificate root.pem).GetCertHashString('SHA256')` = Anzeige im Cockpit.
 
 ### 5.2 Anmeldung des Agenten
 
-- [ ] **C-10** Einmal-Token aus der Konsole, `endpoint` = Name aus dem Zertifikat → Anmeldung gelingt; Token ein zweites Mal → abgelehnt; Token nach 24 h → abgelehnt.
-- [ ] **C-11** `endpoint` als IP-Adresse → `enroll` scheitert mit „Das Zertifikat der Plattform gilt nicht für '<IP>' … an der Firewall liegt es nicht"; **kein** Hinweis auf TCP 46200.
-- [ ] **C-12** Port 46200 blockiert → „Keine Antwort von …" bzw. „Verbindung … abgewiesen"; Name nicht auflösbar → „lässt sich nicht auflösen". Fremdes `ca_bundle` → Meldung nennt `ca_bundle`.
-- [ ] **C-13** `magister-connector check` auf dem DC in einer **neuen** Eingabeaufforderung als Administrator → Zeilen *Endpunkt* (Warnung bei IP), *Rechte*, *Anmeldung*, *Zertifikat*, *Kanal* (echter TLS-Handshake), *Cockpit* (Konfiguration geholt), *OU-Freigabe* (aus dem Cockpit; eine Freigabe auf `OU=Domain Controllers` erscheint als „VERWORFEN"), *DC* und *AD* (LDAPS mit Kerberos-Anmeldung). Kein Passwort wird abgefragt oder angezeigt.
+- [ ] **C-10** Einmal-Token aus dem Cockpit; die Karte zeigt die `enroll`-Zeile. `magister-connector enroll --endpoint https://connect.<domäne>:46200 --ca C:\Temp\root.pem` → Fingerprint stimmt mit dem Cockpit überein, Einstellungen geholt, Dienst gestartet. Token ein zweites Mal → abgelehnt; nach 24 h → abgelehnt.
+- [ ] **C-11** `--endpoint` mit IP-Adresse → `enroll` scheitert mit „Das Zertifikat der Plattform gilt nicht für '<IP>' … an der Firewall liegt es nicht“.
+- [ ] **C-12** Port 46200 blockiert → „Keine Antwort von …“ bzw. „Verbindung … abgewiesen“; Name nicht auflösbar → „lässt sich nicht auflösen“; ohne `--ca` bei eigener CA → Meldung zur nicht vertrauenswürdigen Stelle.
+- [ ] **C-13** `magister-connector check` als Administrator → *Endpunkt*, *Rechte*, *Anmeldung*, *Zertifikat*, *Kanal*, *Cockpit* (Konfiguration geholt), *OU-Freigabe* (Anzahl aus dem Cockpit), *DC*, *AD* („LDAPS mit Kerberos-Anmeldung gelungen“), am Ende „Alles bereit.“. Kein Passwort wird abgefragt oder angezeigt.
 - [ ] **C-13a** Nach Deinstallation ist der Ordner wieder aus dem System-PATH entfernt.
-- [ ] **C-14** Privater Schlüssel liegt nur auf dem Agenten (Dateirechte: nur SYSTEM/Administratoren); im Download-Paket kein Geheimnis ausser dem Einmal-Token.
+- [ ] **C-14** Privater Schlüssel nur unter `C:\ProgramData\Magister Connector` (Rechte: nur SYSTEM/Administratoren); auf dem DC kein AD-Passwort, keine `ad.env`, kein Dienstkonto.
+- [ ] **C-15** Cockpit → Agent → Spalte „Fassung“ zeigt dieselbe Nummer wie `--version` (spätestens 5 Minuten nach dem Start).
 
-### 5.3 Betrieb über den Agenten
+### 5.3 Freigabe und Grenzen (alles im Cockpit)
 
-- [ ] **C-20** AD-Abgleich (Einstellungen → Systemeinstellungen → „AD synchronisieren") → erwartete Benutzerzahl; zweiter Lauf inkrementell (nur Geänderte).
-- [ ] **C-21** PW-Reset an Test-Schüler (generiert und manuell) → Anmeldung am Domänen-PC mit neuem Passwort, Zwangswechsel greift.
+- [ ] **C-16** „Freigabe im AD“: `DC=…` (ganze Domäne) oder `OU=Domain Controllers,…` speichern → abgelehnt mit Grund. Gültige OUs speichern → `check` zeigt nach ≤ 5 Minuten die neue Anzahl, ohne Neustart des Dienstes.
+- [ ] **C-17** Weitere geschützte Gruppe eintragen (z. B. `Schulleitung`) → Aufnahme eines Kontos in diese Gruppe über Magister wird vom Agenten abgelehnt; Domänen-Admins bleiben immer gesperrt.
+- [ ] **C-18** PW-Reset an einem Konto mit `adminCount=1` (z. B. ehemaliger Admin in der freigegebenen OU) → abgelehnt („geschütztes AD-Konto“), im AD nichts geändert.
+- [ ] **C-19** Such-Basis Benutzer = `DC=…` (über der Freigabe) → Abgleich liest nur die freigegebenen OUs (Benutzerzahl = Summe der OUs); Such-Basis neben der Freigabe → Portal meldet „ausserhalb der freigegebenen OUs“.
+
+### 5.4 Betrieb über den Agenten
+
+- [ ] **C-20** Portal → „Jetzt synchronisieren“ → Ergebnis mit Benutzer-, Gruppen- und Gerätezahl nach **Sekunden** (nicht Minuten); zweiter Lauf inkrementell. Cockpit → AD-Connector → Aufträge: vier Suchen, jeweils „erstellt“ → „fertig“ in Sekunden.
+- [ ] **C-20a** Abgleich-Intervall im Cockpit von 15 auf 1 Minute → der nächste automatische Lauf kommt nach ≤ 2 Minuten.
+- [ ] **C-21** PW-Reset an Test-Schüler, -Lehrperson und -Benutzer, **generiert und eigenes Passwort** (≥ 12 Zeichen, komplex) → gesetzt in < 10 s, Anmeldung am Domänen-PC mit neuem Passwort, Zwangswechsel greift.
+- [ ] **C-21a** Eigenes Passwort, das die AD-Richtlinie verletzt (z. B. im Kennwortverlauf) → „entspricht nicht den Richtlinien“ (nicht „AD nicht erreichbar“), im Audit `password_rejected_by_ad`.
+- [ ] **C-21b** PW-Reset während ein voller Abgleich läuft → Reset trotzdem in < 10 s durch.
 - [ ] **C-22** Benutzersuche, Aktivieren/Deaktivieren, Namensänderung (Kaskade UPN/Mail/sAMAccountName, alter Alias bleibt), Mail-Alias hinzufügen.
-- [ ] **C-23** Schüler-Provisioning per CSV → Konten in der richtigen OU, Zugangsdaten-PDF.
-- [ ] **C-24** **Agent stoppen** → PW-Reset zeigt „AD nicht erreichbar" (503 `ad_unavailable`), kein Hänger, kein 500; Agent starten → geht wieder. Ein verfallener Auftrag wird **nicht** nachträglich ausgeführt.
-- [ ] **C-25** Agent in der Konsole widerrufen → nächste Anfrage des Agenten abgelehnt.
+- [ ] **C-23** Schüler-Provisioning per CSV → Konten in der richtigen OU (Standort/Zielrolle), Zugangsdaten-PDF.
+- [ ] **C-24** **Dienst auf dem DC stoppen** → Portal: Reset „AD nicht erreichbar“, Abgleich „AD-Connector antwortet nicht“, kein Hänger, kein 500; Dienst starten → geht wieder. Ein verfallener Auftrag wird **nicht** nachträglich ausgeführt.
+- [ ] **C-24a** Plattform kurz anhalten, DC neu starten, Plattform wieder starten → Agent arbeitet mit der zuletzt geholten Konfiguration weiter und holt die neue nach.
+- [ ] **C-25** Agent im Cockpit widerrufen → nächste Anfrage des Agenten abgelehnt.
 - [ ] **C-26** Client-Zertifikat von A auf dem Kanal von B → abgewiesen.
 - [ ] **C-27** Methode ausserhalb der Allowlist einschleusen → plattformseitig verweigert.
 - [ ] **C-28** Zertifikatserneuerung: Ablauf künstlich nahe setzen (Test-CA) → Agent erneuert selbst, ohne Unterbruch.
-- [ ] **C-29** LDAPS: Agent spricht nur Port 636, signed+sealed; Mitschnitt auf dem Agenten-Server zeigt kein Klartext-LDAP.
+- [ ] **C-29** LDAPS: Agent spricht nur Port 636 (Kerberos-SASL über TLS); Mitschnitt auf dem DC zeigt kein Klartext-LDAP.
 - [ ] **C-30** Ein Kunde mit kaputtem AD (falsche Suchbasis) hält den Abgleich des anderen nicht auf.
 
-### 5.4 Debian-Paket
+### 5.5 Deinstallation
 
-- [ ] **C-40** `apt install ./magister-connector_*.deb` → Dienst, Rechte, Anmeldung wie C-10; `apt purge` entfernt Schlüssel und Konfiguration.
-- [ ] **C-41** apt-Repository mit GPG-Signatur → `apt update` ohne Warnung; manipulierte `Release` → abgelehnt.
+- [ ] **C-40** Startmenü → „Connector-Agent deinstallieren“ (als Administrator) → Agent im Cockpit „Vom Agenten selbst abgemeldet“, Schlüssel gelöscht, Programm entfernt.
+- [ ] **C-41** Deinstallation über „Apps & Features“ → Anmeldung und Schlüssel bleiben liegen (für Neuinstallation), Hinweis in INSTALL.txt stimmt.
 
 ## 6 · Stufe 5 — Modularität (ADR-0008)
 
@@ -306,7 +327,7 @@ Der Stand ist **abnahmefähig für den ersten Fremdkunden**, wenn:
 Ergebnis mit Datum, Commit (`git log -1`) und Name in den PR oder ein
 Abnahme-Issue schreiben.
 
-## 11 · Bekannte Lücken (Stand 2026-10-06)
+## 11 · Bekannte Lücken (Stand 2026-10-08)
 
 | ID | Lücke | Wirkung | Fall |
 |---|---|---|---|
@@ -321,3 +342,5 @@ Abnahme-Issue schreiben.
 | ~~L-09~~ | **Behoben 2026-10-06 (ADR-0024 D6).** Tägliche Sicherung in der Konsole, Prüfer als Timer. | — | K-47, K-48 |
 | L-10 | Organisatorisch offen: CA-Zeremonie (bis dahin nur Test-CA → kein echter Agent beim Fremdkunden), externer Pentest, Wildcard-Zertifikat. | blockiert ersten gehosteten Fremdkunden | §10 Punkt 5 |
 | ~~L-11~~ | **Behoben 2026-10-05.** Hostname wird beim Anlegen auf Form, Plattform-Domäne (eine Ebene) und reservierte Namen geprüft. | — | K-11a |
+| ~~L-12~~ | **Behoben 2026-10-08.** Agent auf dem DC (Kerberos als Maschinenkonto), Einstellungen aus dem Cockpit, ganzer Abgleich über den Agenten, Reset ohne Warten auf den Abgleich, eindeutige MSI-Fassung, eigenes Passwort ohne Probe-Anmeldung. | — | C-01–C-24a |
+| L-13 | Nach einem MSI-Update startet der Dienst nicht von selbst (`sc start MagisterConnector`). | ein Handgriff je Update | C-03 |

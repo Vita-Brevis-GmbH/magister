@@ -185,6 +185,20 @@ describe("SyncAdAction", () => {
     expect(screen.queryByText(/oben eine gültige DN/i)).toBeNull();
   });
 
+  it.each([
+    ["ad_connector_scope", /ausserhalb der freigegebenen OUs/i],
+    ["ad_connector_offline", /Magister Connector-Agent/i],
+  ])("names the AD connector's reason %s instead of 'unreachable'", async (code, text) => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: code }, { status: 503 }));
+    renderAction(true);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /synchronisieren/i }));
+    await waitFor(() => {
+      expect(screen.getByText(text)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/^AD nicht erreichbar\.$/)).toBeNull();
+  });
+
   it("triggers a full sync and reports the counts", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ synced_count: 42, group_count: 3, device_count: 0 }),

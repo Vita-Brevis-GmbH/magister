@@ -387,6 +387,34 @@ class TestOnlyAPersonWritesToACustomerLog:
         assert response.status_code == 403
         assert "Person" in response.json()["detail"]
 
+    def test_the_ad_approval_refuses_a_service_token(
+        self, console_client: TestClient, service_token: str
+    ) -> None:
+        """Die OU-Freigabe des Agenten auf dem DC ist die Schranke zum AD.
+
+        Wer sie ändert, steht im Protokoll — und das ist ein Mensch, kein Token
+        aus einem Container.
+        """
+        created = console_client.post(
+            "/api/tenants",
+            json={"slug": "freigabe", "name": "freigabe", "hostname": "freigabe.magister.test"},
+        )
+        assert created.status_code in (201, 202), created.text
+        tenant_id = created.json()["tenant"]["id"]
+        response = console_client.put(
+            f"/api/tenants/{tenant_id}/connector-settings",
+            json={"allowed_ous": ["OU=Schule,DC=x,DC=y"]},
+            headers=self._as_service(console_client, service_token),
+        )
+        assert response.status_code == 403
+        assert "Person" in response.json()["detail"]
+        # Lesen darf der Dienst — wie bei den Einstellungen.
+        read = console_client.get(
+            f"/api/tenants/{tenant_id}/connector-settings",
+            headers=self._as_service(console_client, service_token),
+        )
+        assert read.status_code == 200, read.text
+
     def test_reading_still_works_for_a_service_token(
         self, console_client: TestClient, service_token: str
     ) -> None:

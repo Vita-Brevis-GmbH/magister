@@ -43,13 +43,13 @@ if TYPE_CHECKING:
     from connector_agent.runner import Runner
 
 #: Fassung des Quelltexts. Die ausgelieferte Fassung trägt zusätzlich die
-#: Nummer des CI-Laufs (``0.2.<lauf>``), siehe :func:`_build_info` — sonst
+#: Nummer des CI-Laufs (``0.2.<lauf>``), siehe :func:`build_info` — sonst
 #: hiesse jedes MSI „0.2.0“, und auf dem DC wäre nicht zu erkennen, ob die neue
 #: Fassung läuft.
 BASE_VERSION = "0.2.0"
 
 
-def _build_info() -> tuple[str, str]:
+def build_info() -> tuple[str, str]:
     """(Version, Commit) des Baus — aus ``connector_agent/_build.py``, das die CI schreibt.
 
     Über importlib: die Datei gibt es nur im gebauten Paket, nicht im
@@ -67,7 +67,7 @@ def _build_info() -> tuple[str, str]:
     )
 
 
-VERSION, BUILD_COMMIT = _build_info()
+VERSION, BUILD_COMMIT = build_info()
 
 logger = logging.getLogger("connector_agent")
 
