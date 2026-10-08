@@ -104,9 +104,9 @@ RECONCILABLE: frozenset[str] = frozenset(
         "ad_computers_search_base",
         "ad_groups_search_base",
         "ad_sync_interval_minutes",
-        "ad_ou_students_other",
-        "ad_ou_teachers",
-        "ad_groups_teacher",
+        # OUs und Gruppen für Schüler:innen und Lehrpersonen setzt die Konsole
+        # nicht mehr: sie gehören an Standort und Zielrollen im Portal und
+        # bleiben dort, wie der Kunde sie pflegt.
         "password_store_enabled",
         "instance_profile",
         "module_overrides",
