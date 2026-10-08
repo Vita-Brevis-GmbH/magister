@@ -79,7 +79,7 @@ def _run_check(
         return probe
 
     def _fetch(
-        _config: AgentConfig, _secrets: AgentSecrets
+        _config: AgentConfig, _secrets: AgentSecrets, **_kw: Any
     ) -> tuple[remote_cfg.RemoteConfig, dict[str, Any]]:
         if remote is None:
             raise remote_cfg.RemoteConfigError("Konfiguration nicht geholt (HTTP 503).")

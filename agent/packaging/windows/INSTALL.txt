@@ -118,6 +118,28 @@ der Dienst mit dem Maschinenkonto. Ob die delegierten Rechte (Schritt 1)
 reichen, zeigt der Verbindungstest und der erste Auftrag im Cockpit.
 
 
+Aktualisieren
+-------------
+Das neue MSI einfach über das alte installieren (Eingabeaufforderung als
+Administrator):
+
+    msiexec /i magister-connector-0.2.NNN-x64.msi /l*v C:\Temp\magister-msi.log
+    sc start MagisterConnector
+
+Anmeldung, Schlüssel und Einstellungen bleiben erhalten. Das Update hält den
+Dienst an; danach von Hand starten (zweite Zeile).
+
+Welche Fassung läuft:
+
+    magister-connector --version
+
+Im Cockpit steht dieselbe Nummer beim Agenten unter "AD-Connector".
+
+Hinweis für Pakete vor 0.2.100: sie hiessen alle "0.2.0". Wer ein solches
+installiert hat, entfernt es einmal über "Apps & Features" (Anmeldung und
+Schlüssel bleiben dabei liegen), installiert das neue und startet den Dienst.
+
+
 Das Zertifikat erneuert sich selbst
 -----------------------------------
 Das Zertifikat des Agenten gilt 90 Tage. Der Dienst erneuert es selbständig, 30

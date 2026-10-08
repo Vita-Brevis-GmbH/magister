@@ -64,7 +64,7 @@ fi
 # Zahlen; alles darüber hinaus (Vorabkennungen wie "0.1.0rc1") wirft Windows
 # ohnehin weg, deshalb wird hier abgeschnitten und nicht geraten.
 if [[ -z "$VERSION" ]]; then
-    VERSION=$(grep -oP '^VERSION\s*=\s*"\K[^"]+' "$HERE/../../connector_agent/cli.py" || true)
+    VERSION=$(grep -oP '^BASE_VERSION\s*=\s*"\K[^"]+' "$HERE/../../connector_agent/cli.py" || true)
 fi
 VERSION="${VERSION:-0.0.0}"
 MSI_VERSION=$(echo "$VERSION" | grep -oE '^[0-9]+(\.[0-9]+){0,2}' || echo "0.0.0")

@@ -44,6 +44,7 @@ import logging
 import uuid
 from collections.abc import Callable
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from magister_api.ad.client import AdClient
@@ -51,6 +52,7 @@ from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.factory import ad_backend, ad_missing_settings, build_ad_client
 from magister_api.auth.effective_settings import load_effective_settings
 from magister_api.config import Settings
+from magister_api.models.app_settings import AppSettings
 from magister_api.services.ad_sync import AdSyncService
 from magister_api.tenancy.context import get_engines, get_registry
 from magister_api.tenancy.keys import attach_keys, resolve_tenant_keys
@@ -65,6 +67,12 @@ SCHEDULER_ACTOR_UPN = "system:ad-sync-scheduler"
 #: sinnvollen Sync-Intervall (Minimum ist eine Minute) und gross genug, dass
 #: das Nachsehen nichts kostet.
 TICK_SECONDS = 5.0
+
+#: Wie oft das Intervall eines wartenden Kunden nachgelesen wird. Ohne das
+#: galt ein verkürztes Intervall erst nach dem schon geplanten Termin: von 15
+#: auf 1 Minute gestellt, lief der nächste Abgleich trotzdem erst nach bis zu
+#: 15 Minuten.
+INTERVAL_RECHECK_SECONDS = 60.0
 
 #: Typ der Sitzungsfabrik je Mandant. Injizierbar, damit ein Test nicht die
 #: Prozess-Globalen aus `tenancy.context` aufbauen muss — dieselbe Bauart wie
@@ -168,6 +176,34 @@ async def sync_tenant(
     return interval
 
 
+async def peek_interval(
+    base_settings: Settings,
+    tenant: Tenant,
+    *,
+    session_factory: SessionFactoryFor = _default_session_factory,
+) -> int | None:
+    """Das aktuelle Intervall eines Kunden in Minuten — ein Feld, kein Abgleich.
+
+    Liest nur die Zahl; Schlüssel braucht es dafür nicht. ``None``, wenn es
+    sich nicht lesen lässt — dann bleibt der Fahrplan, wie er ist.
+    """
+    try:
+        async with session_factory(tenant)() as session:
+            await apply_tenant_scope(
+                session, tenant, extension_schema=base_settings.extension_schema
+            )
+            value = (
+                await session.execute(
+                    select(AppSettings.ad_sync_interval_minutes).where(AppSettings.id == 1)
+                )
+            ).scalar_one_or_none()
+            await session.rollback()
+    except Exception as exc:
+        logger.debug("Intervall von %s nicht lesbar: %s", tenant.slug, type(exc).__name__)
+        return None
+    return max(1, int(value)) if value else None
+
+
 def _initial_due(now: float, tenants: list[Tenant], interval_minutes: int) -> dict[str, float]:
     """Startzeitpunkte, über das Intervall verteilt.
 
@@ -194,6 +230,10 @@ async def run_ad_sync_loop(
     loop = asyncio.get_running_loop()
     due: dict[str, float] = {}
     known: set[str] = set()
+    #: Wann ein Kunde zuletzt abgeglichen wurde und wann sein Intervall
+    #: zuletzt nachgelesen — für ein verkürztes Intervall (siehe oben).
+    last_run: dict[str, float] = {}
+    checked: dict[str, float] = {}
 
     while not stop_event.is_set():
         try:
@@ -218,6 +258,19 @@ async def run_ad_sync_loop(
             for tenant in tenants:
                 if stop_event.is_set():
                     break
+                if (
+                    now < due.get(tenant.slug, 0.0)
+                    and tenant.slug in last_run
+                    and now - checked.get(tenant.slug, now) >= INTERVAL_RECHECK_SECONDS
+                ):
+                    checked[tenant.slug] = now
+                    minutes = await peek_interval(
+                        base_settings, tenant, session_factory=session_factory
+                    )
+                    if minutes is not None:
+                        due[tenant.slug] = min(
+                            due[tenant.slug], last_run[tenant.slug] + minutes * 60.0
+                        )
                 if now < due.get(tenant.slug, 0.0):
                     continue
                 if not tenant.status.serves_requests:
@@ -240,7 +293,8 @@ async def run_ad_sync_loop(
                     # alle fünf Sekunden erneut.
                     logger.exception("Geplanter AD-Abgleich für %s gescheitert", tenant.slug)
                     interval = max(1, base_settings.ad_sync_interval_minutes)
-                due[tenant.slug] = loop.time() + interval * 60.0
+                last_run[tenant.slug] = checked[tenant.slug] = loop.time()
+                due[tenant.slug] = last_run[tenant.slug] + interval * 60.0
         except Exception:
             # Eine schlechte Runde darf die Schleife nicht töten.
             logger.exception("Runde der AD-Abgleich-Schleife gescheitert")
@@ -255,7 +309,9 @@ async def run_ad_sync_loop(
 __all__ = [
     "SCHEDULER_ACTOR_UPN",
     "AdClientFactory",
+    "INTERVAL_RECHECK_SECONDS",
     "TICK_SECONDS",
     "run_ad_sync_loop",
+    "peek_interval",
     "sync_tenant",
 ]

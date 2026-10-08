@@ -20,6 +20,7 @@ import asyncio
 import contextlib
 import uuid
 from collections.abc import AsyncIterator, Callable
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -441,3 +442,57 @@ class TestTheStagger:
         """
         tenants = [_tenant(f"k{i}", database_url) for i in range(3)]
         assert _initial_due(42.0, tenants, 30) == _initial_due(42.0, tenants, 30)
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("tenant_keys")
+async def test_a_shorter_interval_takes_effect_without_waiting_out_the_old_one(
+    engine: AsyncEngine,
+    app_settings: Settings,
+    database_url: str,
+    seeded_mock_client: AdClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Von 15 auf 1 Minute gestellt: der nächste Lauf kommt nach dem neuen Intervall.
+
+    Vorher stand der Termin aus dem alten Intervall fest, und der Abgleich lief
+    trotz „jede Minute“ erst nach bis zu einer Viertelstunde wieder.
+    """
+    import magister_api.services.ad_sync_scheduler as sched
+
+    base = app_settings.model_copy(
+        update={"ad_use_mock": True, "ad_users_search_base": "DC=schule,DC=local"}
+    )
+    sm = async_sessionmaker(engine, expire_on_commit=False, autoflush=False)
+    registry = TenantRegistry([_tenant("alpha", database_url)])
+    runs: list[str] = []
+
+    async def _sync(*_a: Any, **_k: Any) -> int:
+        runs.append("alpha")
+        return 15  # Minuten — ohne Nachlesen käme der nächste Lauf erst dann
+
+    async def _peek(*_a: Any, **_k: Any) -> int:
+        return 0  # das neue, kürzere Intervall: sofort wieder fällig
+
+    monkeypatch.setattr(sched, "sync_tenant", _sync)
+    monkeypatch.setattr(sched, "peek_interval", _peek)
+    monkeypatch.setattr(sched, "INTERVAL_RECHECK_SECONDS", 0.0)
+
+    stop = asyncio.Event()
+    task = asyncio.create_task(
+        sched.run_ad_sync_loop(
+            base,
+            stop_event=stop,
+            client_factory=lambda _b, _s, _t: seeded_mock_client,
+            read_registry=lambda: registry,
+            session_factory=lambda _t: sm,
+        )
+    )
+    try:
+        await _until(lambda: len(runs) >= 2, timeout_s=TICK_SECONDS * 4)
+    finally:
+        stop.set()
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+    assert len(runs) >= 2, runs

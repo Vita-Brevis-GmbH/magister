@@ -22,6 +22,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Annotated, cast
 from uuid import UUID
@@ -471,12 +472,34 @@ async def renew(
     )
 
 
+#: ``User-Agent`` des Agenten: ``magister-connector-agent/0.2.186``.
+_AGENT_UA = re.compile(r"magister-connector-agent/([0-9][0-9A-Za-z.+-]{0,31})")
+
+
+def _note_running_version(agent: ConnectorAgent, user_agent: str) -> None:
+    """Die Fassung festhalten, die gerade läuft — nicht nur die bei der Anmeldung.
+
+    Ohne das zeigte die Konsole nach einem MSI-Update weiter die alte Nummer,
+    und ob die neue Fassung auf dem DC läuft, liess sich nur dort nachsehen.
+    """
+    match = _AGENT_UA.fullmatch(user_agent.strip())
+    if match and agent.agent_version != match.group(1):
+        logger.info(
+            "Agent %s läuft jetzt mit Fassung %s (vorher %s)",
+            agent.name,
+            match.group(1),
+            agent.agent_version or "-",
+        )
+        agent.agent_version = match.group(1)
+
+
 def _opt_str(value: object) -> str | None:
     return value.strip() or None if isinstance(value, str) else None
 
 
 @agent_api.get("/config", response_model=AgentRemoteConfig)
 async def agent_config(
+    request: Request,
     identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
     session: AsyncSession = Depends(get_session),
 ) -> AgentRemoteConfig:
@@ -486,7 +509,8 @@ async def agent_config(
     eigene: der Kunde kommt aus der Agent-Zeile. Kein Geheimnis darin — der
     Agent meldet sich am AD als Maschinenkonto des DC per Kerberos an.
     """
-    _agent, tenant = identity
+    agent, tenant = identity
+    _note_running_version(agent, request.headers.get("user-agent", ""))
     scope = await _connector_settings(session, tenant.id)
     desired = (await SettingsService(session).desired_state(tenant))["settings"]
     dcs_raw: object = desired.get("ad_dcs")

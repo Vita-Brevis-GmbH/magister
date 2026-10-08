@@ -42,7 +42,32 @@ from connector_agent.enrollment import EnrollmentFailedError, enroll
 if TYPE_CHECKING:
     from connector_agent.runner import Runner
 
-VERSION = "0.2.0"
+#: Fassung des Quelltexts. Die ausgelieferte Fassung trägt zusätzlich die
+#: Nummer des CI-Laufs (``0.2.<lauf>``), siehe :func:`_build_info` — sonst
+#: hiesse jedes MSI „0.2.0“, und auf dem DC wäre nicht zu erkennen, ob die neue
+#: Fassung läuft.
+BASE_VERSION = "0.2.0"
+
+
+def _build_info() -> tuple[str, str]:
+    """(Version, Commit) des Baus — aus ``connector_agent/_build.py``, das die CI schreibt.
+
+    Über importlib: die Datei gibt es nur im gebauten Paket, nicht im
+    Quelltext.
+    """
+    import importlib
+
+    try:
+        module = importlib.import_module("connector_agent._build")
+    except ImportError:
+        return BASE_VERSION, ""
+    return (
+        str(getattr(module, "BUILD_VERSION", BASE_VERSION)),
+        str(getattr(module, "BUILD_COMMIT", "")),
+    )
+
+
+VERSION, BUILD_COMMIT = _build_info()
 
 logger = logging.getLogger("connector_agent")
 
@@ -113,7 +138,7 @@ def cmd_enroll(args: argparse.Namespace) -> int:
     secrets = load_secrets(config)
     if secrets is not None:
         try:
-            remote, raw = remote_cfg.fetch_sync(config, secrets)
+            remote, raw = remote_cfg.fetch_sync(config, secrets, agent_version=VERSION)
             remote_cfg.save_cache(config, raw)
             sys.stdout.write(f"{remote_cfg.describe(remote)}\n")
             if not remote.allowed_ous:
@@ -137,7 +162,7 @@ def initial_remote(config: AgentConfig, secrets: AgentSecrets) -> remote_cfg.Rem
     zu tun, und ohne bekannten DC nichts, wogegen er arbeiten könnte.
     """
     try:
-        remote, raw = remote_cfg.fetch_sync(config, secrets)
+        remote, raw = remote_cfg.fetch_sync(config, secrets, agent_version=VERSION)
     except Exception as exc:
         cached = remote_cfg.load_cache(config)
         if cached is None:
@@ -280,7 +305,7 @@ def cmd_check(args: argparse.Namespace) -> int:
     remote: remote_cfg.RemoteConfig | None = None
     if secrets is not None:
         try:
-            remote, _raw = remote_cfg.fetch_sync(config, secrets)
+            remote, _raw = remote_cfg.fetch_sync(config, secrets, agent_version=VERSION)
             sys.stdout.write(f"Cockpit:      ok — Konfiguration {remote.revision or '-'}\n")
         except Exception as exc:
             remote = remote_cfg.load_cache(config)
@@ -521,7 +546,11 @@ def main(argv: list[str] | None = None) -> int:
         help="Pfad zur Konfigurationsdatei (Vorgabe: %(default)s)",
     )
     parser.add_argument("-v", "--verbose", action="store_true")
-    parser.add_argument("--version", action="version", version=VERSION)
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"{VERSION} ({BUILD_COMMIT})" if BUILD_COMMIT else VERSION,
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     enroll_cmd = sub.add_parser(

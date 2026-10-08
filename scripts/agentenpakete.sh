@@ -438,7 +438,7 @@ cmd_msi() {
   fi
 
   local version
-  version="$(grep -oP '^VERSION\s*=\s*"\K[^"]+' "$REPO/agent/connector_agent/cli.py" || echo "0.0.0")"
+  version="$(grep -oP '^BASE_VERSION\s*=\s*"\K[^"]+' "$REPO/agent/connector_agent/cli.py" || echo "0.0.0")"
   local out="$ziel/magister-connector-${version}-x64.msi"
   say "MSI bauen aus $payload"
   # Die .exe-Dateien kommen aus einem ZIP ohne Ausführungsrecht; wixl stört

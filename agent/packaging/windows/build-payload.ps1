@@ -36,6 +36,10 @@ uv python install 3.12
 uv sync --extra packaging
 if ($LASTEXITCODE -ne 0) { throw "uv sync ist gescheitert." }
 
+Write-Host "==> Fassung des Baus" -ForegroundColor Cyan
+uv run python packaging/bau_fassung.py
+if ($LASTEXITCODE -ne 0) { throw "Fassung nicht bestimmbar (git im Suchpfad, ganze Geschichte?)." }
+
 Write-Host "==> PyInstaller" -ForegroundColor Cyan
 uv run pyinstaller --clean --noconfirm packaging/windows/magister-connector.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller ist gescheitert." }

@@ -150,6 +150,7 @@ def fetch_sync(
     config: AgentConfig,
     secrets: AgentSecrets,
     *,
+    agent_version: str = "",
     transport: httpx.BaseTransport | None = None,
 ) -> tuple[RemoteConfig, dict[str, Any]]:
     """Dasselbe für die Kommandozeile (``enroll``, ``check``)."""
@@ -161,7 +162,11 @@ def fetch_sync(
         trust_env=False,
         proxy=config.proxy,
         transport=transport,
-        headers={"X-Connector-Api-Key": secrets.api_key},
+        headers={
+            "X-Connector-Api-Key": secrets.api_key,
+            # Daran erkennt die Konsole, welche Fassung auf dem DC läuft.
+            "User-Agent": f"magister-connector-agent/{agent_version or 'unbekannt'}",
+        },
     ) as client:
         raw = _decode(client.get("/connector/config"))
     return parse(raw), raw

@@ -1038,9 +1038,18 @@ class TestConnectorSettings:
         )
         agent = _enroll(db_client, tenant_a, agent_headers)
 
-        resp = db_client.get("/connector/config", headers=_auth(agent, agent_headers))
+        resp = db_client.get(
+            "/connector/config",
+            headers={
+                **_auth(agent, agent_headers),
+                "User-Agent": "magister-connector-agent/0.2.186",
+            },
+        )
         assert resp.status_code == 200, resp.text
         body = resp.json()
+        # Die laufende Fassung steht danach beim Agenten — nicht nur die der Anmeldung.
+        listed = db_client.get(f"/api/tenants/{tenant_a}/agents").json()
+        assert [a["agent_version"] for a in listed if a["id"] == agent["agent_id"]] == ["0.2.186"]
         assert body["allowed_ous"] == ["OU=A,DC=a,DC=local"]
         assert body["protected_groups"] == ["gruppe a"]
         assert body["revision"]

@@ -44,6 +44,8 @@ AGENT_ROOT = Path(SPECPATH).resolve().parents[1]
 # Fehlt es, scheitert der Dienst beim ersten Zeitstempel — und zwar erst zur
 # Laufzeit beim Kunden.
 HIDDEN = [
+    # Version und Commit des Baus; schreibt die CI vor PyInstaller.
+    "connector_agent._build",
     "magister_api.ad.client",
     "magister_api.ad.threadpool",
     "magister_api.config",
