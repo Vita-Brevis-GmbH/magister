@@ -43,6 +43,7 @@ from ldap3.utils.dn import escape_rdn
 
 from magister_api.ad import security_descriptor as sd
 from magister_api.ad.errors import (
+    PASSWORD_REJECTED,
     REASON_CONFIG,
     AdUnavailableError,
     AdUserParseError,
@@ -931,10 +932,17 @@ class AdClient:
 
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.modify(user_dn, changes)
-            if isinstance(ok, tuple):
-                ok = ok[0]
+            res = conn.modify(user_dn, changes)
+            ok = res[0] if isinstance(res, tuple) else res
             if not ok:
+                result: Any = res[1] if isinstance(res, tuple) else conn.result
+                code = result.get("result") if isinstance(result, dict) else None
+                # 19 constraintViolation (0000052D: Richtlinie, Verlauf,
+                # Mindestalter), 53 unwillingToPerform: das AD lehnt das
+                # Passwort ab — kein Ausfall, sondern eine Antwort an den
+                # Menschen vor dem Formular.
+                if code in (19, 53):
+                    raise AdUnavailableError(PASSWORD_REJECTED)
                 raise AdUnavailableError("ldap_modify_failed")
         except LDAPException as exc:
             raise AdUnavailableError("ldap_modify_failed") from exc

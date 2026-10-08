@@ -16,7 +16,7 @@ from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
-from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.errors import AdUnavailableError, is_password_rejected
 from magister_api.ad.password import generate_password, passes_default_complexity
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
@@ -85,18 +85,14 @@ class UserPasswordResetService:
         if not user_dn:
             raise UserResetNotInAdError(target.ad_object_guid)
 
-        if mode == "manual":
-            ok = await self.ad.probe_bind_as_user(user_dn=user_dn, password=new_password)
-            if not ok:
-                raise UserResetManualPasswordPolicyError("manual_password_rejected_by_ad")
-
         try:
             await self.ad.modify_password(
                 user_dn=user_dn,
                 new_password=new_password,
                 force_change=force_change,
             )
-        except AdUnavailableError:
+        except AdUnavailableError as exc:
+            rejected = is_password_rejected(exc)
             await self.audit.emit(
                 action="user_password_reset_failed",
                 target_kind="ad_user",
@@ -106,8 +102,16 @@ class UserPasswordResetService:
                 school_id=target.school_id,
                 ip=ip,
                 request_id=request_id,
-                payload={"mode": mode, "force_change": force_change, "reason": "ldap_unavailable"},
+                payload={
+                    "mode": mode,
+                    "force_change": force_change,
+                    "reason": "password_rejected_by_ad" if rejected else "ldap_unavailable",
+                },
             )
+            if rejected:
+                # Das AD hat das Passwort abgelehnt (Richtlinie, Verlauf,
+                # Mindestalter) — eine Antwort an den Menschen, kein Ausfall.
+                raise UserResetManualPasswordPolicyError("manual_password_rejected_by_ad") from exc
             raise
 
         await self.audit.emit(

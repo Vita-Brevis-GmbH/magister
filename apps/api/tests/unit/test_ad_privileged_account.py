@@ -51,3 +51,24 @@ def test_a_failed_read_fails_closed() -> None:
     client = _client({"result": 50, "description": "insufficientAccessRights"}, [])
     with pytest.raises(AdUnavailableError):
         client._sync_is_privileged_account(DN)
+
+
+@pytest.mark.parametrize(
+    ("code", "expected"),
+    [(19, "ldap_password_rejected"), (53, "ldap_password_rejected"), (1, "ldap_modify_failed")],
+)
+def test_a_rejected_password_is_named_not_an_outage(code: int, expected: str) -> None:
+    """constraintViolation/unwillingToPerform heisst: das AD lehnt das Passwort ab."""
+    client = AdClient(SimpleNamespace(ad_use_mock=False))  # type: ignore[arg-type]
+
+    class _Conn:
+        def modify(self, *_a: object, **_k: object) -> tuple[object, ...]:
+            return (False, {"result": code, "description": "x"}, None, None)
+
+        def unbind(self) -> None:
+            return None
+
+    client._acquire_connection = lambda: (_Conn(), False)  # type: ignore[assignment,method-assign]
+    with pytest.raises(AdUnavailableError) as exc:
+        client._sync_modify_password(DN, "Neu-Passwort-2026!", False)
+    assert str(exc.value) == expected
