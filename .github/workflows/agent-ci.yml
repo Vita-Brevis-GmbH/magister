@@ -159,7 +159,15 @@ jobs:
         # auf — und sonst erst beim Kunden.
         shell: pwsh
         run: |
-          & dist/magister-connector/magister-connector.exe --version
+          # Die Fassung muss die des Baus sein, nicht die Vorgabe 0.2.0 —
+          # sonst sieht auf dem DC jedes Paket gleich aus.
+          $erwartet = (uv run python packaging/bau_fassung.py --zeigen).Trim()
+          $gemeldet = (& dist/magister-connector/magister-connector.exe --version | Out-String).Trim()
+          Write-Host "Fassung: $gemeldet (erwartet $erwartet)"
+          if (-not $gemeldet.StartsWith("$erwartet ")) {
+            Write-Error "Das eingefrorene Programm meldet '$gemeldet', erwartet '$erwartet (…)'"
+            exit 1
+          }
           & dist/magister-connector/magister-connector.exe --help
           # check ohne Konfiguration MUSS mit einer lesbaren Meldung enden und
           # nicht mit einem Stacktrace. Rückgabewert 1 ist hier richtig.
@@ -224,6 +232,10 @@ jobs:
         run: |
           msiinfo suminfo "$MSI_DATEI"
           msiinfo export "$MSI_DATEI" Property | grep -E '^ProductVersion'
+          # Dieselbe Fassung im MSI wie im Dateinamen — Windows vergleicht sie
+          # beim Update.
+          msiinfo export "$MSI_DATEI" Property \
+            | grep -qE "^ProductVersion\s+$(python3 agent/packaging/bau_fassung.py --zeigen)\s*$"
           msiinfo export "$MSI_DATEI" ServiceInstall
           msiinfo export "$MSI_DATEI" Directory
 
