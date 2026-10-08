@@ -99,6 +99,20 @@ class TestValidation:
     def test_none_is_allowed_as_a_reset(self) -> None:
         assert validate_policy({"ad_bind_dn": None}) == {"ad_bind_dn": None}
 
+    def test_retired_ou_keys_are_dropped_not_refused(self) -> None:
+        """OUs für Schüler:innen und Lehrpersonen stehen nicht mehr in der Konsole.
+
+        Abweisen hiesse: ein Kunde, bei dem einmal ein solcher Wert stand, liesse
+        sich nicht mehr speichern. Also still verwerfen.
+        """
+        doc = {
+            "ad_users_search_base": "OU=Benutzer,DC=x,DC=y",
+            "ad_ou_teachers": "OU=Lehrer,DC=x,DC=y",
+            "ad_ou_students_other": "OU=SuS,DC=x,DC=y",
+            "ad_groups_teacher": ["CN=L,DC=x,DC=y"],
+        }
+        assert validate_policy(doc) == {"ad_users_search_base": "OU=Benutzer,DC=x,DC=y"}
+
     def test_rbac_shape(self) -> None:
         assert validate_rbac({"kl": ["user.read"]}) == {"kl": ["user.read"]}
         assert validate_rbac(None) is None
@@ -120,6 +134,13 @@ class TestEffective:
         # Der Unterschied, ohne den es keinen Weg zurück zur Vorgabe gäbe.
         merged = effective({"ad_sync_interval_minutes": 60}, {"ad_sync_interval_minutes": None})
         assert merged == {"ad_sync_interval_minutes": 60}
+
+    def test_retired_keys_never_reach_the_installation(self) -> None:
+        merged = effective(
+            {"ad_ou_teachers": "OU=Alt,DC=x,DC=y", "instance_profile": "company"},
+            {"ad_groups_teacher": ["CN=L,DC=x,DC=y"]},
+        )
+        assert merged == {"instance_profile": "company"}
 
     def test_defaults_are_not_mutated(self) -> None:
         defaults = {"instance_profile": "school"}

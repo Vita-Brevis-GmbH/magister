@@ -50,13 +50,53 @@ export function TenantOperatorAccess({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-6 text-sm">
-      <section className="max-w-2xl space-y-3">
-        <p className="text-slate-600">
-          Ein Zugriff ist <strong>lesend</strong>, auf eine Stunde befristet und für den
-          Kunden sichtbar: seine Benutzer sehen einen Hinweisbalken, solange er läuft, und
-          der Grund steht in ihrem Protokoll. Ändern kann ein Zugriff nichts — auch die
-          Passwortliste einer Klasse bleibt zu.
+      <section className="max-w-2xl space-y-3 rounded border bg-slate-50 p-3">
+        <h2 className="font-semibold">So funktioniert der Zugriff</h2>
+        <p className="text-slate-700">
+          Damit sieht Vita Brevis im Support-Fall die Installation des Kunden so, wie ein
+          Administrator des Kunden sie sieht („die Klassenlehrerin sieht die Klasse 4a
+          nicht“) — ohne Konto im AD des Kunden und ohne Griff in die Datenbank.
         </p>
+        <ol className="list-decimal space-y-1 pl-5 text-slate-700">
+          <li>
+            Grund eintragen (und, wenn vorhanden, die Ticketnummer) und „Zugriff öffnen“.
+          </li>
+          <li>
+            Die Konsole stellt einen signierten <strong>Einlöseschein</strong> aus: 60
+            Sekunden gültig, nur einmal verwendbar, nirgends gespeichert.
+          </li>
+          <li>
+            „Installation des Kunden öffnen“ löst ihn ein. Im Portal des Kunden entsteht
+            eine Sitzung unter Ihrem Namen, die <strong>eine Stunde</strong> dauert — oder
+            bis Sie sich dort abmelden.
+          </li>
+        </ol>
+        <dl className="grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1 text-slate-700">
+          <dt className="text-slate-500">Was Sie dürfen</dt>
+          <dd>
+            Alles <strong>lesen</strong>, an allen Standorten, wie ein Admin des Kunden.
+          </dd>
+          <dt className="text-slate-500">Was nicht geht</dt>
+          <dd>
+            Nichts ändern: jede schreibende Aktion wird abgewiesen, auch Passwort-Resets.
+            Die Passwortliste einer Klasse bleibt zu. Für Änderungen: der Kunde selbst,
+            oder das lokale Administrationskonto unter „Einstellungen“.
+          </dd>
+          <dt className="text-slate-500">Was der Kunde sieht</dt>
+          <dd>
+            Solange die Sitzung läuft, einen Hinweisbalken bei <strong>jedem</strong>{" "}
+            angemeldeten Benutzer. Danach in seiner Zugriffsliste und im Protokoll: wer,
+            wann, wie lange und warum — der Grund steht dort wörtlich.
+          </dd>
+          <dt className="text-slate-500">Was nicht entsteht</dt>
+          <dd>
+            Kein Benutzer, keine Rolle, kein Eintrag im AD des Kunden. Nach Ablauf bleibt
+            nur der Protokolleintrag.
+          </dd>
+        </dl>
+      </section>
+
+      <section className="max-w-2xl space-y-3">
 
         {openM.isError && <ErrorBox error={openM.error} />}
 

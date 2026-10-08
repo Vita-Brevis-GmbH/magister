@@ -128,3 +128,65 @@ class TestZugang:
     def test_nicht_oeffentlich(self, public_client: TestClient, paketverzeichnis: Path) -> None:
         """Ohne Management-Marker gibt es die Fläche gar nicht (ADR-0015 D1)."""
         assert public_client.get("/api/agent-packages").status_code == 404
+
+
+@pytest.fixture
+def stammzertifikat(tmp_path: Path) -> Iterator[Path]:
+    import datetime as dt
+
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    from cryptography.x509.oid import NameOID
+
+    key = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Magister Test Root")])
+    now = dt.datetime.now(dt.UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now)
+        .not_valid_after(now + dt.timedelta(days=30))
+        .sign(key, hashes.SHA256())
+    )
+    pfad = tmp_path / "root.pem"
+    pfad.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    vorher = settings.platform_root_ca
+    settings.platform_root_ca = str(pfad)
+    yield pfad
+    settings.platform_root_ca = vorher
+
+
+class TestStammzertifikat:
+    """root.pem für `enroll --ca` auf dem DC, neben dem MSI."""
+
+    def test_info_und_download(self, authed_client: TestClient, stammzertifikat: Path) -> None:
+        info = authed_client.get("/api/agent-packages/platform-ca/info")
+        assert info.status_code == 200, info.text
+        assert info.json()["filename"] == "root.pem"
+        assert "Magister Test Root" in info.json()["subject"]
+        assert len(info.json()["sha256"]) == 64
+
+        datei = authed_client.get("/api/agent-packages/platform-ca")
+        assert datei.status_code == 200
+        assert datei.content == stammzertifikat.read_bytes()
+        assert "root.pem" in datei.headers["content-disposition"]
+
+    def test_nicht_eingerichtet_ist_404(self, authed_client: TestClient) -> None:
+        vorher = settings.platform_root_ca
+        settings.platform_root_ca = ""
+        try:
+            antwort = authed_client.get("/api/agent-packages/platform-ca/info")
+        finally:
+            settings.platform_root_ca = vorher
+        assert antwort.status_code == 404
+        assert "COCKPIT_PLATFORM_ROOT_CA" in antwort.json()["detail"]
+
+    def test_nur_angemeldet(
+        self, client: TestClient, public_client: TestClient, stammzertifikat: Path
+    ) -> None:
+        assert client.get("/api/agent-packages/platform-ca").status_code == 401
+        assert public_client.get("/api/agent-packages/platform-ca").status_code == 404

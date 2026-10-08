@@ -111,3 +111,33 @@ export function nachPlattform(pakete: AgentPackage[]): PlattformGruppe[] {
     return a.plattform.localeCompare(b.plattform);
   });
 }
+
+/** Das Stammzertifikat der Plattform, für `enroll --ca` auf dem DC. */
+export interface PlatformCa {
+  filename: string;
+  subject: string;
+  not_after: string;
+  /** SHA-256 über das Zertifikat (DER), nicht über die Datei. */
+  sha256: string;
+}
+
+export function getPlatformCa(): Promise<PlatformCa> {
+  return get("/api/agent-packages/platform-ca/info");
+}
+
+/** Herunterladen wie ein Paket: der Endpunkt braucht den Authorization-Header. */
+export async function downloadPlatformCa(): Promise<void> {
+  const response = await fetch("/api/agent-packages/platform-ca", { headers: authHeaders() });
+  if (!response.ok) {
+    throw new ApiError(response.status, (await response.text()).slice(0, 500));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "root.pem";
+    link.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

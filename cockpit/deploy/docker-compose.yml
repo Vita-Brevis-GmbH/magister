@@ -90,6 +90,9 @@ services:
       # eingerichtet" — die Oberfläche sagt das, statt eine leere Liste zu
       # zeigen.
       COCKPIT_AGENT_PACKAGE_DIR: ${COCKPIT_AGENT_PACKAGE_DIR:-}
+      # Stammzertifikat der Plattform für `enroll --ca` auf dem DC. Fehlt die
+      # Datei (öffentlich vertrautes Zertifikat), sagt die Oberfläche das.
+      COCKPIT_PLATFORM_ROOT_CA: ${COCKPIT_PLATFORM_ROOT_CA:-/certs/root.pem}
       # --- Neustart und Update der Plattform (ADR-0024 D5) ---------------
       # Austausch mit dem Host-Agenten (scripts/plattform-ops-agent.sh). Die
       # Konsole legt Aufträge ab, der Agent führt sie aus. Leer = aus.

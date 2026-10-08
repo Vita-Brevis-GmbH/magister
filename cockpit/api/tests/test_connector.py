@@ -1061,3 +1061,58 @@ class TestConnectorSettings:
         self, db_client: TestClient, agent_headers: dict[str, str]
     ) -> None:
         assert db_client.get("/connector/config", headers=agent_headers).status_code == 401
+
+
+@pytest.mark.usefixtures("connector_ca")
+class TestInteractiveBeforeBulk:
+    """Ein Passwort-Reset wartet nicht hinter einem Abgleich."""
+
+    def test_the_agent_knows_the_same_bulk_methods(self) -> None:
+        from cockpit_api.services.connector_queue import BULK_METHODS
+
+        source = (
+            Path(__file__).resolve().parents[3] / "agent" / "connector_agent" / "runner.py"
+        ).read_text(encoding="utf-8")
+        line = source.split("BULK_METHODS: frozenset[str] = frozenset(", 1)[1].split(")", 1)[0]
+        agent = {part.strip().strip('{}"') for part in line.split(",") if part.strip()}
+        assert agent == set(BULK_METHODS)
+
+    def test_interactive_jobs_jump_the_queue(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "vorrang1")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        bulk = db_client.post(
+            f"/api/tenants/{tenant_id}/jobs",
+            json={"method": "search_users", "payload": {"search_base": "OU=A,DC=x"}},
+        )
+        assert bulk.status_code == 201, bulk.text
+        quick = db_client.post(f"/api/tenants/{tenant_id}/jobs", json={"method": "find_user_dn"})
+        assert quick.status_code == 201
+
+        first = db_client.get(
+            "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+        ).json()
+        assert [j["method"] for j in first] == ["find_user_dn"]
+
+    def test_a_busy_agent_gets_no_second_bulk_job(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "vorrang2")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        db_client.post(
+            f"/api/tenants/{tenant_id}/jobs",
+            json={"method": "search_users", "payload": {"search_base": "OU=A,DC=x"}},
+        )
+        busy = db_client.get(
+            "/connector/jobs",
+            headers=_auth(agent, agent_headers),
+            params={"wait": False, "bulk": False},
+        ).json()
+        assert busy == []
+        idle = db_client.get(
+            "/connector/jobs", headers=_auth(agent, agent_headers), params={"wait": False}
+        ).json()
+        assert [j["method"] for j in idle] == ["search_users"]

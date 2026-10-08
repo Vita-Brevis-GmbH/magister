@@ -542,11 +542,18 @@ async def decommission(
     logger.info("Agent %s (%s) hat sich selbst abgemeldet", agent.id, tenant.slug)
 
 
+#: Takt des Long-Polls. Eine halbe Sekunde: ein Passwort-Reset braucht drei
+#: Aufträge nacheinander (DN suchen, Probe, Schreiben), und jeder wartet im
+#: Mittel einen halben Takt.
+POLL_STEP_S = 0.5
+
+
 @agent_api.get("/jobs", response_model=list[JobForAgent])
 async def poll_jobs(
     identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
     session: AsyncSession = Depends(get_session),
     wait: bool = True,
+    bulk: bool = True,
 ) -> list[JobForAgent]:
     """Long-Poll: offene Aufträge des eigenen Kunden abholen.
 
@@ -555,21 +562,26 @@ async def poll_jobs(
 
     Die Schleife wartet in kurzen Schritten statt in einem langen: so wirkt ein
     Widerruf oder eine Sperre spätestens beim nächsten Poll und nicht erst nach
-    der vollen Wartezeit.
+    der vollen Wartezeit — und ein neuer Auftrag geht nach höchstens einer
+    halben Sekunde hinaus.
+
+    ``bulk=false`` schickt der Agent, solange er einen Abgleich abarbeitet: er
+    will dann nur interaktive Aufträge, damit ein Passwort-Reset nicht hinter
+    dem Abgleich wartet.
     """
     agent, _tenant_row = identity
     deadline = settings.connector_poll_seconds if wait else 0
     waited = 0.0
     while True:
-        jobs = await claim_next(session, agent)
+        jobs = await claim_next(session, agent, include_bulk=bulk)
         await session.commit()
         if jobs or waited >= deadline:
             return [
                 JobForAgent(id=j.id, method=j.method, payload=j.payload, expires_at=j.expires_at)
                 for j in jobs
             ]
-        await asyncio.sleep(1.0)
-        waited += 1.0
+        await asyncio.sleep(POLL_STEP_S)
+        waited += POLL_STEP_S
 
 
 @agent_api.post("/jobs/{job_id}/result", response_model=JobOut)

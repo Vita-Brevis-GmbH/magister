@@ -24,7 +24,7 @@ import datetime as dt
 import json
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any, cast
 
 import httpx
@@ -48,6 +48,11 @@ from connector_agent.signing import canonical_result_body, sign_result
 from connector_agent.tls import build_context
 
 logger = logging.getLogger(__name__)
+
+#: Aufträge, auf die kein Mensch wartet und die Minuten dauern: der Abgleich.
+#: Sie laufen im Hintergrund, höchstens einer zur Zeit, und blockieren die
+#: Abholung nicht. Wörtlich wie ``BULK_METHODS`` in der Konsole.
+BULK_METHODS: frozenset[str] = frozenset({"search_users"})
 
 #: Methoden ohne Argumente. Sie werden ohne Nutzlast aufgerufen.
 _NO_ARG_METHODS = frozenset({"probe_service_connection", "probe_service_connection_detailed"})
@@ -178,6 +183,18 @@ class Runner:
     executor_factory: Callable[[remote_cfg.RemoteConfig], AdExecutor | None] | None = None
     #: Monotone Zeit des letzten Abrufs der Konfiguration.
     last_refresh: float | None = None
+    #: Der laufende Abgleich, falls einer läuft (siehe :data:`BULK_METHODS`).
+    bulk_task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
+
+    @property
+    def bulk_running(self) -> bool:
+        return self.bulk_task is not None and not self.bulk_task.done()
+
+    async def drain(self) -> None:
+        """Auf einen laufenden Abgleich warten — vor dem Schliessen des Clients."""
+        task, self.bulk_task = self.bulk_task, None
+        if task is not None:
+            await asyncio.gather(task, return_exceptions=True)
 
     def build_client(self) -> httpx.AsyncClient:
         # Client-Zertifikat: die eine Hälfte der Authentisierung. Die andere
@@ -210,8 +227,15 @@ class Runner:
         )
 
     async def run_once(self, client: httpx.AsyncClient) -> int:
-        """Eine Runde: abholen, ausführen, antworten. Rückgabe: Anzahl Aufträge."""
-        resp = await client.get("/connector/jobs")
+        """Eine Runde: abholen, ausführen, antworten. Rückgabe: Anzahl Aufträge.
+
+        Ein Abgleich läuft im Hintergrund weiter, während diese Runde schon
+        die nächsten Aufträge holt: ein Passwort-Reset soll nach Sekunden im
+        AD sein und nicht nach dem Abgleich. Solange einer läuft, fragt der
+        Agent mit ``bulk=false`` nur nach interaktiven Aufträgen.
+        """
+        busy = self.bulk_running
+        resp = await client.get("/connector/jobs", params={"bulk": "false"} if busy else None)
         if resp.status_code == 401:
             # Widerrufen, gesperrt oder falscher Key. Kein Grund für einen
             # schnellen Wiederholungslauf — das behebt sich nicht von selbst.
@@ -222,8 +246,22 @@ class Runner:
         resp.raise_for_status()
         jobs: list[dict[str, Any]] = resp.json()
         for job in jobs:
-            await self._handle(client, job)
+            if str(job.get("method", "")) in BULK_METHODS and not self.bulk_running:
+                self.bulk_task = asyncio.create_task(self._handle_logged(client, job))
+            else:
+                # Auch ein zweiter Abgleich, falls eine ältere Konsole `bulk`
+                # nicht kennt: dann eben der Reihe nach, wie bisher.
+                await self._handle(client, job)
         return len(jobs)
+
+    async def _handle_logged(self, client: httpx.AsyncClient, job: dict[str, Any]) -> None:
+        """Wie :meth:`_handle`, aber für den Hintergrund: nichts geht verloren."""
+        try:
+            await self._handle(client, job)
+        except Exception as exc:
+            # Ohne das verschwände ein Fehler beim Zurückmelden in einer
+            # Task, die niemand mehr ansieht.
+            logger.warning("Abgleich %s nicht zurückgemeldet: %s", job.get("id"), exc)
 
     async def _handle(self, client: httpx.AsyncClient, job: dict[str, Any]) -> None:
         job_id = str(job.get("id", ""))
@@ -393,6 +431,12 @@ class Runner:
                     except (httpx.HTTPError, OSError) as exc:
                         logger.warning("%s", explain_transport_error(exc, self.config))
                         await _sleep_or_stop(stop, self.config.backoff_seconds)
+                # Der Abgleich benutzt denselben Client. Beim Anhalten wird er
+                # abgebrochen (die Konsole lässt ihn verfallen), bei einer
+                # Erneuerung zu Ende geführt.
+                if stop.is_set() and self.bulk_task is not None:
+                    self.bulk_task.cancel()
+                await self.drain()
 
 
 async def _sleep_or_stop(stop: asyncio.Event, seconds: float) -> None:
@@ -422,4 +466,4 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
-__all__ = ["AdExecutor", "AdOperation", "Runner"]
+__all__ = ["BULK_METHODS", "AdExecutor", "AdOperation", "Runner"]

@@ -14,3 +14,14 @@ class AgentPackageOut(BaseModel):
     #: Keine Aussage über die Herkunft — dafür ist die Signatur zuständig.
     sha256: str
     modified_at: datetime
+
+
+class PlatformCaOut(BaseModel):
+    """Das Stammzertifikat der Plattform, für ``enroll --ca`` auf dem DC."""
+
+    filename: str
+    subject: str
+    not_after: datetime
+    #: SHA-256 über das DER-Zertifikat (nicht über die Datei). Auf dem DC in
+    #: PowerShell: ``(Get-PfxCertificate root.pem).GetCertHashString('SHA256')``.
+    sha256: str

@@ -15,6 +15,8 @@ import {
 } from "../api/agents";
 import {
   downloadAgentPackage,
+  downloadPlatformCa,
+  getPlatformCa,
   listAgentPackages,
   nachPlattform,
   readableSize,
@@ -68,7 +70,8 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
         <li>
           Danach holt der Agent seine Einstellungen von hier und startet den Dienst. Hat
           die Plattform eine eigene CA, zusätzlich{" "}
-          <span className="font-mono">--ca root.pem</span> angeben.
+          <span className="font-mono">--ca root.pem</span> angeben — das Zertifikat liegt
+          unter „Agent herunterladen“.
         </li>
       </ul>
       <button type="button" onClick={onDone} className="rounded border border-blue-400 px-3 py-1 text-sm">
@@ -115,6 +118,57 @@ function PaketZeile({
       >
         Herunterladen
       </button>
+    </div>
+  );
+}
+
+/**
+ * Das Stammzertifikat der Plattform (root.pem).
+ *
+ * Hat die Plattform eine eigene CA (jede Installation aus dem Aufbau-Skript),
+ * vertraut der DC dem Connector-Endpunkt erst mit diesem Zertifikat:
+ * `magister-connector enroll --ca root.pem`. Fehlt es (404), hat die
+ * Plattform ein öffentlich vertrautes Zertifikat und der DC braucht nichts.
+ */
+function PlatformCaRow() {
+  const caQ = useQuery({ queryKey: ["platform-ca"], queryFn: getPlatformCa, retry: false });
+  const ladenM = useMutation({ mutationFn: downloadPlatformCa });
+  if (caQ.error instanceof ApiError && caQ.error.status === 404) {
+    return (
+      <p className="mt-4 text-xs text-slate-500">
+        Kein eigenes Stammzertifikat: die Plattform hat ein öffentlich vertrautes
+        Zertifikat, auf dem DC ist dafür nichts nötig.
+      </p>
+    );
+  }
+  return (
+    <div className="mt-4 border-t pt-3">
+      <h3 className="mb-1 text-sm font-medium text-slate-700">Stammzertifikat der Plattform</h3>
+      {caQ.isError && <ErrorBox error={caQ.error} />}
+      {ladenM.isError && <ErrorBox error={ladenM.error} />}
+      {caQ.data && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <button
+            type="button"
+            onClick={() => ladenM.mutate()}
+            disabled={ladenM.isPending}
+            className="rounded border px-3 py-1 disabled:opacity-50"
+          >
+            root.pem herunterladen
+          </button>
+          <span className="text-xs text-slate-600">
+            {caQ.data.subject} · gültig bis {new Date(caQ.data.not_after).toLocaleDateString()}
+          </span>
+          <span className="w-full font-mono text-xs break-all text-slate-500">
+            SHA-256 {caQ.data.sha256}
+          </span>
+          <span className="w-full text-xs text-slate-500">
+            Auf den DC kopieren und bei der Anmeldung angeben:{" "}
+            <span className="font-mono">--ca C:\Temp\root.pem</span>. Damit prüft der Agent,
+            dass er wirklich mit dieser Plattform spricht.
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -181,6 +235,7 @@ function AgentPackages() {
             ))}
           </div>
         ))}
+      <PlatformCaRow />
       <p className="mt-3 text-xs text-slate-500">
         Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher sie kommt.
         Dafür ist die Paketsignatur da: <span className="font-mono">msiexec</span> zeigt sie

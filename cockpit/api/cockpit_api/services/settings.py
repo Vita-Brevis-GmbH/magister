@@ -67,9 +67,6 @@ POLICY_KEYS: dict[str, type | tuple[type, ...]] = {
     "ad_computers_search_base": str,
     "ad_groups_search_base": str,
     "ad_sync_interval_minutes": int,
-    "ad_ou_students_other": str,
-    "ad_ou_teachers": str,
-    "ad_groups_teacher": list,
     # Betrieb
     #: Ein Schalter, kein Passwort: er entscheidet, ob der Passwortspeicher
     #: überhaupt benutzt wird.
@@ -84,6 +81,26 @@ POLICY_KEYS: dict[str, type | tuple[type, ...]] = {
     #: (`web_tls_key_pem`) steht ausdrücklich NICHT hier.
     "web_tls_cert_pem": str,
 }
+
+#: Früher hier gepflegt, jetzt nicht mehr: OUs und Gruppen für Schüler:innen
+#: und Lehrpersonen. Sie gehören an den Standort bzw. an die Zielrollen im
+#: Portal des Kunden — als eigenständige Objekte, unabhängig vom Profil (eine
+#: Firma hat keine „OU Lehrpersonen"). Die Konsole setzt nur noch die
+#: Suchbasen für Benutzer, Gruppen und Computer.
+#:
+#: Gespeicherte Altwerte werden still verworfen statt abgewiesen: sonst liesse
+#: sich die Seite eines Kunden, bei dem einmal ein solcher Wert stand, nicht
+#: mehr speichern. Ausgeliefert werden sie nicht mehr; was im Portal steht,
+#: bleibt dort unberührt (der Abgleich fasst nur an, was die Konsole schickt).
+RETIRED_KEYS: frozenset[str] = frozenset(
+    {"ad_ou_students_other", "ad_ou_teachers", "ad_groups_teacher"}
+)
+
+
+def strip_retired(document: dict[str, Any]) -> dict[str, Any]:
+    """Das Dokument ohne die nicht mehr gepflegten Schlüssel."""
+    return {k: v for k, v in document.items() if k not in RETIRED_KEYS}
+
 
 #: Was nach einem Geheimnis aussieht. Wird zur Laufzeit **nicht** angewandt —
 #: die Allowlist oben entscheidet. Der Test über die Allowlist benutzt dieses
@@ -105,7 +122,9 @@ class SettingsError(ValueError):
 
 
 def validate_policy(document: dict[str, Any]) -> dict[str, Any]:
-    """Prüft ein Politik-Dokument und gibt es unverändert zurück.
+    """Prüft ein Politik-Dokument und gibt es ohne Altlasten zurück.
+
+    Einzige Änderung am Dokument: Schlüssel aus :data:`RETIRED_KEYS` fallen weg.
 
     Drei Ablehnungsgründe, jeder mit dem Namen des Feldes in der Meldung —
     eine Fehlermeldung, die „ungültige Eingabe" sagt, kostet den Betreiber
@@ -113,6 +132,7 @@ def validate_policy(document: dict[str, Any]) -> dict[str, Any]:
     """
     if not isinstance(document, dict):
         raise SettingsError("Die Einstellungen müssen ein Objekt sein.")
+    document = strip_retired(document)
     for key, value in document.items():
         expected = POLICY_KEYS.get(key)
         if expected is None:
@@ -179,8 +199,8 @@ def effective(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, 
     Vorgabe gelten — nicht „setze auf null". Ohne diese Unterscheidung gäbe es
     keinen Weg zurück zur Vorgabe.
     """
-    merged = dict(defaults)
-    for key, value in overrides.items():
+    merged = strip_retired(defaults)
+    for key, value in strip_retired(overrides).items():
         if value is None:
             # **Überspringen**, nicht entfernen. Der erste Entwurf stand hier
             # `merged.pop(key)` — das löschte die Vorgabe mit und machte aus
@@ -344,11 +364,13 @@ class SettingsService:
 
 __all__ = [
     "POLICY_KEYS",
+    "RETIRED_KEYS",
     "SECRET_LOOKING",
     "SECRET_LOOKING_EXEMPT",
     "SettingsError",
     "SettingsService",
     "effective",
+    "strip_retired",
     "validate_policy",
     "validate_rbac",
 ]

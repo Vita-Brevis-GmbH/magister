@@ -102,6 +102,13 @@ class Settings(BaseSettings):
     # Leer heisst „nicht eingerichtet": die Oberfläche sagt das dann, statt
     # eine leere Liste zu zeigen.
     agent_package_dir: str = Field(default="")
+    #: Stammzertifikat der Plattform (PEM), wenn sie eine eigene CA hat — wie
+    #: jede Installation aus `plattform-aufbau.sh`. Der Agent auf dem DC braucht
+    #: es, um den Connector-Endpunkt zu prüfen (`enroll --ca`); die Konsole
+    #: bietet es deshalb neben dem MSI an. Öffentlich, kein Geheimnis. Leer oder
+    #: nicht vorhanden heisst: die Plattform hat ein öffentlich vertrautes
+    #: Zertifikat, und der Windows-Truststore genügt.
+    platform_root_ca: str = Field(default="")
     #: Austauschverzeichnis mit dem Host-Agenten für Neustart und Update der
     #: Plattform (ADR-0024 D5). Leer heisst „nicht eingerichtet".
     ops_dir: str = Field(default="")

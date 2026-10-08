@@ -25,12 +25,14 @@ import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 
 from cockpit_api.auth import Caller, require_person
 from cockpit_api.config import settings
-from cockpit_api.schemas.agent_package import AgentPackageOut
+from cockpit_api.schemas.agent_package import AgentPackageOut, PlatformCaOut
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +86,57 @@ async def list_packages(_: Caller = Depends(require_person)) -> list[AgentPackag
             )
         )
     return pakete
+
+
+#: Unter diesem Namen landet das Stammzertifikat beim Herunterladen — derselbe,
+#: den INSTALL.txt und die Befehlszeile im Cockpit nennen.
+PLATFORM_CA_FILENAME = "root.pem"
+
+
+def _platform_ca() -> tuple[Path, x509.Certificate]:
+    if not settings.platform_root_ca:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Kein eigenes Stammzertifikat eingerichtet (COCKPIT_PLATFORM_ROOT_CA) — "
+            "die Plattform braucht dann keines auf dem DC.",
+        )
+    pfad = Path(settings.platform_root_ca)
+    try:
+        cert = x509.load_pem_x509_certificate(pfad.read_bytes())
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, f"{pfad} gibt es im Container nicht."
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, f"{pfad} ist kein PEM-Zertifikat."
+        ) from exc
+    return pfad, cert
+
+
+# Vor `/{filename}`: sonst finge jene Route diesen Pfad ab.
+@router.get("/platform-ca/info", response_model=PlatformCaOut)
+async def platform_ca_info(_: Caller = Depends(require_person)) -> PlatformCaOut:
+    """Wem das Stammzertifikat gehört und sein Fingerprint — zum Vergleich auf dem DC."""
+    _pfad, cert = _platform_ca()
+    return PlatformCaOut(
+        filename=PLATFORM_CA_FILENAME,
+        subject=cert.subject.rfc4514_string(),
+        not_after=cert.not_valid_after_utc,
+        sha256=cert.fingerprint(hashes.SHA256()).hex(),
+    )
+
+
+@router.get("/platform-ca")
+async def download_platform_ca(caller: Caller = Depends(require_person)) -> FileResponse:
+    """Das Stammzertifikat der Plattform, für `magister-connector enroll --ca`.
+
+    Nur das öffentliche Zertifikat; der Schlüssel liegt nie im Container der
+    Konsole.
+    """
+    pfad, _cert = _platform_ca()
+    logger.info("Stammzertifikat der Plattform an %s ausgeliefert.", caller.actor)
+    return FileResponse(pfad, filename=PLATFORM_CA_FILENAME, media_type="application/x-pem-file")
 
 
 @router.get("/{filename}")

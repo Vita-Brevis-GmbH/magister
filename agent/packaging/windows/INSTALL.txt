@@ -70,7 +70,9 @@ ausführen") und:
 
     magister-connector enroll --endpoint https://connect.magister.ch:46200
 
-Hat die Plattform eine eigene CA, zusätzlich deren Stammzertifikat angeben:
+Hat die Plattform eine eigene CA, zusätzlich deren Stammzertifikat angeben.
+Es liegt im Cockpit unter "AD-Connector → Agent herunterladen" (root.pem,
+mit Fingerprint zum Vergleich):
 
     magister-connector enroll --endpoint https://… --ca C:\Temp\root.pem
 

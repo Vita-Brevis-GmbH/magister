@@ -659,7 +659,9 @@ netz() {
 start_konsole() {
   # Die Zertifikate liegen dort, wo die Compose-Datei sie erwartet.
   mkdir -p "$REPO/cockpit/deploy/certs"
-  for datei in platform-ca.pem operator-ca.pem console.pem console-key.pem \
+  # root.pem: nur das öffentliche Stammzertifikat — die Konsole bietet es
+  # zum Herunterladen an (`enroll --ca` auf dem DC). Der Schlüssel bleibt hier.
+  for datei in root.pem platform-ca.pem operator-ca.pem console.pem console-key.pem \
                connector.pem connector-key.pem \
                connector-int.pem connector-int-key.pem operator-signing.pem; do
     cp -f "$CERTS/$datei" "$REPO/cockpit/deploy/certs/$datei"

@@ -28,7 +28,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.models import ConnectorAgent, ConnectorJob, JobState, Tenant
@@ -83,6 +83,14 @@ SEARCH_JOB_TTL = timedelta(minutes=10)
 
 #: Welche Frist für welche Methode gilt.
 JOB_TTL_BY_METHOD: dict[str, timedelta] = {"search_users": SEARCH_JOB_TTL}
+
+
+#: Aufträge, auf die kein Mensch wartet und die Minuten dauern: der Abgleich.
+#: Sie werden **nach** allen anderen ausgeliefert, und ein Agent, der gerade
+#: einen abarbeitet, bekommt keinen zweiten (``include_bulk=False``). Sonst
+#: stünde ein Passwort-Reset hinter einem Abgleich von zehntausend Konten —
+#: genau die Viertelstunde, die ein Anwender vor dem Formular nicht wartet.
+BULK_METHODS: frozenset[str] = frozenset({"search_users"})
 
 
 def ttl_for(method: str) -> timedelta:
@@ -156,23 +164,34 @@ async def expire_stale_jobs(session: AsyncSession, tenant_id: UUID) -> int:
 
 
 async def claim_next(
-    session: AsyncSession, agent: ConnectorAgent, *, limit: int = 1
+    session: AsyncSession,
+    agent: ConnectorAgent,
+    *,
+    limit: int = 1,
+    include_bulk: bool = True,
 ) -> list[ConnectorJob]:
     """Offene Aufträge des eigenen Kunden übernehmen.
 
     ``FOR UPDATE SKIP LOCKED``: mehrere Agenten desselben Kunden holen sich
     nicht denselben Auftrag, und keiner wartet auf den anderen.
+
+    Interaktive Aufträge (Passwort, Gruppen, Konten) vor dem Abgleich, auch
+    wenn der Abgleich früher eingestellt wurde (:data:`BULK_METHODS`).
     """
     await expire_stale_jobs(session, agent.tenant_id)
+    conditions = [
+        # tenant_id des AGENTEN, nicht aus der Anfrage: ein Agent kann
+        # nicht nach Aufträgen eines anderen Kunden fragen.
+        ConnectorJob.tenant_id == agent.tenant_id,
+        ConnectorJob.state == JobState.queued,
+    ]
+    if not include_bulk:
+        conditions.append(ConnectorJob.method.not_in(BULK_METHODS))
+    is_bulk = case((ConnectorJob.method.in_(BULK_METHODS), 1), else_=0)
     stmt = (
         select(ConnectorJob)
-        .where(
-            # tenant_id des AGENTEN, nicht aus der Anfrage: ein Agent kann
-            # nicht nach Aufträgen eines anderen Kunden fragen.
-            ConnectorJob.tenant_id == agent.tenant_id,
-            ConnectorJob.state == JobState.queued,
-        )
-        .order_by(ConnectorJob.created_at)
+        .where(*conditions)
+        .order_by(is_bulk, ConnectorJob.created_at)
         .limit(limit)
         .with_for_update(skip_locked=True)
     )

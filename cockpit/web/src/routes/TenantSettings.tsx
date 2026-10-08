@@ -21,6 +21,9 @@ interface Field {
   placeholder?: string;
 }
 
+// Nur die Suchbasen. OUs und Gruppen für Schüler:innen, Lehrpersonen oder
+// Mitarbeitende gehören an den Standort und an die Zielrollen im Portal des
+// Kunden — eigenständig und unabhängig vom Profil (Schule oder Firma).
 const AD_FIELDS: Field[] = [
   {
     key: "ad_users_search_base",
@@ -36,19 +39,14 @@ const AD_FIELDS: Field[] = [
     kind: "text",
     hint: "Leer = Such-Basis der Benutzer.",
   },
-  { key: "ad_ou_teachers", label: "OU Lehrpersonen / Mitarbeitende", kind: "text" },
-  { key: "ad_ou_students_other", label: "OU übrige Schüler:innen", kind: "text" },
-  {
-    key: "ad_groups_teacher",
-    label: "Gruppen der Lehrpersonen",
-    kind: "lines",
-    hint: "Eine DN je Zeile.",
-  },
   {
     key: "ad_sync_interval_minutes",
     label: "Abgleich alle … Minuten",
     kind: "number",
     placeholder: "15",
+    hint:
+      "Nur der Abgleich vom AD nach Magister. Änderungen aus Magister (Passwort, " +
+      "Gruppen, Konten) gehen sofort an den DC, unabhängig von diesem Wert.",
   },
   {
     key: "ad_dcs",

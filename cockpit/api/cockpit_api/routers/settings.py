@@ -37,7 +37,7 @@ from cockpit_api.schemas.settings import (
     TenantSettingsUpdate,
 )
 from cockpit_api.services.modules import KNOWN_PROFILES, MODULES, effective
-from cockpit_api.services.settings import SettingsError, SettingsService
+from cockpit_api.services.settings import SettingsError, SettingsService, strip_retired
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +83,7 @@ def _tenant_out(row: TenantSettings | None, tenant_id: UUID) -> TenantSettingsOu
         )
     return TenantSettingsOut(
         tenant_id=str(row.tenant_id),
-        overrides=row.overrides,
+        overrides=strip_retired(row.overrides),
         rbac=row.rbac,
         updated_at=row.updated_at,
         updated_by=row.updated_by,
@@ -96,7 +96,9 @@ async def get_platform_settings(
 ) -> PlatformSettingsOut:
     row = await SettingsService(session).platform()
     await session.commit()
-    return PlatformSettingsOut.model_validate(row)
+    out = PlatformSettingsOut.model_validate(row)
+    out.defaults = strip_retired(out.defaults)
+    return out
 
 
 @platform.put("/settings", response_model=PlatformSettingsOut)

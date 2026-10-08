@@ -428,3 +428,20 @@ gilt, unabhängig vom Cockpit und fest im Agenten:
 Damit ist der Schaden einer übernommenen Plattform auf das begrenzt, was der
 Kunde dem Maschinenkonto delegiert hat, und nie Tier-0-Konten.
 
+**E4 · Änderungen gehen in Sekunden an den DC, der Abgleich wartet.**
+Der Agent arbeitete Aufträge strikt nacheinander ab; ein Abgleich
+(`search_users`, je nach Verzeichnis Minuten) hielt jeden Passwort-Reset
+dahinter fest. Jetzt liefert die Konsole interaktive Aufträge vor dem
+Abgleich aus, der Agent führt den Abgleich im Hintergrund aus (höchstens einen)
+und holt währenddessen mit `bulk=false` weiter interaktive Aufträge. Der
+Long-Poll prüft alle 0,5 s. Ein Reset (DN suchen, ggf. Probe, Schreiben) ist
+damit nach wenigen Sekunden im AD; das Intervall des Abgleichs
+(`ad_sync_interval_minutes`) betrifft nur die Richtung AD → Magister.
+`BULK_METHODS` steht in Konsole und Agent wörtlich gleich; ein Test hält sie
+zusammen.
+
+**E5 · Das Stammzertifikat der Plattform liegt im Cockpit.** Hat die
+Plattform eine eigene CA, bietet die Konsole `root.pem` neben dem MSI an
+(`COCKPIT_PLATFORM_ROOT_CA`, nur das öffentliche Zertifikat), mit
+SHA-256-Fingerprint zum Vergleich auf dem DC.
+

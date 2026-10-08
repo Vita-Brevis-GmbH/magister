@@ -8,6 +8,7 @@ werden, sonst wartet die Plattform auf etwas, das nie kommt.
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import datetime as dt
 import json
@@ -97,6 +98,7 @@ class FakePlatform:
         self.result_status = 200
         self.config: dict[str, Any] | None = None
         self.config_calls = 0
+        self.polls: list[str] = []
 
     def transport(self) -> httpx.MockTransport:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -106,6 +108,7 @@ class FakePlatform:
                     return httpx.Response(503, json={"detail": "weg"})
                 return httpx.Response(200, json=self.config)
             if request.method == "GET":
+                self.polls.append(request.url.query.decode())
                 if self.poll_status != 200:
                     return httpx.Response(self.poll_status, json={"detail": "nope"})
                 jobs, self.jobs = self.jobs, []
@@ -401,6 +404,7 @@ class TestTheDirectoryRead:
         runner = _runner(tmp_path, platform, ad)
         async with runner.build_client() as client:
             await runner.run_once(client)
+            await runner.drain()
         method, args = ad.calls[0]
         assert method == "search_users"
         # Nicht die Zeichenkette: sonst baute `search_users` einen LDAP-Filter
@@ -421,6 +425,7 @@ class TestTheDirectoryRead:
         runner = _runner(tmp_path, platform, ad)
         async with runner.build_client() as client:
             await runner.run_once(client)
+            await runner.drain()
         assert ad.calls[0][1]["changed_since"] is None
 
     async def test_records_go_back_as_json_and_the_signature_holds(self, tmp_path: Path) -> None:
@@ -437,6 +442,7 @@ class TestTheDirectoryRead:
         runner = _runner(tmp_path, platform, ad)
         async with runner.build_client() as client:
             await runner.run_once(client)
+            await runner.drain()
         entry = platform.results[0]
         assert entry["ok"] is True
         records = cast(list[dict[str, Any]], entry["result"])
@@ -472,6 +478,7 @@ class TestTheDirectoryRead:
         runner = _runner(tmp_path, platform, ad)
         async with runner.build_client() as client:
             await runner.run_once(client)
+            await runner.drain()
         assert ad.calls == [], "der Auftrag hat das Verzeichnis erreicht"
         assert platform.results[0]["ok"] is False
 
@@ -571,3 +578,53 @@ class TestConfigFromTheCockpit:
         async with runner.build_client() as client:
             await runner.maybe_refresh_config(client, now=1000.0)
         assert runner.executor is fresh
+
+
+class TestBulkDoesNotBlock:
+    """Ein Passwort-Reset wartet nicht hinter dem Abgleich."""
+
+    async def test_a_reset_runs_while_the_sync_is_still_reading(self, tmp_path: Path) -> None:
+        release = asyncio.Event()
+
+        class SlowAd(FakeAd):
+            async def search_users(
+                self,
+                *,
+                search_base: str | None = None,
+                attributes: list[str] | None = None,
+                changed_since: dt.datetime | None = None,
+            ) -> list[AdUserRecord]:
+                self.calls.append(("search_users", {}))
+                await release.wait()
+                return []
+
+        ad = SlowAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-b1",
+                    "method": "search_users",
+                    "payload": {"search_base": SCHULE, "attributes": [], "changed_since": None},
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+            await asyncio.sleep(0)
+            assert runner.bulk_running
+            platform.jobs = [
+                {
+                    "id": "job-b2",
+                    "method": "modify_password",
+                    "payload": {"user_dn": LEHRER, "new_password": "x", "force_change": True},
+                }
+            ]
+            await runner.run_once(client)
+            # Der Reset ist durch, der Abgleich liest noch.
+            assert [r["_job_id"] for r in platform.results] == ["job-b2"]
+            assert "bulk=false" in platform.polls[-1]
+            release.set()
+            await runner.drain()
+        assert [r["_job_id"] for r in platform.results] == ["job-b2", "job-b1"]
+        assert not runner.bulk_running
