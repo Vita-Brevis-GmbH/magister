@@ -23,6 +23,7 @@ import {
 import { ApiError } from "../api/client";
 import { getTenantStatus } from "../api/operations";
 import { Badge, StatusBadge } from "../components/Badge";
+import { ConnectorSettingsSection } from "../components/ConnectorSettingsSection";
 import { ErrorBox } from "../components/ErrorBox";
 import { AdSyncSummary } from "../components/TenantStatusPanel";
 
@@ -43,6 +44,12 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
       <code className="mb-3 block select-all break-all rounded border border-blue-200 bg-white px-2 py-1 font-mono text-sm">
         {enrollment.token}
       </code>
+      <p className="mb-1 text-sm text-blue-900">
+        Auf dem Domänencontroller, in einer Eingabeaufforderung als Administrator:
+      </p>
+      <code className="mb-3 block select-all break-all rounded border border-blue-200 bg-white px-2 py-1 font-mono text-sm">
+        magister-connector enroll --endpoint {enrollment.endpoint || "https://<connector-name>:46200"}
+      </code>
       <ul className="mb-3 list-disc pl-5 text-sm text-blue-900">
         <li>
           Gültig bis {new Date(enrollment.expires_at).toLocaleString()} — danach ein neues
@@ -57,6 +64,11 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
         <li>
           Nach der Anmeldung nennt der Agent seinen SPKI-Fingerprint. Er muss mit der
           Anzeige unten übereinstimmen; weicht er ab, hat sich jemand anders angemeldet.
+        </li>
+        <li>
+          Danach holt der Agent seine Einstellungen von hier und startet den Dienst. Hat
+          die Plattform eine eigene CA, zusätzlich{" "}
+          <span className="font-mono">--ca root.pem</span> angeben.
         </li>
       </ul>
       <button type="button" onClick={onDone} className="rounded border border-blue-400 px-3 py-1 text-sm">
@@ -172,10 +184,9 @@ function AgentPackages() {
       <p className="mt-3 text-xs text-slate-500">
         Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher sie kommt.
         Dafür ist die Paketsignatur da: <span className="font-mono">msiexec</span> zeigt sie
-        im Dialog, <span className="font-mono">dpkg-sig --verify</span> auf der Kommando-
-        zeile. Prüfen lässt sich die Summe mit{" "}
-        <span className="font-mono">Get-FileHash</span> resp.{" "}
-        <span className="font-mono">sha256sum</span>.
+        im Dialog. Prüfen lässt sich die Summe mit{" "}
+        <span className="font-mono">Get-FileHash</span>. Installiert wird auf dem
+        Domänencontroller selbst — der Agent bindet sich als dessen Maschinenkonto ans AD.
       </p>
     </section>
   );
@@ -242,12 +253,12 @@ function AgentRow({
 }
 
 const AD_REASON: Record<string, string> = {
-  ad_ok: "AD antwortet, Anmeldung des Dienstkontos über LDAPS gelungen.",
-  ad_config: "AD-Zugang beim Agenten unvollständig (DCs, Bind-DN oder Passwort fehlen).",
+  ad_ok: "AD antwortet, Kerberos-Anmeldung als Maschinenkonto des DC über LDAPS gelungen.",
+  ad_config: "AD-Zugang beim Agenten unvollständig (kein Domänencontroller bekannt).",
   ad_unreachable: "Der Agent erreicht keinen Domänencontroller auf Port 636.",
   ad_tls: "LDAPS zum Domänencontroller gescheitert (Zertifikat des DC).",
   ad_timeout: "Der Domänencontroller antwortet nicht rechtzeitig.",
-  ad_auth: "Der DC weist das Dienstkonto ab (Bind-DN oder Passwort).",
+  ad_auth: "Kerberos-Anmeldung abgewiesen. DC-Namen als volle DNS-Namen eintragen, keine IPs.",
 };
 
 /**
@@ -301,8 +312,8 @@ function ConnectionTest({ tenantId }: { tenantId: string }) {
     <section className="rounded border bg-white p-4">
       <h2 className="mb-2 font-semibold">Verbindungstest</h2>
       <p className="mb-3 text-xs text-slate-500">
-        Schickt einen Prüfauftrag über den Agenten ins AD des Kunden: Anmeldung des Dienstkontos,
-        keine Benutzerdaten.
+        Schickt einen Prüfauftrag über den Agenten ins AD des Kunden: Anmeldung als
+        Maschinenkonto des DC, keine Benutzerdaten.
       </p>
       <button
         type="button"
@@ -389,6 +400,8 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
       <AdSyncState tenantId={tenantId} />
 
       <AgentPackages />
+
+      <ConnectorSettingsSection tenantId={tenantId} />
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 font-semibold">Agenten</h2>

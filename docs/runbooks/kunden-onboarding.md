@@ -33,19 +33,20 @@ Diese Liste geht als Dokument an die Kunden-IT, mit Rückmeldung vor dem Termin.
 Der Agent braucht ausserdem Sicht auf die eigenen Domänencontroller über
 `LDAPS 636` — das ist internes Netz und meist schon gegeben.
 
-### 1.2 Server für den Agenten
+### 1.2 Der Agent läuft auf dem Domänencontroller
 
-- Windows Server (2019 oder neuer) als Dienst, **oder** Linux mit systemd,
-  **oder** ein Container-Host.
-- Kein eigener Server nötig: ein bestehender Management- oder Applikationsserver
-  genügt. Der Agent ist klein und hat keine eingehenden Ports.
-- Domänenmitglied, wenn GSSAPI/Kerberos als Bind-Modus gewünscht ist
-  (empfohlen — dann liegt kein Dienstkonto-Passwort herum).
+- Installiert wird das MSI **auf einem DC** (Windows Server 2012 R2 oder
+  neuer, 64 Bit). Kein Linux-Paket, kein Mitgliedsserver: der Agent bindet
+  sich per Kerberos als **Maschinenkonto des DC** ans AD, damit bleibt der
+  Zugriff auf das AD in Tier 0 (ADR-0014, Nachtrag „Agent auf dem DC").
+- Kein Dienstkonto, kein Passwort, keine eingehenden Ports.
 
-### 1.3 AD-Dienstkonto mit delegierten Rechten
+### 1.3 Delegierte Rechte für das Maschinenkonto des DC
 
-Kein Domänen-Admin. Auf den freigegebenen OUs delegieren
-(`Active Directory-Benutzer und -Computer` → OU → Objektverwaltung zuweisen):
+Kein Domänen-Admin. Gruppe anlegen (z. B. `Magister-Connector`), das
+Computerkonto des DC (`DC01$`) aufnehmen und der Gruppe auf den freigegebenen
+OUs delegieren (`Active Directory-Benutzer und -Computer` → OU →
+Objektverwaltung zuweisen):
 
 | Recht | GUID / Hinweis |
 |---|---|
@@ -55,16 +56,20 @@ Kein Domänen-Admin. Auf den freigegebenen OUs delegieren
 | Benutzerobjekte erstellen | nur wenn der Kunde Provisionierung per Import nutzt |
 | Mitglied von schreiben | nur wenn Gruppenvorlagen genutzt werden |
 
+Danach den DC neu starten oder `klist -li 0x3e7 purge`, damit das Ticket des
+Maschinenkontos die Gruppe kennt.
+
 Ausdrücklich **nicht** nötig: Domänen-Admin, Schema-Admin, Rechte auf der
 Domänenwurzel, Rechte auf privilegierten Gruppen. Der Agent verweigert
-Operationen auf `Domain Admins` und Verwandten ohnehin lokal
-(ADR-0014 §7).
+Operationen auf `Domain Admins` und Verwandten, auf Konten mit
+`adminCount=1` und in Domain Controllers/Builtin/System ohnehin lokal.
 
 ### 1.4 OU-Struktur
 
-Welche OUs darf der Agent anfassen? Diese Liste kommt in die lokale Konfiguration
-des Agenten und ist die Grenze, die auch eine kompromittierte Plattform nicht
-überschreitet.
+Welche OUs darf der Agent anfassen? Die Liste wird **im Cockpit** beim Kunden
+unter „AD-Connector → Freigabe im AD" gepflegt; der Agent holt sie und prüft
+sie gegen seine festen Sperren (ganze Domäne, Domain Controllers, Builtin,
+System … sind nie zulässig).
 
 - OU der Schülerinnen und Schüler (bei mehreren Zyklen: je eine)
 - OU der Lehrpersonen
@@ -170,9 +175,12 @@ Einzelheiten und der laufende Betrieb:
 
 ## 3 · Installation beim Kunden (gemeinsamer Termin, ~1 Stunde)
 
-1. Agent installieren, Dienstkonto und OU-Grenzen konfigurieren.
-2. Agent starten. Er erzeugt sein Schlüsselpaar **lokal**, löst das Einmal-Token
-   ein und erhält Zertifikat plus API-Key.
+1. Im Cockpit OU-Freigabe eintragen, Einmal-Token ausstellen. MSI auf dem DC
+   installieren.
+2. `magister-connector enroll --endpoint https://…:46200` als Administrator.
+   Der Agent erzeugt sein Schlüsselpaar **lokal**, löst das Einmal-Token ein,
+   erhält Zertifikat plus API-Key, holt seine Einstellungen aus dem Cockpit und
+   startet den Dienst.
 3. **Fingerprint vergleichen:** die Konsole zeigt den SPKI-Fingerprint des neu
    ausgestellten Zertifikats, der Agent zeigt denselben lokal. Beide vorlesen.
    Stimmen sie nicht, abbrechen.

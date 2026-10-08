@@ -189,7 +189,7 @@ nicht (§11, L-02) — dafür die API (`PUT /api/platform/settings`,
 - [ ] **C-10** Einmal-Token aus der Konsole, `endpoint` = Name aus dem Zertifikat → Anmeldung gelingt; Token ein zweites Mal → abgelehnt; Token nach 24 h → abgelehnt.
 - [ ] **C-11** `endpoint` als IP-Adresse → `enroll` scheitert mit „Das Zertifikat der Plattform gilt nicht für '<IP>' … an der Firewall liegt es nicht"; **kein** Hinweis auf TCP 46200.
 - [ ] **C-12** Port 46200 blockiert → „Keine Antwort von …" bzw. „Verbindung … abgewiesen"; Name nicht auflösbar → „lässt sich nicht auflösen". Fremdes `ca_bundle` → Meldung nennt `ca_bundle`.
-- [ ] **C-13** `magister-connector check` in einer **neuen** Eingabeaufforderung, nicht der aus dem Startmenü (Installationsordner im PATH) → Zeilen *Endpunkt* (Warnung bei IP), *Rechte*, *Anmeldung*, *Zertifikat*, *Kanal* (echter TLS-Handshake), *AD-Umgebung* (aus der Dienst-Umgebung bzw. `ad.env`) und *AD* (LDAPS-Bind mit dem Dienstkonto). Falsches Bind-Passwort → „Dienstkonto abgewiesen", und das Passwort steht **nirgends** in der Ausgabe.
+- [ ] **C-13** `magister-connector check` auf dem DC in einer **neuen** Eingabeaufforderung als Administrator → Zeilen *Endpunkt* (Warnung bei IP), *Rechte*, *Anmeldung*, *Zertifikat*, *Kanal* (echter TLS-Handshake), *Cockpit* (Konfiguration geholt), *OU-Freigabe* (aus dem Cockpit; eine Freigabe auf `OU=Domain Controllers` erscheint als „VERWORFEN"), *DC* und *AD* (LDAPS mit Kerberos-Anmeldung). Kein Passwort wird abgefragt oder angezeigt.
 - [ ] **C-13a** Nach Deinstallation ist der Ordner wieder aus dem System-PATH entfernt.
 - [ ] **C-14** Privater Schlüssel liegt nur auf dem Agenten (Dateirechte: nur SYSTEM/Administratoren); im Download-Paket kein Geheimnis ausser dem Einmal-Token.
 

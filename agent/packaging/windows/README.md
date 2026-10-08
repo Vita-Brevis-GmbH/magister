@@ -206,8 +206,6 @@ einer erklärten Warnung.
 
 ## Noch offen
 
-* **`.deb` für Debian/Ubuntu.** Die systemd-Unit liegt in
-  `agent/deploy/magister-connector.service`; ein Paket drumherum fehlt.
 * **Automatische Aktualisierung des Agenten** (Entscheid E10 in
   `docs/features/multitenancy.md`). Bis dahin ist ein Update ein erneutes
   Ausrollen des MSI — es ersetzt die Fassung an derselben Stelle und lässt

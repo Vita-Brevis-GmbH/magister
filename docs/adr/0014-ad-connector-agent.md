@@ -386,3 +386,45 @@ vorher), und die Plattform akzeptiert den alten Fingerprint im
 Erneuert wird **30 Tage** vor Ablauf und nach einem Fehlschlag stündlich. 30
 von 90 ist reichlich, und das ist Absicht: bei sieben Tagen wären
 Betriebsferien beim Kunden genug, um den Agenten stillzulegen.
+
+## Nachtrag · Agent auf dem DC, Einstellungen aus dem Cockpit (2026-10)
+
+**Anlass.** Der Agent auf einem Mitgliedsserver mit einem AD-Dienstkonto
+brach das Tiering: ein Tier-1-Server hielt ein Passwort, das in Tier 0
+schreibt. Und die OU-Freigabe in einer Datei auf dem Server war die eine
+Einstellung, die Vita Brevis bei jeder Änderung beim Kunden anfassen musste.
+
+**E1 · Der Agent läuft auf dem Domänencontroller**, als LocalSystem, und
+bindet sich per SASL/GSSAPI über LDAPS als **Maschinenkonto des DC** ans AD
+(`ad_bind_mode = "gssapi"`, unter Windows über `winkerberos` mit den
+Anmeldedaten des Prozesses). Kein Dienstkonto, kein Passwort. Rechte bekommt
+das Maschinenkonto per Delegation nur auf den freigegebenen OUs. Ausgeliefert
+wird nur noch das MSI; das Debian-Paket und das apt-Repository entfallen.
+
+**E2 · Alle Einstellungen im Cockpit.** OU-Freigabe und zusätzliche
+geschützte Gruppen stehen je Kunde in `tenant_connector_settings`; DCs,
+Suchbasen und LDAPS-CA kommen aus den Kunden-Einstellungen. Der Agent holt sie
+über `GET /connector/config` (Zertifikat + API-Key, nur die eigene) alle fünf
+Minuten und legt die letzte Fassung in seinem Zustandsverzeichnis ab. Auf dem
+DC steht nur der Endpunkt, angelegt von `enroll --endpoint`. Leere DC-Liste
+heisst: der DC, auf dem der Agent läuft.
+
+**E3 · Was der Agent trotzdem selbst festhält.** Die frühere Zusage „die
+Plattform kann die OU-Freigabe nicht ändern" gilt so nicht mehr — dafür
+gilt, unabhängig vom Cockpit und fest im Agenten:
+
+- ganze Domäne, Domain Controllers, Builtin, System, Configuration, Schema,
+  Program Data, Managed Service Accounts, ForeignSecurityPrincipals sind nie
+  eine Freigabe und nie Ziel eines Auftrags (dieselbe Liste wie
+  `connector_scope.FORBIDDEN_CONTAINERS` im Cockpit; ein Test hält beide
+  gleich, und das Cockpit lehnt solche Einträge schon beim Speichern ab);
+- die eingebauten geschützten Gruppen bleiben gesperrt, das Cockpit kann nur
+  ergänzen;
+- Konten mit `adminCount=1` oder `isCriticalSystemObject` fasst der Agent nicht
+  an — geprüft im AD vor jeder Änderung, nicht anhand des Auftrags; scheitert
+  die Prüfung, wird nicht geschrieben;
+- Methoden- und Attribut-Sperren wie bisher.
+
+Damit ist der Schaden einer übernommenen Plattform auf das begrenzt, was der
+Kunde dem Maschinenkonto delegiert hat, und nie Tier-0-Konten.
+

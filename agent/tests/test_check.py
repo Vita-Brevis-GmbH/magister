@@ -1,8 +1,8 @@
-"""``magister-connector check``: AD-Zeile, Dienst-Umgebung, keine Geheimnisse.
+"""``magister-connector check``: Kanal, Konfiguration aus dem Cockpit, AD.
 
-Der Befehl ist der Abnahmebefehl beim Kunden. Er muss das AD mit **denselben**
-Zugangsdaten prüfen, die der Dienst bekommt — und darf dabei keinen davon
-ausgeben, auch nicht im Fehlerfall.
+Der Befehl ist der Abnahmebefehl auf dem DC. Er prüft das AD mit **derselben**
+Konfiguration, die der Dienst aus dem Cockpit holt — Kerberos als
+Maschinenkonto, kein Passwort.
 """
 
 from __future__ import annotations
@@ -14,11 +14,9 @@ from typing import Any
 import pytest
 
 from connector_agent import cli
-from connector_agent.adenv import ServiceEnvironment, apply_missing, parse_env_lines
-from connector_agent.config import AgentConfig
+from connector_agent import remote as remote_cfg
+from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.diagnose import ProbeResult
-
-GEHEIM = "S3hr-geheim!"
 
 
 class _FakeAd:
@@ -31,18 +29,32 @@ class _FakeAd:
 
 @pytest.fixture
 def config_file(tmp_path: Path) -> Path:
+    state = tmp_path / "state"
+    state.mkdir(mode=0o700)
+    (state / "secrets.json").write_text(
+        json.dumps({"agent_id": "a", "api_key": "k", "result_hmac_key": "h", "spki_sha256": "abc"})
+    )
+    (state / "secrets.json").chmod(0o600)
     path = tmp_path / "config.json"
     path.write_text(
         json.dumps(
             {
                 "endpoint": "https://172.25.12.10:46200",
-                "state_dir": str(tmp_path / "state"),
+                "state_dir": str(state),
                 "ca_bundle": str(tmp_path / "ca.pem"),
-                "allowed_ous": ["OU=Schule,DC=x,DC=y"],
             }
         )
     )
     return path
+
+
+REMOTE: dict[str, Any] = {
+    "allowed_ous": ["OU=Schule,DC=x,DC=y"],
+    "protected_groups": [],
+    "ad": {"dcs": ["dc01.x.y"], "users_search_base": "OU=Schule,DC=x,DC=y"},
+    "poll_seconds": 25,
+    "revision": "r1",
+}
 
 
 def _run_check(
@@ -51,68 +63,104 @@ def _run_check(
     config_file: Path,
     *,
     ad: Any,
-    service: ServiceEnvironment | None,
     probe: ProbeResult,
+    remote: dict[str, Any] | None = REMOTE,
 ) -> tuple[int, str]:
-    monkeypatch.setattr(cli, "service_environment", lambda: service)
-    monkeypatch.setattr(cli, "build_ad_client", lambda: ad)
+    def _ad(_remote: remote_cfg.RemoteConfig) -> Any:
+        return ad
+
+    def _cert(_config: AgentConfig) -> int:
+        return 0
+
+    monkeypatch.setattr(cli, "build_ad_client", _ad)
+    monkeypatch.setattr(cli, "_report_certificate", _cert)
 
     def _probe(_config: AgentConfig) -> ProbeResult:
         return probe
 
+    def _fetch(
+        _config: AgentConfig, _secrets: AgentSecrets
+    ) -> tuple[remote_cfg.RemoteConfig, dict[str, Any]]:
+        if remote is None:
+            raise remote_cfg.RemoteConfigError("Konfiguration nicht geholt (HTTP 503).")
+        return remote_cfg.parse(remote), remote
+
     monkeypatch.setattr(cli, "probe_channel", _probe)
-    for key in ("MAGISTER_AD_DCS", "MAGISTER_AD_BIND_DN", "MAGISTER_AD_BIND_PASSWORD"):
-        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr(remote_cfg, "fetch_sync", _fetch)
     code = cli.main(["--config", str(config_file), "check"])
     out = capsys.readouterr()
     return code, out.out + out.err
 
 
-class TestAdLine:
-    def test_a_rejected_bind_is_named_without_the_password(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-        config_file: Path,
-    ) -> None:
-        service = ServiceEnvironment(
-            source="/etc/magister-connector/ad.env",
-            values={
-                "MAGISTER_AD_DCS": "dc01.schule.local",
-                "MAGISTER_AD_BIND_DN": "CN=svc,DC=schule,DC=local",
-                "MAGISTER_AD_BIND_PASSWORD": GEHEIM,
-            },
-        )
-        code, text = _run_check(
-            monkeypatch,
-            capsys,
-            config_file,
-            ad=_FakeAd(False, "ad_auth"),
-            service=service,
-            probe=ProbeResult(True, "ok"),
-        )
-        assert code == 1
-        assert "AD:           FEHLER" in text
-        assert "Dienstkonto abgewiesen" in text
-        assert "/etc/magister-connector/ad.env, 3 Wert(e)" in text
-        assert GEHEIM not in text
-
-    def test_a_working_bind_is_ok(
+class TestCheck:
+    def test_all_green(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
         config_file: Path,
     ) -> None:
         _code, text = _run_check(
+            monkeypatch, capsys, config_file, ad=_FakeAd(True, "ad_ok"), probe=ProbeResult(True, "")
+        )
+        assert "Cockpit:      ok — Konfiguration r1" in text
+        assert "OU-Freigabe:  1 OU(s) aus dem Cockpit" in text
+        assert "DC:           dc01.x.y" in text
+        assert "AD:           ok — LDAPS mit Kerberos-Anmeldung gelungen" in text
+
+    def test_a_rejected_kerberos_bind_is_explained(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        config_file: Path,
+    ) -> None:
+        code, text = _run_check(
+            monkeypatch,
+            capsys,
+            config_file,
+            ad=_FakeAd(False, "ad_auth"),
+            probe=ProbeResult(True, ""),
+        )
+        assert code == 1
+        assert "Kerberos-Anmeldung als Maschinenkonto" in text
+
+    def test_a_forbidden_ou_from_the_cockpit_is_shown_as_refused(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        config_file: Path,
+    ) -> None:
+        remote = {**REMOTE, "allowed_ous": ["OU=Domain Controllers,DC=x,DC=y"]}
+        code, text = _run_check(
             monkeypatch,
             capsys,
             config_file,
             ad=_FakeAd(True, "ad_ok"),
-            service=None,
-            probe=ProbeResult(True, "ok"),
+            probe=ProbeResult(True, ""),
+            remote=remote,
         )
-        assert "AD:           ok" in text
-        assert "keine Dienst-Umgebung gefunden" in text
+        assert code == 1
+        assert "OU-Freigabe:  LEER" in text
+        assert "VERWORFEN (liegt in ou=domain controllers)" in text
+
+    def test_without_the_cockpit_the_cached_config_is_used(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+        config_file: Path,
+    ) -> None:
+        config = AgentConfig.from_file(config_file)
+        remote_cfg.save_cache(config, REMOTE)
+        code, text = _run_check(
+            monkeypatch,
+            capsys,
+            config_file,
+            ad=_FakeAd(True, "ad_ok"),
+            probe=ProbeResult(True, ""),
+            remote=None,
+        )
+        assert code == 1
+        assert "es gilt die zuletzt geholte" in text
+        assert "OU-Freigabe:  1 OU(s)" in text
 
     def test_ip_endpoint_and_failed_channel_are_reported(
         self,
@@ -125,7 +173,6 @@ class TestAdLine:
             capsys,
             config_file,
             ad=_FakeAd(True, "ad_ok"),
-            service=None,
             probe=ProbeResult(False, "Zertifikat passt nicht"),
         )
         assert code == 1
@@ -133,43 +180,100 @@ class TestAdLine:
         assert "Kanal:        FEHLER — Zertifikat passt nicht" in text
 
 
-class TestServiceEnvironment:
-    def test_parses_like_systemd(self) -> None:
-        values = parse_env_lines(
+class TestRemoteConfig:
+    def test_the_ad_settings_are_kerberos_without_a_password(self) -> None:
+        kwargs = remote_cfg.ad_settings_kwargs(remote_cfg.parse(REMOTE))
+        assert kwargs["ad_bind_mode"] == "gssapi"
+        assert kwargs["ad_bind_password"] is None
+        assert kwargs["ad_dcs"] == ["dc01.x.y"]
+
+    def test_without_dcs_the_agent_uses_its_own_server(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(remote_cfg, "local_dc_fqdn", lambda: "dc07.x.y")
+        kwargs = remote_cfg.ad_settings_kwargs(remote_cfg.parse({**REMOTE, "ad": {}}))
+        assert kwargs["ad_dcs"] == ["dc07.x.y"]
+
+    @pytest.mark.parametrize(
+        "dn",
+        [
+            "DC=x,DC=y",
+            "OU=Domain Controllers,DC=x,DC=y",
+            "OU=Sub,CN=System,DC=x,DC=y",
+            "CN=Builtin,DC=x,DC=y",
+            "OU=ohne-domaene",
+            "kein dn",
+        ],
+    )
+    def test_forbidden_bases_are_dropped(self, dn: str) -> None:
+        parsed = remote_cfg.parse({"allowed_ous": [dn, "OU=Schule,DC=x,DC=y"]})
+        assert parsed.allowed_ous == frozenset({"OU=Schule,DC=x,DC=y"})
+        assert [d for d, _ in parsed.refused_ous] == [dn]
+
+    def test_the_built_ad_client_is_kerberos(self) -> None:
+        pytest.importorskip("magister_api.config")
+        client = cli.build_ad_client(remote_cfg.parse(REMOTE))
+        assert client is not None
+        settings: Any = getattr(client, "_settings")  # noqa: B009
+        mode: str = settings.ad_bind_mode
+        dcs: list[str] = settings.ad_dcs
+        assert mode == "gssapi"
+        assert dcs == ["dc01.x.y"]
+
+    def test_legacy_local_ous_are_ignored(self, caplog: pytest.LogCaptureFixture) -> None:
+        config = AgentConfig.from_mapping(
+            {"endpoint": "https://connect.example.ch:46200", "allowed_ous": ["OU=A,DC=x"]}
+        )
+        assert not hasattr(config, "allowed_ous")
+        assert "Cockpit" in caplog.text
+
+
+class TestEnrollWritesTheLocalConfig:
+    def test_endpoint_and_ca_land_in_the_state_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        ca = tmp_path / "root.pem"
+        ca.write_text("-----BEGIN CERTIFICATE-----\n")
+        path = tmp_path / "state" / "config.json"
+        seen: dict[str, AgentConfig] = {}
+
+        def _enroll(config: AgentConfig, **_kw: Any) -> Any:
+            seen["config"] = config
+            raise cli.EnrollmentFailedError("Testende")
+
+        monkeypatch.setattr(cli, "enroll", _enroll)
+        code = cli.main(
             [
-                "# Kommentar",
-                "",
-                "MAGISTER_AD_DCS=dc01.schule.local,dc02.schule.local",
-                'MAGISTER_AD_BIND_PASSWORD="mit = Gleichheitszeichen"',
-                "PATH=/nicht/unseres",
-                "kaputt",
+                "--config",
+                str(path),
+                "enroll",
+                "--endpoint",
+                "https://connect.example.ch:46200/",
+                "--ca",
+                str(ca),
+                "--token",
+                "t",
+                "--ohne-start",
             ]
         )
-        assert values == {
-            "MAGISTER_AD_DCS": "dc01.schule.local,dc02.schule.local",
-            "MAGISTER_AD_BIND_PASSWORD": "mit = Gleichheitszeichen",
-        }
+        assert code == 1
+        config = seen["config"]
+        assert config.endpoint == "https://connect.example.ch:46200"
+        assert config.state_dir == tmp_path / "state"
+        assert config.ca_bundle == tmp_path / "state" / "platform-ca.pem"
+        assert config.ca_bundle.read_text().startswith("-----BEGIN")
 
-    def test_values_set_by_hand_win(self) -> None:
-        env = {"MAGISTER_AD_DCS": "von-hand"}
-        service = ServiceEnvironment(
-            source="x", values={"MAGISTER_AD_DCS": "dienst", "MAGISTER_AD_BIND_DN": "dn"}
+    def test_plain_http_is_refused(self, tmp_path: Path) -> None:
+        code = cli.main(
+            [
+                "--config",
+                str(tmp_path / "config.json"),
+                "enroll",
+                "--endpoint",
+                "http://connect.example.ch",
+                "--token",
+                "t",
+            ]
         )
-        assert apply_missing(service, env) == ["MAGISTER_AD_BIND_DN"]
-        assert env == {"MAGISTER_AD_DCS": "von-hand", "MAGISTER_AD_BIND_DN": "dn"}
-
-
-class TestBuildAdClientKeepsSecretsOut:
-    def test_a_validation_error_names_fields_not_values(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        pytest.importorskip("magister_api.config")
-        monkeypatch.setenv("MAGISTER_AD_BIND_PASSWORD", GEHEIM)
-        # Ein Feld, das sicher scheitert: eine Zahl, die keine ist.
-        monkeypatch.setenv("MAGISTER_AD_SYNC_INTERVAL_MINUTES", "keine-zahl")
-        result = cli.build_ad_client()
-        err = capsys.readouterr().err
-        if result is not None:
-            pytest.skip("Die AD-Schicht kennt das Feld nicht; nichts zu prüfen.")
-        assert GEHEIM not in err
-        assert "keine-zahl" not in err
+        assert code == 1
+        assert not (tmp_path / "config.json").exists()

@@ -19,16 +19,18 @@ der Anrufer nicht — der Grund steht im Log.
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from cockpit_api.auth import require_bootstrap_token
+from cockpit_api.auth import Caller, require_bootstrap_token, require_person
 from cockpit_api.config import settings
 from cockpit_api.db import get_session
 from cockpit_api.models import (
@@ -37,15 +39,20 @@ from cockpit_api.models import (
     ConnectorJob,
     JobState,
     Tenant,
+    TenantConnectorSettings,
     TenantStatus,
 )
 from cockpit_api.schemas.connector import (
+    AgentAdSettings,
     AgentEnrollRequest,
     AgentEnrollResponse,
     AgentOut,
+    AgentRemoteConfig,
     AgentRenewRequest,
     AgentRenewResponse,
     AgentRevoke,
+    ConnectorSettingsIn,
+    ConnectorSettingsOut,
     EnrollmentCreate,
     EnrollmentOut,
     JobDetailOut,
@@ -68,6 +75,8 @@ from cockpit_api.services.connector_queue import (
     expire_stale_jobs,
     submit_result,
 )
+from cockpit_api.services.connector_scope import ScopeError, check_scope
+from cockpit_api.services.settings import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -113,8 +122,82 @@ async def create_enrollment(
     )
     await session.commit()
     await session.refresh(row)
+    host = settings.connector_hostname.strip()
     return EnrollmentOut(
-        id=row.id, agent_name=row.agent_name, expires_at=row.expires_at, token=token
+        id=row.id,
+        agent_name=row.agent_name,
+        expires_at=row.expires_at,
+        token=token,
+        endpoint=f"https://{host}:46200" if host else "",
+    )
+
+
+async def _connector_settings(session: AsyncSession, tenant_id: UUID) -> TenantConnectorSettings:
+    row = await session.get(TenantConnectorSettings, tenant_id)
+    if row is None:
+        row = TenantConnectorSettings(tenant_id=tenant_id, allowed_ous=[], protected_groups=[])
+    return row
+
+
+@console.get("/connector-settings", response_model=ConnectorSettingsOut)
+async def get_connector_settings(
+    tenant_id: UUID, session: AsyncSession = Depends(get_session)
+) -> ConnectorSettingsOut:
+    await _tenant(session, tenant_id)
+    row = await session.get(TenantConnectorSettings, tenant_id)
+    if row is None:
+        return ConnectorSettingsOut(
+            allowed_ous=[], protected_groups=[], updated_at=None, updated_by=None
+        )
+    return ConnectorSettingsOut(
+        allowed_ous=list(row.allowed_ous),
+        protected_groups=list(row.protected_groups),
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
+    )
+
+
+@console.put("/connector-settings", response_model=ConnectorSettingsOut)
+async def put_connector_settings(
+    tenant_id: UUID,
+    payload: ConnectorSettingsIn,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> ConnectorSettingsOut:
+    """OU-Freigabe und geschützte Gruppen setzen. Der Agent holt sie beim nächsten Abruf.
+
+    Die Freigabe ist die Schranke zwischen Plattform und AD: der Agent läuft
+    auf dem DC. Was nie freigegeben werden darf (ganze Domäne, Domain
+    Controllers, Builtin, System …), lehnt diese Prüfung ab — und der Agent
+    noch einmal selbst.
+    """
+    tenant = await _tenant(session, tenant_id)
+    try:
+        ous, groups = check_scope(payload.allowed_ous, payload.protected_groups)
+    except ScopeError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    row = await session.get(TenantConnectorSettings, tenant_id)
+    if row is None:
+        row = TenantConnectorSettings(tenant_id=tenant.id)
+        session.add(row)
+    row.allowed_ous = ous
+    row.protected_groups = groups
+    row.updated_at = datetime.now(UTC)
+    row.updated_by = caller.actor
+    await session.commit()
+    await session.refresh(row)
+    logger.info(
+        "Connector-Freigabe für %s geändert von %s: %d OU(s), %d zusätzliche Gruppe(n)",
+        tenant.slug,
+        caller.actor,
+        len(ous),
+        len(groups),
+    )
+    return ConnectorSettingsOut(
+        allowed_ous=list(row.allowed_ous),
+        protected_groups=list(row.protected_groups),
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
     )
 
 
@@ -385,6 +468,53 @@ async def renew(
         spki_sha256=issued.spki_sha256,
         certificate_not_after=issued.not_after,
         previous_valid_until=now + svc.ROTATION_GRACE,
+    )
+
+
+def _opt_str(value: object) -> str | None:
+    return value.strip() or None if isinstance(value, str) else None
+
+
+@agent_api.get("/config", response_model=AgentRemoteConfig)
+async def agent_config(
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+    session: AsyncSession = Depends(get_session),
+) -> AgentRemoteConfig:
+    """Die Konfiguration des Agenten, aus dem Cockpit (ADR-0014 Nachtrag).
+
+    Beglaubigt wie jeder Agentenaufruf (Zertifikat + API-Key), und nur die
+    eigene: der Kunde kommt aus der Agent-Zeile. Kein Geheimnis darin — der
+    Agent meldet sich am AD als Maschinenkonto des DC per Kerberos an.
+    """
+    _agent, tenant = identity
+    scope = await _connector_settings(session, tenant.id)
+    desired = (await SettingsService(session).desired_state(tenant))["settings"]
+    dcs_raw: object = desired.get("ad_dcs")
+    ad = AgentAdSettings(
+        dcs=[str(d) for d in cast(list[object], dcs_raw)] if isinstance(dcs_raw, list) else [],
+        users_search_base=_opt_str(desired.get("ad_users_search_base")),
+        computers_search_base=_opt_str(desired.get("ad_computers_search_base")),
+        tls_verify=bool(desired.get("ad_tls_verify", True)),
+        tls_ca_pem=_opt_str(desired.get("ad_tls_ca_pem")),
+    )
+    allowed_ous = [str(o) for o in scope.allowed_ous]
+    protected_groups = [str(g) for g in scope.protected_groups]
+    body = {
+        "allowed_ous": allowed_ous,
+        "protected_groups": protected_groups,
+        "ad": ad.model_dump(),
+        "poll_seconds": settings.connector_poll_seconds,
+    }
+    revision = hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()[:16]
+    await session.commit()
+    return AgentRemoteConfig(
+        allowed_ous=allowed_ous,
+        protected_groups=protected_groups,
+        ad=ad,
+        poll_seconds=settings.connector_poll_seconds,
+        revision=revision,
     )
 
 

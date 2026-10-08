@@ -1,8 +1,11 @@
 """Konfiguration und Zustand des Agenten (ADR-0014).
 
-Getrennt gehalten: die **Konfiguration** kommt vom Kunden und ändert sich
-selten (Endpunkt, OU-Allowlist, AD-Zugang). Der **Zustand** entsteht bei der
-Anmeldung (Zertifikat, Schlüssel, API-Key) und gehört dem Agenten.
+Getrennt gehalten: die **lokale Konfiguration** ist nur noch der Weg zur
+Plattform (Endpunkt, CA, ggf. Proxy) und entsteht bei ``enroll``. Alles
+andere — OU-Freigabe, geschützte Gruppen, Domänencontroller, Suchbasen — wird
+im Cockpit gepflegt und vom Agenten geholt (:mod:`connector_agent.remote`).
+Der **Zustand** entsteht bei der Anmeldung (Zertifikat, Schlüssel, API-Key)
+und gehört dem Agenten.
 
 Der private Schlüssel und die Geheimnisse liegen mit ``0600`` in einem
 Verzeichnis mit ``0700``. Der Agent prüft das beim Start und **weigert sich**,
@@ -27,8 +30,6 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
-
-from connector_agent.guardrails import DEFAULT_PROTECTED_GROUPS, Guardrails
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class AgentConfig:
-    """Was der Kunde konfiguriert."""
+    """Der Weg zur Plattform. Mehr steht auf dem DC nicht."""
 
     #: Basis-URL des Connector-Kanals, z. B. ``https://connect.magister.ch:46200``.
     endpoint: str
@@ -76,12 +77,6 @@ class AgentConfig:
     #: die Gegenrichtung zum Client-Zertifikat: ohne diese Prüfung könnte ein
     #: Angreifer im Netz die Plattform spielen und Aufträge erteilen.
     ca_bundle: Path
-    #: Lokale OU-Allowlist. Leer heisst: keine Verzeichnisaufträge (siehe
-    #: guardrails._check_dns) — nicht "alles erlaubt".
-    allowed_ous: frozenset[str] = frozenset()
-    #: Geschützte Gruppen. Die eingebaute Liste ist eine **Untergrenze** —
-    #: Einträge aus der Konfiguration kommen dazu und ersetzen sie nicht.
-    protected_groups: frozenset[str] = DEFAULT_PROTECTED_GROUPS
     #: Ausgehender HTTP-Proxy, falls das Kundennetz einen verlangt. Bewusst
     #: **explizit** und nicht aus ``HTTPS_PROXY`` der Umgebung: der Kanal
     #: trägt ein Client-Zertifikat, und ob das ankommt, darf nicht davon
@@ -93,10 +88,6 @@ class AgentConfig:
     poll_seconds: int = 25
     #: Wartezeit nach einem Fehler, bevor erneut angeklopft wird.
     backoff_seconds: float = 5.0
-
-    @property
-    def guardrails(self) -> Guardrails:
-        return Guardrails(allowed_ous=self.allowed_ous, protected_groups=self.protected_groups)
 
     @property
     def cert_path(self) -> Path:
@@ -134,40 +125,40 @@ class AgentConfig:
             )
         state_dir = Path(str(raw.get("state_dir") or DEFAULT_STATE_DIR))
         ca_bundle = Path(str(raw.get("ca_bundle") or state_dir / "platform-ca.pem"))
-        ous = frozenset(
-            text for text in (str(o).strip() for o in _string_list(raw.get("allowed_ous"))) if text
-        )
-        # VEREINIGUNG, nicht Ersetzung: die eingebaute Liste ist eine
-        # Untergrenze. Wer eine eigene geschützte Gruppe eintragen will, soll
-        # dabei nicht den Schutz für „Domänen-Admins" verlieren — und genau
-        # das täte er, wenn die Konfiguration die Vorgabe ersetzte. Der Fehler
-        # wäre still: alles läuft, und die Plattform darf plötzlich Konten in
-        # die Domänen-Admins aufnehmen.
-        configured_groups = frozenset(
-            text
-            for text in (str(g).strip().lower() for g in _string_list(raw.get("protected_groups")))
-            if text
-        )
-        groups = DEFAULT_PROTECTED_GROUPS | configured_groups
+        legacy = sorted(k for k in ("allowed_ous", "protected_groups") if k in raw)
+        if legacy:
+            # Aus der Zeit, als die Freigabe auf dem Server stand. Nicht still
+            # übernehmen: es gilt, was im Cockpit steht.
+            logger.warning(
+                "%s in der lokalen Konfiguration wird nicht mehr gelesen — die Freigabe "
+                "steht im Cockpit beim Kunden unter „AD-Connector“.",
+                ", ".join(legacy),
+            )
         proxy_raw = raw.get("proxy")
         proxy = str(proxy_raw).strip() if isinstance(proxy_raw, str) and proxy_raw.strip() else None
         return cls(
             endpoint=endpoint,
             state_dir=state_dir,
             ca_bundle=ca_bundle,
-            allowed_ous=ous,
-            protected_groups=groups,
             proxy=proxy,
             poll_seconds=int(raw.get("poll_seconds") or 25),
             backoff_seconds=float(raw.get("backoff_seconds") or 5.0),
         )
 
 
-def _string_list(value: object) -> list[Any]:
-    """Liste aus dem JSON holen, ohne über ihren Inhalt zu raten."""
-    if isinstance(value, list):
-        return cast(list[Any], value)
-    return []
+def write_local_config(
+    path: Path, *, endpoint: str, state_dir: Path, ca_bundle: Path | None = None
+) -> None:
+    """Die lokale Konfiguration anlegen — bei ``enroll``, nicht von Hand."""
+    body: dict[str, Any] = {
+        "endpoint": endpoint.strip().rstrip("/"),
+        "state_dir": str(state_dir),
+    }
+    if ca_bundle is not None:
+        body["ca_bundle"] = str(ca_bundle)
+    AgentConfig.from_mapping(body)  # prüft den Endpunkt, bevor etwas geschrieben wird
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
 
 
 @dataclass(frozen=True, slots=True)
@@ -313,5 +304,6 @@ __all__ = [
     "ensure_state_dir",
     "load_secrets",
     "save_secrets",
+    "write_local_config",
     "write_secret_file",
 ]

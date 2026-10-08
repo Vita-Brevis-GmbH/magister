@@ -1,7 +1,7 @@
 [project]
 name = "magister-connector-agent"
-version = "0.1.0"
-description = "Connector-Agent für Magister — telefoniert aus dem Kundennetz nach Hause (ADR-0014)"
+version = "0.2.0"
+description = "Connector-Agent für Magister — läuft auf dem DC, holt seine Einstellungen aus dem Cockpit (ADR-0014)"
 requires-python = ">=3.12"
 dependencies = [
   "httpx>=0.27",
@@ -14,6 +14,11 @@ dependencies = [
   # Konsolenprogramm scheitert mit "Fehler 1053", auch wenn es einwandfrei
   # läuft. Siehe connector_agent/winservice.py.
   'pywin32>=306; sys_platform == "win32"',
+  # Nur unter Windows: Kerberos für den LDAPS-Bind über die Anmeldedaten des
+  # Prozesses. Als Dienst (LocalSystem) auf dem DC ist das dessen
+  # Maschinenkonto — kein Dienstkonto, kein Passwort. ldap3 nimmt winkerberos,
+  # wenn es kein POSIX-gssapi findet.
+  'winkerberos>=0.12; sys_platform == "win32"',
 ]
 
 [project.optional-dependencies]

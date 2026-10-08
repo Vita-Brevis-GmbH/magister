@@ -36,7 +36,7 @@ def paketverzeichnis(tmp_path: Path) -> Iterator[Path]:
     verzeichnis.mkdir()
     (verzeichnis / "magister-connector-1.4.0.msi").write_bytes(INHALT)
     (verzeichnis / "magister-connector_1.4.0_amd64.deb").write_bytes(INHALT)
-    # Nachbarn, die nicht ausgeliefert werden sollen.
+    # Nachbarn, die nicht ausgeliefert werden sollen — auch kein altes .deb.
     (verzeichnis / "magister-connector-1.4.0.msi.sig").write_bytes(b"signatur")
     (verzeichnis / "SHA256SUMS").write_text("egal\n")
     (verzeichnis / "unterordner").mkdir()
@@ -63,10 +63,7 @@ class TestListe:
         assert antwort.status_code == 200
         pakete = antwort.json()
         namen = [p["filename"] for p in pakete]
-        assert namen == [
-            "magister-connector-1.4.0.msi",
-            "magister-connector_1.4.0_amd64.deb",
-        ]
+        assert namen == ["magister-connector-1.4.0.msi"]
         erwartet = hashlib.sha256(INHALT).hexdigest()
         assert {p["sha256"] for p in pakete} == {erwartet}
         assert {p["size_bytes"] for p in pakete} == {len(INHALT)}

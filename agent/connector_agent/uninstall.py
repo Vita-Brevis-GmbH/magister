@@ -15,8 +15,8 @@ Dieser Befehl macht die Schritte in der Reihenfolge, in der sie sicher sind:
    noch da sind. Danach geht das nicht mehr: ohne Schlüssel kann der Agent
    nicht mehr beweisen, wer er ist.
 3. Schlüssel, Zertifikat und Geheimnisse löschen.
-4. Das Programm selbst entfernen (Windows: ``msiexec /x``; Linux: der
-   Paketbefehl wird genannt).
+4. Das Programm selbst entfernen (``msiexec /x``). Ausgeliefert wird der
+   Agent nur noch als MSI für den Domänencontroller.
 
 Scheitert die Abmeldung (Plattform nicht erreichbar), wird trotzdem gelöscht
 — der Schlüssel ist danach weg, und mit ihm jede Möglichkeit, die Anmeldung
@@ -45,15 +45,11 @@ from connector_agent.tls import TlsSetupError, build_context
 
 logger = logging.getLogger(__name__)
 
-#: Name des Windows-Dienstes und der systemd-Einheit.
+#: Name des Windows-Dienstes.
 WINDOWS_SERVICE = "MagisterConnector"
-SYSTEMD_UNIT = "magister-connector.service"
 
 #: So steht das Paket unter „Apps & Features" (Product/@Name in der .wxs).
 MSI_DISPLAY_NAME = "Magister Connector-Agent"
-
-#: Wie das Paket unter Debian/Ubuntu heisst.
-DEB_PACKAGE = "magister-connector"
 
 
 class DeregisterError(RuntimeError):
@@ -124,13 +120,9 @@ def _system32() -> Path:
 
 def stop_service() -> str:
     """Dienst anhalten. Gibt zurück, was geschah — scheitert nie laut."""
-    systemctl = shutil.which("systemctl")
-    if IS_WINDOWS:
-        cmd = [str(_system32() / "sc.exe"), "stop", WINDOWS_SERVICE]
-    elif systemctl:
-        cmd = [systemctl, "stop", SYSTEMD_UNIT]
-    else:
-        return "kein Dienstverwalter gefunden — nichts angehalten"
+    if not IS_WINDOWS:
+        return "kein Windows-Dienst hier — nichts angehalten"
+    cmd = [str(_system32() / "sc.exe"), "stop", WINDOWS_SERVICE]
     try:
         done = subprocess.run(  # noqa: S603 - fester Befehl mit absolutem Pfad
             cmd, capture_output=True, text=True, timeout=60, check=False
@@ -141,6 +133,23 @@ def stop_service() -> str:
     if done.returncode == 0 or "1062" in done.stdout:
         return "angehalten"
     return f"nicht angehalten (Code {done.returncode}) — läuft er überhaupt?"
+
+
+def start_service() -> str:
+    """Dienst starten (nach ``enroll``). Gibt zurück, was geschah — scheitert nie laut."""
+    if not IS_WINDOWS:
+        return "nur unter Windows — hier von Hand starten"
+    cmd = [str(_system32() / "sc.exe"), "start", WINDOWS_SERVICE]
+    try:
+        done = subprocess.run(  # noqa: S603 - fester Befehl mit absolutem Pfad
+            cmd, capture_output=True, text=True, timeout=60, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"nicht gestartet ({type(exc).__name__})"
+    # `sc start` meldet 1056, wenn er schon läuft — für uns dasselbe.
+    if done.returncode == 0 or "1056" in done.stdout:
+        return "gestartet"
+    return f"nicht gestartet (Code {done.returncode}) — Ereignisprotokoll ansehen"
 
 
 def credential_files(config: AgentConfig) -> list[Path]:
@@ -182,7 +191,7 @@ def windows_product_code() -> str | None:
     """
     if not IS_WINDOWS:
         return None
-    # Über importlib: `winreg` gibt es nur unter Windows (wie in adenv.py).
+    # Über importlib: `winreg` gibt es nur unter Windows.
     winreg: Any = importlib.import_module("winreg")
     root = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
     flags = winreg.KEY_READ | winreg.KEY_WOW64_64KEY
@@ -204,11 +213,11 @@ def windows_product_code() -> str | None:
 
 
 def remove_package(*, keep: bool) -> str:
-    """Programm entfernen (Windows) oder den Befehl dafür nennen (Linux)."""
+    """Das MSI entfernen."""
     if keep:
         return "behalten (--paket-behalten)"
     if not IS_WINDOWS:
-        return f"zum Entfernen des Pakets: sudo apt purge {DEB_PACKAGE}"
+        return "kein MSI hier — der Agent wird nur unter Windows als Paket ausgeliefert"
     code = windows_product_code()
     if code is None:
         return f"nicht gefunden — über „Apps & Features“ „{MSI_DISPLAY_NAME}“ entfernen"
@@ -232,6 +241,7 @@ __all__ = [
     "deregister",
     "is_admin",
     "remove_package",
+    "start_service",
     "stop_service",
     "windows_product_code",
     "wipe",

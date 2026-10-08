@@ -51,11 +51,10 @@ export function readableSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
-/** Windows, Debian oder unbekannt — nach der Endung, mehr weiss die API nicht. */
+/** Windows oder unbekannt — nach der Endung, mehr weiss die API nicht. */
 export function platformOf(filename: string): string {
   const lower = filename.toLowerCase();
   if (lower.endsWith(".msi") || lower.endsWith(".exe")) return "Windows";
-  if (lower.endsWith(".deb")) return "Debian/Ubuntu";
   return "—";
 }
 
@@ -67,7 +66,7 @@ export interface PlattformGruppe {
 }
 
 /** Reihenfolge der Gruppen. Was nicht drinsteht, kommt hinten nach Namen. */
-const PLATTFORM_ORDNUNG = ["Windows", "Debian/Ubuntu"];
+const PLATTFORM_ORDNUNG = ["Windows"];
 
 /**
  * Die Pakete nach Betriebssystem bündeln, je Gruppe das neueste zuerst.

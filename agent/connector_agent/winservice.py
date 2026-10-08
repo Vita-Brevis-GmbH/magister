@@ -148,35 +148,17 @@ class MagisterConnectorService(win32serviceutil.ServiceFramework):  # type: igno
             )
             return
 
-        from connector_agent.cli import VERSION, build_ad_client
-        from connector_agent.runner import AdExecutor, Runner
+        from connector_agent.cli import build_runner
+        from connector_agent.remote import RemoteConfigError
 
-        ad = build_ad_client()
-        if ad is None:
-            self._fail(
-                "Der AD-Zugang ist unvollständig. Die MAGISTER_AD_*-Werte "
-                "gehören in die Umgebung des Dienstes."
-            )
+        try:
+            # Die Konfiguration kommt aus dem Cockpit: OU-Freigabe, DCs,
+            # Suchbasen. Angemeldet wird am AD per Kerberos als Maschinenkonto
+            # dieses DC — der Dienst läuft als LocalSystem.
+            runner = await asyncio.to_thread(build_runner, config, secrets)
+        except (RemoteConfigError, ConfigError) as exc:
+            self._fail(str(exc))
             return
-
-        runner = Runner(
-            config=config,
-            secrets=secrets,
-            executor=AdExecutor(ad),
-            guardrails=config.guardrails,
-            agent_version=VERSION,
-        )
-        logger.info(
-            "Dienst läuft. Endpunkt %s, %d erlaubte OU(s), %d geschützte Gruppe(n).",
-            config.endpoint,
-            len(config.allowed_ous),
-            len(config.protected_groups),
-        )
-        if not config.allowed_ous:
-            logger.warning(
-                "Es ist keine OU-Allowlist konfiguriert. Verzeichnisaufträge "
-                "werden abgelehnt, bis eine steht — das ist Absicht."
-            )
         await runner.serve_forever(self._stop)
         logger.info("Dienst beendet.")
 

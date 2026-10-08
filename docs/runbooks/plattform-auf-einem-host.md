@@ -241,8 +241,8 @@ an (*Kunde → AD-Connector → „Agent herunterladen"*). Sie **baut nichts**: 
 liest ein Verzeichnis, das der Aufbau anlegt und schreibgeschützt einhängt.
 
 ```bash
-./scripts/agentenpakete.sh holen    # MSI + .deb aus der CI
-./scripts/agentenpakete.sh bauen    # nur das .deb, hier auf der Maschine
+./scripts/agentenpakete.sh holen    # das MSI aus der CI
+./scripts/agentenpakete.sh bauen    # sagt, wie das MSI entsteht (kein .deb mehr)
 ./scripts/agentenpakete.sh zeigen   # was liegt da, mit Prüfsumme
 ```
 
@@ -321,7 +321,7 @@ AGENT_CI_ZWEIG=claude/mein-zweig ./scripts/agentenpakete.sh holen
 
 Wer kein Token auf dem Server will, holt die Datei einmal von Hand: GitHub →
 Actions → *agent-ci* → letzter grüner Lauf → Artefakte
-`magister-connector-msi` und `magister-connector-deb`, entpacken, in das
+`magister-connector-msi`, entpacken, in das
 Verzeichnis legen. Artefakte verfallen (Vorgabe 90 Tage, das Payload nach 7);
 ist keines mehr da, den Workflow neu starten (*Run workflow*).
 
@@ -331,8 +331,7 @@ heissen und verschieden sind, und niemand weiss, welche der Kunde bekommen
 hat.
 
 Zwei Dinge, die die Prüfsumme in der Liste **nicht** ist: sie ist kein
-Herkunftsnachweis (dafür die Paketsignatur, Entscheid E18), und sie ersetzt
-das apt-Repository nicht (siehe `agent/packaging/apt/`). Sie beantwortet die
+Herkunftsnachweis (dafür die Paketsignatur, Entscheid E18). Sie beantwortet die
 eine Frage, die beim Onboarding am Telefon steht: „ist die Datei, die ich
 hier habe, dieselbe wie bei euch?"
 

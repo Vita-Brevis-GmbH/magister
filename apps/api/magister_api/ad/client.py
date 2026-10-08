@@ -1136,6 +1136,45 @@ class AdClient:
                 except LDAPException:
                     pass
 
+    async def is_privileged_account(self, *, user_dn: str) -> bool:
+        """Is this object an AD-protected (privileged) account?
+
+        ``adminCount=1`` marks every account that is or was in a protected
+        group (AdminSDHolder); ``isCriticalSystemObject`` marks built-ins such
+        as krbtgt. The connector agent on the DC refuses any change to either
+        (ADR-0014 Nachtrag). Fails closed: a failed read raises.
+        """
+        return await run_in_threadpool(self._sync_is_privileged_account, user_dn)
+
+    def _sync_is_privileged_account(self, user_dn: str) -> bool:
+        conn, owned = self._acquire_connection()
+        try:
+            result, entries = self._single_search(
+                conn,
+                base=user_dn,
+                search_filter="(objectClass=*)",
+                scope=BASE,
+                attributes=["adminCount", "isCriticalSystemObject"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                raise AdUnavailableError(f"ldap_read_admincount_failed:{detail}")
+            for entry in entries:
+                attrs = entry.get("attributes") or {}
+                for name in ("adminCount", "isCriticalSystemObject"):
+                    raw = attrs.get(name)
+                    if isinstance(raw, list):
+                        raw = raw[0] if raw else None
+                    if raw is not None and str(raw).strip().upper() in {"1", "TRUE"}:
+                        return True
+            return False
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
     async def set_account_enabled(self, *, user_dn: str, enabled: bool) -> tuple[bool, bool]:
         """Toggle the ``ACCOUNTDISABLE`` bit on ``userAccountControl``.
 

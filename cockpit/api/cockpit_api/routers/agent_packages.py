@@ -37,8 +37,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent-packages", tags=["agent-packages"])
 
 #: Was ausgeliefert wird. Alles andere im Verzeichnis (Signaturen,
-#: Prüfsummendateien, halbe Uploads) bleibt liegen.
-ERLAUBTE_ENDUNGEN = (".msi", ".deb", ".exe", ".zip")
+#: Prüfsummendateien, halbe Uploads) bleibt liegen. Kein ``.deb`` mehr: der
+#: Agent läuft auf dem Domänencontroller (ADR-0014 Nachtrag); ein altes Paket
+#: im Verzeichnis soll niemand mehr herunterladen.
+ERLAUBTE_ENDUNGEN = (".msi", ".exe", ".zip")
 
 
 def _verzeichnis() -> Path:

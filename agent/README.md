@@ -1,106 +1,72 @@
 # Magister Connector Agent
 
-Läuft im Netz des Kunden und **telefoniert nach Hause**: die Plattform baut nie
-eine Verbindung ins Kundennetz auf, und LDAP verlässt das Kundennetz nicht.
-Referenz: [ADR-0014](../docs/adr/0014-ad-connector-agent.md).
+Läuft **auf dem Domänencontroller** des Kunden und **telefoniert nach Hause**:
+die Plattform baut nie eine Verbindung ins Kundennetz auf, und LDAP verlässt
+den DC nicht. Am AD meldet er sich per Kerberos als **Maschinenkonto des DC**
+an — kein Dienstkonto, kein Passwort, kein Zugriff aus einer tieferen Ebene
+auf Tier 0. Referenz: [ADR-0014](../docs/adr/0014-ad-connector-agent.md),
+Nachtrag „Agent auf dem DC".
 
 ## Was der Agent ist — und was er nicht ist
 
 Er ist ein **Ausführender mit eigenen Grenzen**, kein Fernsteuerungs-Endpunkt.
-Die Plattform kann ihm nur die siebzehn bekannten AD-Operationen auftragen; es
-gibt keinen Weg, freies LDAP, PowerShell oder ein Skript zu schicken. Und was
-der Agent tatsächlich tut, begrenzt seine **lokale** Konfiguration:
+Die Plattform kann ihm nur die bekannten AD-Operationen auftragen; es gibt
+keinen Weg, freies LDAP, PowerShell oder ein Skript zu schicken.
 
-| Grenze | Wo konfiguriert | Was sie verhindert |
+**Eingestellt wird er im Cockpit.** Auf dem DC steht nur der Weg zur
+Plattform (Endpunkt, ggf. CA); OU-Freigabe, weitere geschützte Gruppen,
+Domänencontroller und Suchbasen holt der Agent über den beglaubigten Kanal
+(`GET /connector/config`) und merkt sich die letzte Fassung.
+
+| Grenze | Wo festgelegt | Was sie verhindert |
 |---|---|---|
 | Methoden-Allowlist | im Agenten fest | alles außer den bekannten Operationen |
-| OU-Allowlist | `config.json` beim Kunden | Zugriff auf Objekte außerhalb der Magister-OUs |
-| Gruppen-Denylist | `config.json`, mit Vorgabe | Aufnahme in privilegierte Gruppen (deutsch **und** englisch benannt) |
+| Gesperrte Container | im Agenten fest (und im Cockpit) | ganze Domäne, Domain Controllers, Builtin, System, Configuration … |
+| OU-Freigabe | Cockpit, vom Agenten nachgeprüft | Zugriff auf Objekte außerhalb der freigegebenen OUs |
+| Geschützte Gruppen | im Agenten fest, Cockpit kann ergänzen | Aufnahme in privilegierte Gruppen (deutsch **und** englisch benannt) |
+| Geschützte Konten | im Agenten fest | jede Änderung an Konten mit `adminCount=1` oder `isCriticalSystemObject` |
 | Attribut-Denylist | im Agenten fest | `userAccountControl`, `servicePrincipalName`, `memberOf` und Verwandte |
 
 Die Annahme dahinter ist unbequem und beabsichtigt: **die Plattform könnte
-kompromittiert sein.** Der Agent hat ein Dienstkonto, das Passwörter setzen
-darf — wer die Plattform übernimmt, würde genau das ausnutzen. Diese Grenzen
-liegen deshalb beim Kunden, und die Plattform kann sie nicht ändern, nicht
-lesen und nicht abschalten.
+kompromittiert sein.** Was im Agenten fest steht, kann sie nicht ändern und
+nicht abschalten; eine Freigabe auf die ganze Domäne oder auf Domain
+Controllers verwirft der Agent, auch wenn das Cockpit sie schickt. Die
+Rechte im AD bekommt das Maschinenkonto per Delegation nur auf den
+freigegebenen OUs — privilegierte Konten schützt AdminSDHolder zusätzlich.
 
-## Installation (Linux)
+## Installation (auf dem DC)
 
-```bash
-# 1. Paket auslegen, Dienstkonto anlegen
-sudo useradd --system --home /var/lib/magister-connector --shell /usr/sbin/nologin magister-connector
-sudo install -d -o magister-connector -g magister-connector -m 0700 /var/lib/magister-connector
-sudo install -d -m 0755 /etc/magister-connector
+Es gibt nur noch das MSI. Es installiert den Agenten und richtet den Dienst
+`MagisterConnector` (LocalSystem) ein.
 
-# 2. Konfiguration ablegen und anpassen
-sudo install -m 0640 -g magister-connector deploy/config.example.json /etc/magister-connector/config.json
-sudo install -m 0600 -o magister-connector deploy/ad.env.example /etc/magister-connector/ad.env
-# CA-Bundle der Plattform dazu (kommt mit dem Paket):
-sudo install -m 0644 platform-ca.pem /etc/magister-connector/platform-ca.pem
-
-# 3. Anmelden — das Einmal-Token kommt über stdin, damit es nicht in der
-#    Prozessliste und nicht in der Shell-History landet.
-sudo -u magister-connector magister-connector --config /etc/magister-connector/config.json enroll
-
-# 4. Prüfen, dann Dienst starten
-sudo -u magister-connector magister-connector --config /etc/magister-connector/config.json check
-sudo install -m 0644 deploy/magister-connector.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now magister-connector
-```
+1. Dem Maschinenkonto des DC (über eine Gruppe) auf den freizugebenden OUs
+   „Kennwort zurücksetzen", „Benutzerkonten verwalten" und
+   „Gruppenmitgliedschaft ändern" delegieren.
+2. `msiexec /i magister-connector-x64.msi`
+3. Im Cockpit beim Kunden unter „AD-Connector" ein Einmal-Token ausstellen und
+   die OUs freigeben.
+4. Auf dem DC, Eingabeaufforderung **als Administrator**:
+   ```
+   magister-connector enroll --endpoint https://connect.magister.ch:46200 [--ca root.pem]
+   magister-connector check
+   ```
+   `enroll` legt die lokale Konfiguration an, erzeugt den Schlüssel lokal,
+   meldet sich an, holt die Einstellungen aus dem Cockpit und startet den
+   Dienst. `check` prüft Kanal, Cockpit-Konfiguration und LDAPS mit Kerberos.
 
 Nach der Anmeldung nennt der Agent seinen **SPKI-Fingerprint**. Der muss mit
 der Anzeige in der Konsole übereinstimmen. Weicht er ab, hat sich jemand
 anders mit dem Token angemeldet — deshalb lebt es nur 24 Stunden und gilt nur
 einmal.
 
-### Als Paket
-
-```bash
-sudo dpkg -i magister-connector_0.1.0_amd64.deb
-sudo cp /etc/magister-connector/config.example.json /etc/magister-connector/config.json
-sudoedit /etc/magister-connector/config.json      # endpoint (Name aus dem Zertifikat!), allowed_ous
-sudoedit /etc/magister-connector/ad.env           # MAGISTER_AD_*
-sudo runuser -u magister-connector -- magister-connector enroll
-sudo runuser -u magister-connector -- magister-connector check
-sudo systemctl start magister-connector
-```
-
-Das Paket legt Dienstkonto, Zustandsverzeichnis (`0700`) und `ad.env` (`0640`)
-an und aktiviert die Unit — startet den Dienst aber absichtlich nicht: der
-Agent ist noch nicht angemeldet. Einzelheiten und die beiden Abwägungen dahinter
-(venv unter `/opt`, Zustand überlebt den Purge) in
-[`packaging/debian/README.md`](packaging/debian/README.md).
-
-## Installation (Windows)
-
-Für Windows gibt es ein MSI. Es installiert den Agenten, richtet den Dienst
-`MagisterConnector` ein und legt eine Konfigurationsvorlage ab.
-
-```
-msiexec /i magister-connector-0.1.0-x64.msi /qn
-```
-
-Danach am Server:
-
-1. `%ProgramData%\Magister Connector\config.example.json` nach `config.json`
-   kopieren und anpassen (`endpoint`, `allowed_ous`). Im `endpoint` steht der
-   Name, auf den das Zertifikat der Plattform ausgestellt ist — keine IP.
-2. Die `MAGISTER_AD_*`-Werte in die Umgebung des Dienstes eintragen.
-3. Eingabeaufforderung **als Administrator** (der Installationsordner steht im
-   System-PATH): `magister-connector enroll`, dann `magister-connector check`.
-   `check` prüft Kanal (Name, Port, Zertifikat) und AD-Bind mit den Werten
-   des Dienstes.
-4. `sc start MagisterConnector`.
-
 Der ganze Ablauf mit Begründungen steht in
 [`packaging/windows/INSTALL.txt`](packaging/windows/INSTALL.txt) — die Datei
 wird mitinstalliert und ist über das Startmenü erreichbar.
 
-**Das MSI startet den Dienst absichtlich nicht.** Zum Installationszeitpunkt
-ist der Agent nicht angemeldet; ein Start würde nur eine Fehlermeldung
-erzeugen. Und es fragt nicht nach dem Einmal-Token: eine MSI-Eigenschaft steht
-in der Kommandozeile des Installers und damit im Ereignisprotokoll und in
-jedem Verteilungswerkzeug.
+**Das MSI startet den Dienst absichtlich nicht** und fragt nicht nach dem
+Einmal-Token: eine MSI-Eigenschaft steht in der Kommandozeile des Installers
+und damit im Ereignisprotokoll und in jedem Verteilungswerkzeug. Beides
+erledigt `enroll`.
 
 Wie das Paket gebaut wird — Payload unter Windows mit PyInstaller, MSI
 drumherum unter Linux mit `wixl` — steht in
@@ -109,9 +75,9 @@ drumherum unter Linux mit `wixl` — steht in
 
 ### Die Rechte unter Windows
 
-Im Zustandsverzeichnis liegt der private Schlüssel des Agenten. Unter Linux
-schützt ihn `0700`; unter Windows schützt ihn die **ACL**, und das ist nicht
-dasselbe in anderer Schreibweise:
+Im Zustandsverzeichnis liegt der private Schlüssel des Agenten. Unter Windows
+schützt ihn die **ACL** (in den Linux-Tests `0700`), und das ist nicht dasselbe
+in anderer Schreibweise:
 
 * `os.stat()` liefert unter Windows erfundene Modus-Bits (Verzeichnisse melden
   `0o777`). Die POSIX-Prüfung schlägt dort **immer** fehl — ohne Anpassung
@@ -159,16 +125,15 @@ aktive Paar nicht zusammengehört.
 ## Deinstallieren
 
 ```bash
-magister-connector uninstall            # Windows: als Administrator; Linux: mit sudo
+magister-connector uninstall            # als Administrator
 magister-connector uninstall --alles    # auch Konfiguration und Protokoll
 ```
 
 In dieser Reihenfolge: Dienst anhalten, bei der Plattform abmelden
 (`POST /connector/decommission`, beglaubigt mit Zertifikat und API-Key — der
 Agent steht danach in der Konsole als widerrufen), Schlüssel, Zertifikat und
-Geheimnisse löschen, Programm entfernen (Windows: `msiexec /x` mit dem
-Produktcode aus der Programmliste; Linux: der `apt purge`-Befehl wird
-genannt). Abgemeldet wird **vor** dem Löschen, weil der Agent danach nicht
+Geheimnisse löschen, Programm entfernen (`msiexec /x` mit dem Produktcode
+aus der Programmliste). Abgemeldet wird **vor** dem Löschen, weil der Agent danach nicht
 mehr beweisen kann, wer er ist. Ist die Plattform nicht erreichbar, wird
 trotzdem gelöscht und der Widerruf in der Konsole verlangt (Exit-Code 2).
 
@@ -180,10 +145,11 @@ Unter Windows steht dafür im Startmenü „Connector-Agent deinstallieren".
 * **Ausgehend TCP 46200** zu `connect.magister.ch`. Kein Rückfall auf 443
   (Entscheid E11): eine Rückfallebene würde einen geschlossenen Port
   verstecken, bis es darauf ankommt. `check` sagt, ob es geht.
-* Ein **AD-Dienstkonto** mit delegierten Rechten auf den Magister-OUs — nicht
-  Domänen-Admin. Details in
-  [kunden-onboarding.md](../docs/runbooks/kunden-onboarding.md) §1.3.
-* **LDAPS** auf 636 mit vertrauenswürdigem Zertifikat.
+* Installation **auf einem Domänencontroller** (Windows Server 2012 R2 oder
+  neuer, 64 Bit).
+* Delegierte Rechte für das **Maschinenkonto des DC** auf den freigegebenen
+  OUs — kein Dienstkonto, keine Domänen-Admin-Rechte.
+* **LDAPS** auf 636 mit einem Zertifikat auf den DNS-Namen des DC.
 
 ## Warum der Agent `magister_api` mitbringt
 
@@ -212,11 +178,7 @@ uv run pyright
   Zeitpunkt — beim ersten Kunden mit AppLocker oder ab der dritten
   Windows-Installation. Kosten: 400–700 CHF einmalig für die
   Hardware-Verwahrung, 300–600 CHF jährlich für das Zertifikat.
-* **Der Ort für das apt-Repository.** Das Repository selbst ist gebaut und
-  geprüft ([packaging/apt/README.md](packaging/apt/README.md)); es fehlt
-  `apt.magister.ch` — ein DNS-Eintrag und statisches HTTPS.
-* **Automatische Updates** (Entscheid E10). Durch das signierte Repository
-  jetzt möglich; zu entscheiden bleibt, ob `unattended-upgrades` mit unserer
-  Quelle in der Allowlist oder nur ein Hinweis in der Konsole.
+* **Automatische Updates** (Entscheid E10). Bis dahin ist ein Update ein
+  erneutes Ausrollen des MSI.
 * **Sync-Seiten als Push.** Der Agent holt heute nur Aufträge ab; der
   wiederkehrende AD-Sync läuft noch über den direkten Weg.

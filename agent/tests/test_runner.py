@@ -37,6 +37,10 @@ class FakeAd:
     def __init__(self) -> None:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.raise_on: str | None = None
+        self.privileged: set[str] = set()
+
+    async def is_privileged_account(self, *, user_dn: str) -> bool:
+        return user_dn in self.privileged
 
     async def find_user_dn(self, ad_object_guid: str) -> str:
         self.calls.append(("find_user_dn", {"ad_object_guid": ad_object_guid}))
@@ -91,9 +95,16 @@ class FakePlatform:
         self.results: list[dict[str, Any]] = []
         self.poll_status = 200
         self.result_status = 200
+        self.config: dict[str, Any] | None = None
+        self.config_calls = 0
 
     def transport(self) -> httpx.MockTransport:
         def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET" and request.url.path == "/connector/config":
+                self.config_calls += 1
+                if self.config is None:
+                    return httpx.Response(503, json={"detail": "weg"})
+                return httpx.Response(200, json=self.config)
             if request.method == "GET":
                 if self.poll_status != 200:
                     return httpx.Response(self.poll_status, json={"detail": "nope"})
@@ -463,3 +474,100 @@ class TestTheDirectoryRead:
             await runner.run_once(client)
         assert ad.calls == [], "der Auftrag hat das Verzeichnis erreicht"
         assert platform.results[0]["ok"] is False
+
+
+class TestProtectedAccounts:
+    """Konten mit ``adminCount=1`` fasst der Agent nicht an — egal, was die Freigabe sagt."""
+
+    async def test_a_privileged_account_is_refused(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        ad.privileged.add(LEHRER)
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-p1",
+                    "method": "modify_password",
+                    "payload": {"user_dn": LEHRER, "new_password": "x", "force_change": True},
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        assert ad.calls == []
+        assert platform.results[0]["ok"] is False
+        assert "adminCount" in platform.results[0]["error"]
+
+    async def test_an_ad_layer_that_cannot_tell_writes_nothing(self, tmp_path: Path) -> None:
+        class BlindAd(FakeAd):
+            is_privileged_account = None  # type: ignore[assignment]
+
+        ad = BlindAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-p2",
+                    "method": "modify_password",
+                    "payload": {"user_dn": LEHRER, "new_password": "x", "force_change": True},
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        assert ad.calls == []
+        assert platform.results[0]["ok"] is False
+
+    async def test_reads_are_not_checked(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        ad.privileged.add(LEHRER)
+        platform = FakePlatform(
+            [{"id": "job-p3", "method": "find_user_dn", "payload": {"ad_object_guid": "g"}}]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+        assert platform.results[0]["ok"] is True
+
+
+class TestConfigFromTheCockpit:
+    def _with_remote(self, tmp_path: Path, platform: FakePlatform, ad: FakeAd) -> Runner:
+        from connector_agent.remote import parse
+
+        runner = _runner(tmp_path, platform, ad)
+        runner.remote = parse({"allowed_ous": [SCHULE], "revision": "r1"})
+        runner.guardrails = runner.remote.guardrails
+        return runner
+
+    async def test_a_new_revision_replaces_the_guardrails(self, tmp_path: Path) -> None:
+        platform = FakePlatform([])
+        platform.config = {"allowed_ous": ["OU=Neu,DC=gemeinde,DC=local"], "revision": "r2"}
+        runner = self._with_remote(tmp_path, platform, FakeAd())
+        async with runner.build_client() as client:
+            assert await runner.maybe_refresh_config(client, now=1000.0) is True
+            # Innerhalb des Intervalls fragt er nicht noch einmal.
+            assert await runner.maybe_refresh_config(client, now=1001.0) is False
+        assert platform.config_calls == 1
+        assert runner.guardrails.allowed_ous == frozenset({"OU=Neu,DC=gemeinde,DC=local"})
+        assert (tmp_path / "remote-config.json").exists()
+
+    async def test_a_failed_fetch_keeps_the_old_config(self, tmp_path: Path) -> None:
+        platform = FakePlatform([])
+        runner = self._with_remote(tmp_path, platform, FakeAd())
+        async with runner.build_client() as client:
+            assert await runner.maybe_refresh_config(client, now=1000.0) is False
+        assert runner.guardrails.allowed_ous == frozenset({SCHULE})
+
+    async def test_a_changed_ad_access_rebuilds_the_executor(self, tmp_path: Path) -> None:
+        platform = FakePlatform([])
+        platform.config = {
+            "allowed_ous": [SCHULE],
+            "ad": {"dcs": ["dc02.gemeinde.local"]},
+            "revision": "r3",
+        }
+        runner = self._with_remote(tmp_path, platform, FakeAd())
+        fresh = AdExecutor(FakeAd())
+        runner.executor_factory = lambda _remote: fresh
+        async with runner.build_client() as client:
+            await runner.maybe_refresh_config(client, now=1000.0)
+        assert runner.executor is fresh

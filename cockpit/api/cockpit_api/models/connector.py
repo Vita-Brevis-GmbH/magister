@@ -188,3 +188,28 @@ class ConnectorJob(Base):
         # Der Abholpfad: offene Aufträge eines Kunden in Reihenfolge.
         Index("ix_connector_jobs_queue", "tenant_id", "state", "created_at"),
     )
+
+
+class TenantConnectorSettings(Base):
+    """Was der Agent eines Kunden tun darf — im Cockpit gepflegt (ADR-0014 Nachtrag).
+
+    Vorher stand die OU-Freigabe in der lokalen config.json beim Kunden. Seit
+    der Agent auf dem DC läuft und seine Einstellungen von der Plattform holt,
+    steht sie hier. Die harte Untergrenze bleibt im Agenten: geschützte
+    Gruppen und Konten mit ``adminCount=1`` fasst er nie an, was immer hier
+    steht.
+    """
+
+    __tablename__ = "tenant_connector_settings"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True
+    )
+    #: OUs (DN), in denen der Agent Verzeichnisaufträge ausführt. Leer: keine.
+    allowed_ous: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    #: Zusätzliche geschützte Gruppen; die eingebaute Liste im Agenten bleibt.
+    protected_groups: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(320), default=None)

@@ -1,4 +1,4 @@
-import { get, post } from "./client";
+import { get, post, put } from "./client";
 
 export type AgentStatus = "enrolled" | "online" | "stale" | "revoked";
 export type JobState = "queued" | "claimed" | "done" | "failed" | "expired";
@@ -33,6 +33,8 @@ export interface Enrollment {
   agent_name: string;
   expires_at: string;
   token: string;
+  /** Für `enroll --endpoint`; leer, wenn die Konsole ihren Connector-Namen nicht kennt. */
+  endpoint: string;
 }
 
 export interface ConnectorJob {
@@ -94,7 +96,7 @@ export interface ConnectorJobDetail {
 
 /**
  * Verbindungstest: ein Auftrag `probe_service_connection_detailed` an den
- * Agenten. Er bindet sich mit dem Dienstkonto ans AD und meldet, ob es ging
+ * Agenten. Er bindet sich als Maschinenkonto des DC (Kerberos) ans AD und meldet, ob es ging
  * und wenn nicht, warum — ohne Benutzerdaten zu lesen.
  */
 export function startConnectionTest(tenantId: string): Promise<ConnectorJob> {
@@ -106,4 +108,26 @@ export function startConnectionTest(tenantId: string): Promise<ConnectorJob> {
 
 export function getConnectorJob(tenantId: string, jobId: string): Promise<ConnectorJobDetail> {
   return get(`/api/tenants/${tenantId}/jobs/${jobId}`);
+}
+
+/**
+ * Was der Agent auf dem DC darf — gepflegt hier, geholt vom Agenten
+ * (ADR-0014, Nachtrag „Agent auf dem DC").
+ */
+export interface ConnectorSettings {
+  allowed_ous: string[];
+  protected_groups: string[];
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
+export function getConnectorSettings(tenantId: string): Promise<ConnectorSettings> {
+  return get(`/api/tenants/${tenantId}/connector-settings`);
+}
+
+export function putConnectorSettings(
+  tenantId: string,
+  body: { allowed_ous: string[]; protected_groups: string[] },
+): Promise<ConnectorSettings> {
+  return put(`/api/tenants/${tenantId}/connector-settings`, body);
 }

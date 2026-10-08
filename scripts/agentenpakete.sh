@@ -2,13 +2,16 @@
 # Die Pakete des Connector-Agenten dorthin bringen, wo die Konsole sie
 # ausliefert (ADR-0014).
 #
-#   ./scripts/agentenpakete.sh holen          # aus der CI holen (MSI + .deb)
-#   ./scripts/agentenpakete.sh bauen          # was hier baubar ist (.deb)
+#   ./scripts/agentenpakete.sh holen          # das MSI aus der CI holen
+#   ./scripts/agentenpakete.sh bauen          # sagt, wie das MSI entsteht
 #   ./scripts/agentenpakete.sh msi <payload>  # MSI aus einem Windows-Payload
 #   ./scripts/agentenpakete.sh token          # Token hinterlegen und prüfen
 #   ./scripts/agentenpakete.sh zeigen         # was im Verzeichnis liegt
 #
-# **Warum es dieses Skript gibt.** Die CI baut MSI und .deb bei jedem Push
+# Seit dem Nachtrag zu ADR-0014 („Agent auf dem DC") gibt es nur noch das MSI:
+# der Agent läuft auf dem Domänencontroller. Das Debian-Paket ist entfallen.
+#
+# **Warum es dieses Skript gibt.** Die CI baut das MSI bei jedem Push
 # (agent-ci.yml) — aber sie legt sie als Workflow-Artefakte ab, und die liegen
 # in GitHub, nicht auf dem Plattform-Server. Zwischen „gebaut" und
 # „herunterladbar" fehlte der Weg; im Runbook stand ein `cp` mit einem
@@ -25,7 +28,7 @@
 #             `agent/packaging/windows/build-payload.ps1` gebaut hat. Der Weg,
 #             wenn die CI noch keines hat.
 #
-# `bauen` macht nur das .deb. Es legt bewusst KEINEN Platzhalter aus
+# `bauen` baut nichts mehr (das .deb ist entfallen). Es legt bewusst KEINEN Platzhalter aus
 # `build-msi.sh --stub` ab: der ist installierbar und ohne Inhalt, und
 # niemand soll ihn im Paketverzeichnis für ein Paket halten.
 #
@@ -41,7 +44,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="agent-ci.yml"
 ZWEIG="${AGENT_CI_ZWEIG:-main}"
 # Die Artefaktnamen, die agent-ci.yml hochlädt.
-ARTEFAKTE=("magister-connector-msi" "magister-connector-deb")
+ARTEFAKTE=("magister-connector-msi")
 #: Die curl-Konfiguration mit dem Token. Wird in `cmd_holen` gesetzt und beim
 #: Verlassen gelöscht.
 KONF=""
@@ -332,7 +335,7 @@ for a in json.load(sys.stdin).get("artifacts", []):
       install -m 0644 "$datei" "$ziel/$neu"
       printf '    %s (%s)\n' "$neu" "$(du -h "$datei" | cut -f1)"
       geholt=$((geholt + 1))
-    done < <(find "$tmp/inhalt" -type f \( -name '*.msi' -o -name '*.deb' -o -name '*.exe' \))
+    done < <(find "$tmp/inhalt" -type f \( -name '*.msi' -o -name '*.exe' \))
     rm -rf "$tmp"
   done
 
@@ -342,20 +345,9 @@ for a in json.load(sys.stdin).get("artifacts", []):
 
 # --- Bauen ------------------------------------------------------------------
 cmd_bauen() {
-  local ziel
-  ziel="$(ziel_verzeichnis)"
-
-  say "Debian-Paket bauen"
-  command -v dpkg-deb >/dev/null || die "dpkg-deb fehlt (apt-get install dpkg-dev)."
-  local version
-  version="$(grep -oP '^VERSION\s*=\s*"\K[^"]+' "$REPO/agent/connector_agent/cli.py" || echo "0.0.0")"
-  local deb="$ziel/magister-connector_${version}_amd64.deb"
-  "$REPO/agent/packaging/debian/build-deb.sh" "$deb"
-  chmod 0644 "$deb"
-  say "$(basename "$deb")"
-
-  # Und die ehrliche Auskunft zum MSI, statt eines Platzhalters, den jemand
-  # für ein Paket hält.
+  # Die ehrliche Auskunft zum MSI, statt eines Platzhalters, den jemand für
+  # ein Paket hält. Ein Linux-Paket gibt es nicht mehr: der Agent läuft auf
+  # dem Domänencontroller.
   cat <<'HINWEIS'
 
 Kein MSI: der eingefrorene Agent darin entsteht nur unter Windows.
@@ -467,8 +459,8 @@ cmd_zeigen() {
     leer=0
     printf '  %-52s %8s  %s\n' "$(basename "$datei")" \
       "$(du -h "$datei" | cut -f1)" "$(sha256sum "$datei" | cut -c1-16)…"
-  done < <(find "$ziel" -maxdepth 1 -type f \( -name '*.msi' -o -name '*.deb' -o -name '*.exe' -o -name '*.zip' \) | sort)
-  [ "$leer" -eq 0 ] || warn "Leer — 'holen' oder 'bauen'."
+  done < <(find "$ziel" -maxdepth 1 -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.zip' \) | sort)
+  [ "$leer" -eq 0 ] || warn "Leer — 'holen' oder 'msi <payload>'."
 }
 
 BEFEHL="${1:-zeigen}"; shift || true

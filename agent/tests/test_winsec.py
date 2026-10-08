@@ -155,31 +155,25 @@ class TestProtectedGroupsAreAFloor:
     """
 
     def test_configured_groups_are_added_not_substituted(self) -> None:
-        from connector_agent.config import AgentConfig
         from connector_agent.guardrails import DEFAULT_PROTECTED_GROUPS
+        from connector_agent.remote import parse
 
-        config = AgentConfig.from_mapping(
-            {"endpoint": "https://connect.example.ch:46200", "protected_groups": ["Schulleitung"]}
-        )
+        config = parse({"protected_groups": ["Schulleitung"]})
         assert "schulleitung" in config.protected_groups
         assert DEFAULT_PROTECTED_GROUPS <= config.protected_groups
 
     def test_domain_admins_stay_protected_whatever_is_configured(self) -> None:
-        from connector_agent.config import AgentConfig
+        from connector_agent.remote import parse
 
-        config = AgentConfig.from_mapping(
-            {"endpoint": "https://connect.example.ch:46200", "protected_groups": ["irgendwas"]}
-        )
+        config = parse({"protected_groups": ["irgendwas"]})
         # Deutsch und englisch, weil beide Schreibweisen in Kundendomänen
         # vorkommen und die Plattform nicht weiss, welche gilt.
         assert "domänen-admins" in config.protected_groups
         assert "domain admins" in config.protected_groups
 
     def test_an_empty_list_leaves_the_builtin_list_in_force(self) -> None:
-        from connector_agent.config import AgentConfig
         from connector_agent.guardrails import DEFAULT_PROTECTED_GROUPS
+        from connector_agent.remote import parse
 
-        config = AgentConfig.from_mapping(
-            {"endpoint": "https://connect.example.ch:46200", "protected_groups": []}
-        )
+        config = parse({"protected_groups": []})
         assert config.protected_groups == DEFAULT_PROTECTED_GROUPS

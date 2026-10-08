@@ -94,7 +94,7 @@ class Settings(BaseSettings):
 
     # --- Agentenpakete (ADR-0014) -----------------------------------------
     # Verzeichnis, in dem die gebauten Pakete des Connector-Agenten liegen
-    # (MSI für Windows, .deb für Debian). Die Konsole liefert sie an
+    # (das MSI für den Domänencontroller). Die Konsole liefert sie an
     # angemeldete Personen aus, damit beim Onboarding niemand erst ein
     # Release-Archiv suchen muss — und damit die Prüfsumme aus derselben
     # Quelle kommt wie die Datei.

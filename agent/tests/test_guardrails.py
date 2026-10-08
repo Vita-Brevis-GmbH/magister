@@ -169,7 +169,8 @@ class TestProtectedGroups:
     def test_removal_from_a_protected_group_is_refused_as_well(self) -> None:
         # Auch das Entfernen: einen Administrator aus seiner Gruppe zu werfen
         # ist ein Denial-of-Service auf das Kundennetz.
-        with pytest.raises(GuardrailViolationError, match="Denylist"):
+        # Builtin ist zudem ein gesperrter Container — abgewiesen wird so oder so.
+        with pytest.raises(GuardrailViolationError, match=r"Denylist|gesperrten"):
             _rails(allowed_ous=frozenset({"DC=gemeinde,DC=local"})).check(
                 "remove_user_from_groups",
                 {

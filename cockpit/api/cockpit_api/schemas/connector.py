@@ -24,6 +24,9 @@ class EnrollmentOut(BaseModel):
     agent_name: str
     expires_at: datetime
     token: str
+    #: Was auf dem DC hinter ``enroll --endpoint`` gehört; leer, wenn die
+    #: Konsole ihren Connector-Namen nicht kennt (COCKPIT_CONNECTOR_HOSTNAME).
+    endpoint: str = ""
 
 
 class AgentEnrollRequest(BaseModel):
@@ -184,3 +187,42 @@ class JobDetailOut(BaseModel):
     error: str | None
     expires_at: datetime
     finished_at: datetime | None
+
+
+class ConnectorSettingsIn(BaseModel):
+    """OU-Freigabe und zusätzliche geschützte Gruppen des Agenten."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    allowed_ous: list[str] = Field(default_factory=list[str], max_length=50)
+    protected_groups: list[str] = Field(default_factory=list[str], max_length=100)
+
+
+class ConnectorSettingsOut(BaseModel):
+    allowed_ous: list[str]
+    protected_groups: list[str]
+    updated_at: datetime | None
+    updated_by: str | None
+
+
+class AgentAdSettings(BaseModel):
+    """Was der Agent fürs AD braucht. Kein Bind-Passwort: er meldet sich als
+    Maschinenkonto des DC per Kerberos an."""
+
+    #: Leer: der DC, auf dem der Agent läuft.
+    dcs: list[str] = Field(default_factory=list[str])
+    users_search_base: str | None = None
+    computers_search_base: str | None = None
+    tls_verify: bool = True
+    tls_ca_pem: str | None = None
+
+
+class AgentRemoteConfig(BaseModel):
+    """Die Konfiguration, die der Agent bei der Plattform holt."""
+
+    allowed_ous: list[str]
+    protected_groups: list[str]
+    ad: AgentAdSettings
+    poll_seconds: int = 25
+    #: Prüfsumme über alles oben — der Agent loggt nur, wenn sie sich ändert.
+    revision: str

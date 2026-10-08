@@ -1,15 +1,17 @@
 """``magister-connector`` — Kommandozeile des Agenten (ADR-0014).
 
+Der Agent läuft **auf dem Domänencontroller**, als LocalSystem, und bindet sich
+als Maschinenkonto des DC per Kerberos ans AD. Eingestellt wird er im Cockpit;
+auf dem DC steht nur der Weg zur Plattform.
+
 Vier Befehle:
 
-* ``enroll``    — Einmal-Token einlösen, Schlüssel lokal erzeugen, Zustand anlegen
+* ``enroll``    — Endpunkt festhalten, Einmal-Token einlösen, Schlüssel lokal
+                  erzeugen, Konfiguration holen, Dienst starten
 * ``run``       — Abrufbetrieb (das macht der Dienst)
-* ``check``     — Konfiguration, Rechte und Erreichbarkeit prüfen, ohne etwas zu tun
+* ``check``     — Kanal, Anmeldung, Konfiguration aus dem Cockpit und AD prüfen,
+                  ohne etwas zu verändern
 * ``uninstall`` — bei der Plattform abmelden, Schlüssel löschen, Programm entfernen
-
-``check`` ist der Befehl für die Abnahme beim Kunden: er sagt, ob der Kanal zur
-Plattform steht (Name, Port, Zertifikat), ob die Rechte stimmen und ob das AD
-das Dienstkonto annimmt — bevor irgendwer auf einen Passwort-Reset wartet.
 """
 
 from __future__ import annotations
@@ -17,21 +19,30 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from connector_agent.adenv import apply_missing, service_environment
+from connector_agent import remote as remote_cfg
 from connector_agent.config import (
     DEFAULT_CONFIG_PATH,
+    DEFAULT_STATE_DIR,
     AgentConfig,
+    AgentSecrets,
     ConfigError,
     assert_permissions,
+    ensure_state_dir,
     load_secrets,
+    write_local_config,
 )
 from connector_agent.diagnose import ip_endpoint_hint, probe_channel
 from connector_agent.enrollment import EnrollmentFailedError, enroll
 
-VERSION = "0.1.0"
+if TYPE_CHECKING:
+    from connector_agent.runner import Runner
+
+VERSION = "0.2.0"
 
 logger = logging.getLogger("connector_agent")
 
@@ -48,8 +59,34 @@ def _load(args: argparse.Namespace) -> AgentConfig:
     return AgentConfig.from_file(Path(args.config))
 
 
+def _prepare_local_config(args: argparse.Namespace) -> AgentConfig:
+    """Lokale Konfiguration für ``enroll``: aus ``--endpoint`` anlegen oder lesen."""
+    path = Path(args.config)
+    if not args.endpoint:
+        return AgentConfig.from_file(path)
+    if path.exists():
+        existing = AgentConfig.from_file(path)
+        if existing.secrets_path.exists():
+            raise ConfigError(
+                f"In {existing.state_dir} liegt bereits eine Anmeldung. Zum Neuanmelden erst "
+                "'magister-connector uninstall --paket-behalten' ausführen."
+            )
+    state_dir = path.parent if path.parent != Path() else DEFAULT_STATE_DIR
+    ca_target: Path | None = None
+    if args.ca:
+        ensure_state_dir(state_dir)
+        ca_target = state_dir / "platform-ca.pem"
+        shutil.copyfile(args.ca, ca_target)
+    write_local_config(path, endpoint=args.endpoint, state_dir=state_dir, ca_bundle=ca_target)
+    return AgentConfig.from_file(path)
+
+
 def cmd_enroll(args: argparse.Namespace) -> int:
-    config = _load(args)
+    try:
+        config = _prepare_local_config(args)
+    except (ConfigError, OSError) as exc:
+        sys.stderr.write(f"{exc}\n")
+        return 1
     token = args.token
     if not token:
         # Über stdin, damit das Token nicht in der Shell-History und nicht in
@@ -71,9 +108,85 @@ def cmd_enroll(args: argparse.Namespace) -> int:
         f"  SPKI-Fingerprint:    {result.spki_sha256}\n"
         f"  Zertifikat gültig bis {result.certificate_not_after}\n\n"
         "Diesen Fingerprint mit der Anzeige in der Konsole vergleichen. Weichen\n"
-        "sie ab, hat sich jemand anders mit dem Token angemeldet.\n"
+        "sie ab, hat sich jemand anders mit dem Token angemeldet.\n\n"
     )
+    secrets = load_secrets(config)
+    if secrets is not None:
+        try:
+            remote, raw = remote_cfg.fetch_sync(config, secrets)
+            remote_cfg.save_cache(config, raw)
+            sys.stdout.write(f"{remote_cfg.describe(remote)}\n")
+            if not remote.allowed_ous:
+                sys.stdout.write(
+                    "Noch keine OU freigegeben — im Cockpit beim Kunden unter „AD-Connector“\n"
+                    "eintragen. Bis dahin lehnt der Agent Verzeichnisaufträge ab.\n"
+                )
+        except Exception as exc:
+            sys.stdout.write(f"Konfiguration noch nicht geholt ({exc}); der Dienst holt sie.\n")
+    if not args.ohne_start:
+        from connector_agent.uninstall import start_service
+
+        sys.stdout.write(f"Dienst:              {start_service()}\n")
     return 0
+
+
+def initial_remote(config: AgentConfig, secrets: AgentSecrets) -> remote_cfg.RemoteConfig:
+    """Konfiguration für den Start: frisch aus dem Cockpit, sonst die zuletzt geholte.
+
+    Ohne beides startet der Agent nicht — ohne Freigabe gäbe es ohnehin nichts
+    zu tun, und ohne bekannten DC nichts, wogegen er arbeiten könnte.
+    """
+    try:
+        remote, raw = remote_cfg.fetch_sync(config, secrets)
+    except Exception as exc:
+        cached = remote_cfg.load_cache(config)
+        if cached is None:
+            raise remote_cfg.RemoteConfigError(
+                f"Konfiguration aus dem Cockpit nicht geholt ({exc}), und es liegt keine "
+                "frühere Fassung vor."
+            ) from exc
+        logger.warning(
+            "Konfiguration aus dem Cockpit nicht geholt (%s) — es gilt die zuletzt geholte.", exc
+        )
+        return cached
+    remote_cfg.save_cache(config, raw)
+    return remote
+
+
+def build_runner(config: AgentConfig, secrets: AgentSecrets) -> Runner:
+    """Runner mit Konfiguration aus dem Cockpit — für ``run`` und den Windows-Dienst.
+
+    Wirft :class:`remote_cfg.RemoteConfigError` oder ``ConfigError`` mit einem
+    Satz, der sagt, was zu tun ist.
+    """
+    from connector_agent.runner import AdExecutor, Runner
+
+    remote = initial_remote(config, secrets)
+    for dn, reason in remote.refused_ous:
+        logger.warning("OU-Freigabe aus dem Cockpit verworfen (%s): %s", reason, dn)
+    ad = build_ad_client(remote)
+    if ad is None:
+        raise ConfigError("AD-Zugang aus der Konfiguration des Cockpits nicht baubar.")
+
+    def factory(fresh: remote_cfg.RemoteConfig) -> AdExecutor | None:
+        client = build_ad_client(fresh)
+        return AdExecutor(client) if client is not None else None
+
+    logger.info("Agent startet. Endpunkt %s. %s", config.endpoint, remote_cfg.describe(remote))
+    if not remote.allowed_ous:
+        logger.warning(
+            "Im Cockpit ist keine OU freigegeben. Verzeichnisaufträge werden abgelehnt, "
+            "bis eine steht — das ist Absicht, nicht ein Fehler."
+        )
+    return Runner(
+        config=config,
+        secrets=secrets,
+        executor=AdExecutor(ad),
+        guardrails=remote.guardrails,
+        agent_version=VERSION,
+        remote=remote,
+        executor_factory=factory,
+    )
 
 
 def cmd_run(args: argparse.Namespace) -> int:
@@ -103,29 +216,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
-    from connector_agent.runner import AdExecutor, Runner
-
-    ad = build_ad_client()
-    if ad is None:
+    try:
+        runner = build_runner(config, secrets)
+    except (remote_cfg.RemoteConfigError, ConfigError) as exc:
+        sys.stderr.write(f"{exc}\n")
         return 1
-    runner = Runner(
-        config=config,
-        secrets=secrets,
-        executor=AdExecutor(ad),
-        guardrails=config.guardrails,
-        agent_version=VERSION,
-    )
-    logger.info(
-        "Agent startet. Endpunkt %s, %d erlaubte OU(s), %d geschützte Gruppe(n).",
-        config.endpoint,
-        len(config.allowed_ous),
-        len(config.protected_groups),
-    )
-    if not config.allowed_ous:
-        logger.warning(
-            "Es ist keine OU-Allowlist konfiguriert. Verzeichnisaufträge werden "
-            "abgelehnt, bis eine steht — das ist Absicht, nicht ein Fehler."
-        )
     asyncio.run(runner.serve_forever())
     return 0
 
@@ -136,7 +231,9 @@ def cmd_check(args: argparse.Namespace) -> int:
     try:
         config = _load(args)
     except ConfigError as exc:
-        sys.stderr.write(f"Konfiguration: {exc}\n")
+        sys.stderr.write(
+            f"Konfiguration: {exc}\nZuerst 'magister-connector enroll --endpoint …' ausführen.\n"
+        )
         return 1
     sys.stdout.write(f"Endpunkt:     {config.endpoint}\n")
     hint = ip_endpoint_hint(config.endpoint)
@@ -166,12 +263,6 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stdout.write(f"Anmeldung:    ok, SPKI {secrets.spki_sha256}\n")
         problems += _report_certificate(config)
 
-    if config.allowed_ous:
-        sys.stdout.write(f"OU-Allowlist: {len(config.allowed_ous)} Eintrag/Einträge\n")
-    else:
-        sys.stdout.write("OU-Allowlist: LEER — Verzeichnisaufträge werden abgelehnt\n")
-        problems += 1
-
     if not config.ca_bundle.exists():
         sys.stdout.write(
             f"CA-Bundle:    fehlt ({config.ca_bundle}) — es gilt der System-Truststore\n"
@@ -186,13 +277,49 @@ def cmd_check(args: argparse.Namespace) -> int:
         sys.stdout.write(f"Kanal:        FEHLER — {probe.message}\n")
         problems += 1
 
-    problems += _report_ad()
+    remote: remote_cfg.RemoteConfig | None = None
+    if secrets is not None:
+        try:
+            remote, _raw = remote_cfg.fetch_sync(config, secrets)
+            sys.stdout.write(f"Cockpit:      ok — Konfiguration {remote.revision or '-'}\n")
+        except Exception as exc:
+            remote = remote_cfg.load_cache(config)
+            suffix = " — es gilt die zuletzt geholte" if remote is not None else ""
+            sys.stdout.write(f"Cockpit:      FEHLER — {exc}{suffix}\n")
+            problems += 1
+    if remote is not None:
+        problems += _report_remote(remote)
+        problems += _report_ad(remote)
+    else:
+        sys.stdout.write("AD:           nicht geprüft — keine Konfiguration aus dem Cockpit\n")
+        problems += 1
 
     if problems:
         sys.stdout.write(f"\n{problems} Punkt(e) offen.\n")
         return 1
     sys.stdout.write("\nAlles bereit.\n")
     return 0
+
+
+def _report_remote(remote: remote_cfg.RemoteConfig) -> int:
+    problems = 0
+    if remote.allowed_ous:
+        sys.stdout.write(f"OU-Freigabe:  {len(remote.allowed_ous)} OU(s) aus dem Cockpit\n")
+    else:
+        sys.stdout.write(
+            "OU-Freigabe:  LEER — im Cockpit beim Kunden unter „AD-Connector“ eintragen;\n"
+            "              bis dahin werden Verzeichnisaufträge abgelehnt\n"
+        )
+        problems += 1
+    for dn, reason in remote.refused_ous:
+        sys.stdout.write(f"              VERWORFEN ({reason}): {dn}\n")
+        problems += 1
+    dcs = ", ".join(remote.ad.dcs) or f"{remote_cfg.local_dc_fqdn()} (dieser DC)"
+    sys.stdout.write(f"DC:           {dcs}\n")
+    if not remote.ad.users_search_base:
+        sys.stdout.write("Suchbasis:    keine — im Cockpit unter den AD-Einstellungen setzen\n")
+        problems += 1
+    return problems
 
 
 def _report_certificate(config: AgentConfig) -> int:
@@ -232,43 +359,35 @@ def _report_certificate(config: AgentConfig) -> int:
 #: Die Codes tragen weder Host noch DN noch Passwort; die Sätze auch nicht.
 AD_REASONS: dict[str, str] = {
     "ad_config": (
-        "AD-Zugang unvollständig: Domänencontroller, Bind-DN oder Passwort fehlen "
-        "(MAGISTER_AD_DCS, MAGISTER_AD_BIND_DN, MAGISTER_AD_BIND_PASSWORD)."
+        "AD-Zugang unvollständig: kein Domänencontroller bekannt. Im Cockpit die DCs "
+        "eintragen oder den Agenten auf dem DC selbst betreiben."
     ),
     "ad_unreachable": (
-        "Kein Domänencontroller auf Port 636 erreichbar. Namen in MAGISTER_AD_DCS "
-        "und die Firewall zwischen diesem Server und den DCs prüfen."
+        "Kein Domänencontroller auf Port 636 erreichbar. Hat der DC ein Zertifikat für "
+        "LDAPS, und stimmen die Namen im Cockpit?"
     ),
     "ad_tls": (
-        "LDAPS zum Domänencontroller gescheitert. Hat der DC ein Zertifikat für "
-        "LDAPS, und vertraut dieser Server der ausstellenden CA?"
+        "LDAPS zum Domänencontroller gescheitert. Hat der DC ein Zertifikat für LDAPS, "
+        "und vertraut dieser Server der ausstellenden CA?"
     ),
     "ad_timeout": "Der Domänencontroller antwortet nicht rechtzeitig.",
     "ad_auth": (
-        "Der Domänencontroller hat das Dienstkonto abgewiesen: Bind-DN oder "
-        "Passwort falsch, Konto gesperrt oder abgelaufen."
+        "Die Kerberos-Anmeldung als Maschinenkonto wurde abgewiesen. Läuft der Befehl "
+        "als Administrator (bzw. der Dienst als LocalSystem), und ist der DC-Name im "
+        "Cockpit der volle DNS-Name (keine IP)?"
     ),
 }
 
 
-def _report_ad() -> int:
-    """Bindet sich einmal mit dem Dienstkonto ans AD. Rückgabe: Anzahl Probleme.
+def _report_ad(remote: remote_cfg.RemoteConfig) -> int:
+    """Bindet sich einmal ans AD, wie der Dienst es tut. Rückgabe: Anzahl Probleme.
 
-    Erst damit beantwortet ``check`` die Frage, die bei der Abnahme zählt:
-    kommt ein Passwort-Reset bis ins AD? Kanal und Zertifikat allein sagen
-    nur, dass der Auftrag beim Agenten ankommt.
+    Von Hand aufgerufen läuft das als angemeldeter Administrator und nicht als
+    LocalSystem — Kerberos nimmt dann dessen Ticket. Sagt also, ob LDAPS und
+    Kerberos zum DC stehen; ob das Maschinenkonto die delegierten Rechte hat,
+    zeigt erst ein Auftrag.
     """
-    service = service_environment()
-    if service is not None:
-        taken = apply_missing(service)
-        sys.stdout.write(f"AD-Umgebung:  {service.source}, {len(service.values)} Wert(e)\n")
-        if not taken and service.values:
-            sys.stdout.write("              (von Hand gesetzte Werte dieser Sitzung gehen vor)\n")
-    else:
-        sys.stdout.write(
-            "AD-Umgebung:  keine Dienst-Umgebung gefunden — es gilt nur diese Sitzung\n"
-        )
-    ad = build_ad_client()
+    ad = build_ad_client(remote)
     if ad is None:
         sys.stdout.write("AD:           FEHLER — AD-Schicht nicht ladbar (siehe oben)\n")
         return 1
@@ -278,24 +397,21 @@ def _report_ad() -> int:
         return 0
     ok, reason = asyncio.run(probe())
     if ok:
-        sys.stdout.write("AD:           ok — LDAPS-Bind mit dem Dienstkonto gelungen\n")
+        sys.stdout.write("AD:           ok — LDAPS mit Kerberos-Anmeldung gelungen\n")
         return 0
     text = AD_REASONS.get(reason, f"Bind gescheitert ({reason}).")
     sys.stdout.write(f"AD:           FEHLER — {text}\n")
     return 1
 
 
-def build_ad_client() -> object | None:
-    """AD-Client aus ``magister_api.ad`` bauen.
-
-    Öffentlich, weil ihn zwei Einsprungpunkte brauchen: der ``run``-Befehl von
-    Hand und der Windows-Dienst (:mod:`connector_agent.winservice`).
+def build_ad_client(remote: remote_cfg.RemoteConfig) -> object | None:
+    """AD-Client aus ``magister_api.ad`` bauen, mit den Werten aus dem Cockpit.
 
     Bewusst derselbe Code wie im direkten Pfad: siebzehn LDAP-Operationen ein
     zweites Mal zu schreiben hiesse, zwei Stände zu pflegen, von denen einer
-    schlechter getestet ist. Die Zugangsdaten kommen aus der Umgebung
-    (``MAGISTER_AD_*``), also aus der Dienst-Konfiguration beim Kunden — nie
-    von der Plattform.
+    schlechter getestet ist. Angemeldet wird per Kerberos (SASL/GSSAPI über
+    LDAPS) mit dem Konto, unter dem der Prozess läuft — als Dienst das
+    Maschinenkonto des DC. Kein Passwort, nirgends.
     """
     try:
         from magister_api.ad.client import AdClient
@@ -309,16 +425,12 @@ def build_ad_client() -> object | None:
     from pydantic import ValidationError
 
     try:
-        settings = Settings()  # type: ignore[call-arg]
+        settings = Settings(**remote_cfg.ad_settings_kwargs(remote))  # type: ignore[arg-type]
     except ValidationError as exc:
-        # Nur die Feldnamen: der Text eines Validierungsfehlers enthält den
-        # eingegebenen Wert, und einer davon ist das Bind-Passwort.
         fields = sorted({".".join(str(p) for p in err["loc"]) for err in exc.errors()})
         sys.stderr.write(f"AD-Konfiguration ungültig in: {', '.join(fields)}\n")
         return None
     except Exception as exc:  # pragma: no cover — alles andere, ohne den Text
-        # Dieselbe Vorsicht: nur der Typ. Der Dienst (winservice) erwartet
-        # hier `None` und meldet dann selbst, was zu tun ist.
         sys.stderr.write(f"AD-Konfiguration nicht ladbar ({type(exc).__name__}).\n")
         return None
     return AdClient(settings)
@@ -333,7 +445,7 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
             "Dafür braucht es Administratorrechte (Zustandsverzeichnis, Dienst, "
             "Installationsprogramm). Nichts verändert.\n"
             "Windows: Eingabeaufforderung per Rechtsklick „Als Administrator "
-            "ausführen“. Linux: mit sudo.\n"
+            "ausführen“.\n"
         )
         return 1
 
@@ -412,7 +524,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=VERSION)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    enroll_cmd = sub.add_parser("enroll", help="Einmal-Token einlösen")
+    enroll_cmd = sub.add_parser(
+        "enroll", help="Endpunkt festhalten, Einmal-Token einlösen, Dienst starten"
+    )
+    enroll_cmd.add_argument(
+        "--endpoint",
+        default="",
+        help="Connector-Endpunkt aus der Konsole, z. B. https://connect.magister.ch:46200. "
+        "Legt die lokale Konfiguration an.",
+    )
+    enroll_cmd.add_argument(
+        "--ca",
+        default="",
+        help="CA-Zertifikat der Plattform (PEM), falls sie eine eigene CA hat",
+    )
+    enroll_cmd.add_argument(
+        "--ohne-start", action="store_true", help="den Dienst danach nicht starten"
+    )
     enroll_cmd.add_argument(
         "--token",
         default="",
@@ -424,7 +552,7 @@ def main(argv: list[str] | None = None) -> int:
     run_cmd = sub.add_parser("run", help="Abrufbetrieb (der Dienst)")
     run_cmd.set_defaults(func=cmd_run)
 
-    check_cmd = sub.add_parser("check", help="Konfiguration und Rechte prüfen")
+    check_cmd = sub.add_parser("check", help="Kanal, Konfiguration aus dem Cockpit und AD prüfen")
     check_cmd.set_defaults(func=cmd_check)
 
     uninstall_cmd = sub.add_parser(

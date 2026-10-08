@@ -305,7 +305,8 @@ class TestEnrollment:
         _activate(db_client, tenant_id)
         resp = db_client.post(f"/api/tenants/{tenant_id}/enrollments", json={"agent_name": "dc01"})
         body = resp.json()
-        assert set(body) == {"id", "agent_name", "expires_at", "token"}
+        # `endpoint` ist kein Geheimnis: die Adresse für `enroll --endpoint`.
+        assert set(body) == {"id", "agent_name", "expires_at", "token", "endpoint"}
         # Genau 24 Stunden, weil das Token im Paket reist.
         expires = dt.datetime.fromisoformat(body["expires_at"])
         hours = (expires - dt.datetime.now(dt.UTC)).total_seconds() / 3600
@@ -941,3 +942,122 @@ class TestSelfDecommission:
         # Über den Connector-Kanal, aber ohne Zertifikat und API-Key.
         resp = db_client.post("/connector/decommission", headers=agent_headers)
         assert resp.status_code == 401
+
+
+class TestScopeCheck:
+    """Die OU-Freigabe ist die Schranke zwischen Plattform und AD (ADR-0014 Nachtrag)."""
+
+    @pytest.mark.parametrize(
+        "dn",
+        [
+            "DC=schule,DC=local",
+            "OU=Domain Controllers,DC=schule,DC=local",
+            "OU=X,CN=System,DC=schule,DC=local",
+            "CN=Builtin,DC=schule,DC=local",
+            "OU=Schueler",
+            "Schueler",
+            "",
+        ],
+    )
+    def test_refused(self, dn: str) -> None:
+        from cockpit_api.services.connector_scope import ScopeError, check_scope
+
+        with pytest.raises(ScopeError):
+            check_scope([dn or " x "], [])
+
+    def test_dedupes_and_trims(self) -> None:
+        from cockpit_api.services.connector_scope import check_scope
+
+        ous, groups = check_scope(
+            ["OU=Schueler, DC=schule,DC=local", "ou=schueler,dc=schule,dc=local", "  "],
+            ["Schulleitung ", "schulleitung", ""],
+        )
+        assert ous == ["OU=Schueler,DC=schule,DC=local"]
+        assert groups == ["schulleitung"]
+
+    def test_the_agent_refuses_the_same_containers(self) -> None:
+        """Konsole und Agent prüfen gegen dieselbe Liste — sonst sperrt nur eine Seite."""
+        from cockpit_api.services.connector_scope import FORBIDDEN_CONTAINERS
+
+        source = (
+            Path(__file__).resolve().parents[3] / "agent" / "connector_agent" / "guardrails.py"
+        ).read_text(encoding="utf-8")
+        block = source.split("FORBIDDEN_CONTAINERS: frozenset[str] = frozenset(", 1)[1]
+        block = block.split(")", 1)[0]
+        agent = {line.strip().strip('",') for line in block.splitlines() if '"' in line}
+        assert agent == set(FORBIDDEN_CONTAINERS)
+
+
+@pytest.mark.usefixtures("connector_ca")
+class TestConnectorSettings:
+    """Alles, was der Agent braucht, steht im Cockpit; der Agent holt es nur."""
+
+    def test_defaults_are_empty(self, db_client: TestClient) -> None:
+        tenant_id = _tenant(db_client, "cset1")
+        resp = db_client.get(f"/api/tenants/{tenant_id}/connector-settings")
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["allowed_ous"] == []
+        assert resp.json()["protected_groups"] == []
+
+    def test_put_validates_and_stores(self, db_client: TestClient) -> None:
+        tenant_id = _tenant(db_client, "cset2")
+        url = f"/api/tenants/{tenant_id}/connector-settings"
+        bad = db_client.put(url, json={"allowed_ous": ["OU=Domain Controllers,DC=s,DC=local"]})
+        assert bad.status_code == 422
+        assert "Domain Controllers".lower() in bad.text.lower()
+        root = db_client.put(url, json={"allowed_ous": ["DC=s,DC=local"]})
+        assert root.status_code == 422
+
+        ok = db_client.put(
+            url,
+            json={
+                "allowed_ous": ["OU=Schueler,DC=s,DC=local", "OU=Lehrer,DC=s,DC=local"],
+                "protected_groups": ["Schulleitung"],
+            },
+        )
+        assert ok.status_code == 200, ok.text
+        assert ok.json()["protected_groups"] == ["schulleitung"]
+        again = db_client.get(url).json()
+        assert again["allowed_ous"] == ["OU=Schueler,DC=s,DC=local", "OU=Lehrer,DC=s,DC=local"]
+        assert again["updated_by"]
+
+    def test_the_agent_fetches_its_own_config(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_a = _tenant(db_client, "cset3")
+        tenant_b = _tenant(db_client, "cset4")
+        for t in (tenant_a, tenant_b):
+            _activate(db_client, t)
+        db_client.put(
+            f"/api/tenants/{tenant_a}/connector-settings",
+            json={"allowed_ous": ["OU=A,DC=a,DC=local"], "protected_groups": ["Gruppe A"]},
+        )
+        db_client.put(
+            f"/api/tenants/{tenant_b}/connector-settings",
+            json={"allowed_ous": ["OU=B,DC=b,DC=local"]},
+        )
+        agent = _enroll(db_client, tenant_a, agent_headers)
+
+        resp = db_client.get("/connector/config", headers=_auth(agent, agent_headers))
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["allowed_ous"] == ["OU=A,DC=a,DC=local"]
+        assert body["protected_groups"] == ["gruppe a"]
+        assert body["revision"]
+        assert set(body["ad"]) >= {"dcs", "users_search_base", "tls_verify"}
+        # Kein Geheimnis im Abruf — der Agent bindet per Kerberos als Maschinenkonto.
+        assert "password" not in resp.text.lower()
+
+        # Änderung im Cockpit → neue Revision beim nächsten Abruf.
+        db_client.put(
+            f"/api/tenants/{tenant_a}/connector-settings",
+            json={"allowed_ous": ["OU=A2,DC=a,DC=local"]},
+        )
+        changed = db_client.get("/connector/config", headers=_auth(agent, agent_headers)).json()
+        assert changed["revision"] != body["revision"]
+        assert changed["allowed_ous"] == ["OU=A2,DC=a,DC=local"]
+
+    def test_not_without_the_agents_credentials(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        assert db_client.get("/connector/config", headers=agent_headers).status_code == 401

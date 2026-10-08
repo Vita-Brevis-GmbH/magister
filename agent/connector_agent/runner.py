@@ -29,9 +29,14 @@ from typing import Any, cast
 
 import httpx
 
+from connector_agent import remote as remote_cfg
 from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.diagnose import explain_transport_error
-from connector_agent.guardrails import Guardrails, GuardrailViolationError
+from connector_agent.guardrails import (
+    MUTATING_USER_METHODS,
+    Guardrails,
+    GuardrailViolationError,
+)
 from connector_agent.renewal import (
     RETRY_AFTER,
     RenewalError,
@@ -111,10 +116,35 @@ class AdExecutor:
     def __init__(self, ad: object) -> None:
         self._ad = ad
 
+    async def _refuse_privileged(self, method: str, payload: dict[str, Any]) -> None:
+        """Geschützte Konten (``adminCount=1``) fasst der Agent nicht an.
+
+        Im AD nachgesehen und nicht im Auftrag: ob ein Konto privilegiert ist,
+        ist eine Eigenschaft des Kontos. Scheitert die Prüfung, scheitert der
+        Auftrag — ohne Antwort auf die Frage wird nicht geschrieben.
+        """
+        if method not in MUTATING_USER_METHODS:
+            return
+        user_dn: object = payload.get("user_dn")
+        if not isinstance(user_dn, str) or not user_dn:
+            return
+        check = getattr(self._ad, "is_privileged_account", None)
+        if check is None or not callable(check):
+            raise GuardrailViolationError(
+                "Der AD-Client kann geschützte Konten nicht erkennen; der Agent schreibt "
+                "deshalb nichts."
+            )
+        if await cast(AdOperation, check)(user_dn=user_dn):
+            raise GuardrailViolationError(
+                f"Das Zielkonto ist ein geschütztes AD-Konto (adminCount) — {method} wird "
+                "vom Agenten nicht ausgeführt."
+            )
+
     async def run(self, method: str, payload: dict[str, Any]) -> Any:
         raw = getattr(self._ad, method, None)
         if raw is None or not callable(raw):
             raise GuardrailViolationError(f"Der AD-Client kennt {method!r} nicht.")
+        await self._refuse_privileged(method, payload)
         fn = cast(AdOperation, raw)
         if method in _NO_ARG_METHODS:
             return await fn()
@@ -140,6 +170,14 @@ class Runner:
     #: einen pro ``RETRY_AFTER``; sonst wären es bei jedem Long-Poll einer,
     #: also ein paar tausend am Tag gegen einen Endpunkt, der eine CA bemüht.
     last_renewal_attempt: dt.datetime | None = None
+    #: Die Konfiguration aus dem Cockpit, mit der der Runner gestartet ist.
+    #: ``None`` heisst: kein Nachladen (Tests mit festen Grenzen).
+    remote: remote_cfg.RemoteConfig | None = None
+    #: Baut den AD-Zugang neu, wenn das Cockpit ihn ändert (andere DCs,
+    #: Suchbasis, CA). ``None`` gibt zurück, wer ihn nicht bauen konnte.
+    executor_factory: Callable[[remote_cfg.RemoteConfig], AdExecutor | None] | None = None
+    #: Monotone Zeit des letzten Abrufs der Konfiguration.
+    last_refresh: float | None = None
 
     def build_client(self) -> httpx.AsyncClient:
         # Client-Zertifikat: die eine Hälfte der Authentisierung. Die andere
@@ -204,6 +242,12 @@ class Runner:
             return
         try:
             result = await self.executor.run(method, payload)
+        except GuardrailViolationError as exc:
+            # Eine Grenze, die erst im AD sichtbar wird (geschütztes Konto). Der
+            # Text nennt die Regel, keinen DN — er darf an die Plattform.
+            logger.warning("Auftrag %s (%s) lokal abgelehnt: %s", job_id, method, exc)
+            await self._report(client, job_id, ok=False, result=None, error=str(exc))
+            return
         except Exception as exc:
             # Der Text kann einen DN enthalten, also Personenbezug. Er geht in
             # das lokale Protokoll beim Kunden; an die Plattform geht nur der
@@ -239,6 +283,48 @@ class Runner:
             return
         if resp.status_code != 200:
             logger.warning("Ergebnis für Auftrag %s abgelehnt: HTTP %s", job_id, resp.status_code)
+
+    # -- Konfiguration aus dem Cockpit ------------------------------------
+    async def maybe_refresh_config(
+        self, client: httpx.AsyncClient, *, now: float | None = None
+    ) -> bool:
+        """Neue Fassung holen, wenn fällig. ``True``, wenn sich etwas geändert hat.
+
+        Scheitert der Abruf, gilt die bisherige Fassung weiter — eine kurz
+        nicht erreichbare Plattform ist kein Grund, Aufträge abzulehnen, die
+        sie gleich wieder schicken wird.
+        """
+        if self.remote is None:
+            return False
+        moment = asyncio.get_running_loop().time() if now is None else now
+        if (
+            self.last_refresh is not None
+            and moment - self.last_refresh < remote_cfg.REFRESH_SECONDS
+        ):
+            return False
+        self.last_refresh = moment
+        try:
+            fresh, raw = await remote_cfg.fetch(client)
+        except remote_cfg.RemoteConfigError as exc:
+            logger.warning("%s Es gilt die bisherige Konfiguration.", exc)
+            return False
+        if fresh.revision and fresh.revision == self.remote.revision:
+            return False
+        remote_cfg.save_cache(self.config, raw)
+        for dn, reason in fresh.refused_ous:
+            logger.warning("OU-Freigabe aus dem Cockpit verworfen (%s): %s", reason, dn)
+        if fresh.ad != self.remote.ad and self.executor_factory is not None:
+            executor = self.executor_factory(fresh)
+            if executor is None:
+                logger.error(
+                    "Neuer AD-Zugang aus dem Cockpit nicht nutzbar; es gilt der bisherige."
+                )
+            else:
+                self.executor = executor
+        self.guardrails = fresh.guardrails
+        self.remote = fresh
+        logger.info("%s", remote_cfg.describe(fresh))
+        return True
 
     # -- Zertifikatserneuerung -------------------------------------------
     def renewal_due(self, *, now: dt.datetime | None = None) -> bool:
@@ -298,6 +384,7 @@ class Runner:
                         if renewed:
                             logger.info("Verbindung wird mit dem neuen Zertifikat neu aufgebaut.")
                             break
+                        await self.maybe_refresh_config(client)
                         await self.run_once(client)
                     except PermissionError as exc:
                         logger.error("%s", exc)

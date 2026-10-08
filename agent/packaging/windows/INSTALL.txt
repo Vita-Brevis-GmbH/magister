@@ -1,94 +1,99 @@
-Magister Connector-Agent — Einrichten
-=====================================
+Magister Connector-Agent — Einrichten auf dem Domänencontroller
+===============================================================
 
 Was dieser Agent tut
 --------------------
 Er holt Aufträge von der Magister-Plattform ab (Passwort zurücksetzen, Gruppe
 setzen, Benutzer suchen) und führt sie gegen Ihr Active Directory aus.
 
-Er baut dazu **ausschliesslich ausgehende** Verbindungen auf und nimmt keine
-an. In Ihrer Firewall muss also keine Regel für eingehenden Verkehr
-eingerichtet werden, und es muss kein Port veröffentlicht werden. Benötigt
-wird ausgehend TCP 46200 zum Connector-Endpunkt.
+Er wird **auf dem Domänencontroller** installiert und läuft dort als Dienst
+(LocalSystem). Am AD meldet er sich per Kerberos als **Maschinenkonto des DC**
+an — es gibt kein Dienstkonto und kein Passwort, das irgendwo hinterlegt wird.
+Damit verlässt der Zugriff auf Ihr AD die Tier-0-Ebene nicht: kein
+Mitgliedsserver und kein Dienstkonto bekommen Rechte im AD.
 
-Er führt nur Operationen aus, die eine Liste zulässt, und nur in
-Organisationseinheiten, die Sie freigeben. Geschützte Gruppen (Domänen-Admins
-und Verwandte) sind grundsätzlich gesperrt — auch dann, wenn die Plattform
-etwas anderes verlangt.
+Er baut **ausschliesslich ausgehende** Verbindungen auf (TCP 46200 zum
+Connector-Endpunkt) und nimmt keine an.
 
+Eingestellt wird er **im Cockpit**, nicht auf dem DC: freigegebene OUs,
+weitere geschützte Gruppen, Domänencontroller und Suchbasen pflegt Vita Brevis
+beim Kunden unter „AD-Connector" bzw. „Einstellungen → Active Directory". Der
+Agent holt sie dort ab (spätestens alle fünf Minuten) und merkt sich die
+letzte Fassung.
 
-Schritt 1 — Konfiguration anlegen
----------------------------------
-Im Zustandsverzeichnis
+Was er unabhängig vom Cockpit **nie** tut — fest im Agenten, nicht abschaltbar:
 
-    C:\ProgramData\Magister Connector\
-
-liegt config.example.json. Kopieren Sie sie nach config.json und passen Sie
-sie an. Die Vorlage wird bei einem Update ersetzt, Ihre config.json nie.
-
-Wichtig sind:
-
-  endpoint      Die Adresse aus der Konsole, z. B.
-                "https://connect.magister.ch:46200". Muss https sein.
-
-                **Der Name muss genau der sein, auf den das Zertifikat der
-                Plattform ausgestellt ist** — so, wie er in der Konsole beim
-                Agenten-Download steht. Keine IP-Adresse und kein anderer
-                Name desselben Servers: die Verbindung kommt dann zwar an,
-                wird aber abgewiesen ("Das Zertifikat der Plattform gilt
-                nicht für ..."). Löst der Name auf diesem Server nicht auf,
-                gehört er in den DNS oder in die hosts-Datei
-                (C:\Windows\System32\drivers\etc\hosts) — nicht die IP in
-                die Konfiguration.
-  allowed_ous   Die Organisationseinheiten, in denen der Agent arbeiten darf.
-                **Eine leere Liste heisst: keine Verzeichnisaufträge.** Das
-                ist Absicht und nicht "alles erlaubt".
-  ca_bundle     Das CA-Bündel der Plattform. Fehlt es, gilt der
-                Windows-Truststore.
+  * in der ganzen Domäne, in Domain Controllers, Builtin, System,
+    Configuration, Program Data, Managed Service Accounts arbeiten
+  * Domänen-Admins, Administratoren, Organisations-Admins, Schema-Admins,
+    Konten-/Sicherungs-/Server-/Druck-Operatoren und Verwandte verändern
+  * Konten mit adminCount=1 (AdminSDHolder) oder Systemkonten anfassen
+  * Attribute setzen, mit denen sich ein Konto privilegieren liesse
+    (userAccountControl, servicePrincipalName, sIDHistory, …)
 
 
-Schritt 2 — AD-Zugang in die Dienst-Umgebung
---------------------------------------------
-Der Agent bindet sich mit einem eigenen Dienstkonto an Ihr AD. Die Zugangsdaten
-kommen aus der Umgebung des Dienstes und **nie** von der Plattform:
+Schritt 1 — Rechte delegieren
+-----------------------------
+Das Maschinenkonto des DC darf von sich aus keine Passwörter setzen. Geben Sie
+ihm genau die Rechte, die der Agent braucht, und nur auf den OUs, die Sie im
+Cockpit freigeben:
 
-    MAGISTER_AD_DCS              Domänencontroller, kommagetrennt
-    MAGISTER_AD_BIND_DN          Bind-DN des Dienstkontos
-    MAGISTER_AD_BIND_PASSWORD    dessen Passwort
-    MAGISTER_AD_USERS_SEARCH_BASE
+  1. Gruppe anlegen, z. B. "Magister-Connector" (global, Sicherheit), und das
+     Computerkonto des DC (DC01$) als Mitglied aufnehmen.
+  2. In "Active Directory-Benutzer und -Computer" auf jeder freizugebenden OU:
+     Rechtsklick → "Objektverwaltung zuweisen…" → die Gruppe →
+       - "Setzt Benutzerkennwörter zurück und erzwingt Kennwortänderung bei
+         der nächsten Anmeldung"
+       - "Erstellt, entfernt und verwaltet Benutzerkonten"
+       - "Ändert die Mitgliedschaft einer Gruppe"
+  3. Damit das Maschinenkonto die neue Gruppe im Kerberos-Ticket trägt: den DC
+     neu starten oder in einer Eingabeaufforderung als Administrator
+         klist -li 0x3e7 purge
 
-Eintragen z. B. mit:
+Privilegierte Konten schützt AdminSDHolder ohnehin vor delegierten Rechten;
+der Agent prüft es zusätzlich selbst.
 
-    reg add "HKLM\SYSTEM\CurrentControlSet\Services\MagisterConnector" ^
-        /v Environment /t REG_MULTI_SZ ^
-        /d "MAGISTER_AD_DCS=dc01.schule.local\0MAGISTER_AD_BIND_DN=..." /f
 
-Die Verbindung geht immer über LDAPS auf Port 636, versiegelt und signiert.
-Klartext-LDAP ist nicht vorgesehen und lässt sich nicht einschalten.
+Schritt 2 — Installieren
+------------------------
+magister-connector-x64.msi auf dem DC ausführen. Der Dienst
+"Magister Connector-Agent" wird eingerichtet, aber noch nicht gestartet.
 
 
 Schritt 3 — Anmelden
 --------------------
-Öffnen Sie eine Eingabeaufforderung **als Administrator** und führen Sie
-aus (der Installationsordner steht im Suchpfad; eine Eingabeaufforderung,
-die schon vor der Installation offen war, kennt ihn noch nicht — dann eine
-neue öffnen, oder die aus dem Startmenü: "Magister Connector" →
-"Connector-Agent — Eingabeaufforderung"):
+Im Cockpit beim Kunden unter "AD-Connector" ein Einmal-Token ausstellen. Die
+Konsole zeigt dazu die Befehlszeile. Auf dem DC eine Eingabeaufforderung
+**als Administrator** öffnen (oder Startmenü → "Magister Connector" →
+"Connector-Agent - Eingabeaufforderung", Rechtsklick "Als Administrator
+ausführen") und:
 
-    magister-connector enroll
+    magister-connector enroll --endpoint https://connect.magister.ch:46200
 
-Das Einmal-Token aus der Konsole wird abgefragt. Geben Sie es dort ein und
-nicht als Argument — sonst steht es in der Befehlsgeschichte und in der
-Prozessliste.
+Hat die Plattform eine eigene CA, zusätzlich deren Stammzertifikat angeben:
 
-Der Agent erzeugt dabei sein Schlüsselpaar **lokal**; der private Schlüssel
-verlässt diesen Server nie. Zum Schluss zeigt er einen Fingerprint an:
+    magister-connector enroll --endpoint https://… --ca C:\Temp\root.pem
 
-    SPKI-Fingerprint:  a1b2c3...
+Das Einmal-Token wird abgefragt. Geben Sie es dort ein und nicht als Argument
+— sonst steht es in der Befehlsgeschichte und in der Prozessliste.
 
-**Vergleichen Sie diesen Fingerprint mit der Anzeige in der Konsole.** Weichen
+Der Agent
+
+  * legt die lokale Konfiguration an (nur der Endpunkt),
+  * erzeugt sein Schlüsselpaar **lokal** — der private Schlüssel verlässt
+    den DC nie,
+  * meldet sich an und zeigt einen SPKI-Fingerprint,
+  * holt seine Einstellungen aus dem Cockpit,
+  * startet den Dienst.
+
+**Vergleichen Sie den Fingerprint mit der Anzeige in der Konsole.** Weichen
 sie ab, hat sich jemand anders mit Ihrem Token angemeldet. Dann: Agent in der
 Konsole widerrufen und neu anmelden.
+
+Der Endpunkt muss genau der Name sein, auf den das Zertifikat der Plattform
+ausgestellt ist — keine IP-Adresse. Löst der Name nicht auf, gehört er in den
+DNS (oder in C:\Windows\System32\drivers\etc\hosts), nicht die IP in den
+Befehl.
 
 
 Schritt 4 — Prüfen
@@ -100,26 +105,15 @@ Der Befehl verändert nichts und sagt, was noch fehlt:
   Endpunkt      warnt, wenn dort eine IP-Adresse statt des Namens steht
   Rechte        des Zustandsverzeichnisses
   Anmeldung     und Restlaufzeit des Zertifikats
-  OU-Allowlist  leer heisst: keine Verzeichnisaufträge
-  Kanal         Name, Port 46200 und Zertifikat der Plattform — mit einem
-                echten Verbindungsaufbau
-  AD            ein LDAPS-Bind mit dem Dienstkonto, mit denselben Werten,
-                die der Dienst aus Schritt 2 bekommt. Passwörter werden
-                nicht angezeigt.
+  Kanal         Name, Port 46200 und Zertifikat der Plattform
+  Cockpit       ob die Einstellungen abgeholt werden konnten
+  OU-Freigabe   leer heisst: keine Verzeichnisaufträge (im Cockpit eintragen);
+                verworfene Einträge werden mit Grund genannt
+  DC / AD       LDAPS mit Kerberos-Anmeldung zum DC
 
-Er ist der Abnahmebefehl — führen Sie ihn aus, bevor jemand auf einen
-Passwort-Reset wartet. Steht am Ende "Alles bereit.", trägt der ganze Weg
-bis ins AD.
-
-
-Schritt 5 — Dienst starten
---------------------------
-    sc start MagisterConnector
-
-Der Dienst steht auf "Automatisch" und kommt ab jetzt bei jedem Neustart mit.
-Das Installationsprogramm startet ihn absichtlich nicht: zum
-Installationszeitpunkt ist der Agent noch nicht angemeldet und der Start würde
-nur eine Fehlermeldung erzeugen.
+Von Hand aufgerufen meldet sich "check" mit Ihrem Administratorkonto am AD an,
+der Dienst mit dem Maschinenkonto. Ob die delegierten Rechte (Schritt 1)
+reichen, zeigt der Verbindungstest und der erste Auftrag im Cockpit.
 
 
 Das Zertifikat erneuert sich selbst
@@ -153,6 +147,15 @@ Befehl, der es behebt.
 
 Häufigster Fall: "Der Agent ist nicht angemeldet." Dann fehlt Schritt 3.
 
+"Konfiguration aus dem Cockpit nicht geholt … keine frühere Fassung": der
+Dienst braucht beim allerersten Start die Plattform. Kanal prüfen (check).
+
+"… lokal abgelehnt: … ausserhalb der erlaubten OUs": die OU ist im Cockpit
+nicht freigegeben. "… geschütztes AD-Konto (adminCount)": gewollt.
+
+"insufficientAccessRights" im Protokoll: die Delegation aus Schritt 1 fehlt,
+oder das Ticket des Maschinenkontos kennt die Gruppe noch nicht (klist purge).
+
 Zweithäufigster: eine Meldung über die Rechte des Zustandsverzeichnisses. Dort
 liegt der private Schlüssel, und der Agent läuft nicht, wenn andere ihn lesen
 könnten. Die Meldung enthält die icacls-Zeile, die es richtet.
@@ -160,10 +163,10 @@ könnten. Die Meldung enthält die icacls-Zeile, die es richtet.
 Die Meldungen zur Verbindung nennen die Ursache, nicht nur das Symptom:
 
   "Das Zertifikat der Plattform gilt nicht für ..."
-        Im 'endpoint' steht eine IP oder ein anderer Name (Schritt 1).
+        Im 'endpoint' steht eine IP oder ein anderer Name (Schritt 3).
         Der Port ist offen; an der Firewall liegt es nicht.
   "... stammt von einer Stelle, der dieser Server nicht vertraut"
-        'ca_bundle' prüfen — oder ein Proxy bricht TLS auf.
+        enroll mit --ca wiederholen — oder ein Proxy bricht TLS auf.
   "Verbindung zu ... abgewiesen" / "Keine Antwort von ..."
         Netz: Firewall, Port, Weiterleitung.
   "Der Name ... lässt sich nicht auflösen"
@@ -172,7 +175,9 @@ Die Meldungen zur Verbindung nennen die Ursache, nicht nur das Symptom:
 
 Was in diesem Verzeichnis liegt — und was Sie sichern sollten
 -------------------------------------------------------------
-    config.json      Ihre Konfiguration
+    config.json      der Endpunkt (von enroll angelegt)
+    remote-config.json  die zuletzt aus dem Cockpit geholten Einstellungen
+    platform-ca.pem  CA der Plattform (falls bei enroll angegeben)
     agent.pem        Zertifikat des Agenten
     agent-key.pem    sein privater Schlüssel  — verlässt den Server nie
     agent.pem.prev   das vorherige Paar, aus der letzten Erneuerung
@@ -185,7 +190,7 @@ verloren, wird der Agent in der Konsole widerrufen und auf dem neuen Server
 neu angemeldet. Das ist der vorgesehene Weg und dauert zwei Minuten.
 
 Umgekehrt gilt: eine **Kopie** dieses Verzeichnisses ist ein vollwertiger
-Zugang zu Ihrem AD über die Plattform. Es gehört nicht in eine Dateiablage und
+Zugang zur Plattform als dieser Agent. Es gehört nicht in eine Dateiablage und
 nicht in ein Ticket.
 
 

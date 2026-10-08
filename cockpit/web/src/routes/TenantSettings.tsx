@@ -55,8 +55,8 @@ const AD_FIELDS: Field[] = [
     label: "Domänencontroller",
     kind: "lines",
     hint:
-      "Nur für den direkten LDAP-Weg. Über den AD-Connector kennt der Agent die DCs " +
-      "selbst — dann leer lassen.",
+      "Volle DNS-Namen, keine IP-Adressen (Kerberos). Über den AD-Connector: leer = der " +
+      "DC, auf dem der Agent läuft.",
   },
 ];
 

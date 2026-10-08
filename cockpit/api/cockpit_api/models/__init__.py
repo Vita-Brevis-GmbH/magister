@@ -15,6 +15,7 @@ from cockpit_api.models.connector import (
     ConnectorEnrollment,
     ConnectorJob,
     JobState,
+    TenantConnectorSettings,
 )
 from cockpit_api.models.instance import Instance, InstanceChannel
 from cockpit_api.models.offboarding import OffboardingState, TenantOffboarding
@@ -86,6 +87,7 @@ __all__ = [
     "Tenant",
     "TenantBackup",
     "TenantBackupPolicy",
+    "TenantConnectorSettings",
     "TenantMaintenanceRequest",
     "TenantOffboarding",
     "TenantProfile",

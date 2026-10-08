@@ -37,6 +37,9 @@ AGENT_ROOT = Path(SPECPATH).resolve().parents[1]
 # und keinen Importfehler beim Start. Genau deshalb sieht der statische Scan
 # sie nicht.
 #
+# ``ldap3.protocol.sasl.kerberos`` und ``winkerberos``: der Kerberos-Bind als
+# Maschinenkonto. ldap3 lädt beides erst beim ersten SASL-Bind.
+#
 # ``win32timezone``: pywin32 lädt es nachträglich über einen String-Import.
 # Fehlt es, scheitert der Dienst beim ersten Zeitstempel — und zwar erst zur
 # Laufzeit beim Kunden.
@@ -46,6 +49,8 @@ HIDDEN = [
     "magister_api.config",
     "ldap3",
     "ldap3.core.exceptions",
+    "ldap3.protocol.sasl.kerberos",
+    "winkerberos",
     "pydantic_settings",
     "win32timezone",
     "servicemanager",
