@@ -989,12 +989,27 @@ cmd_up() {
   start_daten
   make_kunden
   kunden_anbinden
+  agentenpakete_auffrischen
   cmd_status
   if [ "${DATEN_FEHLER:-0}" -eq 1 ]; then
     dc_daten ps -a --format '  {{.Service}}  {{.Status}}' 2>/dev/null || true
     die "Die Datenebene lief nicht vollständig an (siehe Meldung von docker oben). Ursache beheben, dann erneut aufrufen."
   fi
   naechste_schritte
+}
+
+# Das neueste Agenten-MSI ins Paketverzeichnis, wenn ein Token hinterlegt ist.
+# Ohne das bot das Cockpit nach einem Update weiter das MSI vom Stand an, an dem
+# zuletzt jemand von Hand `agentenpakete.sh holen` aufgerufen hatte — und auf
+# dem DC landete ein Agent, der zur Plattform nicht passte. Scheitert es, ist
+# das kein Grund, den Aufbau abzubrechen.
+agentenpakete_auffrischen() {
+  if [ -z "${GITHUB_TOKEN:-}" ] && [ ! -s "$HOME/.magister/github-token" ]; then
+    return 0
+  fi
+  say "Agenten-MSI des aktuellen Stands holen"
+  AGENT_PAKETE_ZIEL="$PAKETE" "$REPO/scripts/agentenpakete.sh" holen \
+    || warn "Agenten-MSI nicht geholt (Grund oben) — von Hand: ./scripts/agentenpakete.sh holen"
 }
 
 # --- Nächste Schritte --------------------------------------------------------

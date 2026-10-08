@@ -42,7 +42,11 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKFLOW="agent-ci.yml"
-ZWEIG="${AGENT_CI_ZWEIG:-main}"
+# Der Zweig, der hier ausgecheckt ist — nicht fest `main`. Sonst holte ein
+# Host, der einen Arbeitszweig fährt, das Paket eines anderen Stands, und das
+# Cockpit böte einen Agenten an, der nicht zur Plattform passt.
+ZWEIG="${AGENT_CI_ZWEIG:-$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)}"
+[ "$ZWEIG" = "HEAD" ] && ZWEIG=main
 # Die Artefaktnamen, die agent-ci.yml hochlädt.
 ARTEFAKTE=("magister-connector-msi")
 #: Die curl-Konfiguration mit dem Token. Wird in `cmd_holen` gesetzt und beim
@@ -281,6 +285,10 @@ for r in laeufe:
   sha="$(printf '%s' "$lauf" | cut -f2)"
   wann="$(printf '%s' "$lauf" | cut -f3)"
   say "Lauf $lauf_id (Stand $sha, $wann)"
+  if compgen -G "$ziel/*-$sha.msi" >/dev/null; then
+    say "Das MSI dieses Stands liegt schon in $ziel — nichts zu tun."
+    return 0
+  fi
 
   local liste
   liste="$(api "https://api.github.com/repos/$slug/actions/runs/$lauf_id/artifacts?per_page=100")"
