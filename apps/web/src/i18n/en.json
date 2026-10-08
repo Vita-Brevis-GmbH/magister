@@ -465,12 +465,16 @@
         "ad_search_failed": "AD search failed. Check the search-base DN and that the service account may read that subtree.",
         "ad_bind_failed": "AD bind rejected. Check the bind DN and password.",
         "ad_config": "AD configuration incomplete. Check the domain controllers and bind account.",
-        "ad_unavailable": "AD unreachable."
+        "ad_unavailable": "AD unreachable.",
+        "ad_connector_scope": "The AD connector refused the search: the search base lies outside the OUs approved in the cockpit. Align the search base and the approval.",
+        "ad_connector_offline": "The AD connector on the domain controller did not respond. Is the “Magister Connector-Agent” service running?"
       },
       "sync_ad_reason_managed": {
         "ad_search_base_missing": "The user search base is not yet set for this installation. The AD settings are managed by Vita Brevis — please contact Vita Brevis.",
         "ad_search_base_not_found": "The configured search base does not exist in your AD (noSuchObject). The AD settings are managed by Vita Brevis — please send them the correct OU path.",
-        "ad_config": "The AD connection of this installation is incomplete. Please contact Vita Brevis."
+        "ad_config": "The AD connection of this installation is incomplete. Please contact Vita Brevis.",
+        "ad_connector_scope": "The AD search base lies outside the approved OUs. Vita Brevis manages the approval — please report it.",
+        "ad_connector_offline": "The AD connector on your domain controller is not responding. Check that the “Magister Connector-Agent” service is running, otherwise contact Vita Brevis."
       },
       "save": "Save",
       "success": "Settings saved.",

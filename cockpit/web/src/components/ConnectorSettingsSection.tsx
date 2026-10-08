@@ -99,7 +99,10 @@ function SettingsForm({
         <span className="text-xs text-slate-500">
           Eine OU je Zeile, als Distinguished Name. Leer heisst: keine
           Verzeichnisaufträge — nicht „alles“. Nicht zulässig: die ganze Domäne,
-          Domain Controllers, Builtin, System, Configuration.
+          Domain Controllers, Builtin, System, Configuration. Für den Abgleich
+          gehören auch die OUs der Gruppen und Computer hierher. Liegt eine
+          Such-Basis darüber (etwa die ganze Domäne), liest der Agent nur die
+          freigegebenen OUs darunter.
         </span>
       </label>
       <label className="grid gap-1">

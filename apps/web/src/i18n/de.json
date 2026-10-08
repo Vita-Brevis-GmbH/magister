@@ -463,12 +463,16 @@
         "ad_search_failed": "AD-Suche fehlgeschlagen. Such-Basis-DN prüfen und ob der Service-Account diesen Bereich lesen darf.",
         "ad_bind_failed": "Anmeldung am AD abgelehnt. Bind-DN und Passwort prüfen.",
         "ad_config": "AD-Konfiguration unvollständig. Domain-Controller und Bind-Zugang prüfen.",
-        "ad_unavailable": "AD nicht erreichbar."
+        "ad_unavailable": "AD nicht erreichbar.",
+        "ad_connector_scope": "Der AD-Connector hat die Suche abgelehnt: die Such-Basis liegt ausserhalb der im Cockpit freigegebenen OUs. Such-Basis und Freigabe aufeinander abstimmen.",
+        "ad_connector_offline": "Der AD-Connector auf dem Domänencontroller hat nicht geantwortet. Läuft der Dienst „Magister Connector-Agent“?"
       },
       "sync_ad_reason_managed": {
         "ad_search_base_missing": "Die Such-Basis (User) ist für diese Installation noch nicht gesetzt. Die AD-Einstellungen pflegt Vita Brevis — bitte dort melden.",
         "ad_search_base_not_found": "Die eingestellte Such-Basis gibt es in Ihrem AD nicht (noSuchObject). Die AD-Einstellungen pflegt Vita Brevis — bitte den richtigen OU-Pfad dorthin melden.",
-        "ad_config": "Die AD-Anbindung dieser Installation ist unvollständig. Bitte Vita Brevis melden."
+        "ad_config": "Die AD-Anbindung dieser Installation ist unvollständig. Bitte Vita Brevis melden.",
+        "ad_connector_scope": "Die AD-Such-Basis liegt ausserhalb der freigegebenen OUs. Die Freigabe pflegt Vita Brevis — bitte dort melden.",
+        "ad_connector_offline": "Der AD-Connector auf Ihrem Domänencontroller antwortet nicht. Bitte prüfen, ob der Dienst „Magister Connector-Agent“ läuft, sonst Vita Brevis melden."
       },
       "mail_section": "Mail-Domains",
       "mail_section_desc": "Liste der Domains, die im User-Edit-Formular für UPN und Mail zur Auswahl stehen.",

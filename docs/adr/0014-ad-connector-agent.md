@@ -445,3 +445,15 @@ Plattform eine eigene CA, bietet die Konsole `root.pem` neben dem MSI an
 (`COCKPIT_PLATFORM_ROOT_CA`, nur das öffentliche Zertifikat), mit
 SHA-256-Fingerprint zum Vergleich auf dem DC.
 
+**E6 · Der ganze Abgleich läuft über den Agenten.** Bisher ging nur
+`search_users` über den Connector; Gruppenkatalog (`search_groups`), Computer
+(`search_computers`) und `managedBy` (`search_managed_computers`) erbten den
+direkten LDAP-Körper, und der volle Abgleich eines gehosteten Kunden scheiterte
+mit „AD nicht erreichbar“, obwohl der Agent lief. Alle vier stehen jetzt in
+`CONNECTOR_EXTRA_METHODS`, in der Konsole und im Agenten. Liegt eine
+Such-Basis über der Freigabe (etwa `DC=…`), sucht der Agent über jede
+freigegebene OU darunter einzeln und führt die Ergebnisse zusammen; daneben
+liegende Basen lehnt er weiter ab. Eine solche Ablehnung erscheint im Portal
+als eigene Meldung (`ad_connector_scope`), Fehlercodes der AD-Schicht
+(`ldap_search_failed:noSuchObject`) kommen in fester Form durch.
+

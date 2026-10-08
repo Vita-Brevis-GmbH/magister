@@ -395,3 +395,93 @@ class TestAbfrageTakt:
         naiv = connector_client.SEARCH_TIMEOUT_S / connector_client.POLL_INTERVAL_S
         assert naiv == 960
         assert calls < 200  # gemessen: 154 statt 960
+
+
+class TestTheRestOfTheSyncRunsOverTheAgent:
+    """Gruppen, Computer und managedBy laufen ebenfalls über den Agenten.
+
+    Vorher erbten sie den direkten LDAP-Körper: der Benutzerteil ging durch,
+    der volle Abgleich scheiterte danach mit „AD nicht erreichbar“.
+    """
+
+    async def test_groups_come_back_as_records(self) -> None:
+        from magister_api.ad.client import AdGroupRecord
+        from magister_api.ad.rpc import ad_group_record_to_jsonable
+
+        group = AdGroupRecord("g-1", "CN=Lehrer,OU=G,DC=x", "Lehrer", "lehrer", None)
+        console = _Console()
+        console.states = [{"state": "done", "result": [ad_group_record_to_jsonable(group)]}]
+        client = console.client()
+        try:
+            assert await client.search_groups(search_base="OU=G,DC=x") == [group]
+        finally:
+            await client.aclose()
+        assert console.enqueued[0]["method"] == "search_groups"
+
+    async def test_computers_and_managed_by(self) -> None:
+        console = _Console()
+        console.states = [
+            {"state": "done", "result": [["c-1", "PC01"]]},
+            {"state": "done", "result": {"cn=dora,ou=s,dc=x": "PC01"}},
+        ]
+        client = console.client()
+        try:
+            assert await client.search_computers(search_base="OU=C,DC=x") == [("c-1", "PC01")]
+            assert await client.search_managed_computers(search_base="OU=C,DC=x") == {
+                "cn=dora,ou=s,dc=x": "PC01"
+            }
+        finally:
+            await client.aclose()
+        assert [j["method"] for j in console.enqueued] == [
+            "search_computers",
+            "search_managed_computers",
+        ]
+
+    async def test_without_a_base_nothing_is_asked(self) -> None:
+        console = _Console()
+        client = console.client()
+        try:
+            assert await client.search_computers() == []
+            assert await client.search_managed_computers() == {}
+        finally:
+            await client.aclose()
+        assert console.enqueued == []
+
+
+class TestRefusalsAreNamed:
+    async def test_a_scope_refusal_becomes_its_own_reason(self) -> None:
+        from magister_api.ad.errors import classify_sync_failure
+
+        console = _Console()
+        console.states = [
+            {
+                "state": "failed",
+                "error": "search_base liegt ausserhalb der erlaubten OUs (search_users).",
+            }
+        ]
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError) as exc:
+                await client.search_users(search_base="DC=x")
+        finally:
+            await client.aclose()
+        assert classify_sync_failure(exc.value) == "ad_connector_scope"
+
+    async def test_an_ad_code_is_passed_on_but_free_text_is_not(self) -> None:
+        from magister_api.ad.errors import classify_sync_failure
+
+        console = _Console()
+        console.states = [
+            {"state": "failed", "error": "AdUnavailableError: ldap_search_failed:noSuchObject"},
+            {"state": "failed", "error": "AdUnavailableError: CN=Geheim,OU=X <b>"},
+        ]
+        client = console.client()
+        try:
+            with pytest.raises(AdUnavailableError) as first:
+                await client.search_users(search_base="OU=A,DC=x")
+            with pytest.raises(AdUnavailableError) as second:
+                await client.search_users(search_base="OU=A,DC=x")
+        finally:
+            await client.aclose()
+        assert classify_sync_failure(first.value) == "ad_search_base_not_found"
+        assert str(second.value) == "connector_job_failed"

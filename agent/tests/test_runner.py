@@ -628,3 +628,102 @@ class TestBulkDoesNotBlock:
             await runner.drain()
         assert [r["_job_id"] for r in platform.results] == ["job-b2", "job-b1"]
         assert not runner.bulk_running
+
+
+class TestSearchBaseIsNarrowed:
+    """Eine Such-Basis über der Freigabe wird auf die freigegebenen OUs eingegrenzt."""
+
+    async def test_the_domain_root_becomes_the_approved_ous(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        other = "OU=Verwaltung,DC=gemeinde,DC=local"
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-n1",
+                    "method": "search_users",
+                    "payload": {
+                        "search_base": "DC=gemeinde,DC=local",
+                        "attributes": [],
+                        "changed_since": None,
+                    },
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        runner.guardrails = Guardrails(allowed_ous=frozenset({SCHULE, other}))
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+            await runner.drain()
+        bases = sorted(str(args["search_base"]) for _, args in ad.calls)
+        assert bases == sorted([SCHULE, other])
+        entry = platform.results[0]
+        assert entry["ok"] is True
+        # Dieselbe Person aus beiden Läufen der Attrappe: einmal, nicht zweimal.
+        assert len(cast(list[Any], entry["result"])) == 1
+
+    async def test_a_base_beside_the_approval_is_still_refused(self, tmp_path: Path) -> None:
+        ad = FakeAd()
+        platform = FakePlatform(
+            [
+                {
+                    "id": "job-n2",
+                    "method": "search_users",
+                    "payload": {
+                        "search_base": "OU=Fremd,DC=gemeinde,DC=local",
+                        "attributes": [],
+                        "changed_since": None,
+                    },
+                }
+            ]
+        )
+        runner = _runner(tmp_path, platform, ad)
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+            await runner.drain()
+        assert ad.calls == []
+        assert "ausserhalb" in platform.results[0]["error"]
+
+
+class TestOtherSyncReads:
+    async def test_groups_and_computers_go_back_as_json(self, tmp_path: Path) -> None:
+        from magister_api.ad.client import AdGroupRecord
+
+        class SearchAd(FakeAd):
+            async def search_groups(self, *, search_base: str | None = None) -> list[AdGroupRecord]:
+                return [AdGroupRecord("g-1", f"CN=Lehrer,{SCHULE}", "Lehrer", "lehrer", None)]
+
+            async def search_computers(
+                self, *, search_base: str | None = None
+            ) -> list[tuple[str, str]]:
+                return [("c-1", "PC01")]
+
+        platform = FakePlatform(
+            [
+                {"id": "job-g", "method": "search_groups", "payload": {"search_base": SCHULE}},
+                {"id": "job-c", "method": "search_computers", "payload": {"search_base": SCHULE}},
+            ]
+        )
+        runner = _runner(tmp_path, platform, SearchAd())
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+            await runner.drain()
+        by_id = {r["_job_id"]: r for r in platform.results}
+        assert by_id["job-g"]["result"][0]["cn"] == "Lehrer"
+        assert by_id["job-c"]["result"] == [["c-1", "PC01"]]
+        assert all(_signature_is_valid(r) for r in platform.results)
+
+    async def test_an_ad_error_code_reaches_the_platform(self, tmp_path: Path) -> None:
+        from magister_api.ad.errors import AdUnavailableError
+
+        class FailingAd(FakeAd):
+            async def search_groups(self, *, search_base: str | None = None) -> list[Any]:
+                raise AdUnavailableError("ldap_search_failed:noSuchObject")
+
+        platform = FakePlatform(
+            [{"id": "job-e", "method": "search_groups", "payload": {"search_base": SCHULE}}]
+        )
+        runner = _runner(tmp_path, platform, FailingAd())
+        async with runner.build_client() as client:
+            await runner.run_once(client)
+            await runner.drain()
+        assert platform.results[0]["error"] == "AdUnavailableError: ldap_search_failed:noSuchObject"

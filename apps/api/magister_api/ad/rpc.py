@@ -13,7 +13,7 @@ import dataclasses
 from datetime import datetime
 from typing import Any
 
-from magister_api.ad.client import AdUserRecord
+from magister_api.ad.client import AdGroupRecord, AdUserRecord
 
 # Internal-only mount path. NOT under any module's Caddy-routed prefix (``/ad``),
 # so it is unreachable from outside the docker network; sibling containers call
@@ -61,9 +61,17 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
 #: AD-Zugang (ADR-0014), also muss der Abgleich über ihn laufen oder gar
 #: nicht. Ohne diesen Eintrag holte die Plattform das Verzeichnis eines
 #: gehosteten Kunden direkt per LDAP — die Verbindung, die es nicht geben darf.
+#:
+#: Alle vier Lesewege des Abgleichs: Benutzer, Gruppen (Katalog der
+#: Zielrollen), Computer (Geräte) und die ``managedBy``-Zuordnung. Fehlte einer,
+#: griff die Plattform für ihn per LDAP ins Kundennetz — und der Abgleich
+#: scheiterte mit „AD nicht erreichbar“, obwohl der Agent einwandfrei lief.
 CONNECTOR_EXTRA_METHODS: frozenset[str] = frozenset(
     {
         "search_users",
+        "search_groups",
+        "search_computers",
+        "search_managed_computers",
     }
 )
 
@@ -79,6 +87,14 @@ def ad_user_record_to_jsonable(rec: AdUserRecord) -> dict[str, Any]:
     data["groups"] = list(rec.groups)
     data["mail_aliases"] = list(rec.mail_aliases)
     return data
+
+
+def ad_group_record_to_jsonable(rec: AdGroupRecord) -> dict[str, Any]:
+    return dataclasses.asdict(rec)
+
+
+def ad_group_record_from_jsonable(data: dict[str, Any]) -> AdGroupRecord:
+    return AdGroupRecord(**data)
 
 
 def ad_user_record_from_jsonable(data: dict[str, Any]) -> AdUserRecord:

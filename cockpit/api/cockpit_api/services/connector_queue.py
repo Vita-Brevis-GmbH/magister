@@ -61,6 +61,12 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         # Megabyte statt in Bytes — deshalb hat sie ihre eigene Frist, siehe
         # `ttl_for`.
         "search_users",
+        # Die übrigen Lesewege des Abgleichs: Gruppenkatalog, Computer-OU und
+        # die managedBy-Zuordnung. Ohne sie griff die Datenebene dafür per
+        # LDAP ins Kundennetz und der Abgleich scheiterte.
+        "search_groups",
+        "search_computers",
+        "search_managed_computers",
     }
 )
 
@@ -82,7 +88,12 @@ JOB_TTL = timedelta(seconds=90)
 SEARCH_JOB_TTL = timedelta(minutes=10)
 
 #: Welche Frist für welche Methode gilt.
-JOB_TTL_BY_METHOD: dict[str, timedelta] = {"search_users": SEARCH_JOB_TTL}
+JOB_TTL_BY_METHOD: dict[str, timedelta] = {
+    "search_users": SEARCH_JOB_TTL,
+    "search_groups": SEARCH_JOB_TTL,
+    "search_computers": SEARCH_JOB_TTL,
+    "search_managed_computers": SEARCH_JOB_TTL,
+}
 
 
 #: Aufträge, auf die kein Mensch wartet und die Minuten dauern: der Abgleich.
@@ -90,7 +101,9 @@ JOB_TTL_BY_METHOD: dict[str, timedelta] = {"search_users": SEARCH_JOB_TTL}
 #: einen abarbeitet, bekommt keinen zweiten (``include_bulk=False``). Sonst
 #: stünde ein Passwort-Reset hinter einem Abgleich von zehntausend Konten —
 #: genau die Viertelstunde, die ein Anwender vor dem Formular nicht wartet.
-BULK_METHODS: frozenset[str] = frozenset({"search_users"})
+BULK_METHODS: frozenset[str] = frozenset(
+    {"search_users", "search_groups", "search_computers", "search_managed_computers"}
+)
 
 
 def ttl_for(method: str) -> timedelta:

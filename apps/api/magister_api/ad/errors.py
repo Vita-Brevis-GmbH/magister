@@ -37,6 +37,10 @@ SYNC_REASON_SEARCH_FAILED = "ad_search_failed"
 SYNC_REASON_BIND_FAILED = "ad_bind_failed"
 SYNC_REASON_CONFIG = "ad_config"
 SYNC_REASON_UNAVAILABLE = "ad_unavailable"
+#: Der AD-Connector hat die Suche abgelehnt: Such-Basis nicht in der Freigabe.
+SYNC_REASON_CONNECTOR_SCOPE = "ad_connector_scope"
+#: Der AD-Connector hat den Auftrag nicht abgeholt (Dienst aus, Netz zu).
+SYNC_REASON_CONNECTOR_OFFLINE = "ad_connector_offline"
 
 
 def classify_sync_failure(exc: AdUnavailableError) -> str:
@@ -49,6 +53,10 @@ def classify_sync_failure(exc: AdUnavailableError) -> str:
     ``ldap_search_failed:noSuchObject``) which we mine for a finer reason.
     """
     msg = str(exc)
+    if msg == "connector_refused_scope":
+        return SYNC_REASON_CONNECTOR_SCOPE
+    if msg.startswith("connector_agent_unavailable") or msg == "connector_timeout":
+        return SYNC_REASON_CONNECTOR_OFFLINE
     if "SEARCH_BASE" in msg:
         return SYNC_REASON_SEARCH_BASE_MISSING
     if msg == "ldap_bind_failed":

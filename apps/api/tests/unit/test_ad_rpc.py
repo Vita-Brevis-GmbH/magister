@@ -132,15 +132,20 @@ def test_sync_methods_are_not_on_the_rpc_surface() -> None:
 # --- contract: der Connector kann eine Methode mehr (ADR-0022 D1) ----------------
 
 
+SYNC_READS = ("search_users", "search_groups", "search_computers", "search_managed_computers")
+
+
 def test_the_connector_surface_is_the_rpc_surface_plus_the_sync() -> None:
-    """Eine Menge mehr, und zwar genau eine Methode mehr.
+    """Eine Menge mehr, und zwar genau die Lesewege des Abgleichs.
 
     Getrennte Mengen, weil die beiden Transporte verschieden liegen: über RPC
     läuft der Abgleich **im** AD-Container (ADR-0011), über den Connector muss
     er über den Agenten laufen, weil nur er ins Verzeichnis kommt (ADR-0014).
+    Alle vier Lesewege: fehlte einer, griff die Plattform dafür per LDAP ins
+    Kundennetz.
     """
-    assert CONNECTOR_METHODS == ALLOWED_METHODS | {"search_users"}
-    assert "search_users" not in ALLOWED_METHODS
+    assert CONNECTOR_METHODS == ALLOWED_METHODS | set(SYNC_READS)
+    assert not ALLOWED_METHODS & set(SYNC_READS)
 
 
 def test_only_the_connector_overrides_the_sync() -> None:
@@ -151,21 +156,23 @@ def test_only_the_connector_overrides_the_sync() -> None:
     dagegen überschreiben, sonst griffe die Plattform beim Abgleich eines
     gehosteten Kunden selbst per LDAP ins Kundennetz.
     """
-    owner_connector = next(
-        klass for klass in AdConnectorClient.__mro__ if "search_users" in klass.__dict__
-    )
-    assert owner_connector is AdConnectorClient
+    for method in SYNC_READS:
+        owner_connector = next(
+            klass for klass in AdConnectorClient.__mro__ if method in klass.__dict__
+        )
+        assert owner_connector is AdConnectorClient, method
 
-    owner_rpc = next(klass for klass in AdRpcClient.__mro__ if "search_users" in klass.__dict__)
-    assert owner_rpc is AdClient
+        owner_rpc = next(klass for klass in AdRpcClient.__mro__ if method in klass.__dict__)
+        assert owner_rpc is AdClient, method
 
 
 def test_the_connector_sync_keeps_the_signature_of_the_direct_one() -> None:
     # Sonst ruft die Fachschicht beim gehosteten Kunden mit Argumenten auf,
     # die dieser Rücken nicht kennt — und das fiele erst im Betrieb auf.
-    parent = _param_shape(AdClient.search_users)
-    child = _param_shape(AdConnectorClient.search_users)
-    assert child == parent
+    for method in SYNC_READS:
+        parent = _param_shape(getattr(AdClient, method))
+        child = _param_shape(getattr(AdConnectorClient, method))
+        assert child == parent, method
 
 
 def test_directory_password_authentication_is_not_on_the_rpc_surface() -> None:

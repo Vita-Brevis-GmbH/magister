@@ -468,12 +468,16 @@
         "ad_search_failed": "Ricerca AD non riuscita. Verifica il DN della base di ricerca e che l'account di servizio possa leggere quel sottoalbero.",
         "ad_bind_failed": "Autenticazione AD rifiutata. Verifica il DN di bind e la password.",
         "ad_config": "Configurazione AD incompleta. Verifica i domain controller e l'account di bind.",
-        "ad_unavailable": "AD non raggiungibile."
+        "ad_unavailable": "AD non raggiungibile.",
+        "ad_connector_scope": "Il connettore AD ha rifiutato la ricerca: la base di ricerca si trova al di fuori delle UO autorizzate nel cockpit. Allineare base di ricerca e autorizzazione.",
+        "ad_connector_offline": "Il connettore AD sul domain controller non ha risposto. Il servizio «Magister Connector-Agent» è in esecuzione?"
       },
       "sync_ad_reason_managed": {
         "ad_search_base_missing": "La base di ricerca (utenti) non è ancora impostata per questa installazione. Le impostazioni AD sono gestite da Vita Brevis — rivolgersi a Vita Brevis.",
         "ad_search_base_not_found": "La base di ricerca impostata non esiste nel vostro AD (noSuchObject). Le impostazioni AD sono gestite da Vita Brevis — comunicare il percorso OU corretto.",
-        "ad_config": "La connessione AD di questa installazione è incompleta. Rivolgersi a Vita Brevis."
+        "ad_config": "La connessione AD di questa installazione è incompleta. Rivolgersi a Vita Brevis.",
+        "ad_connector_scope": "La base di ricerca AD si trova al di fuori delle UO autorizzate. L’autorizzazione è gestita da Vita Brevis — si prega di segnalarlo.",
+        "ad_connector_offline": "Il connettore AD sul vostro domain controller non risponde. Verificare che il servizio «Magister Connector-Agent» sia in esecuzione, altrimenti contattare Vita Brevis."
       },
       "save": "Salva",
       "success": "Impostazioni salvate.",

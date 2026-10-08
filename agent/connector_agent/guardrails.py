@@ -58,10 +58,14 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "add_user_to_groups",
         "remove_user_from_groups",
         "create_user",
-        # Der Abgleich über den Agenten (ADR-0022 D1). Die einzige Methode,
-        # die viel zurückgibt — die Grenzen unten gelten für sie genauso:
-        # `search_base` ist ein DN und muss in einer erlaubten OU liegen.
+        # Der Abgleich über den Agenten (ADR-0022 D1). Die Lesewege geben viel
+        # zurück — die Grenzen unten gelten für sie genauso: `search_base` ist
+        # ein DN und muss in einer erlaubten OU liegen (siehe
+        # `narrow_search_base`).
         "search_users",
+        "search_groups",
+        "search_computers",
+        "search_managed_computers",
     }
 )
 
@@ -235,6 +239,20 @@ class Guardrails:
     allowed_ous: frozenset[str] = field(default_factory=frozenset[str])
     protected_groups: frozenset[str] = field(default_factory=lambda: DEFAULT_PROTECTED_GROUPS)
     protected_attributes: frozenset[str] = field(default_factory=lambda: PROTECTED_ATTRIBUTES)
+
+    def narrow_search_base(self, search_base: str) -> list[str]:
+        """Die Such-Basen, über die ein Abgleich tatsächlich laufen darf.
+
+        Liegt ``search_base`` in einer freigegebenen OU, bleibt sie, wie sie
+        ist. Liegt sie **darüber** (etwa die ganze Domäne oder eine OU, unter
+        der die freigegebenen hängen), wird über jede freigegebene OU darunter
+        einzeln gesucht — der Abgleich liest dann genau die Freigabe und nicht
+        mehr. Liegt sie daneben, bleibt sie stehen und :meth:`check` lehnt ab.
+        """
+        if dn_is_within(search_base, self.allowed_ous):
+            return [search_base]
+        below = sorted(ou for ou in self.allowed_ous if dn_is_within(ou, frozenset({search_base})))
+        return below or [search_base]
 
     def check(self, method: str, payload: dict[str, Any]) -> None:
         """Auftrag prüfen. Kehrt still zurück oder wirft."""

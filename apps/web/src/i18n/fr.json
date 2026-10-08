@@ -468,12 +468,16 @@
         "ad_search_failed": "Échec de la recherche AD. Vérifiez le DN de la base de recherche et que le compte de service peut lire cette sous-arborescence.",
         "ad_bind_failed": "Authentification AD refusée. Vérifiez le DN de bind et le mot de passe.",
         "ad_config": "Configuration AD incomplète. Vérifiez les contrôleurs de domaine et le compte de bind.",
-        "ad_unavailable": "AD injoignable."
+        "ad_unavailable": "AD injoignable.",
+        "ad_connector_scope": "Le connecteur AD a refusé la recherche : la base de recherche se trouve en dehors des UO autorisées dans le cockpit. Harmoniser la base de recherche et l’autorisation.",
+        "ad_connector_offline": "Le connecteur AD sur le contrôleur de domaine n’a pas répondu. Le service « Magister Connector-Agent » est-il démarré ?"
       },
       "sync_ad_reason_managed": {
         "ad_search_base_missing": "La base de recherche (utilisateurs) n'est pas encore définie pour cette installation. Les réglages AD sont gérés par Vita Brevis — veuillez vous adresser à Vita Brevis.",
         "ad_search_base_not_found": "La base de recherche configurée n'existe pas dans votre AD (noSuchObject). Les réglages AD sont gérés par Vita Brevis — veuillez lui communiquer le bon chemin d'OU.",
-        "ad_config": "La connexion AD de cette installation est incomplète. Veuillez vous adresser à Vita Brevis."
+        "ad_config": "La connexion AD de cette installation est incomplète. Veuillez vous adresser à Vita Brevis.",
+        "ad_connector_scope": "La base de recherche AD se trouve en dehors des UO autorisées. Vita Brevis gère l’autorisation — merci de le signaler.",
+        "ad_connector_offline": "Le connecteur AD sur votre contrôleur de domaine ne répond pas. Vérifiez que le service « Magister Connector-Agent » est démarré, sinon contactez Vita Brevis."
       },
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",

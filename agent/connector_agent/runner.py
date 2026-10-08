@@ -52,7 +52,9 @@ logger = logging.getLogger(__name__)
 #: Aufträge, auf die kein Mensch wartet und die Minuten dauern: der Abgleich.
 #: Sie laufen im Hintergrund, höchstens einer zur Zeit, und blockieren die
 #: Abholung nicht. Wörtlich wie ``BULK_METHODS`` in der Konsole.
-BULK_METHODS: frozenset[str] = frozenset({"search_users"})
+BULK_METHODS: frozenset[str] = frozenset(
+    {"search_users", "search_groups", "search_computers", "search_managed_computers"}
+)
 
 #: Methoden ohne Argumente. Sie werden ohne Nutzlast aufgerufen.
 _NO_ARG_METHODS = frozenset({"probe_service_connection", "probe_service_connection_detailed"})
@@ -97,10 +99,52 @@ def _encode_user_records(result: Any) -> Any:
     return [ad_user_record_to_jsonable(record) for record in records]
 
 
+def _encode_group_records(result: Any) -> Any:
+    """`AdGroupRecord`-Liste in JSON-taugliche Form, wie beim RPC-Weg."""
+    from magister_api.ad.rpc import ad_group_record_to_jsonable
+
+    return [ad_group_record_to_jsonable(record) for record in cast(list[Any], result)]
+
+
 #: Ergebnisse, die vor dem Zurückschicken übersetzt werden müssen.
 _RESULT_ENCODERS: dict[str, Callable[[Any], Any]] = {
     "search_users": _encode_user_records,
+    "search_groups": _encode_group_records,
 }
+
+
+def _identity(item: Any) -> str:
+    """Woran ein Objekt in einem Suchergebnis erkannt wird: DN, sonst GUID."""
+    dn: object = getattr(item, "distinguished_name", None)
+    if isinstance(dn, str) and dn:
+        return dn.lower()
+    if isinstance(item, tuple):
+        first: object = cast(tuple[object, ...], item)[0] if item else ""
+        return str(first).lower()
+    return repr(item)
+
+
+def _merge_results(parts: list[Any]) -> Any:
+    """Ergebnisse mehrerer Such-Basen zu einem zusammenführen.
+
+    Listen werden aneinandergehängt, doppelte Objekte (verschachtelte
+    Freigaben) einmal behalten — erkannt am DN bzw. an der GUID. Dicts
+    (``managedBy``-Zuordnung) werden vereinigt.
+    """
+    if all(isinstance(p, dict) for p in parts):
+        merged: dict[Any, Any] = {}
+        for part in parts:
+            merged.update(cast(dict[Any, Any], part))
+        return merged
+    seen: set[str] = set()
+    out: list[Any] = []
+    for part in parts:
+        for item in cast(list[Any], part):
+            key = _identity(item)
+            if key not in seen:
+                seen.add(key)
+                out.append(item)
+    return out
 
 
 #: Form einer AD-Operation: async, beliebige Argumente, beliebiges Ergebnis.
@@ -270,8 +314,21 @@ class Runner:
         payload: dict[str, Any] = (
             cast(dict[str, Any], raw_payload) if isinstance(raw_payload, dict) else {}
         )
+        payloads = [payload]
+        base: object = payload.get("search_base")
+        if method in BULK_METHODS and isinstance(base, str) and base:
+            bases = self.guardrails.narrow_search_base(base)
+            if bases != [base]:
+                logger.info(
+                    "Auftrag %s (%s): Such-Basis auf %d freigegebene OU(s) eingegrenzt",
+                    job_id,
+                    method,
+                    len(bases),
+                )
+                payloads = [{**payload, "search_base": b} for b in bases]
         try:
-            self.guardrails.check(method, payload)
+            for part in payloads:
+                self.guardrails.check(method, part)
         except GuardrailViolationError as exc:
             # Abgelehnt, aber beantwortet: die Plattform soll den Grund sehen
             # und nicht auf einen Auftrag warten, der nie ausgeführt wird.
@@ -279,7 +336,8 @@ class Runner:
             await self._report(client, job_id, ok=False, result=None, error=str(exc))
             return
         try:
-            result = await self.executor.run(method, payload)
+            parts = [await self.executor.run(method, part) for part in payloads]
+            result = parts[0] if len(parts) == 1 else _merge_results(parts)
         except GuardrailViolationError as exc:
             # Eine Grenze, die erst im AD sichtbar wird (geschütztes Konto). Der
             # Text nennt die Regel, keinen DN — er darf an die Plattform.
@@ -291,7 +349,13 @@ class Runner:
             # das lokale Protokoll beim Kunden; an die Plattform geht nur der
             # Ausnahmetyp.
             logger.warning("Auftrag %s (%s) gescheitert: %s", job_id, method, exc)
-            await self._report(client, job_id, ok=False, result=None, error=type(exc).__name__)
+            error = type(exc).__name__
+            if error == "AdUnavailableError":
+                # Die AD-Schicht wirft feste Codes (`ldap_search_failed:noSuchObject`)
+                # ohne DN und ohne Host — die gehen mit, damit die Plattform eine
+                # genaue Meldung zeigen kann statt „nicht erreichbar“.
+                error = f"AdUnavailableError: {str(exc)[:200]}"
+            await self._report(client, job_id, ok=False, result=None, error=error)
             return
         encoder = _RESULT_ENCODERS.get(method)
         encoded = encoder(result) if encoder is not None else result

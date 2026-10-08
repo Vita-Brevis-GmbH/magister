@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections.abc import Sequence
 from datetime import datetime
@@ -32,10 +33,10 @@ from typing import Any, cast
 
 import httpx
 
-from magister_api.ad.client import DEFAULT_USER_ATTRIBUTES, AdUserRecord
+from magister_api.ad.client import DEFAULT_USER_ATTRIBUTES, AdGroupRecord, AdUserRecord
 from magister_api.ad.errors import AdUnavailableError
 from magister_api.ad.remote_base import RemoteAdClient
-from magister_api.ad.rpc import ad_user_record_from_jsonable
+from magister_api.ad.rpc import ad_group_record_from_jsonable, ad_user_record_from_jsonable
 from magister_api.config import Settings
 from magister_api.tenancy.console_tls import console_verify
 
@@ -72,6 +73,19 @@ HTTP_TIMEOUT_S = 10.0
 #: unter der Frist liegen, die die Konsole diesem Auftrag gibt (dort 10
 #: Minuten) — sonst wartet die Datenebene auf etwas, das schon verfallen ist.
 SEARCH_TIMEOUT_S = 480.0
+
+#: Die Lesewege des Abgleichs — sie bekommen die lange Wartezeit.
+SEARCH_METHODS: frozenset[str] = frozenset(
+    {"search_users", "search_groups", "search_computers", "search_managed_computers"}
+)
+
+#: Teile einer Ablehnung durch den Agenten, an denen sich die Ursache erkennen
+#: lässt. Der Text kommt aus dem Kundennetz; ausgewertet wird er nur auf diese
+#: festen Bruchstücke, an den Browser geht nur der Code.
+_SCOPE_REFUSALS = ("ausserhalb der erlaubten OUs", "keine OU-Allowlist", "gesperrten AD-Container")
+
+#: Form eines Fehlercodes der AD-Schicht: `marker` oder `marker:LDAP-Beschreibung`.
+_AD_ERROR_CODE = re.compile(r"[a-z_]{3,64}(:[A-Za-z][A-Za-z ]{0,63})?")
 
 #: Obergrenze der Antwort eines Abgleichs. Darüber wird **abgewiesen** und
 #: nicht abgeschnitten: ein halber Abgleich sieht aus wie ein ganzer und
@@ -155,7 +169,7 @@ class AdConnectorClient(RemoteAdClient):
         wartet; dafür ist eine Minute grosszügig. Der Abgleich ist ein Lauf
         über das ganze Verzeichnis und braucht seine eigene Zahl.
         """
-        if method == "search_users":
+        if method in SEARCH_METHODS:
             return max(self._timeout_s, SEARCH_TIMEOUT_S)
         return self._timeout_s
 
@@ -179,12 +193,25 @@ class AdConnectorClient(RemoteAdClient):
                 # Der Agent hat es versucht und ist gescheitert. Der Grund
                 # kommt aus dem Kundennetz und ist damit fremder Text — er
                 # geht in das Log, aber nicht als Fehlermeldung an den Browser.
+                error = str(body.get("error") or "")
                 logger.warning(
                     "Connector-Auftrag %s (%s) im Kundennetz gescheitert: %s",
                     job_id,
                     method,
-                    body.get("error"),
+                    error,
                 )
+                if any(part in error for part in _SCOPE_REFUSALS):
+                    # Der Agent hat abgelehnt, weil die Such-Basis nicht in der
+                    # Freigabe im Cockpit liegt — kein Ausfall, eine Einstellung.
+                    raise AdUnavailableError("connector_refused_scope")
+                code = error.removeprefix("AdUnavailableError: ")
+                if code != error and _AD_ERROR_CODE.fullmatch(code):
+                    # Der feste Fehlercode der AD-Schicht beim Agenten (etwa
+                    # `ldap_search_failed:noSuchObject`) — ohne DN und ohne
+                    # Host, deshalb weitergereicht: er ergibt eine genaue
+                    # Meldung statt „nicht erreichbar“. Nur in genau dieser
+                    # Form; alles andere ist fremder Text und bleibt im Log.
+                    raise AdUnavailableError(code)
                 raise AdUnavailableError("connector_job_failed")
             if state == "expired":
                 # Der Agent war weg. Genau dafür verfallen Aufträge: ein spät
@@ -255,5 +282,41 @@ class AdConnectorClient(RemoteAdClient):
             # der Fachschicht — dieselbe Ausnahme wie ein Netzproblem.
             raise AdUnavailableError("connector_search_malformed") from exc
 
+    async def search_groups(self, *, search_base: str | None = None) -> list[AdGroupRecord]:
+        """Gruppenkatalog über den Agenten. Ohne Basis: leise nichts, wie direkt."""
+        base = search_base or self._settings.ad_users_search_base
+        if not base:
+            return []
+        raw = await self._call("search_groups", {"search_base": base})
+        if not isinstance(raw, list):
+            raise AdUnavailableError("connector_search_malformed")
+        try:
+            return [ad_group_record_from_jsonable(item) for item in cast(list[Any], raw)]
+        except (TypeError, ValueError, KeyError) as exc:
+            raise AdUnavailableError("connector_search_malformed") from exc
 
-__all__ = ["AdConnectorClient"]
+    async def search_computers(self, *, search_base: str | None = None) -> list[tuple[str, str]]:
+        """Computer-OU über den Agenten. Ohne Basis: leise nichts, wie direkt."""
+        base = search_base or self._settings.ad_computers_search_base
+        if not base:
+            return []
+        raw = await self._call("search_computers", {"search_base": base})
+        if not isinstance(raw, list):
+            raise AdUnavailableError("connector_search_malformed")
+        try:
+            return [(str(guid), str(name)) for guid, name in cast(list[list[Any]], raw)]
+        except (TypeError, ValueError) as exc:
+            raise AdUnavailableError("connector_search_malformed") from exc
+
+    async def search_managed_computers(self, *, search_base: str | None = None) -> dict[str, str]:
+        """``managedBy``-Zuordnung über den Agenten. Ohne Basis: leise nichts."""
+        base = search_base or self._settings.ad_computers_search_base
+        if not base:
+            return {}
+        raw = await self._call("search_managed_computers", {"search_base": base})
+        if not isinstance(raw, dict):
+            raise AdUnavailableError("connector_search_malformed")
+        return {str(k): str(v) for k, v in cast(dict[Any, Any], raw).items()}
+
+
+__all__ = ["SEARCH_METHODS", "AdConnectorClient"]
