@@ -8,7 +8,9 @@
 > [ADR-0021](../adr/0021-betrieb-im-grossen.md).
 
 Dieses Runbook beschreibt **einen** Aufbau, der zweimal verwendet wird: auf
-einer Testmaschine und auf dem Produktionsserver. Es gibt keinen zweiten
+einer Testmaschine und auf dem Produktionsserver. Für den Produktionsserver
+von Null (Ubuntu 26.04, DMZ, Let's Encrypt, `--art prod`):
+[prod-installation.md](prod-installation.md). Es gibt keinen zweiten
 Ablauf — was hier scheitert, scheitert dort auch, und das ist der Zweck.
 
 ## 0 · Der Unterschied zur Entwicklungsumgebung

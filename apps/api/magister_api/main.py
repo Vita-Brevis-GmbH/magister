@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 
 from magister_api import __version__
 from magister_api.audit.middleware import AuditContextMiddleware
@@ -298,6 +298,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """
         health = await stack_health(resolve_host(request), settings=s, registry=get_registry())
         return JSONResponse(content=health.as_dict(version=__version__))
+
+    @app.get("/tls/ask", tags=["meta"], include_in_schema=False)
+    async def tls_ask(domain: str = "") -> Response:
+        """Caddy fragt vor jedem Let's-Encrypt-Zertifikat hier nach.
+
+        200 heisst „ist ein Kunde, Zertifikat holen", alles andere „nein".
+        Nur intern erreichbar (Caddy → magister-api:8000); öffentlich leitet
+        Caddy diesen Pfad nicht weiter.
+        """
+        allowed = get_registry().certificate_allowed(domain)
+        return Response(status_code=200 if allowed else 404)
 
     @app.get("/runtime", tags=["meta"])
     async def runtime() -> dict[str, object]:

@@ -269,6 +269,24 @@ class TenantRegistry:
                 return hit
         return self._catch_all
 
+    def certificate_allowed(self, host: str | None) -> bool:
+        """Darf für diesen Namen ein öffentliches Zertifikat geholt werden?
+
+        Caddy fragt das vor jedem Let's-Encrypt-Zertifikat (on-demand TLS,
+        ``/tls/ask``). Ja nur für einen Namen, den ein Kunde ausdrücklich
+        trägt und der bedient wird oder gesperrt ist (die Sperrseite braucht
+        auch TLS). Der Auffang-Eintrag zählt nicht: sonst holte Caddy für
+        jeden Namen, den irgendwer auf diese IP zeigen lässt, ein Zertifikat —
+        bis die Rate-Limits von Let's Encrypt die echten Kunden treffen.
+        """
+        if not host:
+            return False
+        tenant = self._by_host.get(host.strip().lower().rstrip("."))
+        return tenant is not None and tenant.status in (
+            TenantStatus.ACTIVE,
+            TenantStatus.SUSPENDED,
+        )
+
 
 def _tenant_from_mapping(raw: Mapping[str, object], *, default_dsn: str) -> Tenant:
     slug_raw = raw.get("slug")

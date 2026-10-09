@@ -65,8 +65,15 @@ services:
     environment:
       MAGISTER_TENANT_DOMAIN: ${MAGISTER_TENANT_DOMAIN:?MAGISTER_TENANT_DOMAIN is required — die Ebene, unter der die Kundennamen liegen}
       MAGISTER_DEFAULT_SNI: ${MAGISTER_DEFAULT_SNI:?MAGISTER_DEFAULT_SNI is required — ein Aufruf ohne SNI bekommt sonst 421}
+      # Nur für Caddyfile.mandanten-acme: Kontakt bei Let's Encrypt.
+      MAGISTER_ACME_EMAIL: ${MAGISTER_ACME_EMAIL:-}
     volumes:
-      - ../caddy/Caddyfile.mandanten:/etc/caddy/Caddyfile:ro
+      # Das ganze Verzeichnis, weil beide Fassungen `mandanten-routen.caddy`
+      # einbinden. Welche gilt, sagt MAGISTER_TENANT_CADDYFILE:
+      #   Caddyfile.mandanten       — Zertifikat als Datei (Plattform-CA oder
+      #                               gekauftes Wildcard), Vorgabe
+      #   Caddyfile.mandanten-acme  — Let's Encrypt je Kundenname
+      - ../caddy:/etc/caddy/magister:ro
       # Zertifikat und Schlüssel für alle Kundennamen, ausgestellt aus der
       # Plattform-CA. Read-only eingehängt: Caddy stellt hier nichts aus.
       - ${MAGISTER_TENANT_CERT_DIR:?MAGISTER_TENANT_CERT_DIR is required — dort liegen tenants.pem und tenants-key.pem}:/certs:ro
@@ -75,7 +82,7 @@ services:
     # Kein Warten auf /certs/tls.caddy: das gilt der Einzelinstallation, die
     # ihr Zertifikat von der Anwendung bekommt. Hier liegt es vorher da.
     entrypoint: ["caddy"]
-    command: ["run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]
+    command: ["run", "--config", "/etc/caddy/magister/${MAGISTER_TENANT_CADDYFILE:-Caddyfile.mandanten}", "--adapter", "caddyfile"]
 
 networks:
   plattform:

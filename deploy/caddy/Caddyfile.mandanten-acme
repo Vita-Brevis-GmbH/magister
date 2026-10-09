@@ -1,0 +1,40 @@
+# Kundenseiten der gehosteten Plattform mit Let's Encrypt (ADR-0013 D3).
+#
+# Dieselben Routen wie `Caddyfile.mandanten` (beide binden
+# `mandanten-routen.caddy` ein) — nur das Zertifikat kommt anders zustande:
+#
+#   * Je Kundenname ein eigenes Zertifikat von Let's Encrypt, geholt beim
+#     ersten Aufruf (on-demand TLS) und von Caddy selbst erneuert. Ein
+#     Platzhalter-Zertifikat für `*.<domäne>` ginge nur über DNS-01 und damit
+#     über die API des DNS-Anbieters — on-demand braucht nur Port 80 und 443.
+#   * Vor jedem Zertifikat fragt Caddy die Datenebene (`/tls/ask`): ja nur
+#     für einen Namen, den ein aktiver oder gesperrter Kunde trägt. Sonst
+#     holte Caddy für jeden Namen, den jemand auf diese IP zeigen lässt, ein
+#     Zertifikat — bis die Rate-Limits von Let's Encrypt die echten Kunden
+#     treffen.
+#   * HTTP auf 80 bleibt offen: dort beantwortet Caddy die ACME-Prüfung
+#     (HTTP-01) und leitet alles andere auf HTTPS um.
+#
+# Pflicht-Umgebung:
+#   MAGISTER_TENANT_DOMAIN   — die Ebene, unter der die Kundennamen liegen,
+#                              z.B. mgmt.vitabrevis.ch
+#   MAGISTER_ACME_EMAIL      — Kontakt bei Let's Encrypt (Ablaufwarnungen)
+#   MAGISTER_DEFAULT_SNI     — Name für Aufrufe ohne SNI
+{
+	admin off
+	email {$MAGISTER_ACME_EMAIL}
+	default_sni {$MAGISTER_DEFAULT_SNI}
+	on_demand_tls {
+		ask http://magister-api:8000/tls/ask
+	}
+}
+
+import mandanten-routen.caddy
+
+*.{$MAGISTER_TENANT_DOMAIN} {
+	tls {
+		on_demand
+	}
+
+	import mandanten_routen
+}

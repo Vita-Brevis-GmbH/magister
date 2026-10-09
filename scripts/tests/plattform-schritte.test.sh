@@ -72,4 +72,11 @@ enthaelt "plattform-auf-einem-host.md §5"
 # 6) Kein .deb mehr in den Hinweisen.
 enthaelt_nicht ".deb"
 
+# 7) Produktion: DNS statt /etc/hosts — öffentlich der Platzhalter, intern die Konsole.
+laeuft "prod: Namen fehlen" AUFGELOEST=0 OPS=1 ART=prod
+enthaelt "*.dev.test  → öffentliche IP der Firewall"
+enthaelt "konsole.dev.test  → 172.25.12.10"
+enthaelt "prod-installation.md §2"
+enthaelt_nicht "/etc/hosts"
+
 echo "plattform-schritte: alle Fälle bestanden"

@@ -5,6 +5,9 @@
 #   ./scripts/plattform-aufbau.sh up      # aufbauen und starten
 #   ./scripts/plattform-aufbau.sh update  # dasselbe — nach einem `git pull`
 #   ./scripts/plattform-aufbau.sh up --ui-neu   # Oberfläche zwingend neu bauen
+#   ./scripts/plattform-aufbau.sh up --art prod # Produktion: keine Demo-Kunden,
+#                                     # Kundenzertifikate von Let's Encrypt
+#                                     # (docs/runbooks/prod-installation.md)
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
 #   ./scripts/plattform-aufbau.sh schritte  # alle Einrichtungsschritte, auch erledigte
 #   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
@@ -89,6 +92,21 @@ DOMAIN_GESETZT=0; [ -n "${PLATTFORM_DOMAIN:-}" ] && DOMAIN_GESETZT=1
 BIND_GESETZT=0;   [ -n "${PLATTFORM_BIND:-}" ]   && BIND_GESETZT=1
 ZUSATZNAME_GESETZT=0
 [ -n "${PLATTFORM_ZUSATZNAME+x}" ] && ZUSATZNAME_GESETZT=1
+# Art der Installation und Herkunft der Kundenzertifikate. Eine bestehende
+# Konfiguration ohne diese Schlüssel gilt als Test mit Plattform-CA — so
+# lief jede Installation vor ihrer Einführung, und ein Update fragt nicht nach.
+#
+#   PLATTFORM_ART  test  — Demo-Kunden (thun, bern) auf einer frischen Installation
+#                  prod  — keine Demo-Kunden; Kunden legt man in der Konsole an
+#   PLATTFORM_TLS  plattform-ca — Wildcard aus der Plattform-CA (Browser warnen)
+#                  letsencrypt  — je Kundenname ein Zertifikat von Let's Encrypt
+#                  eigen        — gekauftes Wildcard für *.<domäne> als Datei
+ART="${PLATTFORM_ART:-}"
+TLS_MODUS="${PLATTFORM_TLS:-}"
+ACME_MAIL="${PLATTFORM_ACME_MAIL:-}"
+ART_GESETZT=0;  [ -n "${PLATTFORM_ART:-}" ] && ART_GESETZT=1
+TLS_GESETZT=0;  [ -n "${PLATTFORM_TLS:-}" ] && TLS_GESETZT=1
+ACME_GESETZT=0; [ -n "${PLATTFORM_ACME_MAIL:-}" ] && ACME_GESETZT=1
 KONSOLE_HOST=""
 KUNDEN=("thun" "bern")
 ZIEHEN=0
@@ -113,12 +131,17 @@ dc_konsole() {
 }
 
 dc_daten() {
-  local bauen=()
+  local bauen=() konsole=()
   [ "$ZIEHEN" -eq 0 ] && bauen=(-f "$REPO/deploy/compose/docker-compose.build.yml")
+  # Fester Weg zur Konsole über die Verwaltungsadresse — unabhängig davon,
+  # was der DNS für konsole.<domäne> sagt (in der DMZ: die Firewall).
+  if [ -n "$BIND" ] && [ "$BIND" != "127.0.0.1" ]; then
+    konsole=(-f "$REPO/deploy/compose/docker-compose.konsole-adresse.yml")
+  fi
   docker compose --project-directory "$REPO/deploy/compose" \
     -f "$REPO/deploy/compose/docker-compose.yml" \
     -f "$REPO/deploy/compose/docker-compose.plattform.yml" \
-    "${bauen[@]}" "$@"
+    "${bauen[@]}" "${konsole[@]}" "$@"
 }
 
 secret() { openssl rand -hex 32; }
@@ -155,8 +178,17 @@ konf_laden() {
         if [ "$BIND_GESETZT" -eq 0 ]; then BIND="$wert"; BIND_GESETZT=1; fi ;;
       PLATTFORM_ZUSATZNAME)
         if [ "$ZUSATZNAME_GESETZT" -eq 0 ]; then ZUSATZNAME="$wert"; ZUSATZNAME_GESETZT=1; fi ;;
+      PLATTFORM_ART)
+        if [ "$ART_GESETZT" -eq 0 ]; then ART="$wert"; ART_GESETZT=1; fi ;;
+      PLATTFORM_TLS)
+        if [ "$TLS_GESETZT" -eq 0 ]; then TLS_MODUS="$wert"; TLS_GESETZT=1; fi ;;
+      PLATTFORM_ACME_MAIL)
+        if [ "$ACME_GESETZT" -eq 0 ]; then ACME_MAIL="$wert"; ACME_GESETZT=1; fi ;;
     esac
   done < <(grep -E '^PLATTFORM_[A-Z_]+=' "$KONF" || true)
+  # Eine Konfiguration von vor diesen Schlüsseln ist beantwortet: Test mit
+  # Plattform-CA. Sonst fragte das nächste Update auf dem Dev-Host nach.
+  ART_GESETZT=1; TLS_GESETZT=1; ACME_GESETZT=1
 }
 
 #: Vorschlag für die Adresse dieser Maschine — die, über die sie ins Netz
@@ -182,16 +214,22 @@ konf_erfragen() {  # nur bei `up`, nur was fehlt, nur mit Terminal
   if [ -n "${PLATTFORM_NICHT_FRAGEN:-}" ]; then return 0; fi
   if [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then return 0; fi
   if [ "$DOMAIN_GESETZT" -eq 1 ] && [ "$BIND_GESETZT" -eq 1 ] \
-     && [ "$ZUSATZNAME_GESETZT" -eq 1 ]; then
+     && [ "$ZUSATZNAME_GESETZT" -eq 1 ] && [ "$ART_GESETZT" -eq 1 ] \
+     && [ "$TLS_GESETZT" -eq 1 ] && [ "$ACME_GESETZT" -eq 1 ]; then
     return 0
   fi
   if [ ! -f "$KONF" ]; then
     cat > /dev/tty <<'HINWEIS'
 
-Erstinstallation. Drei Angaben, danach stehen sie in der Konfiguration und
+Erstinstallation. Einige Angaben, danach stehen sie in der Konfiguration und
 werden nie wieder gefragt — auch nicht bei einem Update.
 
 HINWEIS
+  fi
+  if [ "$ART_GESETZT" -eq 0 ]; then
+    printf '    test = Demo-Kunden, Zertifikate aus der Plattform-CA; prod = keine\n' > /dev/tty
+    printf '    Demo-Kunden, Kundenseiten mit öffentlich gültigem Zertifikat.\n' > /dev/tty
+    ART="$(frage 'Art der Installation (test/prod)' "test")"
   fi
   if [ "$DOMAIN_GESETZT" -eq 0 ]; then
     DOMAIN="$(frage 'Domäne, unter der die Kundennamen liegen' "$VORGABE_DOMAIN")"
@@ -208,7 +246,20 @@ HINWEIS
     printf '    endet ein Aufruf unter diesem Namen in 421.\n' > /dev/tty
     ZUSATZNAME="$(frage 'Zweiter Name (leer = keiner)' "$(vorschlag_fqdn)")"
   fi
+  if [ "$TLS_GESETZT" -eq 0 ]; then
+    local tls_vorschlag="plattform-ca"
+    [ "$ART" = "prod" ] && tls_vorschlag="letsencrypt"
+    printf '    Zertifikate der Kundenseiten (<kunde>.%s):\n' "$DOMAIN" > /dev/tty
+    printf '      letsencrypt  — je Kunde automatisch; braucht DNS *.%s und Port 80+443\n' "$DOMAIN" > /dev/tty
+    printf '      eigen        — gekauftes Wildcard *.%s als Datei\n' "$DOMAIN" > /dev/tty
+    printf '      plattform-ca — eigene CA, nur für Tests (Browser warnen)\n' > /dev/tty
+    TLS_MODUS="$(frage 'Zertifikate (letsencrypt/eigen/plattform-ca)' "$tls_vorschlag")"
+  fi
+  if [ "$ACME_GESETZT" -eq 0 ] && [ "$TLS_MODUS" = "letsencrypt" ]; then
+    ACME_MAIL="$(frage "Kontakt-Mail für Let's Encrypt (Ablaufwarnungen)" "")"
+  fi
   DOMAIN_GESETZT=1; BIND_GESETZT=1; ZUSATZNAME_GESETZT=1
+  ART_GESETZT=1; TLS_GESETZT=1; ACME_GESETZT=1
   printf '\n' > /dev/tty
 }
 
@@ -217,7 +268,23 @@ konf_anwenden() {
   DOMAIN="${DOMAIN:-$VORGABE_DOMAIN}"
   BIND="${BIND:-$VORGABE_BIND}"
   KONSOLE_HOST="konsole.$DOMAIN"
+  ART="${ART:-test}"
+  if [ -z "$TLS_MODUS" ]; then
+    TLS_MODUS="plattform-ca"
+    [ "$ART" = "prod" ] && TLS_MODUS="letsencrypt"
+  fi
   [ "$BIND" = "0.0.0.0" ] && die "0.0.0.0 ist nicht zulässig: die Konsole gehört auf eine Verwaltungsadresse (ADR-0015 D1)."
+  case "$ART" in test|prod) ;; *) die "Art '$ART' unbekannt — test oder prod." ;; esac
+  case "$TLS_MODUS" in
+    plattform-ca|letsencrypt|eigen) ;;
+    *) die "Zertifikate '$TLS_MODUS' unbekannt — letsencrypt, eigen oder plattform-ca." ;;
+  esac
+  if [ "$TLS_MODUS" = "letsencrypt" ] && [ -z "$ACME_MAIL" ]; then
+    die "Für Let's Encrypt braucht es eine Kontakt-Mail: --acme-mail it@… (wird gespeichert)."
+  fi
+  if [ "$ART" = "prod" ] && [ "$BIND" = "127.0.0.1" ]; then
+    die "In Produktion braucht die Konsole eine Verwaltungsadresse (die private IP dieses Hosts), nicht 127.0.0.1 — sonst erreicht die Datenebene sie nicht: --bind <ip>"
+  fi
   return 0
 }
 
@@ -233,6 +300,9 @@ konf_speichern() {
 PLATTFORM_DOMAIN=$DOMAIN
 PLATTFORM_BIND=$BIND
 PLATTFORM_ZUSATZNAME=$ZUSATZNAME
+PLATTFORM_ART=$ART
+PLATTFORM_TLS=$TLS_MODUS
+PLATTFORM_ACME_MAIL=$ACME_MAIL
 EOF
 }
 
@@ -378,6 +448,11 @@ make_ca() {
     grep "public key:" "$CERTS/backup-age.key" | awk '{print $NF}' > "$CERTS/backup-age.pub"
   fi
   chmod 600 "$CERTS"/*-key.pem "$CERTS/operator-signing.pem" 2>/dev/null || true
+  if [ "$ART" = "prod" ]; then
+    warn "Die Plattform-CA ist auf diesem Host entstanden. Nach der Einrichtung root-key.pem und"
+    warn "backup-age.key in die Ablage (Passwortspeicher/Tresor) und hier löschen — siehe"
+    warn "docs/runbooks/prod-installation.md §7."
+  fi
 }
 
 konsolen_san() {
@@ -415,12 +490,66 @@ zertifikat_deckt_ab() {  # Trägt das Konsolenzertifikat alle verlangten Namen?
 }
 
 zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
+  # In Produktion liegt der Schlüssel der Wurzel nach der Einrichtung nicht
+  # mehr auf dem Server (docs/runbooks/prod-installation.md §7). Gebraucht
+  # wird er nur, wenn sich Namen ändern — dann ausdrücklich, nicht als
+  # kryptischer openssl-Fehler.
+  [ -f "$CERTS/root-key.pem" ] || die "Für ein neues Zertifikat ($2) braucht es den Schlüssel der Plattform-CA: $CERTS/root-key.pem vorübergehend aus der Ablage zurücklegen, 'up' erneut aufrufen, danach wieder entfernen."
   openssl req -newkey rsa:3072 -nodes -keyout "$CERTS/$1-key.pem" \
     -out "$CERTS/$1.csr" -subj "/CN=$2" 2>/dev/null
   openssl x509 -req -in "$CERTS/$1.csr" -CA "$CERTS/root.pem" \
     -CAkey "$CERTS/root-key.pem" -CAcreateserial -days 730 -sha256 \
     -out "$CERTS/$1.pem" \
     -extfile <(printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth\n' "$3") 2>/dev/null
+}
+
+# --- Kundenzertifikate --------------------------------------------------------
+#: Wo das Kundenzertifikat liegt, wenn es eines als Datei gibt. Bei
+#: `plattform-ca` erzeugt `make_ca` es dort, bei `eigen` legt man das
+#: gekaufte Wildcard hierher (tenants.pem = Zertifikat samt Kette,
+#: tenants-key.pem = Schlüssel). Getrennt von $CERTS, damit ein Neuaufbau der
+#: Test-CA das gekaufte Zertifikat nie überschreibt.
+eigenes_zertifikat_dir() { echo "$ZIEL/kundenzertifikat"; }
+
+kunden_cert_dir() {
+  if [ "$TLS_MODUS" = "eigen" ]; then eigenes_zertifikat_dir; else echo "$CERTS"; fi
+}
+
+kunden_caddyfile() {
+  if [ "$TLS_MODUS" = "letsencrypt" ]; then echo "Caddyfile.mandanten-acme"; else echo "Caddyfile.mandanten"; fi
+}
+
+# Das gekaufte Wildcard prüfen, bevor Caddy damit startet: fehlt es oder deckt
+# es die Kundennamen nicht ab, scheitert sonst jeder Aufruf mit einer
+# Zertifikatswarnung — erst beim Kunden sichtbar.
+eigenes_zertifikat_pruefen() {
+  [ "$TLS_MODUS" = "eigen" ] || return 0
+  local dir; dir="$(eigenes_zertifikat_dir)"
+  mkdir -p "$dir"
+  if [ ! -s "$dir/tenants.pem" ] || [ ! -s "$dir/tenants-key.pem" ]; then
+    die "Eigenes Zertifikat fehlt: $dir/tenants.pem (Zertifikat samt Zwischenzertifikaten) und $dir/tenants-key.pem (Schlüssel, ohne Passwort) ablegen — es muss *.$DOMAIN abdecken."
+  fi
+  local san
+  san="$(openssl x509 -in "$dir/tenants.pem" -noout -ext subjectAltName 2>/dev/null || true)"
+  if ! printf '%s' "$san" | grep -qF "DNS:*.$DOMAIN"; then
+    die "Das Zertifikat in $dir/tenants.pem deckt *.$DOMAIN nicht ab (gefunden: $(printf '%s' "$san" | tail -1 | tr -s ' ')). Ein *.${DOMAIN#*.}-Wildcard gilt nur eine Ebene tief."
+  fi
+  if ! openssl x509 -in "$dir/tenants.pem" -noout -checkend 1209600 >/dev/null 2>&1; then
+    warn "Das eigene Kundenzertifikat läuft in weniger als 14 Tagen ab (oder ist abgelaufen)."
+  fi
+  chmod 600 "$dir/tenants-key.pem"
+}
+
+# Die Werte, die Caddy der Datenebene und den Weg zur Konsole bestimmen —
+# in einer neuen wie in einer bestehenden `.env`. 0 = etwas geändert.
+daten_env_tls() {  # $1 = Datei
+  local geaendert=1
+  setze_wert "$1" MAGISTER_TENANT_CERT_DIR "$(kunden_cert_dir)" && geaendert=0
+  setze_wert "$1" MAGISTER_TENANT_CADDYFILE "$(kunden_caddyfile)" && geaendert=0
+  setze_wert "$1" MAGISTER_ACME_EMAIL "$ACME_MAIL" && geaendert=0
+  setze_wert "$1" MAGISTER_CONSOLE_HOST "$KONSOLE_HOST" && geaendert=0
+  setze_wert "$1" MAGISTER_CONSOLE_ADDRESS "$BIND" && geaendert=0
+  return "$geaendert"
 }
 
 # --- Umgebung ----------------------------------------------------------------
@@ -549,6 +678,7 @@ MAGISTER_OIDC_CLIENT_ID=
 MAGISTER_OIDC_CLIENT_SECRET=
 PLATTFORM_NETZ=$NETZ
 EOF
+    daten_env_tls "$daten_env" || true
     chmod 600 "$daten_env"
   else
     # Dieselbe Nachführung wie oben, und aus demselben Grund: ändert sich
@@ -560,7 +690,7 @@ EOF
     setze_wert "$daten_env" MAGISTER_PUBLIC_HOSTNAME "$KONSOLE_HOST" && geaendert=1
     setze_wert "$daten_env" MAGISTER_TENANT_DOMAIN "$DOMAIN" && geaendert=1
     setze_wert "$daten_env" MAGISTER_DEFAULT_SNI "$KONSOLE_HOST" && geaendert=1
-    setze_wert "$daten_env" MAGISTER_TENANT_CERT_DIR "$CERTS" && geaendert=1
+    daten_env_tls "$daten_env" && geaendert=1
     setze_wert "$daten_env" MAGISTER_CONSOLE_REGISTRY_URL \
       "https://$KONSOLE_HOST:4444/api/tenants/registry" && geaendert=1
     # Nachtrag für Installationen von vor 2026-10-06: ohne den Anker scheiterte
@@ -772,6 +902,10 @@ for t in json.loads(rumpf):
 
 make_kunden() {
   local daten_env="$REPO/deploy/compose/.env" liste antwort id
+  if [ "$ART" = "prod" ]; then
+    say "Produktion: keine Demo-Kunden — Kunden legt man in der Konsole an"
+    return 0
+  fi
   liste="$(konsole_kunden)" || die "Kundenliste der Konsole nicht abrufbar (Grund oben)."
   # Die Demo-Kunden nur auf einer frischen Installation — oder wenn einer
   # davon schon angefangen ist und fertig werden soll. Hat die Konsole eigene
@@ -986,6 +1120,7 @@ cmd_up() {
   build_ui
   netz
   start_konsole
+  eigenes_zertifikat_pruefen
   start_daten
   make_kunden
   kunden_anbinden
@@ -1070,9 +1205,20 @@ naechste_schritte() {  # $1 = "alle", um auch Erledigtes zu zeigen
     cat <<EOF
 
   $nr. Namen auflösbar machen${namen:+ — es fehlen: $namen}
+EOF
+    if [ "$ART" = "prod" ]; then
+      cat <<EOF
+     Öffentlicher DNS:  *.$DOMAIN  → öffentliche IP der Firewall
+                        (Kundenseiten 80/443, connect.$DOMAIN:46200)
+     Interner DNS:      $KONSOLE_HOST${ZUSATZNAME:+ und $ZUSATZNAME}  → $BIND
+     Details: docs/runbooks/prod-installation.md §2
+EOF
+    else
+      cat <<EOF
      In Produktion macht das der DNS, hier reicht (als root) /etc/hosts:
        echo "$BIND ${namen:-$KONSOLE_HOST connect.$DOMAIN}" >> /etc/hosts
 EOF
+    fi
   fi
 
   if [ "$op" -eq 0 ] || [ -n "$alle" ]; then
@@ -1086,7 +1232,7 @@ EOF
      Danach: https://$KONSOLE_HOST:4444${ZUSATZNAME:+ (oder https://$ZUSATZNAME:4444)}
      Anmeldung mit Benutzername, Passwort und Code.
      Die Plattform-CA $CERTS/root.pem im Browser als vertrauenswürdig
-     eintragen, sonst warnt er (in Produktion kommt sie über die GPO).
+     eintragen, sonst warnt er (auf den Admin-Geräten am besten über die GPO).
 EOF
   fi
 
@@ -1114,9 +1260,19 @@ cmd_status() {
   say "Zustand"
   dc_konsole ps --format '  konsole  {{.Service}}  {{.Status}}' 2>/dev/null || true
   dc_daten ps --format '  daten    {{.Service}}  {{.Status}}' 2>/dev/null || true
-  local token
+  local token liste
+  local -a slugs=()
   token="$(grep -oP '(?<=^MAGISTER_HEALTH_TOKEN=).*' "$REPO/deploy/compose/.env" 2>/dev/null || true)"
-  for slug in "${KUNDEN[@]}"; do
+  # Die Kunden der Konsole, nicht die Demo-Liste: in Produktion gibt es
+  # thun und bern nicht, und eine Zeile „keine Antwort" für einen Kunden,
+  # den es nicht gibt, verdeckt die echten.
+  if liste="$(konsole_kunden 2>/dev/null)" && [ -n "$liste" ]; then
+    mapfile -t slugs < <(awk '$7 == "active" || $7 == "suspended" {print $1}' <<<"$liste")
+  elif [ "$ART" != "prod" ]; then
+    slugs=("${KUNDEN[@]}")
+  fi
+  [ "${#slugs[@]}" -gt 0 ] || printf '  (noch keine Kunden)\n'
+  for slug in "${slugs[@]}"; do
     local antwort
     antwort="$(curl -sS -k --noproxy '*' --resolve "$slug.$DOMAIN:443:127.0.0.1" \
       -H "X-Magister-Health: $token" \
@@ -1235,11 +1391,20 @@ cmd_konfig() {
   printf 'PLATTFORM_DOMAIN=%s\n' "$DOMAIN"
   printf 'PLATTFORM_BIND=%s\n' "$BIND"
   printf 'PLATTFORM_ZUSATZNAME=%s\n' "$ZUSATZNAME"
+  printf 'PLATTFORM_ART=%s\n' "$ART"
+  printf 'PLATTFORM_TLS=%s\n' "$TLS_MODUS"
+  printf 'PLATTFORM_ACME_MAIL=%s\n' "$ACME_MAIL"
   printf '# abgeleitet\n'
   printf 'KONSOLE_URL=https://%s:4444\n' "$KONSOLE_HOST"
-  local namen=""
-  for slug in "${KUNDEN[@]}"; do namen="$namen $slug.$DOMAIN"; done
-  printf 'KUNDEN=%s\n' "${namen# }"
+  printf 'CONNECTOR=connect.%s:46200\n' "$DOMAIN"
+  printf 'KUNDEN_CADDYFILE=%s\n' "$(kunden_caddyfile)"
+  if [ "$ART" = "prod" ]; then
+    printf 'KUNDEN=<kunde>.%s (in der Konsole angelegt)\n' "$DOMAIN"
+  else
+    local namen=""
+    for slug in "${KUNDEN[@]}"; do namen="$namen $slug.$DOMAIN"; done
+    printf 'KUNDEN=%s\n' "${namen# }"
+  fi
 }
 
 # --- Werkzeuge in der Konsole ------------------------------------------------
@@ -1288,6 +1453,9 @@ while [ $# -gt 0 ]; do
     --domaene) DOMAIN="$2"; DOMAIN_GESETZT=1; shift 2 ;;
     --bind)    BIND="$2"; BIND_GESETZT=1; shift 2 ;;
     --zusatzname) ZUSATZNAME="$2"; ZUSATZNAME_GESETZT=1; shift 2 ;;
+    --art)     ART="$2"; ART_GESETZT=1; shift 2 ;;
+    --tls)     TLS_MODUS="$2"; TLS_GESETZT=1; shift 2 ;;
+    --acme-mail) ACME_MAIL="$2"; ACME_GESETZT=1; shift 2 ;;
     --auch-konfiguration) KONF_LOESCHEN=1; shift ;;
     *) die "Unbekannte Option: $1" ;;
   esac

@@ -47,7 +47,13 @@ logger = logging.getLogger(__name__)
 #: Schlüssel bekommt von dieser Middleware ein `503 maintenance`, und die
 #: Sonde dahinter käme nie zum Zug. Sie löst den Mandanten selbst auf und
 #: verlangt einen eigenen Token.
-TENANT_FREE_PATHS: frozenset[str] = frozenset({"/healthz", "/runtime", "/healthz/stack"})
+#:
+#: `/tls/ask` fragt Caddy vor einem Let's-Encrypt-Zertifikat — für einen Namen,
+#: der eben gerade noch keinen Mandanten hat. Caddy leitet den Pfad nicht nach
+#: aussen (nur `/api/*` und `/healthz*` gehen an die API).
+TENANT_FREE_PATHS: frozenset[str] = frozenset(
+    {"/healthz", "/runtime", "/healthz/stack", "/tls/ask"}
+)
 
 
 def resolve_host(request: Request) -> str | None:

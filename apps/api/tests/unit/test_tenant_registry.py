@@ -227,3 +227,39 @@ class TestStatus:
         # provisioning und offboarding sind Übergänge, in denen Daten wandern;
         # eine Anfrage dorthin liest einen halben Zustand.
         assert status.serves_requests is served
+
+
+class TestCertificateAllowed:
+    """Wofür Caddy ein Let's-Encrypt-Zertifikat holen darf (``/tls/ask``)."""
+
+    def _reg(self) -> TenantRegistry:
+        return TenantRegistry(
+            [
+                _tenant("aktiv"),
+                _tenant("gesperrt", status=TenantStatus.SUSPENDED),
+                _tenant("neu", status=TenantStatus.PROVISIONING),
+                _tenant("weg", status=TenantStatus.OFFBOARDING),
+            ]
+        )
+
+    def test_a_served_or_suspended_customer_gets_one(self) -> None:
+        reg = self._reg()
+        assert reg.certificate_allowed("aktiv.magister.ch")
+        assert reg.certificate_allowed("AKTIV.magister.ch.")
+        assert reg.certificate_allowed("gesperrt.magister.ch")
+
+    def test_nothing_for_names_in_transition(self) -> None:
+        reg = self._reg()
+        assert not reg.certificate_allowed("neu.magister.ch")
+        assert not reg.certificate_allowed("weg.magister.ch")
+
+    def test_nothing_for_unknown_or_empty_names(self) -> None:
+        reg = self._reg()
+        assert not reg.certificate_allowed("fremd.magister.ch")
+        assert not reg.certificate_allowed("")
+        assert not reg.certificate_allowed(None)
+
+    def test_the_catch_all_never_counts(self) -> None:
+        """On-prem bedient der Auffang-Eintrag jeden Namen — ein Zertifikat gibt es dafür nicht."""
+        reg = single_tenant_registry(dsn=DSN_A)
+        assert not reg.certificate_allowed("irgendwas.example.ch")

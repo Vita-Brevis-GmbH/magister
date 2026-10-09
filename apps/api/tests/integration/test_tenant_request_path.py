@@ -163,3 +163,18 @@ class TestTheWholeChain:
     ) -> None:
         resp = await tenant_client.get("/healthz", headers={"host": "unbekannt.test"})
         assert resp.status_code == 200
+
+    async def test_caddy_may_ask_for_a_certificate_only_for_a_customer(
+        self, tenant_client: AsyncClient
+    ) -> None:
+        """``/tls/ask`` läuft ohne Mandanten und sagt nur zu bekannten Kundennamen ja."""
+        ok = await tenant_client.get(
+            "/tls/ask", params={"domain": HOST}, headers={"host": "magister-api:8000"}
+        )
+        assert ok.status_code == 200
+        nein = await tenant_client.get(
+            "/tls/ask",
+            params={"domain": "fremder.magister.test"},
+            headers={"host": "magister-api:8000"},
+        )
+        assert nein.status_code == 404

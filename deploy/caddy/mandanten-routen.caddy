@@ -1,0 +1,46 @@
+# Gemeinsame Teile der Kundenseiten (ADR-0013 D3) — eingebunden von
+# `Caddyfile.mandanten` (Zertifikat aus der Plattform-CA bzw. eigenes
+# Wildcard) und `Caddyfile.mandanten-acme` (Let's Encrypt je Kunde).
+# Eine Stelle, damit Sicherheitsköpfe und Weiterleitungen in beiden
+# Fassungen nie auseinanderlaufen.
+
+(sicherheitskoepfe) {
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+}
+
+(mandanten_routen) {
+	import sicherheitskoepfe
+	encode zstd gzip
+
+	# Die Sonde für die Überwachung (ADR-0021 D6). Sie läuft VOR der
+	# Mandanten-Auflösung und muss den Hostnamen trotzdem mitbekommen —
+	# sonst kann sie nicht sagen, WELCHER Kunde in Wartung ist.
+	handle /healthz* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# `handle_path`: die Datenebene hängt ihre Router an „/", der Präfix
+	# wird hier abgestreift.
+	handle_path /api/* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
+	}
+
+	handle {
+		reverse_proxy magister-web:80 {
+			header_up X-Forwarded-Host {host}
+		}
+	}
+}

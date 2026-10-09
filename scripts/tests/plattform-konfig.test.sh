@@ -24,6 +24,7 @@ ROT=0
 lauf() {  # $1 = Befehl, Rest = Argumente -> Ausgabe auf stdout
   local befehl="$1"; shift
   env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
       PLATTFORM_ROOT="$ARBEIT" \
       PLATTFORM_NUR_KONFIG=1 \
       PLATTFORM_NICHT_FRAGEN=1 \
@@ -106,6 +107,37 @@ rm -f /tmp/plattform-konfig-test-ausgefuehrt
 A="$(lauf konfig)"
 pruefe "kein Befehl ausgeführt"         "nein"                         "$([ -e /tmp/plattform-konfig-test-ausgefuehrt ] && echo ja || echo nein)"
 
+printf '\n\033[1m9a · Produktion: Let'"'"'s Encrypt als Vorgabe, Pflichtangaben laut\033[0m\n'
+PROD_ROOT="$ARBEIT/prod"; mkdir -p "$PROD_ROOT"
+prod_lauf() {
+  env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
+      PLATTFORM_ROOT="$PROD_ROOT" PLATTFORM_NUR_KONFIG=1 PLATTFORM_NICHT_FRAGEN=1 \
+      bash "$SKRIPT" "$@" 2>&1
+}
+A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 127.0.0.1 --acme-mail it@example.ch)"
+pruefe "prod auf 127.0.0.1 wird abgewiesen" "ja" \
+  "$(printf '%s' "$A" | grep -q 'Verwaltungsadresse' && echo ja || echo nein)"
+A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 172.25.40.10)"
+pruefe "prod ohne Kontakt-Mail wird abgewiesen" "ja" \
+  "$(printf '%s' "$A" | grep -q 'Kontakt-Mail' && echo ja || echo nein)"
+A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 172.25.40.10 \
+      --zusatzname mgmt.int.vitabrevis.ch --acme-mail it@example.ch)"
+pruefe "prod: Zertifikate von Let's Encrypt"  "letsencrypt"              "$(wert PLATTFORM_TLS "$A")"
+pruefe "prod: Caddy mit ACME-Fassung"        "Caddyfile.mandanten-acme" "$(wert KUNDEN_CADDYFILE "$A")"
+pruefe "prod: Kontakt gespeichert"           "PLATTFORM_ACME_MAIL=it@example.ch" \
+  "$(grep '^PLATTFORM_ACME_MAIL=' "$PROD_ROOT/plattform.conf")"
+pruefe "prod: keine Demo-Kunden angekündigt" "nein" \
+  "$(printf '%s' "$A" | grep -q 'thun\.' && echo ja || echo nein)"
+A="$(prod_lauf up)"
+pruefe "prod: Update behält die Art"         "prod"                     "$(wert PLATTFORM_ART "$A")"
+pruefe "prod: Update behält den TLS-Weg"     "letsencrypt"              "$(wert PLATTFORM_TLS "$A")"
+A="$(prod_lauf up --tls eigen)"
+pruefe "eigenes Wildcard: Caddy mit Datei"   "Caddyfile.mandanten"      "$(wert KUNDEN_CADDYFILE "$A")"
+A="$(prod_lauf up --tls irgendwas)"
+pruefe "unbekannter TLS-Weg wird abgewiesen" "ja" \
+  "$(printf '%s' "$A" | grep -q "unbekannt" && echo ja || echo nein)"
+
 printf '\n\033[1m9 · Gefragt wird genau einmal\033[0m\n'
 # Braucht ein Pseudo-Terminal: ohne /dev/tty fragt das Skript gar nicht, und
 # der Test prüfte dann nichts. `script` liefert eines. Gefüttert wird es mit
@@ -116,7 +148,8 @@ if command -v script >/dev/null; then
   FRAGE_ROOT="$ARBEIT/fragen"
   mkdir -p "$FRAGE_ROOT"
   mit_tty() {
-    printf '\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+    printf '\n\n\n\n\n\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
         PLATTFORM_ROOT="$FRAGE_ROOT" PLATTFORM_NUR_KONFIG=1 \
         script -qec "bash '$SKRIPT' up" /dev/null 2>&1
   }
@@ -132,13 +165,21 @@ if command -v script >/dev/null; then
   LEER_ROOT="$ARBEIT/leer"; mkdir -p "$LEER_ROOT"
   printf 'PLATTFORM_DOMAIN=a.example\nPLATTFORM_BIND=10.0.0.7\nPLATTFORM_ZUSATZNAME=\n' \
     > "$LEER_ROOT/plattform.conf"
-  A="$(printf '\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+  A="$(printf '\n\n\n\n\n\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
         PLATTFORM_ROOT="$LEER_ROOT" PLATTFORM_NUR_KONFIG=1 \
         script -qec "bash '$SKRIPT' up" /dev/null 2>&1)"
   pruefe "leerer zweiter Name wird nicht neu gefragt" "nein" \
     "$(printf '%s' "$A" | grep -q 'Zweiter Name' && echo ja || echo nein)"
   pruefe "und bleibt leer" "PLATTFORM_ZUSATZNAME=" \
     "$(grep '^PLATTFORM_ZUSATZNAME=' "$LEER_ROOT/plattform.conf")"
+  # Eine Konfiguration von vor PLATTFORM_ART: kein Update darf neu fragen.
+  pruefe "alte Konfiguration: Art wird nicht gefragt" "nein" \
+    "$(printf '%s' "$A" | grep -q 'Art der Installation' && echo ja || echo nein)"
+  pruefe "…und gilt als Test" "PLATTFORM_ART=test" \
+    "$(grep '^PLATTFORM_ART=' "$LEER_ROOT/plattform.conf")"
+  pruefe "Erstinstallation fragt nach der Art" "ja" \
+    "$(printf '%s' "$ERSTER" | grep -q 'Art der Installation' && echo ja || echo nein)"
 else
   printf '\033[33m  --  script fehlt (util-linux) — Frage-Pfad nicht geprüft\033[0m\n'
 fi
