@@ -106,7 +106,7 @@ ghcr.io|Abbilder aus der CI (nur mit --ziehen)
 github.com|Repository und Agenten-MSI (agentenpakete.sh)
 pypi.org|Python-Abhängigkeiten beim Bau der Abbilder
 registry.npmjs.org|Oberflächen beim Bau der Abbilder
-acme-v02.api.letsencrypt.org/directory|Zertifikate der Kundenseiten (Let's Encrypt)
+acme-v02.api.letsencrypt.org/directory|nur für --tls letsencrypt (ohne WAF); mit eigenem Wildcard egal
 login.microsoftonline.com|Anmeldung der Kunden über Entra ID
 ZIELE
 }
@@ -239,9 +239,10 @@ cat <<EOF
 
 Weiter (als ${BENUTZER:-Betriebsbenutzer}, nach neuer Anmeldung):
   cd $ZIEL_DIR
-  ./scripts/plattform-aufbau.sh up --art prod \\
+  ./scripts/plattform-aufbau.sh csr --domaene mgmt.vitabrevis.ch   # Wildcard beantragen
+  ./scripts/plattform-aufbau.sh up --art prod --tls eigen \\
     --domaene mgmt.vitabrevis.ch --bind <private IP> \\
-    --zusatzname mgmt.int.vitabrevis.ch --acme-mail <kontakt@…>
+    --zusatzname mgmt.int.vitabrevis.ch --waf "<Adressen der WAF>"
 
 Runbook: docs/runbooks/prod-installation.md
 EOF

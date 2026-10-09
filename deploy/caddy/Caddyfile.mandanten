@@ -29,6 +29,13 @@
 	auto_https off
 	admin off
 	default_sni {$MAGISTER_DEFAULT_SNI}
+	# Vor den Kundenseiten steht eine WAF (MAGISTER_TRUSTED_PROXIES = ihre
+	# Adressen): dann gilt die Client-Adresse aus ihrem X-Forwarded-For.
+	# Ohne Angabe nur Loopback — also niemand, die Gegenstelle zählt.
+	servers {
+		trusted_proxies static {$MAGISTER_TRUSTED_PROXIES:127.0.0.1/32}
+		trusted_proxies_strict
+	}
 }
 
 http:// {

@@ -24,7 +24,7 @@ ROT=0
 lauf() {  # $1 = Befehl, Rest = Argumente -> Ausgabe auf stdout
   local befehl="$1"; shift
   env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
-      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL -u PLATTFORM_WAF \
       PLATTFORM_ROOT="$ARBEIT" \
       PLATTFORM_NUR_KONFIG=1 \
       PLATTFORM_NICHT_FRAGEN=1 \
@@ -111,7 +111,7 @@ printf '\n\033[1m9a · Produktion: Let'"'"'s Encrypt als Vorgabe, Pflichtangaben
 PROD_ROOT="$ARBEIT/prod"; mkdir -p "$PROD_ROOT"
 prod_lauf() {
   env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
-      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL -u PLATTFORM_WAF \
       PLATTFORM_ROOT="$PROD_ROOT" PLATTFORM_NUR_KONFIG=1 PLATTFORM_NICHT_FRAGEN=1 \
       bash "$SKRIPT" "$@" 2>&1
 }
@@ -138,6 +138,46 @@ A="$(prod_lauf up --tls irgendwas)"
 pruefe "unbekannter TLS-Weg wird abgewiesen" "ja" \
   "$(printf '%s' "$A" | grep -q "unbekannt" && echo ja || echo nein)"
 
+printf '\n\033[1m9b · Eigenes Wildcard hinter einer WAF\033[0m\n'
+A="$(prod_lauf up --tls eigen --waf "203.0.113.0/24 198.51.100.7")"
+pruefe "WAF-Adressen übernommen"             "203.0.113.0/24 198.51.100.7" "$(wert PLATTFORM_WAF "$A")"
+pruefe "…und gespeichert"                    "PLATTFORM_WAF=203.0.113.0/24 198.51.100.7" \
+  "$(grep '^PLATTFORM_WAF=' "$PROD_ROOT/plattform.conf")"
+A="$(prod_lauf up)"
+pruefe "Update behält die WAF"               "203.0.113.0/24 198.51.100.7" "$(wert PLATTFORM_WAF "$A")"
+A="$(prod_lauf up --waf "waf.example.ch")"
+pruefe "WAF als Name wird abgewiesen"        "ja" \
+  "$(printf '%s' "$A" | grep -q "keine IP" && echo ja || echo nein)"
+
+# Antrag für das gekaufte Wildcard: Schlüssel bleibt, Name stimmt.
+A="$(prod_lauf csr)"
+KZ="$PROD_ROOT/kundenzertifikat"
+pruefe "csr legt Schlüssel und Antrag an"    "ja" \
+  "$([ -s "$KZ/tenants-key.pem" ] && [ -s "$KZ/tenants.csr" ] && echo ja || echo nein)"
+pruefe "Antrag lautet auf *.mgmt.vitabrevis.ch" "ja" \
+  "$(openssl req -in "$KZ/tenants.csr" -noout -text 2>/dev/null | grep -q 'DNS:\*\.mgmt\.vitabrevis\.ch' && echo ja || echo nein)"
+pruefe "Schlüssel nur für den Besitzer"      "600" "$(stat -c %a "$KZ/tenants-key.pem")"
+VORHER="$(sha256sum "$KZ/tenants-key.pem")"
+prod_lauf csr >/dev/null
+pruefe "zweites csr überschreibt den Schlüssel nicht" "$VORHER" "$(sha256sum "$KZ/tenants-key.pem")"
+
+# Die Prüfung vor dem Start: nur ein Zertifikat für *.<domäne> wird genommen.
+sed -n '/^eigenes_zertifikat_dir()/,/^}/p; /^eigenes_zertifikat_pruefen()/,/^}/p' "$SKRIPT" > "$ARBEIT/kz.sh"
+kz_pruefen() {  # $1 = SAN, $2 = Tage gültig -> Ausgabe (immer Status 0: pipefail)
+  local d="$ARBEIT/kz-$RANDOM"; mkdir -p "$d/kundenzertifikat"
+  openssl req -x509 -newkey rsa:2048 -nodes -days "${2:-90}" -subj "/CN=t" -addext "subjectAltName=$1" \
+    -keyout "$d/kundenzertifikat/tenants-key.pem" -out "$d/kundenzertifikat/tenants.pem" 2>/dev/null
+  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }
+           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
+}
+pruefe "Wildcard *.mgmt… wird genommen"      "ja" \
+  "$(kz_pruefen 'DNS:*.mgmt.vitabrevis.ch' | grep -q '^OK' && echo ja || echo nein)"
+pruefe "*.vitabrevis.ch wird abgewiesen"     "ja" \
+  "$(kz_pruefen 'DNS:*.vitabrevis.ch' | grep -q 'deckt \*.mgmt.vitabrevis.ch nicht ab' && echo ja || echo nein)"
+pruefe "kurz vor Ablauf gibt einen Hinweis"  "ja" \
+  "$(kz_pruefen 'DNS:*.mgmt.vitabrevis.ch' 7 | grep -q '^WARN: .*14 Tagen' && echo ja || echo nein)"
+
 printf '\n\033[1m9 · Gefragt wird genau einmal\033[0m\n'
 # Braucht ein Pseudo-Terminal: ohne /dev/tty fragt das Skript gar nicht, und
 # der Test prüfte dann nichts. `script` liefert eines. Gefüttert wird es mit
@@ -149,7 +189,7 @@ if command -v script >/dev/null; then
   mkdir -p "$FRAGE_ROOT"
   mit_tty() {
     printf '\n\n\n\n\n\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
-      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL -u PLATTFORM_WAF \
         PLATTFORM_ROOT="$FRAGE_ROOT" PLATTFORM_NUR_KONFIG=1 \
         script -qec "bash '$SKRIPT' up" /dev/null 2>&1
   }
@@ -166,7 +206,7 @@ if command -v script >/dev/null; then
   printf 'PLATTFORM_DOMAIN=a.example\nPLATTFORM_BIND=10.0.0.7\nPLATTFORM_ZUSATZNAME=\n' \
     > "$LEER_ROOT/plattform.conf"
   A="$(printf '\n\n\n\n\n\n\n\n' | env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
-      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL \
+      -u PLATTFORM_ART -u PLATTFORM_TLS -u PLATTFORM_ACME_MAIL -u PLATTFORM_WAF \
         PLATTFORM_ROOT="$LEER_ROOT" PLATTFORM_NUR_KONFIG=1 \
         script -qec "bash '$SKRIPT' up" /dev/null 2>&1)"
   pruefe "leerer zweiter Name wird nicht neu gefragt" "nein" \

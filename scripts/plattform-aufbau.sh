@@ -8,6 +8,8 @@
 #   ./scripts/plattform-aufbau.sh up --art prod # Produktion: keine Demo-Kunden,
 #                                     # Kundenzertifikate von Let's Encrypt
 #                                     # (docs/runbooks/prod-installation.md)
+#   ./scripts/plattform-aufbau.sh csr     # Schlüssel + CSR für ein gekauftes
+#                                     # Wildcard *.<domäne> (--tls eigen)
 #   ./scripts/plattform-aufbau.sh status  # was läuft, was antwortet
 #   ./scripts/plattform-aufbau.sh schritte  # alle Einrichtungsschritte, auch erledigte
 #   ./scripts/plattform-aufbau.sh konfig  # welche Angaben gelten
@@ -104,6 +106,11 @@ ZUSATZNAME_GESETZT=0
 ART="${PLATTFORM_ART:-}"
 TLS_MODUS="${PLATTFORM_TLS:-}"
 ACME_MAIL="${PLATTFORM_ACME_MAIL:-}"
+# Adressen (IP oder CIDR, durch Leerzeichen getrennt) einer WAF vor den
+# Kundenseiten. Leer: keine — die Gegenstelle ist der Client. Kein Teil der
+# Erstfragen: wer eine WAF hat, sagt es mit --waf.
+WAF="${PLATTFORM_WAF:-}"
+WAF_GESETZT=0; [ -n "${PLATTFORM_WAF+x}" ] && WAF_GESETZT=1
 ART_GESETZT=0;  [ -n "${PLATTFORM_ART:-}" ] && ART_GESETZT=1
 TLS_GESETZT=0;  [ -n "${PLATTFORM_TLS:-}" ] && TLS_GESETZT=1
 ACME_GESETZT=0; [ -n "${PLATTFORM_ACME_MAIL:-}" ] && ACME_GESETZT=1
@@ -184,6 +191,8 @@ konf_laden() {
         if [ "$TLS_GESETZT" -eq 0 ]; then TLS_MODUS="$wert"; TLS_GESETZT=1; fi ;;
       PLATTFORM_ACME_MAIL)
         if [ "$ACME_GESETZT" -eq 0 ]; then ACME_MAIL="$wert"; ACME_GESETZT=1; fi ;;
+      PLATTFORM_WAF)
+        if [ "$WAF_GESETZT" -eq 0 ]; then WAF="$wert"; WAF_GESETZT=1; fi ;;
     esac
   done < <(grep -E '^PLATTFORM_[A-Z_]+=' "$KONF" || true)
   # Eine Konfiguration von vor diesen Schlüsseln ist beantwortet: Test mit
@@ -282,6 +291,11 @@ konf_anwenden() {
   if [ "$TLS_MODUS" = "letsencrypt" ] && [ -z "$ACME_MAIL" ]; then
     die "Für Let's Encrypt braucht es eine Kontakt-Mail: --acme-mail it@… (wird gespeichert)."
   fi
+  local adresse
+  for adresse in $WAF; do
+    printf '%s' "$adresse" | grep -qE '^([0-9]{1,3}\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^[0-9a-fA-F:]+(/[0-9]{1,3})?$' \
+      || die "WAF-Adresse '$adresse' ist keine IP und kein Netz (z. B. 203.0.113.10 oder 203.0.113.0/24)."
+  done
   if [ "$ART" = "prod" ] && [ "$BIND" = "127.0.0.1" ]; then
     die "In Produktion braucht die Konsole eine Verwaltungsadresse (die private IP dieses Hosts), nicht 127.0.0.1 — sonst erreicht die Datenebene sie nicht: --bind <ip>"
   fi
@@ -303,6 +317,7 @@ PLATTFORM_ZUSATZNAME=$ZUSATZNAME
 PLATTFORM_ART=$ART
 PLATTFORM_TLS=$TLS_MODUS
 PLATTFORM_ACME_MAIL=$ACME_MAIL
+PLATTFORM_WAF=$WAF
 EOF
 }
 
@@ -549,6 +564,7 @@ daten_env_tls() {  # $1 = Datei
   setze_wert "$1" MAGISTER_ACME_EMAIL "$ACME_MAIL" && geaendert=0
   setze_wert "$1" MAGISTER_CONSOLE_HOST "$KONSOLE_HOST" && geaendert=0
   setze_wert "$1" MAGISTER_CONSOLE_ADDRESS "$BIND" && geaendert=0
+  setze_wert "$1" MAGISTER_TRUSTED_PROXIES "$WAF" && geaendert=0
   return "$geaendert"
 }
 
@@ -1115,12 +1131,12 @@ cmd_up() {
   # halbe Plattform (scripts/tests/plattform-konfig.test.sh).
   if [ -n "${PLATTFORM_NUR_KONFIG:-}" ]; then cmd_konfig; return 0; fi
   preflight
+  eigenes_zertifikat_pruefen
   make_ca
   write_env
   build_ui
   netz
   start_konsole
-  eigenes_zertifikat_pruefen
   start_daten
   make_kunden
   kunden_anbinden
@@ -1379,6 +1395,37 @@ cmd_purge() {
   fi
 }
 
+# Schlüssel und Zertifikatsantrag für ein gekauftes Wildcard (--tls eigen).
+# Der Schlüssel entsteht hier und bleibt hier; zur Zertifizierungsstelle geht
+# nur der Antrag. Ein vorhandener Schlüssel wird nie überschrieben — er
+# gehört womöglich zum Zertifikat, das gerade läuft.
+cmd_csr() {
+  local dir; dir="$(eigenes_zertifikat_dir)"
+  mkdir -p "$dir"
+  local schluessel="$dir/tenants-key.pem" antrag="$dir/tenants.csr"
+  if [ -e "$schluessel" ]; then
+    [ -s "$antrag" ] || die "$schluessel besteht, aber kein Antrag daneben. Für einen neuen Antrag den Schlüssel zuerst wegräumen."
+    say "Schlüssel besteht bereits — vorhandener Antrag:"
+  else
+    say "Schlüssel und Antrag für *.$DOMAIN erzeugen ($dir)"
+    ( umask 077
+      openssl req -new -newkey rsa:3072 -nodes -sha256 \
+        -keyout "$schluessel" -out "$antrag" \
+        -subj "/CN=*.$DOMAIN" \
+        -addext "subjectAltName=DNS:*.$DOMAIN,DNS:$DOMAIN" 2>/dev/null )
+  fi
+  openssl req -in "$antrag" -noout -subject 2>/dev/null | sed 's/^/    /'
+  cat "$antrag"
+  cat <<EOF
+
+Den Antrag oben (oder $antrag) bei der Zertifizierungsstelle einreichen.
+Das ausgestellte Zertifikat SAMT Zwischenzertifikaten als
+  $dir/tenants.pem
+ablegen, dann:
+  $0 up --tls eigen
+EOF
+}
+
 cmd_konfig() {
   # Im Format der Konfigurationsdatei: was hier steht, steht auch dort —
   # und lässt sich so ohne Umdeutung vergleichen. Die abgeleiteten Werte
@@ -1394,6 +1441,7 @@ cmd_konfig() {
   printf 'PLATTFORM_ART=%s\n' "$ART"
   printf 'PLATTFORM_TLS=%s\n' "$TLS_MODUS"
   printf 'PLATTFORM_ACME_MAIL=%s\n' "$ACME_MAIL"
+  printf 'PLATTFORM_WAF=%s\n' "$WAF"
   printf '# abgeleitet\n'
   printf 'KONSOLE_URL=https://%s:4444\n' "$KONSOLE_HOST"
   printf 'CONNECTOR=connect.%s:46200\n' "$DOMAIN"
@@ -1456,6 +1504,7 @@ while [ $# -gt 0 ]; do
     --art)     ART="$2"; ART_GESETZT=1; shift 2 ;;
     --tls)     TLS_MODUS="$2"; TLS_GESETZT=1; shift 2 ;;
     --acme-mail) ACME_MAIL="$2"; ACME_GESETZT=1; shift 2 ;;
+    --waf)     WAF="$2"; WAF_GESETZT=1; shift 2 ;;
     --auch-konfiguration) KONF_LOESCHEN=1; shift ;;
     *) die "Unbekannte Option: $1" ;;
   esac
@@ -1476,6 +1525,7 @@ case "$BEFEHL" in
   down)   cmd_down ;;
   purge)  cmd_purge ;;
   konfig) cmd_konfig ;;
+  csr)    cmd_csr ;;
   ops-agent) cmd_ops_agent ;;
   backup-pruefer) cmd_backup_pruefer ;;
   kunde-anbinden)
@@ -1484,5 +1534,5 @@ case "$BEFEHL" in
     else
       kunden_anbinden
     fi ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
 esac

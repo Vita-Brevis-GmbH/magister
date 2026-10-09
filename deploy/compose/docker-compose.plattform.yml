@@ -67,6 +67,9 @@ services:
       MAGISTER_DEFAULT_SNI: ${MAGISTER_DEFAULT_SNI:?MAGISTER_DEFAULT_SNI is required — ein Aufruf ohne SNI bekommt sonst 421}
       # Nur für Caddyfile.mandanten-acme: Kontakt bei Let's Encrypt.
       MAGISTER_ACME_EMAIL: ${MAGISTER_ACME_EMAIL:-}
+      # Adressen der WAF vor den Kundenseiten (leer: keine). Nur von dort wird
+      # X-Forwarded-For geglaubt — sonst sähe die API jeden unter der WAF-IP.
+      MAGISTER_TRUSTED_PROXIES: ${MAGISTER_TRUSTED_PROXIES:-127.0.0.1/32}
     volumes:
       # Das ganze Verzeichnis, weil beide Fassungen `mandanten-routen.caddy`
       # einbinden. Welche gilt, sagt MAGISTER_TENANT_CADDYFILE:
