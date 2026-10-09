@@ -1,0 +1,247 @@
+name: agent-ci
+
+# Der Connector-Agent (ADR-0014) hatte wie die Konsole keinen eigenen
+# Workflow: 89 Tests, die nur lokal liefen. Er läuft im Kundennetz, direkt am
+# Active Directory, und ist damit die Komponente mit der grössten
+# Fehlerwirkung ausserhalb unserer Reichweite.
+#
+# Die Jobs:
+#
+#   test  — Lint, Typprüfung und Tests. Auf Linux UND Windows: Linux ist der
+#           schnelle Lauf für die Logik, Windows die Plattform, auf der der
+#           Agent tatsächlich läuft (Dienst, ACL-Prüfung, Kerberos). Genau dort steckte der Fehler, der ohne
+#           diesen Job niemandem aufgefallen wäre: die POSIX-Rechteprüfung
+#           schlägt unter Windows immer fehl, weil os.stat() dort erfundene
+#           Modus-Bits liefert.
+#
+#   msi   — Das Windows-Paket. Payload unter Windows (PyInstaller kann nicht
+#           für eine fremde Plattform bauen), MSI drumherum unter Linux mit
+#           wixl. Läuft bei jedem Push, damit ein Fehler in der WiX-Quelle
+#           nicht erst beim Ausliefern auffällt.
+#
+#   Seit dem Nachtrag zu ADR-0014 („Agent auf dem DC") gibt es nur noch das
+#   MSI: der Agent läuft auf dem Domänencontroller und bindet sich per
+#   Kerberos als dessen Maschinenkonto ans AD. Das Debian-Paket ist entfallen.
+
+on:
+  push:
+    branches: [main]
+    tags: ["agent-v*"]
+  pull_request:
+    paths:
+      - "agent/**"
+      - "apps/api/magister_api/ad/**"
+      - ".github/workflows/agent-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        run: uv run ruff check connector_agent tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check connector_agent tests
+
+      - name: Pyright (strict)
+        run: uv run pyright
+
+      - name: Pytest
+        run: uv run pytest -q
+
+      - name: Kommandozeile antwortet
+        # Der billigste Test, der einen kaputten Import findet — und unter
+        # Windows zusätzlich, dass der Vorgabepfad der Konfiguration dort ein
+        # Windows-Pfad ist und nicht /etc/magister-connector/config.json.
+        run: |
+          uv run magister-connector --version
+          uv run magister-connector --help
+
+      - name: Dienst-Modul ist unter Windows importierbar
+        if: runner.os == 'Windows'
+        # Es importiert pywin32 auf Modulebene. Ein fehlendes oder falsch
+        # installiertes pywin32 fällt hier auf und nicht erst, wenn der Dienst
+        # beim Kunden nicht startet.
+        run: uv run python -c "import connector_agent.winservice as w; print(w.MagisterConnectorService._svc_name_)"
+
+      - name: Kerberos ist unter Windows ladbar
+        if: runner.os == 'Windows'
+        # Der Bind als Maschinenkonto geht über winkerberos. ldap3 lädt es erst
+        # beim ersten SASL-Bind — fehlt es, fiele das sonst erst auf dem DC auf.
+        run: uv run python -c "import winkerberos, ldap3.protocol.sasl.kerberos as k; print('winkerberos ok')"
+
+      - name: ACL-Prüfung gegen ein echtes Verzeichnis
+        if: runner.os == 'Windows'
+        # Der Teil, der sich nur unter Windows prüfen lässt: erst abdichten,
+        # dann prüfen. Ohne diesen Schritt ist die ctypes-Anbindung an
+        # advapi32 ungetestet, und die Einheitentests prüfen nur die
+        # SDDL-Zerlegung.
+        shell: pwsh
+        run: |
+          $probe = Join-Path $env:RUNNER_TEMP "connector-acl-probe"
+          uv run python -c @"
+          from pathlib import Path
+          from connector_agent.winsec import assert_windows_permissions, harden_directory, read_sddl
+          p = Path(r'$probe')
+          p.mkdir(parents=True, exist_ok=True)
+          print('vorher:', read_sddl(p))
+          harden_directory(p)
+          print('nachher:', read_sddl(p))
+          assert_windows_permissions(p, what='Probe')
+          print('Pruefung bestanden')
+          "@
+
+  payload:
+    needs: test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Die ganze Geschichte: die Fassung des Baus ist die Zahl der
+          # Commits (packaging/bau_fassung.py).
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --extra packaging --extra dev
+
+      - name: Fassung des Baus festhalten
+        # 0.2.<commits> statt immer 0.2.0: sonst hält Windows jedes neue MSI
+        # für dasselbe, und auf dem DC ist nicht zu erkennen, was läuft.
+        run: uv run python packaging/bau_fassung.py
+
+      - name: PyInstaller
+        run: uv run pyinstaller --clean --noconfirm packaging/windows/magister-connector.spec
+
+      - name: Vorlage und Anleitung dazulegen
+        shell: pwsh
+        run: |
+          Copy-Item deploy/config.example.json dist/magister-connector/
+          Copy-Item packaging/windows/INSTALL.txt dist/magister-connector/
+
+      - name: Das eingefrorene Programm antwortet
+        # Der Test, der zählt: nicht ob PyInstaller gelaufen ist, sondern ob
+        # das Ergebnis startet. Ein fehlender hiddenimport fällt genau hier
+        # auf — und sonst erst beim Kunden.
+        shell: pwsh
+        run: |
+          # Die Fassung muss die des Baus sein, nicht die Vorgabe 0.2.0 —
+          # sonst sieht auf dem DC jedes Paket gleich aus.
+          $erwartet = (uv run python packaging/bau_fassung.py --zeigen).Trim()
+          $gemeldet = (& dist/magister-connector/magister-connector.exe --version | Out-String).Trim()
+          Write-Host "Fassung: $gemeldet (erwartet $erwartet)"
+          if (-not $gemeldet.StartsWith("$erwartet ")) {
+            Write-Error "Das eingefrorene Programm meldet '$gemeldet', erwartet '$erwartet (…)'"
+            exit 1
+          }
+          & dist/magister-connector/magister-connector.exe --help
+          # check ohne Konfiguration MUSS mit einer lesbaren Meldung enden und
+          # nicht mit einem Stacktrace. Rückgabewert 1 ist hier richtig.
+          & dist/magister-connector/magister-connector.exe --config nichts.json check
+          if ($LASTEXITCODE -ne 1) {
+            Write-Error "check ohne Konfiguration gab $LASTEXITCODE zurueck, erwartet 1"
+            exit 1
+          }
+          # $LASTEXITCODE steht jetzt auf 1 — und der Runner hängt an jeden
+          # pwsh-Schritt ein `exit $LASTEXITCODE`. Ohne diese Zeile scheitert
+          # der Schritt an genau dem Rückgabewert, den er eine Zeile vorher
+          # als den richtigen bestätigt hat. Genau so passiert: das Payload
+          # war fertig, das Programm lief, und der Job war trotzdem rot.
+          exit 0
+
+      - name: Payload hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-payload-windows
+          path: agent/dist/magister-connector/
+          if-no-files-found: error
+          retention-days: 7
+
+  msi:
+    needs: payload
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install wixl
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wixl msitools
+
+      # Zuerst die WiX-Quelle allein prüfen. Scheitert sie, braucht es den
+      # teuren Windows-Lauf nicht — und die Fehlermeldung zeigt auf die
+      # richtige Datei.
+      - name: WiX-Quelle prüfen (Platzhalter-Payload)
+        run: agent/packaging/windows/build-msi.sh --stub /tmp/stub.msi
+
+      - name: Payload herunterladen
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-payload-windows
+          path: payload
+
+      - name: MSI bauen
+        # Dieselbe Fassung wie im Payload: Windows vergleicht sie beim Update,
+        # und der Dateiname sagt dem Menschen, welche er in der Hand hat.
+        run: |
+          chmod +x payload/*.exe || true
+          version="$(python3 agent/packaging/bau_fassung.py --zeigen)"
+          echo "MSI_DATEI=magister-connector-$version-x64.msi" >> "$GITHUB_ENV"
+          MAGISTER_AGENT_VERSION="$version" \
+            agent/packaging/windows/build-msi.sh payload "magister-connector-$version-x64.msi"
+
+      - name: MSI-Inhalt protokollieren
+        # Ins Protokoll, damit man nach einem Release nachsehen kann, was
+        # ausgeliefert wurde, ohne die Datei zu besorgen.
+        run: |
+          msiinfo suminfo "$MSI_DATEI"
+          msiinfo export "$MSI_DATEI" Property | grep -E '^ProductVersion'
+          # Dieselbe Fassung im MSI wie im Dateinamen — Windows vergleicht sie
+          # beim Update.
+          msiinfo export "$MSI_DATEI" Property \
+            | grep -qE "^ProductVersion\s+$(python3 agent/packaging/bau_fassung.py --zeigen)\s*$"
+          msiinfo export "$MSI_DATEI" ServiceInstall
+          msiinfo export "$MSI_DATEI" Directory
+
+      - name: MSI hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: magister-connector-msi
+          path: ${{ env.MSI_DATEI }}
+          if-no-files-found: error

@@ -22,6 +22,34 @@ class DocumentTemplateOut(BaseModel):
     is_active: bool
     updated_by: str | None
     updated_at: datetime
+    #: Die Fassung, die der Kunde zur Kenntnis genommen hat (ADR-0018 D4).
+    platform_version_ack: int | None = None
+    #: Es gibt eine neuere gelieferte Fassung als die quittierte. Ausgerechnet
+    #: und nicht vom Frontend zusammengesetzt: der Vergleich ist die Regel, und
+    #: die gehört an eine Stelle.
+    platform_update_available: bool = False
+    #: Diese eigene Fassung gilt derzeit **nicht**, weil die Plattformfassung
+    #: gesperrt ist. Sie bleibt liegen und wird nicht gelöscht (ADR-0018 D3).
+    superseded_by_platform: bool = False
+
+
+class PlatformTemplateOut(BaseModel):
+    """Eine gelieferte Fassung, wie der Kunde sie sieht.
+
+    Mit Text: wer entscheiden soll, ob er seine eigene Fassung aufgibt, muss
+    die neue lesen können. Ein Hinweis „es gibt eine neue Fassung" ohne den
+    Text wäre eine Aufforderung, in der Konsole nachzufragen.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    language: str
+    subject: str | None
+    body_html: str
+    may_override: bool
+    version: int
+    delivered_at: datetime
 
 
 class DocumentTemplateSave(BaseModel):
@@ -63,6 +91,9 @@ class DocumentTemplateMetaOut(BaseModel):
 class DocumentTemplateListOut(BaseModel):
     templates: list[DocumentTemplateOut]
     meta: DocumentTemplateMetaOut
+    #: Die Fassungen des Betreibers. Leer auf einer Einzelinstallation — dort
+    #: gibt es keinen Betreiber ausser dem Kunden selbst (ADR-0016 D9).
+    platform_templates: list[PlatformTemplateOut] = []
 
 
 __all__ = [
@@ -73,4 +104,5 @@ __all__ = [
     "DocumentTemplatePreviewOut",
     "DocumentTemplatePreviewRequest",
     "DocumentTemplateSave",
+    "PlatformTemplateOut",
 ]

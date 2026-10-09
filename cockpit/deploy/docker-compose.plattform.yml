@@ -1,0 +1,42 @@
+# Die Konsole im GEHOSTETEN Betrieb, auf derselben Maschine wie die
+# Datenebene (ADR-0013 D2).
+#
+# Drei Dinge fehlen der Grundfassung für diesen Fall, und jedes davon fällt
+# sonst erst beim ersten Kunden auf — mitten im Termin:
+#
+#   1. **Das Alembic-Verzeichnis der Datenebene.** Schritt 3 der
+#      Bereitstellung ruft `python -m alembic upgrade head` im Verzeichnis
+#      `COCKPIT_MAGISTER_API_DIR` auf. Ohne Einhängung zeigt der Pfad im
+#      Container ins Leere, und der Kunde bleibt mit Rolle und Schema, aber
+#      ohne Tabellen stehen. Nachgemessen: die Abhängigkeiten der Konsole
+#      genügen, um `magister_api` zu importieren und die Migration zu fahren
+#      — es fehlt nur das Verzeichnis und `PYTHONPATH`.
+#   2. **Ein Weg zum Magister-Cluster.** `COCKPIT_TENANT_ADMIN_DSN` zeigt auf
+#      die Postgres-Instanz der Datenebene, und die steht im anderen Stack.
+#      Beide hängen deshalb am selben externen Netz.
+#   3. **Die Erwartung an den Schemastand** (ADR-0021 D2): ohne sie nimmt
+#      die Konsole jede Meldung an, auch eine von einer veralteten Instanz.
+#
+# Aufruf:
+#   docker compose -f docker-compose.yml -f docker-compose.plattform.yml up -d
+services:
+  api:
+    environment:
+      # Der Pfad im CONTAINER, nicht auf dem Host.
+      COCKPIT_MAGISTER_API_DIR: /opt/magister/apps/api
+      # Damit `import magister_api` in der Migration gelingt: das Paket ist
+      # nicht installiert, es liegt eingehängt daneben. `/app` steht voran,
+      # weil dort die Konsole selbst liegt — auch sie ist im Abbild nur
+      # einkopiert, nicht installiert.
+      PYTHONPATH: /app:/opt/magister/apps/api
+    volumes:
+      - ../../apps/api:/opt/magister/apps/api:ro
+    networks: [default, plattform]
+
+  # Caddy und Postgres bleiben im Stack-eigenen Netz: die Konsole soll mit
+  # der Datenebene reden können, nicht umgekehrt.
+
+networks:
+  plattform:
+    external: true
+    name: ${PLATTFORM_NETZ:-magister-plattform}

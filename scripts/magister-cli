@@ -8,6 +8,21 @@ Subcommands:
                        empty deployment can show the full UI without
                        waiting for an AD-sync. Wraps
                        ``python -m magister_api.cli.seed_demo``.
+    tenants          — the tenant registry (ADR-0013): ``list`` shows it,
+                       ``migrate`` runs ``alembic upgrade head`` per tenant —
+                       a pre-migration dump first, the canary before the rest,
+                       and each schema migrated with the tenant's own login
+                       role so the tables end up owned by it.
+    backup           — ``verify`` spielt eine verschlüsselte Sicherung in eine
+                       Wegwerf-Datenbank ein und prüft sie (ADR-0016 D9). Ein
+                       Backup gilt erst als Backup, wenn es eingespielt wurde.
+                       Braucht den PRIVATEN age-Schlüssel, läuft also dort, wo
+                       der liegt — nicht auf dem Anwendungsserver.
+    local-admin      — the local break-glass account. Currently one action:
+                       ``totp-reset`` clears the second factor (ADR-0015 D2),
+                       ``--new-recovery-codes`` only reissues the codes, and
+                       ``--disable`` closes the account. On-prem equivalent of
+                       the console's four interventions.
 
 The CLI needs the API venv so SQLAlchemy + argon2-cffi + magister_api
 are importable. From a repo checkout:
@@ -75,6 +90,26 @@ def cmd_seed_demo(args: argparse.Namespace) -> int:
     return seed_main(forwarded)
 
 
+def cmd_local_admin_totp_reset(args: argparse.Namespace) -> int:
+    try:
+        from magister_api.cli.local_admin_totp import main as totp_main
+    except ImportError:
+        sys.stderr.write(
+            "magister_api is not importable — run inside apps/api's venv:\n"
+            "  cd apps/api && uv run ../../scripts/magister-cli local-admin totp-reset\n"
+        )
+        return 2
+
+    forwarded: list[str] = []
+    if args.new_recovery_codes:
+        forwarded.append("--new-recovery-codes")
+    if args.disable:
+        forwarded.append("--disable")
+    if args.reason:
+        forwarded += ["--reason", args.reason]
+    return totp_main(forwarded)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="magister-cli", description=__doc__)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -103,6 +138,46 @@ def main() -> int:
         help="Seed even if the DB already contains classes. Use with care.",
     )
     sd.set_defaults(func=cmd_seed_demo)
+
+    la = sub.add_parser("local-admin", help="Local break-glass account actions.")
+    la_sub = la.add_subparsers(dest="local_admin_cmd", required=True)
+    tr = la_sub.add_parser(
+        "totp-reset",
+        help="Reset the second factor of the local account (ADR-0015 D2). Without "
+        "options the factor is cleared and re-enrolled at the next sign-in.",
+    )
+    tr_group = tr.add_mutually_exclusive_group()
+    tr_group.add_argument(
+        "--new-recovery-codes",
+        action="store_true",
+        help="Only reissue the recovery codes; the secret is left alone.",
+    )
+    tr_group.add_argument(
+        "--disable",
+        action="store_true",
+        help="Disable the account. Closes the break-glass path without weakening anything.",
+    )
+    tr.add_argument("--reason", default="", help="Reason or ticket number for the audit trail.")
+    tr.set_defaults(func=cmd_local_admin_totp_reset)
+
+    # Mandanten-Werkzeug (ADR-0013). Der Import liegt hier drin, damit die
+    # anderen Subcommands weiter funktionieren, wenn magister_api nicht
+    # importierbar ist — der Fall, den cmd_hash_password oben abfängt.
+    try:
+        from magister_api.cli.tenants import add_parser as add_tenants_parser
+    except ImportError:
+        pass
+    else:
+        add_tenants_parser(sub)
+
+    # Sicherungen prüfen (ADR-0016 D9). Braucht den PRIVATEN age-Schlüssel und
+    # läuft deshalb dort, wo er liegt — nicht auf dem Anwendungsserver.
+    try:
+        from magister_api.cli.backup import add_parser as add_backup_parser
+    except ImportError:
+        pass
+    else:
+        add_backup_parser(sub)
 
     args = parser.parse_args()
     return args.func(args)

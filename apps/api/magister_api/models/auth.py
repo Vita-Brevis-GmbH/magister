@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import (
@@ -14,7 +15,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -139,6 +140,17 @@ class Session(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+    #: Bei ``auth_kind='operator'`` (ADR-0019): wer von Vita Brevis hier
+    #: zusieht, und mit welchem Einlöseschein. Zwei Spalten an der Session und
+    #: kein Join auf ``operator_accesses`` bei jeder Anfrage — die Session wird
+    #: ohnehin bei jeder gelesen.
+    #:
+    #: Ein Operator ist **kein** Benutzer des Kunden: es gibt zu ihm keine
+    #: Zeile in ``ad_user_cache`` und keine Rollenzuweisung (ADR-0019 D5).
+    #: Deshalb steht seine Identität hier und nicht dort.
+    operator_upn: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    operator_jti: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
 class RoleAssignment(Base):

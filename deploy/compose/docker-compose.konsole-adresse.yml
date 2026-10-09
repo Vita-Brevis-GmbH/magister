@@ -1,0 +1,15 @@
+# Fester Weg von der Datenebene zur Konsole (ADR-0013 D4, ADR-0015 D1).
+#
+# Die Datenebene holt die Kundenliste unter `https://konsole.<domäne>:4444`.
+# Ohne diese Datei löst der Container den Namen über den DNS des Hosts auf —
+# in der DMZ zeigt der öffentliche Eintrag (`*.<domäne>`) aber auf die
+# Firewall, und dort ist 4444 zu Recht nicht offen. Folge: keine Kunden, nur
+# 503. Hier steht deshalb fest, wo die Konsole lauscht: auf der
+# Verwaltungsadresse dieses Hosts (PLATTFORM_BIND).
+#
+# `plattform-aufbau.sh` hängt die Datei an, sobald die Verwaltungsadresse
+# nicht 127.0.0.1 ist (an Loopback kommt aus einem Container niemand heran).
+services:
+  magister-api:
+    extra_hosts:
+      - "${MAGISTER_CONSOLE_HOST:?MAGISTER_CONSOLE_HOST is required}:${MAGISTER_CONSOLE_ADDRESS:?MAGISTER_CONSOLE_ADDRESS is required — die Verwaltungsadresse der Konsole}"

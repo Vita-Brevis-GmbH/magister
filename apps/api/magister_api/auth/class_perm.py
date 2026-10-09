@@ -50,7 +50,7 @@ async def require_class_writer(
     if cls is None:
         raise HTTPException(status_code=404, detail="class_not_found")
 
-    if user.is_admin:
+    if user.sees_whole_tenant:
         return user
 
     if cls.school_id in user.school_scope:
@@ -82,7 +82,7 @@ async def require_student_writer(
     if student is None:
         raise HTTPException(status_code=404, detail="student_not_found")
 
-    if user.is_admin:
+    if user.sees_whole_tenant:
         return user, student
 
     # Schulleitung or SMI of the student's school?
@@ -130,7 +130,7 @@ async def require_teacher_writer(
     if teacher is None:
         raise HTTPException(status_code=404, detail="teacher_not_found")
 
-    if user.is_admin:
+    if user.sees_whole_tenant:
         return user, teacher
 
     # SMI grants live in ``role_assignments`` per school; school_scope holds
@@ -167,7 +167,7 @@ async def require_user_writer(
     if target is None:
         raise HTTPException(status_code=404, detail="user_not_found")
 
-    if user.is_admin:
+    if user.sees_whole_tenant:
         return user, target
 
     if (
@@ -201,7 +201,7 @@ async def require_user_lifecycle_writer(
     if target is None:
         raise HTTPException(status_code=404, detail="user_not_found")
 
-    if user.is_admin:
+    if user.sees_whole_tenant:
         return user, target
 
     if target.school_id is None:

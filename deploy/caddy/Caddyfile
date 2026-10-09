@@ -93,8 +93,15 @@ http:// {
 	import security_headers
 
 	# Health-probes for ops — answered by the API directly, no /api/ prefix.
-	handle /healthz {
-		reverse_proxy magister-api:8000
+	# `/healthz` is flat (does the process live?), `/healthz/stack` is the deep
+	# one the monitoring reads: it needs the tenant hostname, so X-Forwarded-Host
+	# must travel with it — without the header the probe would resolve whatever
+	# Host the proxy happens to send and report on the wrong customer.
+	handle /healthz* {
+		reverse_proxy magister-api:8000 {
+			header_up X-Forwarded-Host {host}
+			header_up X-Forwarded-Proto {scheme}
+		}
 	}
 
 	# API + auth surface. handle_path strips the /api/ prefix before

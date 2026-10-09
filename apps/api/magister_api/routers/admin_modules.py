@@ -4,6 +4,14 @@ The instance profile (school/company/neutral) seeds the default module set +
 vocabulary; per-module overrides are the source of truth and win over the
 profile default (ADR-0008, Phase 1). The non-toggleable ``platform`` base can
 never be disabled.
+
+Zwei Router mit demselben Pfad, weil Lesen und Schreiben verschiedenen
+gehören, sobald es eine Konsole gibt: Profil und Modul-Freischaltung sind dann
+Politik des Betreibers (ADR-0017, Tabelle „Politik"), und der Abgleich schreibt
+sie bei jedem Lauf ins Kundenschema. Ein Schreibweg beim Kunden daneben hiess,
+dass seine Änderung beim nächsten Lauf still zurückgestellt wurde. Gehostet
+wird ``write_router`` deshalb nicht gemountet (siehe
+``modules.settings.PLATFORM_OWNED_ROUTERS``); die Seite bleibt lesbar.
 """
 
 from __future__ import annotations
@@ -21,9 +29,12 @@ from magister_api.schemas.modules import AdminModuleOut, AdminModulesOut, Module
 from magister_api.services.app_settings import AppSettingsService
 
 router = APIRouter(prefix="/admin/modules", tags=["admin"])
+write_router = APIRouter(prefix="/admin/modules", tags=["admin"])
 
 
-def _view(profile: str, overrides: dict[str, bool]) -> AdminModulesOut:
+def _view(
+    profile: str, overrides: dict[str, bool], *, managed_by_platform: bool
+) -> AdminModulesOut:
     enabled = set(catalog.effective_enabled_ids(profile, overrides))
     return AdminModulesOut(
         instance_profile=profile,
@@ -39,6 +50,7 @@ def _view(profile: str, overrides: dict[str, bool]) -> AdminModulesOut:
             for m in catalog.MODULE_CATALOG
         ],
         module_overrides=dict(overrides),
+        managed_by_platform=managed_by_platform,
     )
 
 
@@ -49,10 +61,14 @@ async def get_modules(
     session: AsyncSession = Depends(get_session),
 ) -> AdminModulesOut:
     cfg = await AppSettingsService(session, settings).get_module_settings()
-    return _view(cfg.instance_profile, cfg.module_overrides)
+    return _view(
+        cfg.instance_profile,
+        cfg.module_overrides,
+        managed_by_platform=bool(settings.console_registry_url),
+    )
 
 
-@router.put("", response_model=AdminModulesOut)
+@write_router.put("", response_model=AdminModulesOut)
 async def put_modules(
     request: Request,
     payload: ModuleSettingsUpdate,
@@ -96,7 +112,7 @@ async def put_modules(
         ip=ip,
         request_id=request_id,
     )
-    return _view(updated.instance_profile, updated.module_overrides)
+    return _view(updated.instance_profile, updated.module_overrides, managed_by_platform=False)
 
 
-__all__ = ["router"]
+__all__ = ["router", "write_router"]

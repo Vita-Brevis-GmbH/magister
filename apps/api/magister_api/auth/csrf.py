@@ -67,12 +67,17 @@ class CsrfMiddleware(BaseHTTPMiddleware):
     # never routed by Caddy from outside and carries its own shared-secret auth,
     # so the double-submit CSRF token — which presupposes a browser session —
     # does not apply. Inter-container POSTs would otherwise be blocked.
+    # ``/operator/redeem`` steht hier aus demselben Grund wie ``/auth/login``:
+    # es gibt zu diesem Zeitpunkt keine Sitzung, gegen die ein Doppel-Cookie
+    # prüfbar wäre. Der Einlöseschein selbst ist das Zugangsmittel — signiert,
+    # einmal verwendbar, sechzig Sekunden gültig (ADR-0019).
     EXEMPT_PATH_PREFIXES = (
         "/auth/login",
         "/auth/logout",
         "/auth/callback",
         "/healthz",
         "/internal/",
+        "/operator/redeem",
     )
 
     async def dispatch(

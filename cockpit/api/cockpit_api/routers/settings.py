@@ -1,0 +1,268 @@
+"""Systemeinstellungen und Rechte-Matrix als Soll-Zustand (ADR-0017).
+
+Drei Flächen:
+
+* `/api/platform/settings` — die Vorgaben für alle Kunden.
+* `/api/tenants/{id}/settings` — die Abweichungen eines Kunden.
+* `/api/tenants/{id}/desired-state` — was daraus folgt. Das ist die Fläche,
+  die die **Datenebene** abholt; sie schreibt nichts und liest nur.
+
+Die Prüfungen sitzen im Dienst (`services/settings.py`), damit sie auch für
+einen CLI-Aufruf gelten. Dieses Modul übersetzt sie in HTTP: ein verbotener
+oder unbekannter Schlüssel ist **422** — die Anfrage ist syntaktisch richtig
+und inhaltlich nicht erlaubt.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import cast
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from cockpit_api.auth import Caller, require_identity, require_person
+from cockpit_api.db import get_session
+from cockpit_api.models import Tenant
+from cockpit_api.models.settings import TenantSettings
+from cockpit_api.schemas.settings import (
+    DesiredStateOut,
+    PlatformSettingsOut,
+    PlatformSettingsUpdate,
+    TenantModuleOut,
+    TenantModulesOut,
+    TenantModulesUpdate,
+    TenantSettingsOut,
+    TenantSettingsUpdate,
+)
+from cockpit_api.services.modules import KNOWN_PROFILES, MODULES, effective
+from cockpit_api.services.settings import SettingsError, SettingsService, strip_retired
+
+logger = logging.getLogger(__name__)
+
+# Am Router ein **Boden** (`require_identity`), an den schreibenden Routen eine
+# **Erhöhung** (`require_person`, ADR-0020 D4). Der erste Entwurf nahm den
+# Boden weg und setzte die Erhöhung nur an die zwei PUTs — damit waren die
+# GET-Flächen unauthentisiert, darunter der Soll-Zustand, den die Datenebene
+# abholt. Ein Boden am Router ist keine Redundanz, sondern der Unterschied
+# zwischen „vergessen" und „offen".
+#
+# Warum der Soll-Zustand keine Person verlangt: die Datenebene holt ihn mit
+# einem Dienst-Token, und sie ist keine.
+platform = APIRouter(
+    prefix="/platform", tags=["settings"], dependencies=[Depends(require_identity)]
+)
+tenant_scoped = APIRouter(
+    prefix="/tenants/{tenant_id}",
+    tags=["settings"],
+    dependencies=[Depends(require_identity)],
+)
+
+
+async def _known_tenant(session: AsyncSession, tenant_id: UUID) -> Tenant:
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
+    return tenant
+
+
+def _tenant_out(row: TenantSettings | None, tenant_id: UUID) -> TenantSettingsOut:
+    """Auch der leere Fall ist eine Antwort.
+
+    Kein Eintrag heisst „keine Abweichung" — und nicht 404. Ein 404 zwänge
+    jede Oberfläche zu einer Sonderbehandlung für den Normalfall.
+    """
+    if row is None:
+        return TenantSettingsOut(
+            tenant_id=str(tenant_id),
+            overrides={},
+            rbac=None,
+            updated_at=None,
+            updated_by=None,
+        )
+    return TenantSettingsOut(
+        tenant_id=str(row.tenant_id),
+        overrides=strip_retired(row.overrides),
+        rbac=row.rbac,
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
+    )
+
+
+@platform.get("/settings", response_model=PlatformSettingsOut)
+async def get_platform_settings(
+    session: AsyncSession = Depends(get_session),
+) -> PlatformSettingsOut:
+    row = await SettingsService(session).platform()
+    await session.commit()
+    out = PlatformSettingsOut.model_validate(row)
+    out.defaults = strip_retired(out.defaults)
+    return out
+
+
+@platform.put("/settings", response_model=PlatformSettingsOut)
+async def put_platform_settings(
+    body: PlatformSettingsUpdate,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformSettingsOut:
+    svc = SettingsService(session)
+    try:
+        row = await svc.set_platform(defaults=body.defaults, rbac=body.rbac, actor=caller.actor)
+    except SettingsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    await session.commit()
+    logger.info("Plattform-Vorgaben geändert von %s", caller.actor)
+    return PlatformSettingsOut.model_validate(row)
+
+
+@tenant_scoped.get("/settings", response_model=TenantSettingsOut)
+async def get_tenant_settings(
+    tenant_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> TenantSettingsOut:
+    await _known_tenant(session, tenant_id)
+    row = await SettingsService(session).tenant(tenant_id)
+    return _tenant_out(row, tenant_id)
+
+
+@tenant_scoped.put("/settings", response_model=TenantSettingsOut)
+async def put_tenant_settings(
+    tenant_id: UUID,
+    body: TenantSettingsUpdate,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> TenantSettingsOut:
+    tenant = await _known_tenant(session, tenant_id)
+    svc = SettingsService(session)
+    try:
+        row = await svc.set_tenant(
+            tenant_id,
+            overrides=body.overrides,
+            rbac=body.rbac,
+            clear_rbac=body.clear_rbac,
+            actor=caller.actor,
+        )
+    except SettingsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    await session.commit()
+    # Der Name des Kunden im Protokoll, nicht nur die Id: wer den Log liest,
+    # soll nicht erst eine Tabelle befragen müssen.
+    logger.info("Einstellungen von %s geändert von %s", tenant.slug, caller.actor)
+    return _tenant_out(row, tenant_id)
+
+
+@tenant_scoped.get("/desired-state", response_model=DesiredStateOut)
+async def get_desired_state(
+    tenant_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> DesiredStateOut:
+    """Der Soll-Zustand, wie die Datenebene ihn abholt (ADR-0017 D3).
+
+    Nur lesend. Die Konsole schreibt nicht in das Schema des Kunden — sie hat
+    dorthin keinen Zugang, und das ist keine Auslassung.
+    """
+    tenant = await _known_tenant(session, tenant_id)
+    state = await SettingsService(session).desired_state(tenant)
+    await session.commit()
+    return DesiredStateOut(**state)
+
+
+__all__ = ["platform", "tenant_scoped"]
+
+
+def _switches(raw: object) -> dict[str, bool]:
+    """Die gespeicherten Modul-Schalter; geprüft sind sie beim Speichern."""
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): bool(v) for k, v in cast(dict[object, object], raw).items()}
+
+
+async def _modules_view(session: AsyncSession, tenant: Tenant) -> TenantModulesOut:
+    row = await SettingsService(session).tenant(tenant.id)
+    overrides = dict(row.overrides) if row else {}
+    own_profile = overrides.get("instance_profile")
+    profile = str(own_profile) if own_profile is not None else str(tenant.profile)
+    switches = _switches(overrides.get("module_overrides"))
+    enabled = effective(profile, switches)
+    return TenantModulesOut(
+        profile=profile,
+        profile_source="override" if own_profile is not None else "tenant",
+        known_profiles=list(KNOWN_PROFILES),
+        modules=[
+            TenantModuleOut(
+                id=m.id,
+                toggleable=m.toggleable,
+                enabled=enabled[m.id],
+                default_in_profiles=list(m.default_in_profiles),
+                override=switches.get(m.id),
+            )
+            for m in MODULES
+        ],
+    )
+
+
+@tenant_scoped.get("/modules", response_model=TenantModulesOut)
+async def get_tenant_modules(
+    tenant_id: UUID,
+    session: AsyncSession = Depends(get_session),
+) -> TenantModulesOut:
+    """Profil und Module des Kunden — der Ort, an dem man sie gehostet ändert.
+
+    Beim Kunden ist die Seite „Module & Funktionen" dann nur lesbar
+    (ADR-0017): zwei Autoren für dasselbe Feld hiessen, dass der Abgleich die
+    Änderung des einen still zurückstellt.
+    """
+    tenant = await _known_tenant(session, tenant_id)
+    return await _modules_view(session, tenant)
+
+
+@tenant_scoped.put("/modules", response_model=TenantModulesOut)
+async def put_tenant_modules(
+    tenant_id: UUID,
+    body: TenantModulesUpdate,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> TenantModulesOut:
+    tenant = await _known_tenant(session, tenant_id)
+    svc = SettingsService(session)
+    row = await svc.tenant(tenant_id)
+    overrides = dict(row.overrides) if row else {}
+    changed: list[str] = []
+
+    if body.profile is not None:
+        tenant.profile = body.profile
+        # Eine abweichende Einstellung überstimmt das Profil am Kunden
+        # (SettingsService.desired_state). Bliebe sie stehen, zeigte die
+        # Konsole das neue Profil, und beim Kunden gälte das alte.
+        overrides.pop("instance_profile", None)
+        changed.append(f"Profil={body.profile}")
+
+    if body.module_overrides is not None:
+        switches = _switches(overrides.get("module_overrides"))
+        for module_id, on in body.module_overrides.items():
+            if on is None:
+                switches.pop(module_id, None)
+            else:
+                switches[module_id] = on
+        # Auch leer gespeichert und nicht entfernt: ein ausdrückliches `{}`
+        # schreibt der Abgleich ins Kundenschema. Ein fehlender Schlüssel
+        # liesse dort einen Schalter stehen, den der Kunde vor dem Umzug in
+        # die Konsole selbst gesetzt hat — und die Konsole zeigte ihn nicht.
+        overrides["module_overrides"] = switches
+        changed.append("Module=" + ",".join(f"{k}:{v}" for k, v in sorted(switches.items())))
+
+    try:
+        await svc.set_tenant(tenant_id, overrides=overrides, actor=caller.actor)
+    except SettingsError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    await session.commit()
+    await session.refresh(tenant)
+    logger.info(
+        "Profil/Module von %s geändert von %s: %s",
+        tenant.slug,
+        caller.actor,
+        "; ".join(changed) or "keine Änderung",
+    )
+    return await _modules_view(session, tenant)

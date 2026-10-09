@@ -511,3 +511,72 @@ class TestSchemaGuards:
                 assert r.status_code == 422
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
+
+
+class TestManualPasswordAgainstRealAd:
+    """Ein eigenes Passwort wird gesetzt und nur bei echter Ablehnung abgewiesen.
+
+    Früher meldete sich Magister vor dem Setzen *mit dem neuen Passwort als
+    der Benutzer* an — das konnte gegen ein echtes AD nie gelingen, weil das
+    Passwort da noch nicht gesetzt war. Jedes eigene Passwort galt so als
+    „entspricht nicht den Richtlinien“. Die Attrappe nahm jede Anmeldung an,
+    deshalb fiel es erst am echten DC auf.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("ad_rejects", [False, True])
+    async def test_no_probe_bind_and_ad_rejection_is_a_policy_error(
+        self,
+        app: FastAPI,
+        as_schulleitung_a: AsyncClient,
+        app_settings: Settings,
+        db_session: AsyncSession,
+        school_a: int,
+        mock_ad_with_students: AdClient,
+        ad_rejects: bool,
+    ) -> None:
+        from magister_api.ad.errors import PASSWORD_REJECTED, AdUnavailableError
+
+        class StrictAd:
+            """Echtes Verhalten: Anmeldung mit dem noch nicht gesetzten Passwort scheitert."""
+
+            def __getattr__(self, name: str) -> object:
+                return getattr(mock_ad_with_students, name)
+
+            async def probe_bind_as_user(self, *, user_dn: str, password: str) -> bool:
+                raise AssertionError("Vor dem Setzen darf nicht als Benutzer angemeldet werden.")
+
+            async def modify_password(
+                self, *, user_dn: str, new_password: str, force_change: bool
+            ) -> None:
+                if ad_rejects:
+                    raise AdUnavailableError(PASSWORD_REJECTED)
+
+        await _wire_class_with_kl_and_student(
+            as_schulleitung_a=as_schulleitung_a,
+            db_session=db_session,
+            school_id=school_a,
+        )
+        app.dependency_overrides[get_ad_client] = lambda: StrictAd()
+        try:
+            kl = await _kl_client(
+                app=app,
+                app_settings=app_settings,
+                db_session=db_session,
+                school_id=school_a,
+                cid=0,
+                kl_guid=KL_GUID,
+                upn="kl-anna@example.ch",
+            )
+            async with kl:
+                r = await kl.post(
+                    f"/students/{STUDENT_GUID}/password-reset",
+                    json={"mode": "manual", "manual_password": "Apfel-Stuhl-77!"},
+                )
+        finally:
+            app.dependency_overrides.pop(get_ad_client, None)
+        if ad_rejects:
+            assert r.status_code == 422, r.text
+            assert r.json()["detail"] == "manual_password_rejected_by_ad"
+        else:
+            assert r.status_code == 200, r.text

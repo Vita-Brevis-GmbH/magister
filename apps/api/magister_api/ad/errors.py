@@ -22,6 +22,18 @@ class AdUnavailableError(RuntimeError):
     """
 
 
+#: Fehlercode, wenn das AD ein neues Passwort ablehnt (Länge, Komplexität,
+#: Verlauf, Mindestalter). Bewusst ein Code im ``AdUnavailableError`` und keine
+#: eigene Klasse: so reist er unverändert über alle drei Wege (direkt, RPC,
+#: Connector-Agent) und kommt beim Dienst als dasselbe an.
+PASSWORD_REJECTED = "ldap_password_rejected"  # noqa: S105 - Fehlercode, kein Passwort
+
+
+def is_password_rejected(exc: BaseException) -> bool:
+    """Hat das AD das Passwort abgelehnt (statt nicht erreichbar zu sein)?"""
+    return isinstance(exc, AdUnavailableError) and str(exc) == PASSWORD_REJECTED
+
+
 class AdUserParseError(ValueError):
     """An LDAP entry could not be parsed into an :class:`AdUserRecord`."""
 
@@ -37,6 +49,10 @@ SYNC_REASON_SEARCH_FAILED = "ad_search_failed"
 SYNC_REASON_BIND_FAILED = "ad_bind_failed"
 SYNC_REASON_CONFIG = "ad_config"
 SYNC_REASON_UNAVAILABLE = "ad_unavailable"
+#: Der AD-Connector hat die Suche abgelehnt: Such-Basis nicht in der Freigabe.
+SYNC_REASON_CONNECTOR_SCOPE = "ad_connector_scope"
+#: Der AD-Connector hat den Auftrag nicht abgeholt (Dienst aus, Netz zu).
+SYNC_REASON_CONNECTOR_OFFLINE = "ad_connector_offline"
 
 
 def classify_sync_failure(exc: AdUnavailableError) -> str:
@@ -49,6 +65,10 @@ def classify_sync_failure(exc: AdUnavailableError) -> str:
     ``ldap_search_failed:noSuchObject``) which we mine for a finer reason.
     """
     msg = str(exc)
+    if msg == "connector_refused_scope":
+        return SYNC_REASON_CONNECTOR_SCOPE
+    if msg.startswith("connector_agent_unavailable") or msg == "connector_timeout":
+        return SYNC_REASON_CONNECTOR_OFFLINE
     if "SEARCH_BASE" in msg:
         return SYNC_REASON_SEARCH_BASE_MISSING
     if msg == "ldap_bind_failed":

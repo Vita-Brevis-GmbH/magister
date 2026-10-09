@@ -5,7 +5,6 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
   AdConnectionTestOut,
-  AdLoginRequest,
   AdSyncResultOut,
   AdUserCreateRequest,
   AdUserCreateResponse,
@@ -77,6 +76,9 @@ import type {
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
+  LocalLoginStageOut,
+  LocalRecoveryCodesOut,
+  LocalTotpRequest,
   RbacConfig,
   RbacRole,
   RoleAssignmentOut,
@@ -91,6 +93,7 @@ import type {
   DocumentTemplatePreviewOut,
   DocumentTemplatePreviewRequest,
   DocumentTemplateSave,
+  OperatorAccessOut,
   RenameApplyRequest,
   RenamePreviewOut,
   RenamePreviewRequest,
@@ -130,6 +133,7 @@ export const queryKeys = {
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
   documentTemplates: ["admin-document-templates"] as const,
+  operatorAccesses: ["operator-accesses"] as const,
   departments: ["departments"] as const,
   department: (id: number) => ["departments", id] as const,
   departmentMembers: (id: number) => ["departments", id, "members"] as const,
@@ -164,6 +168,27 @@ export function useEnabledModules() {
     queryFn: () => apiFetch<ModulesOut>("/me/modules"),
     staleTime: 5 * 60_000,
     select: (data) => new Set(data.modules.map((m) => m.id)),
+  });
+}
+
+/**
+ * Ob ein Betreiber diese Installation verwaltet (ADR-0017 D1).
+ *
+ * Dieselbe Abfrage wie `useEnabledModules` — gleicher `queryKey`, also keine
+ * zweite Anfrage. Systemeinstellungen und Rechte-Matrix gehören dann der
+ * Konsole, und die Endpunkte dafür sind in der Kunden-API gar nicht gemountet.
+ *
+ * Vorgabe `false`, solange die Antwort noch nicht da ist: der Menüpunkt
+ * erscheint dann kurz und verschwindet wieder. Umgekehrt — erst verstecken,
+ * dann zeigen — wäre für eine Einzelinstallation ein Flackern bei jedem
+ * Seitenaufbau, und die ist der häufigere Fall.
+ */
+export function usePlatformManaged() {
+  return useQuery<ModulesOut, ApiError, boolean>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => data.platform_managed ?? false,
   });
 }
 
@@ -224,6 +249,39 @@ export function useDeleteDocumentTemplate() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
+  });
+}
+
+/**
+ * „Neue globale Fassung gesehen" (ADR-0018 D4).
+ *
+ * Ein eigener Aufruf und kein Nebeneffekt des Speicherns: wer seinen Text
+ * bearbeitet, hat damit nicht gesagt, dass er den neuen gelesen hat.
+ */
+export function useAcknowledgePlatformTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplateOut, ApiError, number>({
+    mutationFn: (id) =>
+      apiFetch<DocumentTemplateOut>(`/templates/${id}/acknowledge`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+// --- Operator-Zugriff (ADR-0019) ---------------------------------------
+
+/**
+ * Die Zugriffe von Vita Brevis auf diese Installation.
+ *
+ * Jeder angemeldete Benutzer darf sie sehen — nicht nur Admins. Eine
+ * Transparenz, die nur derjenige sieht, der den Zugriff ohnehin bewilligt
+ * haette, ist keine.
+ */
+export function useOperatorAccesses() {
+  return useQuery<OperatorAccessOut[]>({
+    queryKey: queryKeys.operatorAccesses,
+    queryFn: () => apiFetch<OperatorAccessOut[]>("/operator/accesses"),
   });
 }
 
@@ -903,20 +961,38 @@ export function useAuthCapabilities() {
   });
 }
 
+/**
+ * Step 1 of the local login. Since ADR-0015 D2 a correct password does NOT
+ * yield a session: it returns the next stage plus a short-lived challenge.
+ * The one exception is a suspended MFA requirement, where the backend answers
+ * 204 with the cookies — hence the nullable result.
+ */
 export function useLocalLogin() {
-  return useMutation<void, ApiError, LocalLoginRequest>({
+  return useMutation<LocalLoginStageOut | null, ApiError, LocalLoginRequest>({
     mutationFn: (body) =>
-      apiFetch<void>("/auth/login/local", {
+      apiFetch<LocalLoginStageOut | null>("/auth/login/local", {
         method: "POST",
         body,
       }),
   });
 }
 
-export function useAdLogin() {
-  return useMutation<void, ApiError, AdLoginRequest>({
+/** Step 2: the one-time code, or a recovery code. Sets the session cookies. */
+export function useLocalTotp() {
+  return useMutation<void, ApiError, LocalTotpRequest>({
     mutationFn: (body) =>
-      apiFetch<void>("/auth/login/ad", {
+      apiFetch<void>("/auth/login/local/totp", {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+/** Finish enrolment: confirm the code, receive the recovery codes, sign in. */
+export function useLocalEnroll() {
+  return useMutation<LocalRecoveryCodesOut, ApiError, LocalTotpRequest>({
+    mutationFn: (body) =>
+      apiFetch<LocalRecoveryCodesOut>("/auth/login/local/enroll", {
         method: "POST",
         body,
       }),

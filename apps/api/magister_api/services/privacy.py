@@ -34,6 +34,7 @@ from magister_api.models.class_teacher_role import ClassTeacherRole
 from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
+from magister_api.tenancy.keys import keys_for
 
 
 class SubjectNotFoundError(LookupError):
@@ -170,7 +171,9 @@ class PrivacyService:
 
     async def _audit_events(self, guid: str) -> list[dict[str, Any]]:
         """All audit events where the user is target OR actor — decrypted."""
-        key = self.settings.audit_key.get_secret_value()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self.settings).audit_key
         stmt = (
             select(
                 AuditEvent.id,

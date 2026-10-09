@@ -28,7 +28,7 @@ class FakeOidcClient:
         self._userinfo = userinfo
         self.captured: dict[str, str] = {}
 
-    def build_authorize_request(self) -> OidcAuthorizeRequest:
+    async def build_authorize_request(self) -> OidcAuthorizeRequest:
         return OidcAuthorizeRequest(
             url="https://login.example.test/authorize?fake=1",
             state="state-xyz",
@@ -124,8 +124,36 @@ class TestBootstrapLoginFlow:
             params={"code": "c", "state": "state-xyz"},
             follow_redirects=False,
         )
-        assert cb.status_code == 403
-        assert cb.json()["detail"] == "user_not_synced"
+        # Zurück auf die Anmeldeseite, mit dem Grund — nicht JSON im Fenster.
+        assert cb.status_code == 303
+        assert cb.headers["location"] == "/login?error=user_not_synced"
+        assert "magister_session" not in cb.cookies
+
+    @pytest.mark.asyncio
+    async def test_an_entra_error_goes_back_to_the_login_page(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        fake = FakeOidcClient(_bootstrap_userinfo())
+        app.dependency_overrides[get_oidc_client] = lambda: fake
+        cb = await client.get(
+            "/auth/callback",
+            params={"error": "access_denied", "error_description": "<b>fremder Text</b>"},
+            follow_redirects=False,
+        )
+        assert cb.status_code == 303
+        assert cb.headers["location"] == "/login?error=oidc_error&entra=access_denied"
+
+    @pytest.mark.asyncio
+    async def test_a_stale_or_foreign_callback_goes_back_to_the_login_page(
+        self, app: FastAPI, client: AsyncClient
+    ) -> None:
+        fake = FakeOidcClient(_bootstrap_userinfo())
+        app.dependency_overrides[get_oidc_client] = lambda: fake
+        cb = await client.get(
+            "/auth/callback", params={"code": "c", "state": "s"}, follow_redirects=False
+        )
+        assert cb.status_code == 303
+        assert cb.headers["location"] == "/login?error=oidc_callback_invalid"
 
     @pytest.mark.asyncio
     async def test_logout_deletes_session(

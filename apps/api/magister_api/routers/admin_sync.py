@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, classify_sync_failure
+from magister_api.ad.factory import build_ad_client
 from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.effective_settings import get_effective_settings
@@ -21,6 +22,7 @@ from magister_api.config import Settings
 from magister_api.db import get_session
 from magister_api.schemas.ad_users import AdConnectionTestOut, AdSyncResultOut
 from magister_api.services.ad_sync import AdSyncService
+from magister_api.tenancy.context import tenant_from_request
 
 logger = logging.getLogger(__name__)
 
@@ -35,29 +37,25 @@ def get_ad_client(
 
     Cached per-request per app.state, mirroring ``get_oidc_client``: the
     overlay dep returns the same Settings instance until app_settings.version
-    bumps, so this small identity-keyed cache is enough.
+    bumps, so this small identity-keyed cache is enough. The cache key also
+    carries the tenant: two tenants in one process must not share a client
+    that carries the other's console id.
 
-    Strict AD boundary (ADR-0011): when ``MAGISTER_AD_RPC_URL`` is configured
-    this process holds no directory credentials and gets an ``AdRpcClient`` that
-    forwards to the AD container; otherwise it talks to AD directly. The RPC
-    URL/secret are deploy-time env (not DB-overlaid), so they are read from the
-    base settings on ``app.state``.
+    **Welcher** Rücken es wird, entscheidet ``ad.factory.build_ad_client`` —
+    dieselbe Stelle, die auch die wiederkehrende Schleife fragt (ADR-0022 D2).
+    Hier stand die Auswahl früher selbst, und die Schleife hatte eine zweite,
+    ältere Kopie davon, die den Connector nicht kannte.
     """
-    cached: tuple[int, AdClient] | None = getattr(request.app.state, "_ad_client_cache", None)
-    if cached is not None and cached[0] == id(eff):
-        return cached[1]
     base: Settings = request.app.state.settings
-    client: AdClient
-    if base.ad_rpc_url and base.ad_rpc_secret is not None:
-        # Imported lazily so the direct-AD path carries no httpx-client import.
-        from magister_api.ad.rpc_client import AdRpcClient
-
-        client = AdRpcClient(
-            eff, base_url=base.ad_rpc_url, secret=base.ad_rpc_secret.get_secret_value()
-        )
-    else:
-        client = AdClient(eff)
-    request.app.state._ad_client_cache = (id(eff), client)
+    tenant = tenant_from_request(request)
+    cache_key = (id(eff), tenant.slug)
+    cached: tuple[tuple[int, str], AdClient] | None = getattr(
+        request.app.state, "_ad_client_cache", None
+    )
+    if cached is not None and cached[0] == cache_key:
+        return cached[1]
+    client = build_ad_client(base, eff, tenant)
+    request.app.state._ad_client_cache = (cache_key, client)
     return client
 
 
