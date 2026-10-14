@@ -19,7 +19,7 @@ grep -q '^naechste_schritte()' "$T/schritte.sh" \
 
 cat > "$T/harness.sh" <<'X'
 say()  { printf '==> %s\n' "$*"; }
-KONSOLE_HOST=konsole.dev.test; DOMAIN=dev.test; BIND=172.25.12.10; CERTS=/x/certs; ZUSATZNAME=
+KONSOLE_HOST=konsole.dev.test; DOMAIN=dev.test; BIND=172.25.12.10; CERTS=/x/certs; ZUSATZNAME="${ZUSATZ:-}"
 PAKETE="$PAKETE_DIR"
 konsole_kunden() { printf 'gmp id ref role schema key active 42\n'; }
 getent() { [ "${AUFGELOEST:-0}" = 1 ]; }
@@ -76,6 +76,9 @@ enthaelt_nicht ".deb"
 laeuft "prod: Namen fehlen" AUFGELOEST=0 OPS=1 ART=prod
 enthaelt "*.dev.test  → öffentliche IP der Firewall"
 enthaelt "konsole.dev.test  → 172.25.12.10"
+# Mit zweitem Namen nennt der Hinweis den, unter dem man die Konsole aufruft.
+laeuft "prod: interner Name" AUFGELOEST=0 OPS=1 ART=prod ZUSATZ=konsole.int.vitabrevis.ch
+enthaelt "konsole.int.vitabrevis.ch  → 172.25.12.10 (Konsole, Port 4444)"
 enthaelt "prod-installation.md §2"
 enthaelt_nicht "/etc/hosts"
 

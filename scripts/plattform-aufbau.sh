@@ -1226,7 +1226,7 @@ EOF
       cat <<EOF
      Öffentlicher DNS:  *.$DOMAIN  → öffentliche IP der Firewall
                         (Kundenseiten 80/443, connect.$DOMAIN:46200)
-     Interner DNS:      $KONSOLE_HOST${ZUSATZNAME:+ und $ZUSATZNAME}  → $BIND
+     Interner DNS:      ${ZUSATZNAME:-$KONSOLE_HOST}  → $BIND (Konsole, Port 4444)
      Details: docs/runbooks/prod-installation.md §2
 EOF
     else

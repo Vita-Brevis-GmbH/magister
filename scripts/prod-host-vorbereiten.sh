@@ -242,7 +242,7 @@ Weiter (als ${BENUTZER:-Betriebsbenutzer}, nach neuer Anmeldung):
   ./scripts/plattform-aufbau.sh csr --domaene mgmt.vitabrevis.ch   # Wildcard beantragen
   ./scripts/plattform-aufbau.sh up --art prod --tls eigen \\
     --domaene mgmt.vitabrevis.ch --bind <private IP> \\
-    --zusatzname mgmt.int.vitabrevis.ch --waf "<Adressen der WAF>"
+    --zusatzname konsole.int.vitabrevis.ch --waf "<Adressen der WAF>"
 
 Runbook: docs/runbooks/prod-installation.md
 EOF

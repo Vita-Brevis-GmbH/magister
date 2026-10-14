@@ -11,8 +11,8 @@
 |---|---|---|---|
 | Kundenseiten | `<kunde>.mgmt.vitabrevis.ch` (z. B. `gmp.mgmt.vitabrevis.ch`) | 443 | Internet, **über die WAF** |
 | Connector-Kanal (AD-Agent auf dem DC) | `connect.mgmt.vitabrevis.ch` | 46200 | Internet (Kunden-DCs), **an der WAF vorbei** |
-| Konsole (Cockpit) | `https://mgmt.int.vitabrevis.ch:4444` (auch `konsole.mgmt.vitabrevis.ch`) | 4444 | **nur intern** (Verwaltungsnetz/VPN) |
-| Server selbst | Hostname `mgmt`, FQDN `mgmt.int.vitabrevis.ch` | 22 | nur intern |
+| Konsole (Cockpit) | `https://konsole.int.vitabrevis.ch:4444` | 4444 | **nur intern** (Verwaltungsnetz/VPN) |
+| Server selbst | `web02-002-vb.int.vitabrevis.ch`, CNAME `mgmt.int.vitabrevis.ch` | 22 | nur intern |
 
 **Zertifikate:**
 
@@ -30,11 +30,11 @@ Firewall.
 
 - Ubuntu Server 26.04 LTS, minimal, mit OpenSSH.
 - Empfohlen sind 4 vCPU, 8 GB RAM und 80 GB Platte. Der Bau der Abbilder braucht anfangs am meisten.
-- Netz: feste IP `<PRIVATE_IP>`, Hostname `mgmt`:
+- Netz: feste IP `<PRIVATE_IP>`, Hostname `web02-002-vb`:
 
 ```bash
-sudo hostnamectl set-hostname mgmt
-# /etc/hosts: <PRIVATE_IP>  mgmt.int.vitabrevis.ch mgmt
+sudo hostnamectl set-hostname web02-002-vb
+# /etc/hosts: <PRIVATE_IP>  web02-002-vb.int.vitabrevis.ch web02-002-vb
 ```
 
 ## 2 · DNS und Firewall (vor dem Aufbau)
@@ -54,8 +54,17 @@ Client-Zertifikat an (mTLS). Eine WAF, die TLS aufbricht, nimmt ihm das weg.
 
 | Eintrag | Typ | Ziel |
 |---|---|---|
-| `mgmt.int.vitabrevis.ch` | A | `<PRIVATE_IP>` |
-| `konsole.mgmt.vitabrevis.ch` | A | `<PRIVATE_IP>` (optional; die Konsole ist auch unter `mgmt.int…` erreichbar) |
+| `web02-002-vb.int.vitabrevis.ch` | A | `<PRIVATE_IP>` |
+| `konsole.int.vitabrevis.ch` | CNAME | `web02-002-vb.int.vitabrevis.ch` (Konsole) |
+| `mgmt.int.vitabrevis.ch` | CNAME | `web02-002-vb.int.vitabrevis.ch` (SSH, Betrieb) |
+
+Die Konsole antwortet auf **zwei** Namen: ihren festen
+`konsole.mgmt.vitabrevis.ch` und den zweiten Namen aus `--zusatzname`, hier
+`konsole.int.vitabrevis.ch`. Beide stehen im Zertifikat. Unter
+`mgmt.int.vitabrevis.ch:4444` oder `web02-002-vb…:4444` gibt es eine
+Zertifikatswarnung bzw. 421, weil diese Namen nicht im Zertifikat stehen. Für SSH gehen alle drei.
+`konsole.mgmt.vitabrevis.ch` braucht keinen internen DNS-Eintrag: die
+Datenebene erreicht die Konsole über einen festen Eintrag, nicht über den DNS.
 | `*.mgmt.vitabrevis.ch` | A | `<PRIVATE_IP>` (optional, gegen Hairpin-NAT für interne Aufrufe der Kundenseiten) |
 
 **WAF** (für `*.mgmt.vitabrevis.ch`):
@@ -161,7 +170,7 @@ cd /opt/magister
 ./scripts/plattform-aufbau.sh up --art prod --tls eigen \
   --domaene mgmt.vitabrevis.ch \
   --bind <PRIVATE_IP> \
-  --zusatzname mgmt.int.vitabrevis.ch \
+  --zusatzname konsole.int.vitabrevis.ch \
   --waf "<WAF-Adressen, z. B. 10.20.30.0/28>"
 ```
 
@@ -209,7 +218,7 @@ ohne Warnung zeigt. Die Datei ist `/opt/magister/plattform/certs/root.pem`.
 certutil -addstore -f Root C:\Temp\root.pem
 ```
 
-Danach `https://mgmt.int.vitabrevis.ch:4444` öffnen.
+Danach `https://konsole.int.vitabrevis.ch:4444` öffnen.
 
 **Neustart und Update aus der Konsole** einrichten (einmalig, als root):
 
@@ -337,5 +346,5 @@ git pull && ./scripts/plattform-aufbau.sh update
 | Entra-Anmeldung endet mit `oidc_state_mismatch` / `oidc_callback_invalid` | Die WAF verwirft Cookies oder Query-Parameter auf `/api/auth/callback` | Ausnahme in der WAF für `/api/auth/*` |
 | `up`: „deckt *.mgmt.vitabrevis.ch nicht ab“ | Falsches Zertifikat abgelegt (z. B. `*.vitabrevis.ch`) | Das Zertifikat aus dem Antrag von §3a ablegen |
 | Kundenseite 503 „maintenance“, `status`: keine Kunden | Datenebene erreicht die Konsole nicht | `docker exec magister-magister-api-1 getent hosts konsole.mgmt.vitabrevis.ch` muss `<PRIVATE_IP>` zeigen; sonst `up` erneut |
-| Konsole 421 | Aufruf unter einem Namen, der nicht im Zertifikat steht | `https://mgmt.int.vitabrevis.ch:4444` verwenden |
+| Konsole 421 | Aufruf unter einem Namen, der nicht im Zertifikat steht (z. B. `mgmt.int…` oder `web02-002-vb…`) | `https://konsole.int.vitabrevis.ch:4444` verwenden |
 | Agent: `CERTIFICATE_VERIFY_FAILED` | `root.pem` fehlt beim `enroll` oder ein Proxy bricht TLS auf | `enroll --ca …\root.pem`; 46200 am Proxy vorbei |
