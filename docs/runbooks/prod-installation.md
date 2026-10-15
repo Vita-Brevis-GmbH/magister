@@ -111,7 +111,62 @@ git clone --branch claude/multitenant-capability-planning-t6mygz \
 Solange PR #57 nicht gemergt ist, gilt der Branch oben. Danach `main`
 (`git switch main`).
 
-## 3a · Wildcard-Zertifikat beantragen
+## 3a · Wildcard-Zertifikat ablegen
+
+Gebraucht werden zwei Dateien im Ordner `plattform/kundenzertifikat/`:
+
+- `tenants.pem`: das Zertifikat für `*.mgmt.vitabrevis.ch`, **dahinter** das
+  Zwischenzertifikat der Zertifizierungsstelle;
+- `tenants-key.pem`: der Schlüssel, **ohne Passwort**.
+
+### Zertifikat ist schon vorhanden
+
+Kein `csr`: die Dateien direkt ablegen.
+
+```bash
+cd /opt/magister
+mkdir -p plattform/kundenzertifikat && cd plattform/kundenzertifikat
+```
+
+**Als PFX/P12** (häufigster Fall; das Passwort der Datei wird abgefragt):
+
+```bash
+openssl pkcs12 -in wildcard-mgmt.pfx -nokeys -out tenants.pem          # Zertifikat + Kette
+openssl pkcs12 -in wildcard-mgmt.pfx -nocerts -nodes -out tenants-key.pem
+chmod 600 tenants-key.pem
+```
+
+Meldet `openssl` dabei `unsupported` oder `RC2-40-CBC`, stammt die Datei aus
+einem älteren Windows-Export. Dann beide Befehle mit `-legacy` wiederholen.
+
+**Als einzelne PEM-Dateien** (Zertifikat, Zwischenzertifikat, Schlüssel):
+
+```bash
+cat wildcard.crt zwischenzertifikat.crt > tenants.pem
+openssl pkey -in wildcard.key -out tenants-key.pem   # entfernt ein allfälliges Passwort
+chmod 600 tenants-key.pem
+```
+
+Dann prüfen:
+
+```bash
+openssl x509 -in tenants.pem -noout -subject -ext subjectAltName -enddate
+# muss DNS:*.mgmt.vitabrevis.ch zeigen
+```
+
+`up --tls eigen` (§5) prüft das ohnehin vor dem Start. Es bricht ab, wenn:
+
+- eine der Dateien fehlt;
+- der Schlüssel ein Passwort hat;
+- Schlüssel und Zertifikat nicht zusammengehören;
+- das Zertifikat `*.mgmt.vitabrevis.ch` nicht abdeckt.
+
+Ohne Zwischenzertifikat gibt es einen Hinweis.
+
+Die Originaldatei (PFX) danach vom Server löschen. Sie liegt ohnehin im
+Passwortspeicher.
+
+### Zertifikat muss erst beantragt werden
 
 Der Schlüssel entsteht auf dem Server, zur Zertifizierungsstelle geht nur der
 Antrag. Das geht, sobald das Repository da ist (vor §4/§5):
@@ -138,8 +193,6 @@ cd plattform/kundenzertifikat
 openssl pkcs12 -export -in tenants.pem -inkey tenants-key.pem -out wildcard-mgmt.pfx
 ```
 
-Stellt die IT das Zertifikat lieber selbst aus (eigener Schlüssel): dann
-`tenants.pem` und `tenants-key.pem` (ohne Passwort) einfach dorthin legen.
 
 ## 4 · Host vorbereiten
 

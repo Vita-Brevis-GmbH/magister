@@ -177,6 +177,29 @@ pruefe "*.vitabrevis.ch wird abgewiesen"     "ja" \
   "$(kz_pruefen 'DNS:*.vitabrevis.ch' | grep -q 'deckt \*.mgmt.vitabrevis.ch nicht ab' && echo ja || echo nein)"
 pruefe "kurz vor Ablauf gibt einen Hinweis"  "ja" \
   "$(kz_pruefen 'DNS:*.mgmt.vitabrevis.ch' 7 | grep -q '^WARN: .*14 Tagen' && echo ja || echo nein)"
+# Schlüssel mit Passwort, fremder Schlüssel, fehlende Kette.
+kz_mit() {  # $1 = Fall -> Ausgabe
+  local d="$ARBEIT/kz-$RANDOM"; mkdir -p "$d/kundenzertifikat"; local k="$d/kundenzertifikat"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=t" \
+    -addext "subjectAltName=DNS:*.mgmt.vitabrevis.ch" -keyout "$k/tenants-key.pem" -out "$k/tenants.pem" 2>/dev/null
+  case "$1" in
+    passwort) openssl pkey -in "$k/tenants-key.pem" -aes256 -passout pass:geheim -out "$k/x" 2>/dev/null
+              mv "$k/x" "$k/tenants-key.pem" ;;
+    fremd)    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$k/tenants-key.pem" 2>/dev/null ;;
+    kette)    cat "$k/tenants.pem" "$k/tenants.pem" > "$k/x" && mv "$k/x" "$k/tenants.pem" ;;
+  esac
+  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }
+           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
+}
+pruefe "Schlüssel mit Passwort wird abgewiesen" "ja" \
+  "$(kz_mit passwort | grep -q 'mit Passwort' && echo ja || echo nein)"
+pruefe "fremder Schlüssel wird abgewiesen"     "ja" \
+  "$(kz_mit fremd | grep -q 'gehören nicht zusammen' && echo ja || echo nein)"
+pruefe "fehlende Kette gibt einen Hinweis"     "ja" \
+  "$(kz_mit "" | grep -q '^WARN: .*Zwischenzertifikat' && echo ja || echo nein)"
+pruefe "mit Kette kein Hinweis, gültig"        "OK" \
+  "$(kz_mit kette | tail -1)"
 
 printf '\n\033[1m9 · Gefragt wird genau einmal\033[0m\n'
 # Braucht ein Pseudo-Terminal: ohne /dev/tty fragt das Skript gar nicht, und

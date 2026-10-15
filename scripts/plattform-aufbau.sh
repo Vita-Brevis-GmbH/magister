@@ -549,6 +549,23 @@ eigenes_zertifikat_pruefen() {
   if ! printf '%s' "$san" | grep -qF "DNS:*.$DOMAIN"; then
     die "Das Zertifikat in $dir/tenants.pem deckt *.$DOMAIN nicht ab (gefunden: $(printf '%s' "$san" | tail -1 | tr -s ' ')). Ein *.${DOMAIN#*.}-Wildcard gilt nur eine Ebene tief."
   fi
+  # Caddy liest keinen Schlüssel mit Passwort — und sagt beim Start nur
+  # „failed to load", ohne den Grund.
+  if grep -q "ENCRYPTED" "$dir/tenants-key.pem"; then
+    die "$dir/tenants-key.pem ist mit Passwort geschützt. Ohne Passwort ablegen: openssl pkey -in <schlüssel> -out $dir/tenants-key.pem"
+  fi
+  # Schlüssel und Zertifikat müssen zusammengehören. Vergleicht den
+  # öffentlichen Schlüssel beider Seiten.
+  local pub_cert pub_key
+  pub_cert="$(openssl x509 -in "$dir/tenants.pem" -noout -pubkey 2>/dev/null | openssl sha256 2>/dev/null)"
+  pub_key="$(openssl pkey -in "$dir/tenants-key.pem" -pubout 2>/dev/null | openssl sha256 2>/dev/null)"
+  if [ -z "$pub_key" ] || [ "$pub_cert" != "$pub_key" ]; then
+    die "Schlüssel und Zertifikat in $dir gehören nicht zusammen (oder der Schlüssel ist unlesbar)."
+  fi
+  # Ohne Zwischenzertifikat vertrauen viele Browser (und WAFs) dem Zertifikat nicht.
+  if [ "$(grep -c "BEGIN CERTIFICATE" "$dir/tenants.pem")" -lt 2 ]; then
+    warn "$dir/tenants.pem enthält nur ein Zertifikat — das Zwischenzertifikat der Zertifizierungsstelle gehört dahinter (cat zertifikat.pem zwischen.pem > tenants.pem)."
+  fi
   if ! openssl x509 -in "$dir/tenants.pem" -noout -checkend 1209600 >/dev/null 2>&1; then
     warn "Das eigene Kundenzertifikat läuft in weniger als 14 Tagen ab (oder ist abgelaufen)."
   fi
