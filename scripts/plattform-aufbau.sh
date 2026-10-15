@@ -537,6 +537,42 @@ kunden_caddyfile() {
 # Das gekaufte Wildcard prüfen, bevor Caddy damit startet: fehlt es oder deckt
 # es die Kundennamen nicht ab, scheitert sonst jeder Aufruf mit einer
 # Zertifikatswarnung — erst beim Kunden sichtbar.
+# Das eigene Zertifikat zuerst, dahinter die Kette — so verlangt es Caddy
+# (das erste Zertifikat muss zum Schlüssel passen). Ein PFX-Export, vor allem
+# aus Windows, liefert oft das Zwischen- oder Stammzertifikat zuerst und
+# Text („Bag Attributes") dazwischen. Hier wird das Zertifikat gesucht, das
+# zum Schlüssel gehört, nach vorne gestellt und die Datei bereinigt; das
+# Original bleibt als tenants.pem.orig daneben.
+eigenes_zertifikat_ordnen() {  # $1 = Zertifikatsdatei, $2 = Schlüssel
+  local datei="$1" schluessel="$2" tmp pub_key blatt="" c
+  tmp="$(mktemp -d)"
+  awk -v d="$tmp" '
+    /-----BEGIN CERTIFICATE-----/ { n++; f = sprintf("%s/c%03d.pem", d, n) }
+    f { print > f }
+    /-----END CERTIFICATE-----/ { close(f); f = "" }
+  ' "$datei"
+  pub_key="$(openssl pkey -in "$schluessel" -pubout 2>/dev/null | openssl sha256 2>/dev/null)"
+  [ -n "$pub_key" ] || { rm -rf "$tmp"; die "Der Schlüssel $schluessel ist unlesbar."; }
+  for c in "$tmp"/c*.pem; do
+    if [ "$(openssl x509 -in "$c" -noout -pubkey 2>/dev/null | openssl sha256 2>/dev/null)" = "$pub_key" ]; then
+      blatt="$c"; break
+    fi
+  done
+  if [ -z "$blatt" ]; then
+    local gefunden
+    gefunden="$(for c in "$tmp"/c*.pem; do openssl x509 -in "$c" -noout -subject 2>/dev/null; done | sed 's/^subject=//' | paste -sd ';' -)"
+    rm -rf "$tmp"
+    die "Schlüssel und Zertifikat gehören nicht zusammen — keines der Zertifikate in $datei passt zu $schluessel (gefunden: ${gefunden:-keines})."
+  fi
+  { cat "$blatt"; for c in "$tmp"/c*.pem; do [ "$c" = "$blatt" ] || cat "$c"; done; } > "$tmp/neu.pem"
+  if ! cmp -s "$tmp/neu.pem" "$datei"; then
+    cp -p "$datei" "$datei.orig"
+    cat "$tmp/neu.pem" > "$datei"
+    say "Kundenzertifikat geordnet: eigenes Zertifikat zuerst, dann die Kette (Original: $datei.orig)"
+  fi
+  rm -rf "$tmp"
+}
+
 eigenes_zertifikat_pruefen() {
   [ "$TLS_MODUS" = "eigen" ] || return 0
   local dir; dir="$(eigenes_zertifikat_dir)"
@@ -544,23 +580,20 @@ eigenes_zertifikat_pruefen() {
   if [ ! -s "$dir/tenants.pem" ] || [ ! -s "$dir/tenants-key.pem" ]; then
     die "Eigenes Zertifikat fehlt: $dir/tenants.pem (Zertifikat samt Zwischenzertifikaten) und $dir/tenants-key.pem (Schlüssel, ohne Passwort) ablegen — es muss *.$DOMAIN abdecken."
   fi
-  local san
-  san="$(openssl x509 -in "$dir/tenants.pem" -noout -ext subjectAltName 2>/dev/null || true)"
-  if ! printf '%s' "$san" | grep -qF "DNS:*.$DOMAIN"; then
-    die "Das Zertifikat in $dir/tenants.pem deckt *.$DOMAIN nicht ab (gefunden: $(printf '%s' "$san" | tail -1 | tr -s ' ')). Ein *.${DOMAIN#*.}-Wildcard gilt nur eine Ebene tief."
-  fi
   # Caddy liest keinen Schlüssel mit Passwort — und sagt beim Start nur
   # „failed to load", ohne den Grund.
   if grep -q "ENCRYPTED" "$dir/tenants-key.pem"; then
     die "$dir/tenants-key.pem ist mit Passwort geschützt. Ohne Passwort ablegen: openssl pkey -in <schlüssel> -out $dir/tenants-key.pem"
   fi
-  # Schlüssel und Zertifikat müssen zusammengehören. Vergleicht den
-  # öffentlichen Schlüssel beider Seiten.
-  local pub_cert pub_key
-  pub_cert="$(openssl x509 -in "$dir/tenants.pem" -noout -pubkey 2>/dev/null | openssl sha256 2>/dev/null)"
-  pub_key="$(openssl pkey -in "$dir/tenants-key.pem" -pubout 2>/dev/null | openssl sha256 2>/dev/null)"
-  if [ -z "$pub_key" ] || [ "$pub_cert" != "$pub_key" ]; then
-    die "Schlüssel und Zertifikat in $dir gehören nicht zusammen (oder der Schlüssel ist unlesbar)."
+  if ! grep -q "BEGIN CERTIFICATE" "$dir/tenants.pem"; then
+    die "$dir/tenants.pem ist kein PEM (vielleicht DER oder PFX). Umwandeln: openssl x509 -inform der -in <datei> -out tenants.pem — oder aus PFX: openssl pkcs12 -in <datei>.pfx -nokeys -out tenants.pem"
+  fi
+  eigenes_zertifikat_ordnen "$dir/tenants.pem" "$dir/tenants-key.pem"
+  local san subjekt
+  san="$(openssl x509 -in "$dir/tenants.pem" -noout -ext subjectAltName 2>/dev/null | tail -n +2 | tr -s ' ' || true)"
+  subjekt="$(openssl x509 -in "$dir/tenants.pem" -noout -subject 2>/dev/null || true)"
+  if ! printf '%s' "$san" | grep -qF "DNS:*.$DOMAIN"; then
+    die "Das Zertifikat in $dir/tenants.pem deckt *.$DOMAIN nicht ab (${subjekt:-ohne Subjekt}; Namen:${san:- keine}). Ein *.${DOMAIN#*.}-Wildcard gilt nur eine Ebene tief."
   fi
   # Ohne Zwischenzertifikat vertrauen viele Browser (und WAFs) dem Zertifikat nicht.
   if [ "$(grep -c "BEGIN CERTIFICATE" "$dir/tenants.pem")" -lt 2 ]; then

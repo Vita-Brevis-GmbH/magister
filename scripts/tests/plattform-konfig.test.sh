@@ -162,12 +162,12 @@ prod_lauf csr >/dev/null
 pruefe "zweites csr überschreibt den Schlüssel nicht" "$VORHER" "$(sha256sum "$KZ/tenants-key.pem")"
 
 # Die Prüfung vor dem Start: nur ein Zertifikat für *.<domäne> wird genommen.
-sed -n '/^eigenes_zertifikat_dir()/,/^}/p; /^eigenes_zertifikat_pruefen()/,/^}/p' "$SKRIPT" > "$ARBEIT/kz.sh"
+sed -n '/^eigenes_zertifikat_dir()/,/^}/p; /^eigenes_zertifikat_ordnen()/,/^}/p; /^eigenes_zertifikat_pruefen()/,/^}/p' "$SKRIPT" > "$ARBEIT/kz.sh"
 kz_pruefen() {  # $1 = SAN, $2 = Tage gültig -> Ausgabe (immer Status 0: pipefail)
   local d="$ARBEIT/kz-$RANDOM"; mkdir -p "$d/kundenzertifikat"
   openssl req -x509 -newkey rsa:2048 -nodes -days "${2:-90}" -subj "/CN=t" -addext "subjectAltName=$1" \
     -keyout "$d/kundenzertifikat/tenants-key.pem" -out "$d/kundenzertifikat/tenants.pem" 2>/dev/null
-  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }
+  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
            ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
            eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
 }
@@ -188,7 +188,7 @@ kz_mit() {  # $1 = Fall -> Ausgabe
     fremd)    openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$k/tenants-key.pem" 2>/dev/null ;;
     kette)    cat "$k/tenants.pem" "$k/tenants.pem" > "$k/x" && mv "$k/x" "$k/tenants.pem" ;;
   esac
-  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }
+  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
            ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
            eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
 }
@@ -200,6 +200,31 @@ pruefe "fehlende Kette gibt einen Hinweis"     "ja" \
   "$(kz_mit "" | grep -q '^WARN: .*Zwischenzertifikat' && echo ja || echo nein)"
 pruefe "mit Kette kein Hinweis, gültig"        "OK" \
   "$(kz_mit kette | tail -1)"
+
+# Windows-PFX: Stammzertifikat zuerst, „Bag Attributes" dazwischen. Wird geordnet.
+kz_pfx_reihenfolge() {
+  local d="$ARBEIT/kz-$RANDOM"; local k="$d/kundenzertifikat"; mkdir -p "$k"
+  openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=Test CA" \
+    -addext "basicConstraints=critical,CA:TRUE" -keyout "$d/ca-key.pem" -out "$d/ca.pem" 2>/dev/null
+  openssl req -newkey rsa:2048 -nodes -subj "/CN=*.mgmt.vitabrevis.ch" -keyout "$k/tenants-key.pem" -out "$d/r.csr" 2>/dev/null
+  openssl x509 -req -in "$d/r.csr" -CA "$d/ca.pem" -CAkey "$d/ca-key.pem" -CAcreateserial -days 90 \
+    -extfile <(printf 'subjectAltName=DNS:*.mgmt.vitabrevis.ch,DNS:mgmt.vitabrevis.ch\n') -out "$d/blatt.pem" 2>/dev/null
+  { printf 'Bag Attributes\n    friendlyName: CA\n'; cat "$d/ca.pem"; printf 'Bag Attributes\n    localKeyID: 01\n'; cat "$d/blatt.pem"; } > "$k/tenants.pem"
+  bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
+           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
+  echo "ERSTES=$(openssl x509 -in "$k/tenants.pem" -noout -subject 2>/dev/null)"
+  [ -f "$k/tenants.pem.orig" ] && echo "ORIGINAL=ja"
+}
+A="$(kz_pfx_reihenfolge)"
+pruefe "Windows-PFX-Reihenfolge wird geordnet"  "ja" \
+  "$(printf '%s' "$A" | grep -q '^SAY: Kundenzertifikat geordnet' && echo ja || echo nein)"
+pruefe "…danach gültig"                         "ja" \
+  "$(printf '%s' "$A" | grep -q '^OK' && echo ja || echo nein)"
+pruefe "…eigenes Zertifikat steht vorne"        "ja" \
+  "$(printf '%s' "$A" | grep -q 'ERSTES=.*mgmt.vitabrevis.ch' && echo ja || echo nein)"
+pruefe "…Original bleibt daneben"               "ja" \
+  "$(printf '%s' "$A" | grep -q 'ORIGINAL=ja' && echo ja || echo nein)"
 
 printf '\n\033[1m9 · Gefragt wird genau einmal\033[0m\n'
 # Braucht ein Pseudo-Terminal: ohne /dev/tty fragt das Skript gar nicht, und
