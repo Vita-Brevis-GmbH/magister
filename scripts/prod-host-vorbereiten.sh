@@ -164,7 +164,9 @@ docker_installieren() {
 docker_einstellen() {
   local datei=/etc/docker/daemon.json
   mkdir -p /etc/docker
-  if [ -s "$datei" ]; then
+  if [ -s "$datei" ] && grep -q '"live-restore"' "$datei" && grep -q '"max-size"' "$datei"; then
+    say "Docker-Einstellungen bestehen bereits"
+  elif [ -s "$datei" ]; then
     warn "$datei besteht schon — nicht überschrieben. Empfohlen: log-opts max-size/max-file, live-restore."
   else
     say "Docker: Protokolle begrenzen, live-restore"
@@ -206,8 +208,15 @@ benutzer_einrichten() {
   fi
   id "$BENUTZER" >/dev/null 2>&1 || die "Benutzer $BENUTZER gibt es nicht (adduser $BENUTZER)."
   say "Benutzer $BENUTZER: Gruppe docker, Besitzer von $ZIEL_DIR"
-  usermod -aG docker "$BENUTZER"
-  chown -R "$BENUTZER:$BENUTZER" "$ZIEL_DIR"
+  # Domänenbenutzer (SSSD/AD, z. B. name@int.firma.ch) stehen nicht in
+  # /etc/passwd: usermod kennt sie nicht, gpasswd schon (es schreibt nur
+  # /etc/group). Und ihre Hauptgruppe heisst nicht wie der Benutzer —
+  # deshalb `chown user:` (Doppelpunkt ohne Gruppe = seine Anmeldegruppe).
+  if ! id -nG "$BENUTZER" | tr ' ' '\n' | grep -qx docker; then
+    usermod -aG docker "$BENUTZER" 2>/dev/null || gpasswd -a "$BENUTZER" docker >/dev/null \
+      || die "$BENUTZER liess sich nicht zur Gruppe docker hinzufügen."
+  fi
+  chown -R "$BENUTZER": "$ZIEL_DIR"
   # Die Gruppe docker ist root-gleich. Wer darin ist, kann jeden Container mit
   # dem Host-Dateisystem starten — nur Betriebsleute gehören hinein.
   warn "Gruppe docker gilt erst nach neuer Anmeldung von $BENUTZER (abmelden, wieder anmelden)."
