@@ -82,7 +82,8 @@ function NewTenantForm({ onDone }: { onDone: () => void }) {
             label="Rollenpasswort"
             value={secrets.role}
             destination="Passwortspeicher; die Datenebene löst es über dsn_ref auf"
-            consequence="Verloren ist kein Schaden — es lässt sich neu setzen (Rollenpasswort drehen)."
+            consequence="Verloren ist kein Schaden — es lässt sich neu setzen."
+            recovery="Kunde → Übersicht → „Auf der Datenebene anbinden“: setzt ein neues Rollenpasswort und trägt den Datenbankzugang auf dem Anwendungsserver ein."
             onAcknowledged={() => acknowledge("role")}
           />
         )}
@@ -92,6 +93,7 @@ function NewTenantForm({ onDone }: { onDone: () => void }) {
             value={secrets.key}
             destination={`Umgebung des Anwendungsservers als MAGISTER_TENANT_AUDIT_KEY_${secrets.ref}`}
             consequence="Verloren ist teuer: damit sind die Audit-Payloads und gespeicherten Passwörter dieses Kunden verschlüsselt. Ein Wechsel verlangt eine Umschlüsselung aller Zeilen, kein Neusetzen. Bis der Wert gesetzt ist, antwortet der Mandant mit 503."
+            recovery={`Solange beim Kunden noch nichts verschlüsselt ist (frisch angelegt, nie benutzt): Kunde → Übersicht → „Auf der Datenebene anbinden“ erzeugt einen neuen Schlüssel und trägt ihn auf dem Anwendungsserver ein. Von dort (deploy/compose/.env, MAGISTER_TENANT_AUDIT_KEY_${secrets.ref}) in den Passwortspeicher übernehmen. Hat der Kunde schon Daten, gibt es keinen Ersatz — dann nur aus dem Passwortspeicher.`}
             onAcknowledged={() => acknowledge("key")}
           />
         )}

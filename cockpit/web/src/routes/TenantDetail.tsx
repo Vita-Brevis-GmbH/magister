@@ -123,6 +123,7 @@ function Overview({ tenantId }: { tenantId: string }) {
           value={newRolePassword}
           destination="Passwortspeicher; danach die Datenebene neu starten"
           consequence="Bis der neue Wert dort liegt, kommt die Datenebene nicht mehr an dieses Schema — der Kunde antwortet mit einem Fehler."
+          recovery={`Auf dem Plattform-Host die Zeile MAGISTER_TENANT_DSN_${tenant.slug.toUpperCase()} aus deploy/compose/.env löschen, dann „Auf der Datenebene anbinden“ — das setzt ein neues Passwort und trägt es selbst ein.`}
           onAcknowledged={() => setNewRolePassword(null)}
         />
       )}

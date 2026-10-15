@@ -65,10 +65,58 @@ export function parseHash(hash: string): Route {
   return { view: "tenants" };
 }
 
+/**
+ * Offene Einmal-Geheimnisse (Rollenpasswort, Kundenschlüssel).
+ *
+ * Solange eines angezeigt und nicht bestätigt ist, fragt jeder Ansichtswechsel
+ * nach — ein Klick in die Seitenleiste, auf einen Reiter oder „Zurück“ —, und
+ * Neuladen oder Schliessen des Tabs ebenso. Ohne das war ein Kundenschlüssel
+ * mit einem einzigen Fehlklick weg (Prod, 2026-10-15).
+ */
+let heldSecrets = 0;
+
+const LEAVE_MESSAGE =
+  "Ein Wert, der nur einmal angezeigt wird, ist noch nicht bestätigt.\n\n" +
+  "Verlassen Sie die Seite jetzt, ist er nicht mehr abrufbar. Trotzdem verlassen?";
+
+function onBeforeUnload(event: BeforeUnloadEvent) {
+  event.preventDefault();
+  // Ältere Browser zeigen den Dialog nur mit gesetztem returnValue.
+  event.returnValue = "";
+}
+
+/** Meldet ein offenes Geheimnis an; die Rückgabe gibt es wieder frei (mehrfach aufrufbar). */
+export function holdSecret(): () => void {
+  heldSecrets += 1;
+  if (heldSecrets === 1) window.addEventListener("beforeunload", onBeforeUnload);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    heldSecrets -= 1;
+    if (heldSecrets === 0) window.removeEventListener("beforeunload", onBeforeUnload);
+  };
+}
+
 export function useRoute(): Route {
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   useEffect(() => {
-    const onChange = () => setRoute(parseHash(window.location.hash));
+    let current = window.location.hash;
+    const onChange = () => {
+      const next = window.location.hash;
+      if (next === current) return;
+      if (heldSecrets > 0 && !window.confirm(LEAVE_MESSAGE)) {
+        // Zurück auf die alte Adresse, ohne neues hashchange auszulösen.
+        window.history.replaceState(
+          null,
+          "",
+          current || window.location.pathname + window.location.search,
+        );
+        return;
+      }
+      current = next;
+      setRoute(parseHash(next));
+    };
     window.addEventListener("hashchange", onChange);
     return () => window.removeEventListener("hashchange", onChange);
   }, []);
