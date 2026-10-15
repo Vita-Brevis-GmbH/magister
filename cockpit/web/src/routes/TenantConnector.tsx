@@ -27,6 +27,11 @@ import {
 import { ApiError } from "../api/client";
 import { getTenantStatus } from "../api/operations";
 import { Badge, StatusBadge } from "../components/Badge";
+import {
+  ConnectorHelpButton,
+  ConnectorInstallHelp,
+  type ConnectorInstallValues,
+} from "../components/ConnectorInstallHelp";
 import { ConnectorSettingsSection } from "../components/ConnectorSettingsSection";
 import { ErrorBox } from "../components/ErrorBox";
 import { AdSyncSummary } from "../components/TenantStatusPanel";
@@ -39,7 +44,17 @@ import { AdSyncSummary } from "../components/TenantStatusPanel";
  * IT-Person beim Kunden, über einen Kanal, der nicht die Mailbox ist. Es lebt
  * 24 Stunden und gilt einmal.
  */
-function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone: () => void }) {
+function EnrollmentCard({
+  enrollment,
+  install,
+  onDone,
+}: {
+  enrollment: Enrollment;
+  install: ConnectorInstallValues;
+  onDone: () => void;
+}) {
+  const endpoint = enrollment.endpoint || "https://<connector-name>:46200";
+  const caArg = install.hasCa === false ? "" : " --ca C:\\Temp\\root.pem";
   return (
     <div className="mb-4 rounded border-2 border-blue-400 bg-blue-50 p-4">
       <h3 className="mb-2 font-semibold text-blue-900">
@@ -49,10 +64,12 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
         {enrollment.token}
       </code>
       <p className="mb-1 text-sm text-blue-900">
-        Auf dem Domänencontroller, in einer Eingabeaufforderung als Administrator:
+        Auf dem Domänencontroller, in einer Eingabeaufforderung als Administrator (Schritt 7
+        der Anleitung unten; Schritte 1–6 vorher erledigen):
       </p>
       <code className="mb-3 block select-all break-all rounded border border-blue-200 bg-white px-2 py-1 font-mono text-sm">
-        magister-connector enroll --endpoint {enrollment.endpoint || "https://<connector-name>:46200"}
+        magister-connector enroll --endpoint {endpoint}
+        {caArg}
       </code>
       <ul className="mb-3 list-disc pl-5 text-sm text-blue-900">
         <li>
@@ -71,11 +88,17 @@ function EnrollmentCard({ enrollment, onDone }: { enrollment: Enrollment; onDone
         </li>
         <li>
           Danach holt der Agent seine Einstellungen von hier und startet den Dienst. Hat
-          die Plattform eine eigene CA, zusätzlich{" "}
-          <span className="font-mono">--ca root.pem</span> angeben — das Zertifikat liegt
-          unter „Agent herunterladen“.
+          die Plattform eine eigene CA, gehört{" "}
+          <span className="font-mono">--ca C:\Temp\root.pem</span> dazu — das Zertifikat
+          liegt unter „Agent herunterladen“.
         </li>
       </ul>
+      <details open className="mb-3">
+        <summary className="mb-2 cursor-pointer text-sm font-medium text-blue-900">
+          Vollständige Installationsanleitung für den Domänencontroller / Full install guide
+        </summary>
+        <ConnectorInstallHelp {...install} />
+      </details>
       <button type="button" onClick={onDone} className="rounded border border-blue-400 px-3 py-1 text-sm">
         Ausblenden
       </button>
@@ -286,7 +309,7 @@ function AgentRow({
           <span className="ml-2 text-xs text-slate-500">{agent.revoked_reason}</span>
         )}
       </td>
-      <td className="p-2 font-mono text-xs">
+      <td className="p-2 font-mono text-xs" title={agent.spki_sha256}>
         {agent.spki_sha256.slice(0, 16)}…
         {agent.previous_spki_sha256 && (
           <span className="ml-2" title="Erneuerungsfenster: beide Fingerprints gelten">
@@ -426,6 +449,7 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
   const [agentName, setAgentName] = useState("");
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [revoking, setRevoking] = useState<{ agent: Agent; reason: string } | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const agentsQ = useQuery({
     queryKey: ["agents", tenantId],
@@ -440,6 +464,17 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
     retry: false,
     staleTime: 5 * 60_000,
   });
+  // Derselbe Schlüssel wie in PlatformCaRow — eine Anfrage für beide.
+  const caQ = useQuery({ queryKey: ["platform-ca"], queryFn: getPlatformCa, retry: false });
+  const install: ConnectorInstallValues = {
+    endpoint: enrollment?.endpoint ?? "",
+    hasCa: caQ.data
+      ? true
+      : caQ.error instanceof ApiError && caQ.error.status === 404
+        ? false
+        : null,
+    msiName: latestQ.data?.filename ?? null,
+  };
   const jobsQ = useQuery({
     queryKey: ["connector-jobs", tenantId],
     queryFn: () => listConnectorJobs(tenantId),
@@ -467,7 +502,11 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
   return (
     <div className="space-y-6">
       {enrollment && (
-        <EnrollmentCard enrollment={enrollment} onDone={() => setEnrollment(null)} />
+        <EnrollmentCard
+          enrollment={enrollment}
+          install={install}
+          onDone={() => setEnrollment(null)}
+        />
       )}
 
       <ConnectionTest tenantId={tenantId} />
@@ -479,7 +518,11 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
       <ConnectorSettingsSection tenantId={tenantId} />
 
       <section className="rounded border bg-white p-4">
-        <h2 className="mb-3 font-semibold">Agenten</h2>
+        <h2 className="mb-3 flex items-center gap-3 font-semibold">
+          Agenten
+          <ConnectorHelpButton open={helpOpen} onToggle={() => setHelpOpen((o) => !o)} />
+        </h2>
+        {helpOpen && <ConnectorInstallHelp {...install} />}
         {agentsQ.isError && <ErrorBox error={agentsQ.error} />}
         {agentsQ.data && (
           <table className="mb-4 w-full border-collapse text-sm">
