@@ -24,6 +24,7 @@ PAKETE="$PAKETE_DIR"
 konsole_kunden() { printf 'gmp id ref role schema key active 42\n'; }
 getent() { [ "${AUFGELOEST:-0}" = 1 ]; }
 dc_konsole() { echo "${OPS:-0}"; }
+systemctl() { [ "${AGENT:-0}" = 1 ]; }
 source "$1"
 naechste_schritte "${2:-}"
 X
@@ -81,5 +82,14 @@ laeuft "prod: interner Name" AUFGELOEST=0 OPS=1 ART=prod ZUSATZ=konsole.int.vita
 enthaelt "konsole.int.vitabrevis.ch  → 172.25.12.10 (Konsole, Port 4444)"
 enthaelt "prod-installation.md §2"
 enthaelt_nicht "/etc/hosts"
+
+# 8) Produktion ohne Host-Agent: der Schritt erscheint, mit ihm nicht mehr.
+laeuft "prod: ohne Agent" AUFGELOEST=1 OPS=1 ART=prod AGENT=0
+enthaelt "Host-Agent einrichten"
+enthaelt "ops-agent"
+laeuft "prod: mit Agent" AUFGELOEST=1 OPS=1 ART=prod AGENT=1
+enthaelt "Einrichtung vollständig"
+laeuft "test: kein Agent-Schritt" AUFGELOEST=1 OPS=1 AGENT=0
+enthaelt_nicht "Host-Agent"
 
 echo "plattform-schritte: alle Fälle bestanden"

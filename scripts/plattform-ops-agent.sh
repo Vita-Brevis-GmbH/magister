@@ -30,7 +30,11 @@ LOGFILE="$OPS_DIR/last.log"
 AUFBAU="$REPO/scripts/plattform-aufbau.sh"
 
 now() { date -u +%Y-%m-%dT%H:%M:%SZ; }
-git_sha() { git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo "unbekannt"; }
+# Der Agent läuft als root, das Repository gehört dem Betriebsbenutzer. Ohne
+# safe.directory verweigert git dann jede Arbeit („dubious ownership") — das
+# Update aus der Konsole schlüge still fehl.
+git_r() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
+git_sha() { git_r rev-parse --short HEAD 2>/dev/null || echo "unbekannt"; }
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr -d '\000-\010\013\014\016-\037' \
     | awk 'BEGIN{ORS="\\n"}{print}'
@@ -48,7 +52,7 @@ write_status() {  # action state message started finished requested_by [slug]
 run_action() {  # $1 = Auftrag, $2 = Kürzel (nur bei attach)
   case "$1" in
     restart) "$AUFBAU" restart ;;
-    update)  git -C "$REPO" pull --ff-only && "$AUFBAU" update ;;
+    update)  git_r pull --ff-only && "$AUFBAU" update ;;
     attach)  "$AUFBAU" kunde-anbinden "$2" ;;
     *)       echo "unbekannter Auftrag: $1"; return 2 ;;
   esac

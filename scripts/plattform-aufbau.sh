@@ -1252,15 +1252,25 @@ schritt_pakete_offen() {  # 0 = offen (kein MSI im Paketverzeichnis)
   ! compgen -G "$PAKETE/*.msi" >/dev/null
 }
 
+# Ohne den Host-Agenten bleiben „Auf der Datenebene anbinden", Neustart und
+# Update aus der Konsole als Auftrag liegen — und ein neuer Kunde antwortet
+# mit 503, weil ihm DSN und Schlüssel fehlen. Nur in Produktion gefragt: auf
+# einem Testhost bindet man von Hand an.
+schritt_opsagent_offen() {  # 0 = offen
+  [ "${ART:-test}" = "prod" ] || return 1
+  ! systemctl is-enabled --quiet magister-plattform-ops.timer 2>/dev/null
+}
+
 naechste_schritte() {  # $1 = "alle", um auch Erledigtes zu zeigen
   local alle="${1:-}" offen=0 nr=0 namen
   namen="$(schritt_namen_offen)"
   namen="${namen% }"
-  local op=1 pk=1
+  local op=1 pk=1 ag=1
   schritt_operator_offen && op=0
   schritt_pakete_offen && pk=0
+  schritt_opsagent_offen && ag=0
 
-  if [ -z "$alle" ] && [ -z "$namen" ] && [ "$op" -eq 1 ] && [ "$pk" -eq 1 ]; then
+  if [ -z "$alle" ] && [ -z "$namen" ] && [ "$op" -eq 1 ] && [ "$pk" -eq 1 ] && [ "$ag" -eq 1 ]; then
     say "Einrichtung vollständig — keine offenen Schritte (alle zeigen: $0 schritte)"
     return 0
   fi
@@ -1309,6 +1319,16 @@ EOF
   $nr. Agenten-MSI bereitstellen (sonst sagt die Konsole „Verzeichnis leer“):
        ./scripts/agentenpakete.sh holen     # aus der CI (Token: agentenpakete.sh token)
      oder das Artefakt magister-connector-msi von Hand nach $PAKETE legen.
+EOF
+  fi
+
+  if [ "$ag" -eq 0 ] || { [ -n "$alle" ] && [ "${ART:-test}" = "prod" ]; }; then
+    nr=$((nr + 1)); offen=1
+    cat <<EOF
+
+  $nr. Host-Agent einrichten (sonst bleiben „Auf der Datenebene anbinden",
+     Neustart und Update aus der Konsole liegen; neue Kunden antworten mit 503):
+       sudo $0 ops-agent
 EOF
   fi
 
