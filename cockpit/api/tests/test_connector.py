@@ -999,6 +999,22 @@ class TestConnectorSettings:
         assert resp.json()["allowed_ous"] == []
         assert resp.json()["protected_groups"] == []
 
+    def test_carries_connector_endpoint(
+        self, db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # Die Installationsanleitung setzt ihn ein, bevor es ein Token gibt.
+        from cockpit_api.config import settings
+
+        tenant_id = _tenant(db_client, "cset_ep")
+        url = f"/api/tenants/{tenant_id}/connector-settings"
+        monkeypatch.setattr(settings, "connector_hostname", "")
+        assert db_client.get(url).json()["endpoint"] == ""
+        monkeypatch.setattr(settings, "connector_hostname", " connect.mgmt.example.ch ")
+        assert db_client.get(url).json()["endpoint"] == "https://connect.mgmt.example.ch:46200"
+        put = db_client.put(url, json={"allowed_ous": ["OU=Schule,DC=s,DC=local"]})
+        assert put.status_code == 200, put.text
+        assert put.json()["endpoint"] == "https://connect.mgmt.example.ch:46200"
+
     def test_put_validates_and_stores(self, db_client: TestClient) -> None:
         tenant_id = _tenant(db_client, "cset2")
         url = f"/api/tenants/{tenant_id}/connector-settings"

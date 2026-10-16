@@ -6,6 +6,7 @@ import {
   createEnrollment,
   daysUntilExpiry,
   getConnectorJob,
+  getConnectorSettings,
   listAgents,
   listConnectorJobs,
   revokeAgent,
@@ -53,7 +54,7 @@ function EnrollmentCard({
   install: ConnectorInstallValues;
   onDone: () => void;
 }) {
-  const endpoint = enrollment.endpoint || "https://<connector-name>:46200";
+  const endpoint = install.endpoint || "https://<connector-name>:46200";
   const caArg = install.hasCa === false ? "" : " --ca C:\\Temp\\root.pem";
   return (
     <div className="mb-4 rounded border-2 border-blue-400 bg-blue-50 p-4">
@@ -466,8 +467,15 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
   });
   // Derselbe Schlüssel wie in PlatformCaRow — eine Anfrage für beide.
   const caQ = useQuery({ queryKey: ["platform-ca"], queryFn: getPlatformCa, retry: false });
+  // Derselbe Schlüssel wie in ConnectorSettingsSection. Liefert den Endpunkt,
+  // bevor es ein Token gibt — sonst stünde in der Anleitung ein Platzhalter.
+  const settingsQ = useQuery({
+    queryKey: ["connector-settings", tenantId],
+    queryFn: () => getConnectorSettings(tenantId),
+    retry: false,
+  });
   const install: ConnectorInstallValues = {
-    endpoint: enrollment?.endpoint ?? "",
+    endpoint: enrollment?.endpoint || settingsQ.data?.endpoint || "",
     hasCa: caQ.data
       ? true
       : caQ.error instanceof ApiError && caQ.error.status === 404

@@ -203,6 +203,9 @@ class ConnectorSettingsOut(BaseModel):
     protected_groups: list[str]
     updated_at: datetime | None
     updated_by: str | None
+    #: ``https://<connector>:46200`` für ``enroll --endpoint``; leer, wenn die
+    #: Konsole ihren Connector-Namen nicht kennt (COCKPIT_CONNECTOR_HOSTNAME).
+    endpoint: str = ""
 
 
 class AgentAdSettings(BaseModel):

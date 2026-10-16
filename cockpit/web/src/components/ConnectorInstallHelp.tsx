@@ -102,6 +102,13 @@ function Guide({ lang, endpoint, hasCa, msiName }: ConnectorInstallValues & { la
 
   return (
     <ol className="mb-4 space-y-3">
+      {!endpoint && (
+        <li className="rounded border border-amber-400 bg-amber-50 p-2 text-xs text-amber-900">
+          {de
+            ? "Die Konsole kennt ihren Connector-Namen nicht — unten steht deshalb <connector-name>. Auf dem Plattform-Host COCKPIT_CONNECTOR_HOSTNAME setzen (das Aufbau-Skript setzt connect.<domäne>) und die Konsole neu starten."
+            : "The console doesn't know its connector name — hence <connector-name> below. Set COCKPIT_CONNECTOR_HOSTNAME on the platform host (the setup script sets connect.<domain>) and restart the console."}
+        </li>
+      )}
       <Step n={1} title={de ? "Voraussetzungen klären" : "Check prerequisites"}>
         <ul className="list-disc pl-5">
           <li>

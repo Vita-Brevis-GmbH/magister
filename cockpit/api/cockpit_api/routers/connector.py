@@ -127,13 +127,38 @@ async def create_enrollment(
     )
     await session.commit()
     await session.refresh(row)
-    host = settings.connector_hostname.strip()
     return EnrollmentOut(
         id=row.id,
         agent_name=row.agent_name,
         expires_at=row.expires_at,
         token=token,
-        endpoint=f"https://{host}:46200" if host else "",
+        endpoint=_connector_endpoint(),
+    )
+
+
+def _connector_endpoint() -> str:
+    """Was auf dem DC hinter ``enroll --endpoint`` gehört; leer, wenn unbekannt."""
+    host = settings.connector_hostname.strip()
+    return f"https://{host}:46200" if host else ""
+
+
+def _settings_out(row: TenantConnectorSettings | None) -> ConnectorSettingsOut:
+    # Der Endpunkt reist mit, damit die Installationsanleitung im Cockpit ihn
+    # schon vor dem Einmal-Token einsetzen kann (Netzprüfung, enroll-Befehl).
+    if row is None:
+        return ConnectorSettingsOut(
+            allowed_ous=[],
+            protected_groups=[],
+            updated_at=None,
+            updated_by=None,
+            endpoint=_connector_endpoint(),
+        )
+    return ConnectorSettingsOut(
+        allowed_ous=list(row.allowed_ous),
+        protected_groups=list(row.protected_groups),
+        updated_at=row.updated_at,
+        updated_by=row.updated_by,
+        endpoint=_connector_endpoint(),
     )
 
 
@@ -149,17 +174,7 @@ async def get_connector_settings(
     tenant_id: UUID, session: AsyncSession = Depends(get_session)
 ) -> ConnectorSettingsOut:
     await _tenant(session, tenant_id)
-    row = await session.get(TenantConnectorSettings, tenant_id)
-    if row is None:
-        return ConnectorSettingsOut(
-            allowed_ous=[], protected_groups=[], updated_at=None, updated_by=None
-        )
-    return ConnectorSettingsOut(
-        allowed_ous=list(row.allowed_ous),
-        protected_groups=list(row.protected_groups),
-        updated_at=row.updated_at,
-        updated_by=row.updated_by,
-    )
+    return _settings_out(await session.get(TenantConnectorSettings, tenant_id))
 
 
 @console.put("/connector-settings", response_model=ConnectorSettingsOut)
@@ -198,12 +213,7 @@ async def put_connector_settings(
         len(ous),
         len(groups),
     )
-    return ConnectorSettingsOut(
-        allowed_ous=list(row.allowed_ous),
-        protected_groups=list(row.protected_groups),
-        updated_at=row.updated_at,
-        updated_by=row.updated_by,
-    )
+    return _settings_out(row)
 
 
 @console.get("/agents", response_model=list[AgentOut])

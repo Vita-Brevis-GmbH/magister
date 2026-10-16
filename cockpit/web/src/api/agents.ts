@@ -119,6 +119,8 @@ export interface ConnectorSettings {
   protected_groups: string[];
   updated_at: string | null;
   updated_by: string | null;
+  /** `https://<connector>:46200`; leer, wenn die Konsole ihren Connector-Namen nicht kennt. */
+  endpoint?: string;
 }
 
 export function getConnectorSettings(tenantId: string): Promise<ConnectorSettings> {
