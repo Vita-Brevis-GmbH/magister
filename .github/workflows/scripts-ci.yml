@@ -43,3 +43,6 @@ jobs:
 
       - name: Nächste Schritte nur, solange etwas offen ist
         run: ./scripts/tests/plattform-schritte.test.sh
+
+      - name: Host-Agent führt nur bekannte Aufträge aus
+        run: ./scripts/tests/plattform-ops-agent.test.sh

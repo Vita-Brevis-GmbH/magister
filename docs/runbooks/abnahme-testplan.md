@@ -95,7 +95,7 @@ Jeder Fall einmal **A → B** und einmal **B → A**.
   in `pg_roles` gegenlesen (`rolconnlimit`, `rolconfig`); eine absichtlich lange Abfrage als `r_thun` bricht nach 15 s ab.
 - [ ] **M-11** Konsole ausgefallen (`docker compose … stop api` im Konsolen-Stack):
   beide Kunden arbeiten weiter (Anmeldung, Liste, Klasse anlegen). **Ausnahme**, dokumentiert: alles, was über den Connector geht (AD-Abgleich, PW-Reset), meldet `connector_console_unreachable` sauber statt zu hängen.
-- [ ] **M-12** Rollenpasswort drehen (Konsole) → Kunde läuft nach dem Nachladen der Registry weiter; altes Passwort funktioniert nicht mehr.
+- [ ] **M-12** Kunde → Übersicht → „Rollenpasswort neu setzen“ → Auftrag „erledigt“, Kunde läuft nach dem Neustart der Datenebene weiter, im API-Log kein `InvalidPasswordError`; altes Passwort funktioniert nicht mehr.
 - [ ] **M-13** Umzug auf andere Ablage (Konsole, nur gesperrt möglich): bei aktivem Kunden steht die Begründung statt des Formulars; nach dem Umzug Daten vollständig, Trennung (M-02) hält auch dort.
 - [ ] **M-14** Migrationswelle: `magister-cli tenants migrate --canary thun --canary-only`
   → verschlüsselter Dump je Kunde (`age-encryption.org/v1`), Halt nach dem Kanarienvogel; Kundenprotokoll zeigt `schema_migrated`. Ohne `MAGISTER_BACKUP_AGE_RECIPIENT` → Abbruch **vor** jeder Änderung.

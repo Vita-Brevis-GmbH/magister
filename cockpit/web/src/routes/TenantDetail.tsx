@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   getTenant,
   resumeProvisioning,
-  rotateRolePassword,
   suspendTenant,
   unsuspendTenant,
   type Tenant,
@@ -14,7 +13,6 @@ import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 import { ProvisioningLog } from "../components/ProvisioningLog";
 import { MaintenanceSection } from "../components/MaintenanceSection";
-import { SecretOnce } from "../components/SecretOnce";
 import { TenantStatusPanel } from "../components/TenantStatusPanel";
 import { TenantLimitsSection, TenantRelocateSection } from "../components/TenantLoad";
 import { go, href, type TenantTab } from "../lib/nav";
@@ -78,7 +76,6 @@ function Facts({ tenant }: { tenant: Tenant }) {
 function Overview({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [suspendReason, setSuspendReason] = useState("");
-  const [newRolePassword, setNewRolePassword] = useState<string | null>(null);
 
   const detailQ = useQuery({
     queryKey: ["tenant", tenantId],
@@ -100,13 +97,6 @@ function Overview({ tenantId }: { tenantId: string }) {
     },
   });
   const unsuspendM = useMutation({ mutationFn: () => unsuspendTenant(tenantId), onSuccess: invalidate });
-  const rotateM = useMutation({
-    mutationFn: () => rotateRolePassword(tenantId),
-    onSuccess: (result) => {
-      setNewRolePassword(result.role_password);
-      invalidate();
-    },
-  });
 
   if (detailQ.isLoading) return <p className="text-sm text-slate-500">Lade…</p>;
   if (detailQ.isError) return <ErrorBox error={detailQ.error} />;
@@ -117,16 +107,6 @@ function Overview({ tenantId }: { tenantId: string }) {
 
   return (
     <div className="space-y-6">
-      {newRolePassword && (
-        <SecretOnce
-          label="Neues Rollenpasswort"
-          value={newRolePassword}
-          destination="Passwortspeicher; danach die Datenebene neu starten"
-          consequence="Bis der neue Wert dort liegt, kommt die Datenebene nicht mehr an dieses Schema — der Kunde antwortet mit einem Fehler."
-          recovery={`Auf dem Plattform-Host die Zeile MAGISTER_TENANT_DSN_${tenant.slug.toUpperCase()} aus deploy/compose/.env löschen, dann „Auf der Datenebene anbinden“ — das setzt ein neues Passwort und trägt es selbst ein.`}
-          onAcknowledged={() => setNewRolePassword(null)}
-        />
-      )}
 
       <TenantStatusPanel tenantId={tenantId} />
 
@@ -220,21 +200,12 @@ function Overview({ tenantId }: { tenantId: string }) {
       <TenantLimitsSection tenant={tenant} />
 
       <section className="rounded border bg-white p-4">
-        <h2 className="mb-2 font-semibold">Rollenpasswort drehen</h2>
-        <p className="mb-2 text-xs text-slate-500">
-          Setzt ein neues Passwort für die Anmelderolle und zeigt es genau einmal.
-          Der Kundenschlüssel bleibt davon unberührt — der lässt sich nicht drehen,
-          nur umschlüsseln.
+        <h2 className="mb-2 font-semibold">Rollenpasswort</h2>
+        <p className="text-xs text-slate-500">
+          Neu setzen unter „Anbindung an die Datenebene“ oben: der Host-Agent dreht es und
+          trägt es im selben Lauf auf der Datenebene ein. Der Kundenschlüssel bleibt davon
+          unberührt — der lässt sich nicht drehen, nur umschlüsseln.
         </p>
-        <button
-          type="button"
-          onClick={() => rotateM.mutate()}
-          disabled={rotateM.isPending}
-          className="rounded border px-3 py-1 text-sm disabled:opacity-50"
-        >
-          {rotateM.isPending ? "Läuft…" : "Neues Rollenpasswort"}
-        </button>
-        {rotateM.isError && <div className="mt-3"><ErrorBox error={rotateM.error} /></div>}
       </section>
 
       <TenantRelocateSection tenant={tenant} />

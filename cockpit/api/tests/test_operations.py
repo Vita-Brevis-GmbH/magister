@@ -434,6 +434,40 @@ class TestAttach:
         assert console_client.post(f"/api/tenants/{tenant_id}/attach").status_code == 503
 
 
+class TestRotateRole:
+    def test_request_carries_only_the_slug(
+        self,
+        console_client: TestClient,
+        tenant_id: str,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        resp = console_client.post(f"/api/tenants/{tenant_id}/rotate-role")
+        assert resp.status_code == 202, resp.text
+        assert resp.json()["action"] == "rotate-role"
+        (request,) = list((tmp_path / "requests").glob("*.json"))
+        payload = json.loads(request.read_text())
+        assert payload["action"] == "rotate-role"
+        assert payload["slug"] == SLUG
+        # Das Passwort entsteht auf dem Host; in der Auftragsdatei steht keines.
+        assert set(payload) == {"id", "action", "slug", "requested_by", "requested_at"}
+
+    def test_unknown_tenant(
+        self, console_client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", str(tmp_path))
+        resp = console_client.post(f"/api/tenants/{uuid.uuid4()}/rotate-role")
+        assert resp.status_code == 404
+        assert not (tmp_path / "requests").exists()
+
+    def test_not_configured(
+        self, console_client: TestClient, tenant_id: str, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(settings, "ops_dir", "")
+        assert console_client.post(f"/api/tenants/{tenant_id}/rotate-role").status_code == 503
+
+
 class TestBackupWorker:
     def test_queue_records_the_heartbeat(
         self, console_client: TestClient, cockpit_schema: str

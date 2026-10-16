@@ -62,9 +62,13 @@ MAGISTER_TENANT_DSN_TENANT_MUSTERSTADT=postgresql+asyncpg://r_musterstadt:<pw>@d
 ```
 
 Der Variablenname ist `MAGISTER_TENANT_DSN_` plus der `dsn_ref` aus der Antwort
-in Grossbuchstaben. Verloren? `POST /api/tenants/{id}/rotate-role-password`
-setzt ein neues — danach **muss** der Geheimnisspeicher nachgezogen werden,
-sonst verliert der Kunde die Verbindung.
+in Grossbuchstaben. Verloren oder neu nötig? Im Cockpit Kunde → Übersicht →
+**„Rollenpasswort neu setzen“**, oder auf dem Host
+`./scripts/plattform-aufbau.sh rollenpasswort-neu <kürzel>`: setzt ein neues
+Passwort **und** schreibt den DSN im selben Lauf, dann Neustart der Datenebene.
+`POST /api/tenants/{id}/rotate-role-password` allein ändert nur die Datenbank —
+der alte DSN bleibt stehen, und jede neue Verbindung des Kunden scheitert mit
+„password authentication failed“.
 
 ## 3 · Abgebrochenen Auftrag weiterführen
 

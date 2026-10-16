@@ -8,16 +8,19 @@
 # Nebenbei erhebt er einmal je Minute den Zustand des Hosts für die
 # Überwachung in der Konsole (scripts/plattform_zustand.py → health.json).
 #
-# Es kennt genau drei Aufträge und liest aus der Datei nichts anderes als den
-# Namen des Auftrags und — beim Anbinden — das Kürzel des Kunden, geprüft
-# gegen dasselbe Muster wie in der Konsole. Eine übernommene Konsole kann
-# damit einen Neustart, ein Update oder ein Anbinden bestellen, aber keinen
-# beliebigen Befehl auf dem Host ausführen.
+# Es kennt genau vier Aufträge und liest aus der Datei nichts anderes als den
+# Namen des Auftrags und — bei den Kundenaufträgen — das Kürzel des Kunden,
+# geprüft gegen dasselbe Muster wie in der Konsole. Eine übernommene Konsole
+# kann damit einen Neustart, ein Update, ein Anbinden oder ein neues
+# Rollenpasswort bestellen, aber keinen beliebigen Befehl auf dem Host
+# ausführen.
 #
 #   restart  beide Stacks neu starten (ohne Neubau)
 #   update   git pull --ff-only, dann plattform-aufbau.sh update
 #   attach   plattform-aufbau.sh kunde-anbinden <kürzel>: DSN und Kundenschlüssel
 #            eines in der Konsole angelegten Kunden nachtragen (Daten bleiben)
+#   rotate-role  plattform-aufbau.sh rollenpasswort-neu <kürzel>: neues
+#            Rollenpasswort setzen und im selben Lauf in den DSN schreiben
 #
 # Umgebung: OPS_DIR (Pflicht), REPO (Vorgabe: Verzeichnis über diesem Skript).
 set -uo pipefail
@@ -49,11 +52,12 @@ write_status() {  # action state message started finished requested_by [slug]
   mv -f "$tmp" "$STATUS"
 }
 
-run_action() {  # $1 = Auftrag, $2 = Kürzel (nur bei attach)
+run_action() {  # $1 = Auftrag, $2 = Kürzel (nur bei attach/rotate-role)
   case "$1" in
     restart) "$AUFBAU" restart ;;
     update)  git_r pull --ff-only && "$AUFBAU" update ;;
     attach)  "$AUFBAU" kunde-anbinden "$2" ;;
+    rotate-role) "$AUFBAU" rollenpasswort-neu "$2" ;;
     *)       echo "unbekannter Auftrag: $1"; return 2 ;;
   esac
 }
@@ -83,10 +87,10 @@ for req in $(ls -1tr "$REQ_DIR"/*.json 2>/dev/null); do
   started="$(now)"
   case "$action" in
     restart|update) : ;;
-    attach)
+    attach|rotate-role)
       slug="$(feld "$req" slug)"
       if ! gueltiges_kuerzel "$slug"; then
-        write_status "attach" "error" "ungültiges Kürzel" "$started" "$(now)" "$who"
+        write_status "$action" "error" "ungültiges Kürzel" "$started" "$(now)" "$who"
         rm -f "$req"; continue
       fi ;;
     *)

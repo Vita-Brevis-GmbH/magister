@@ -16,6 +16,8 @@
 #   ./scripts/plattform-aufbau.sh restart # beide Stacks neu starten (ohne Neubau)
 #   ./scripts/plattform-aufbau.sh kunde-anbinden [kürzel]  # in der Konsole angelegte
 #                                     # Kunden auf der Datenebene nachtragen (Daten bleiben)
+#   ./scripts/plattform-aufbau.sh rollenpasswort-neu <kürzel>  # neues Rollenpasswort
+#                                     # setzen UND in den DSN schreiben, Datenebene neu starten
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
@@ -1073,6 +1075,11 @@ PY
 #   * Schlüssel fehlt -> neuen erzeugen, aber NUR, wenn im Schema noch nichts
 #     damit verschlüsselt ist. Sonst Abbruch: ein neuer Schlüssel machte
 #     vorhandene Daten unlesbar, der alte gehört aus dem Passwortspeicher.
+#
+# Mit ROLLE_NEU=1 wird das Rollenpasswort auch bei vorhandenem DSN neu gesetzt
+# (`rollenpasswort-neu`). Der alte DSN bleibt stehen, bis der neue geschrieben
+# ist — scheitert das Drehen, ändert sich nichts.
+ROLLE_NEU=0
 kunde_anbinden() {  # $@ = eine Zeile aus konsole_kunden -> 0 wenn etwas eingetragen wurde
   local slug="$1" id="$2" ref="$3" db_role="$4" schema="$5" key_id="$6" status="$7"
   local daten_env="$REPO/deploy/compose/.env" slug_ref geaendert=1
@@ -1080,8 +1087,12 @@ kunde_anbinden() {  # $@ = eine Zeile aus konsole_kunden -> 0 wenn etwas eingetr
   ref="${ref^^}"
   slug_ref="$(echo "${slug^^}" | tr '-' '_')"
 
-  if ! grep -q "^MAGISTER_TENANT_DSN_${ref}=." "$daten_env"; then
-    say "Kunde $slug: Datenbankzugang fehlt — Rollenpasswort in der Konsole neu setzen"
+  if [ "$ROLLE_NEU" -eq 1 ] || ! grep -q "^MAGISTER_TENANT_DSN_${ref}=." "$daten_env"; then
+    if [ "$ROLLE_NEU" -eq 1 ]; then
+      say "Kunde $slug: Rollenpasswort neu setzen und MAGISTER_TENANT_DSN_${ref} nachführen"
+    else
+      say "Kunde $slug: Datenbankzugang fehlt — Rollenpasswort in der Konsole neu setzen"
+    fi
     local antwort
     antwort="$(konsole_api POST "/api/tenants/$id/rotate-role-password")"
     python3 - "$antwort" "$daten_env" "$ref" "$db_role" <<'PY' || die "Rollenpasswort für $slug nicht gesetzt."
@@ -1560,7 +1571,9 @@ case "$BEFEHL" in
 esac
 
 # `kunde-anbinden` nimmt optional ein Kürzel — ohne alle Kunden der Konsole.
-if [ "$BEFEHL" = "kunde-anbinden" ] && [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+# `rollenpasswort-neu` verlangt eines.
+if { [ "$BEFEHL" = "kunde-anbinden" ] || [ "$BEFEHL" = "rollenpasswort-neu" ]; } \
+   && [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
   KUNDE_SLUG="$1"; shift
 fi
 
@@ -1604,5 +1617,9 @@ case "$BEFEHL" in
     else
       kunden_anbinden
     fi ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden)" ;;
+  rollenpasswort-neu)
+    [ -n "${KUNDE_SLUG:-}" ] || die "Kürzel fehlt: $0 rollenpasswort-neu <kürzel>"
+    ROLLE_NEU=1
+    kunde_anbinden_kuerzel "$KUNDE_SLUG" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden, rollenpasswort-neu)" ;;
 esac

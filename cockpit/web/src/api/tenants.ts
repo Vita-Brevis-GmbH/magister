@@ -122,10 +122,6 @@ export function unsuspendTenant(id: string): Promise<Tenant> {
   return post(`/api/tenants/${id}/unsuspend`);
 }
 
-export function rotateRolePassword(id: string): Promise<TenantProvisionResult> {
-  return post(`/api/tenants/${id}/rotate-role-password`);
-}
-
 /**
  * Die drei Lastgrenzen — alle drei, immer (ADR-0021 D3).
  *

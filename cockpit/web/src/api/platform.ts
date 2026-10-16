@@ -12,7 +12,7 @@ export interface OpsStatus {
     started_at?: string;
     finished_at?: string;
     requested_by?: string;
-    /** Nur beim Anbinden: welcher Kunde. */
+    /** Nur bei Kundenaufträgen (Anbinden, Rollenpasswort): welcher Kunde. */
     slug?: string;
   } | null;
   log: string | null;
@@ -27,6 +27,15 @@ export const requestOps = (action: "restart" | "update") =>
 export const requestAttach = (tenantId: string) =>
   post<{ id: string; action: string; requested_at: string; slug: string }>(
     `/api/tenants/${tenantId}/attach`,
+  );
+
+/**
+ * Ein neues Rollenpasswort setzen lassen. Der Host-Agent dreht es und schreibt
+ * den DSN der Datenebene im selben Lauf — das Passwort erscheint nirgends.
+ */
+export const requestRotateRole = (tenantId: string) =>
+  post<{ id: string; action: string; requested_at: string; slug: string }>(
+    `/api/tenants/${tenantId}/rotate-role`,
   );
 
 /** Ein Eintrag im Zustandsbericht des Hosts: jeder hat `ok`, der Rest je Art. */

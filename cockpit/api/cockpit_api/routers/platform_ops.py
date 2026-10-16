@@ -8,7 +8,7 @@ Endpunkte gehostet nicht mehr.
 Dasselbe Sicherheitsmodell wie vorher: die API startet nichts selbst. Sie legt
 einen Auftrag als Datei in ``COCKPIT_OPS_DIR/requests/`` ab; ein Agent auf dem
 Host (``scripts/plattform-ops-agent.sh``, systemd-Timer) führt ihn aus und
-schreibt das Ergebnis nach ``status.json``. Der Agent kennt genau drei
+schreibt das Ergebnis nach ``status.json``. Der Agent kennt genau vier
 Aufträge — eine übernommene Konsole kann einen Neustart bestellen, aber keinen
 beliebigen Befehl auf dem Host.
 
@@ -18,6 +18,13 @@ gibt die Konsole nur einmal aus und speichert es nicht. Der Agent führt dafür
 ``plattform-aufbau.sh kunde-anbinden <kürzel>`` aus; Schema und Daten bleiben
 unberührt. Aus der Auftragsdatei liest er nur das Kürzel und prüft es gegen
 dasselbe Muster wie hier.
+
+Der vierte ist **„Rollenpasswort neu"** je Kunde
+(``plattform-aufbau.sh rollenpasswort-neu <kürzel>``). Vorher drehte die
+Konsole das Passwort selbst und zeigte es einmal an; auf der Datenebene stand
+danach noch der alte DSN, und jede neue Datenbankverbindung des Kunden schlug
+fehl (Prod, 2026-10-16). Jetzt setzt der Agent das Passwort und schreibt den
+DSN im selben Lauf — niemand muss es abschreiben.
 """
 
 from __future__ import annotations
@@ -52,7 +59,7 @@ tenant_router = APIRouter(
     prefix="/tenants", tags=["platform"], dependencies=[Depends(require_identity)]
 )
 
-ALLOWED: tuple[str, ...] = ("restart", "update", "attach")
+ALLOWED: tuple[str, ...] = ("restart", "update", "attach", "rotate-role")
 
 
 class OpsStatus(BaseModel):
@@ -226,6 +233,34 @@ async def attach_request(
     neues Passwort ohne den neuen DSN daneben hiesse Ausfall, deshalb macht
     beides derselbe Agent in einem Lauf. Ein vorhandener DSN bleibt stehen.
     """
+    return await _tenant_request(session, tenant_id, "attach", caller)
+
+
+@tenant_router.post(
+    "/{tenant_id}/rotate-role",
+    response_model=OpsRequested,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def rotate_role_request(
+    tenant_id: UUID,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> OpsRequested:
+    """Ein neues Rollenpasswort setzen lassen — samt DSN auf der Datenebene.
+
+    Ersetzt das Drehen direkt in der Konsole für die Oberfläche: das Passwort
+    verlässt den Host nicht, und der alte DSN bleibt in Kraft, bis der neue
+    geschrieben ist.
+    """
+    return await _tenant_request(session, tenant_id, "rotate-role", caller)
+
+
+async def _tenant_request(
+    session: AsyncSession,
+    tenant_id: UUID,
+    action: Literal["attach", "rotate-role"],
+    caller: Caller,
+) -> OpsRequested:
     tenant = await session.get(Tenant, tenant_id)
     if tenant is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "unknown tenant")
@@ -241,16 +276,16 @@ async def attach_request(
     ops = _ops_dir()
     payload: dict[str, Any] = {
         "id": uuid4().hex,
-        "action": "attach",
+        "action": action,
         "slug": tenant.slug,
         "requested_by": caller.actor,
         "requested_at": datetime.now(UTC).isoformat(),
     }
     await run_in_threadpool(_write_request, ops, payload)
-    logger.info("Anbinden von %s bestellt von %s (%s)", tenant.slug, caller.actor, payload["id"])
+    logger.info("%s für %s bestellt von %s (%s)", action, tenant.slug, caller.actor, payload["id"])
     return OpsRequested(
         id=str(payload["id"]),
-        action="attach",
+        action=action,
         requested_at=str(payload["requested_at"]),
         slug=tenant.slug,
     )

@@ -89,7 +89,7 @@ Build JavaScript **neben** die Quellen, und `src/App.js` landet beim nächsten
 
 Dazu, aus der Mandantenfähigkeit (ADR-0013 bis ADR-0016):
 
-- ✅ Kunden erfassen, bereitstellen, sperren, Rollenpasswort drehen
+- ✅ Kunden erfassen, bereitstellen, sperren, Rollenpasswort neu setzen (über den Host-Agenten)
 - ✅ Sicherungen, Aufbewahrung, Wiederherstellungen, Exporte
 - ✅ AD-Connector: Agenten, Einmal-Token, Widerruf, Aufträge
 - ✅ Kündigung in fünf Schritten mit Fristen und Schranken
