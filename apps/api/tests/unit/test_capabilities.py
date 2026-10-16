@@ -15,7 +15,9 @@ import pytest
 from fastapi import HTTPException
 
 from magister_api.auth.capabilities import (
+    PLATFORM_CAPABILITIES,
     ROLE_CAPABILITIES,
+    TENANT_CAPABILITIES,
     Capability,
     RbacMatrix,
     effective_capabilities,
@@ -107,10 +109,24 @@ async def test_gate_authorization_matches_history(gate_name: str, caller: str) -
 
 class TestRequireCapability:
     @pytest.mark.asyncio
-    async def test_admin_holds_every_capability(self) -> None:
-        for cap in Capability:
+    async def test_admin_holds_every_tenant_capability(self) -> None:
+        for cap in TENANT_CAPABILITIES:
             out = await require_capability(cap)(_CALLERS[_ADMIN], _MATRIX)
             assert out.is_admin
+
+    @pytest.mark.asyncio
+    async def test_admin_holds_no_platform_capability(self) -> None:
+        """Seit ADR-0017 D5: ``admin`` heisst „alles, was ein Kunde haben kann".
+
+        Vorher hiess es „alles" — und hätte damit jedes neu hinzugefügte
+        Plattform-Recht mitgewährt. Die ausführliche Prüfung dieser Grenze
+        steht in ``test_platform_capabilities.py``; hier steht sie, weil an
+        genau dieser Stelle die alte Zusage stand.
+        """
+        for cap in PLATFORM_CAPABILITIES:
+            with pytest.raises(HTTPException) as exc:
+                await require_capability(cap)(_CALLERS[_ADMIN], _MATRIX)
+            assert exc.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_any_of_semantics(self) -> None:
@@ -131,8 +147,10 @@ class TestRequireCapability:
 
 
 class TestEffectiveCapabilities:
-    def test_admin_gets_full_set(self) -> None:
-        assert effective_capabilities(_CALLERS[_ADMIN], _MATRIX) == frozenset(Capability)
+    def test_admin_gets_every_tenant_capability(self) -> None:
+        # Nicht `frozenset(Capability)`: die Plattform-Rechte gehören dem
+        # Betreiber (ADR-0017 D5).
+        assert effective_capabilities(_CALLERS[_ADMIN], _MATRIX) == TENANT_CAPABILITIES
 
     def test_kl_and_anonymous_hold_nothing(self) -> None:
         assert effective_capabilities(_CALLERS[_KL], _MATRIX) == frozenset()

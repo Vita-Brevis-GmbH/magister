@@ -1,0 +1,281 @@
+# ADR-0024 · Betrieb aus der Konsole
+
+**Status:** Angenommen · 2026-10-06
+**Bezug:** [ADR-0013](0013-mandantenfaehigkeit-control-plane.md) (Control Plane),
+[ADR-0016](0016-sicherung-wiederherstellung-export.md) (Sicherung),
+[ADR-0017](0017-systemeinstellungen-und-rechte-in-der-konsole.md) (Politik in der Konsole),
+[ADR-0014](0014-ad-connector-agent.md) (Connector)
+
+## Problem
+
+Auf dem Dev-Host mit dem ersten gehosteten Kunden zeigten sich sechs Lücken,
+die alle dieselbe Ursache haben: die Konsole konnte Dinge **anordnen**, aber
+nicht **sehen**, ob sie ankamen — und einige Handlungen, die gehostet der
+Plattform gehören, sassen noch im Kundenportal.
+
+1. In der Konsole stand der Kunde auf „Firma", sein Portal zeigte „Schule".
+   Ob der Abgleich überhaupt lief, war von der Konsole aus nicht festzustellen.
+2. Der AD-Sync meldete „Such-Basis nicht gesetzt — bitte oben eintragen".
+   Oben gab es kein Feld: die Einstellungen waren gehostet aus dem Portal
+   entfernt (ADR-0017), eine Oberfläche in der Konsole fehlte.
+3. Entra ID liess sich gar nicht verbinden: das Client-Secret war ein
+   Geheimnis, und ADR-0017 D2 verwies dafür auf ein CLI, das nie gebaut wurde.
+4. Sicherungen standen dauerhaft auf „written": niemand prüfte sie, und eine
+   Wiederherstellung liess sich nicht erfassen.
+5. Neustart und Update sassen im Kundenportal — der Admin **eines** Kunden
+   startete den Host **aller** Kunden neu.
+6. Dasselbe für „Demodaten entfernen" und „Aktivitäten zurücksetzen".
+
+## Entscheidung
+
+### D1 · Die Datenebene meldet ihren Zustand
+
+Nach jedem Abgleich schickt die Datenebene je Kunde eine **Zustandsmeldung**
+an die Konsole (`POST /api/tenants/{id}/status`): ob der Abgleich gelang,
+welches Profil und welche Module wirksam sind, wie der AD-Sync steht (Weg,
+fehlende Einstellungen, letzter Erfolg, letzter Fehlschlag, Anzahl), welche
+Geheimnisse gesetzt sind (nur ob, nie was), der öffentliche Schlüssel zum
+Versiegeln (D3) und die Ergebnisse von Wartungsaufträgen (D4).
+
+Auch ein gescheiterter Abruf des Soll-Zustands wird gemeldet. Und meldet
+sich eine Installation nie, sagt die Konsole genau das — mit der Logzeile, in
+der die Ursache steht.
+
+Die Meldung ist der zweite Rückkanal neben der Schemastand-Meldung
+(ADR-0021 D2). Sie trägt keine Personendaten: Zeitpunkte, Zähler,
+Schlüsselnamen, Ursachen-Codes. Die Konsole prüft sie streng
+(`extra=forbid`, begrenzte Längen).
+
+Dazu: der Soll-Zustand enthält jetzt **immer** `module_overrides`, auch leer.
+Ohne diese Aussage blieben bei bestehenden Portalen Schalter stehen, die dort
+vor der Konsole gesetzt wurden — der eigentliche Grund für „Firma in der
+Konsole, Schule im Portal". Bestehende Portale werden damit beim nächsten
+Abgleich korrigiert, ohne Handgriff.
+
+### D2 · Die Einstellungen eines Kunden haben eine Oberfläche
+
+Reiter „Einstellungen" je Kunde: Entra ID (Tenant-Id → Issuer, Client-Id,
+Umleitungs-URI aus dem Hostnamen, Scopes), Zugang (erste Admins,
+Mail-Domänen), Active Directory (Suchbasen, OUs, Gruppen, Intervall) und
+NinjaOne. Leer heisst „Plattform-Vorgabe". Geschrieben wird über die
+bestehende Fläche `PUT /api/tenants/{id}/settings` mit ihrer Allowlist.
+
+Im Kundenportal verweist eine Konfigurations-Fehlermeldung des AD-Syncs
+gehostet auf Vita Brevis statt auf ein Feld, das es dort nicht gibt.
+
+Und: über den Connector braucht die Datenebene **keinen** Domänencontroller
+— den kennt der Agent. Verlangt wurde er trotzdem, und ohne ihn übersprang
+der wiederkehrende Abgleich einen gehosteten Kunden still.
+
+### D3 · Geheimnisse werden versiegelt, nicht gespeichert
+
+ADR-0017 D2 sagt: in der Konsole liegen keine Kundengeheimnisse. Dabei
+bleibt es — gelesen als „keine, die sie lesen kann".
+
+Die Datenebene leitet je Kunde ein X25519-Schlüsselpaar aus seinem
+Geheimnisschlüssel ab (HKDF, nichts zusätzlich zu sichern) und meldet den
+öffentlichen Teil (D1). Die Konsole versiegelt ein eingegebenes Geheimnis
+damit (versiegelte Box: Ephemeral-X25519, HKDF-SHA256, ChaCha20-Poly1305;
+die zusätzlichen Daten binden das Chiffrat an Kunde und Feld) und speichert
+**nur das Chiffrat**. Der Klartext lebt nur in der einen Anfrage, wird nicht
+protokolliert und nicht zurückgegeben. Die Datenebene öffnet es beim
+Abgleich und schreibt es, mit dem Kundenschlüssel verschlüsselt, über den
+bestehenden einen Schreibweg ins Kundenschema.
+
+Versiegelbar sind nur `oidc_client_secret` und `ninja_client_secret`
+(Allowlist auf beiden Seiten). Das AD-Bind-Passwort bleibt beim Agenten des
+Kunden (ADR-0014); der private Webserver-Schlüssel bleibt auf dem
+Anwendungsserver.
+
+Was eine übernommene Konsole damit erreicht: sie kann ein Geheimnis
+**ersetzen** (das konnte sie über die Einstellungen schon immer indirekt,
+etwa durch einen anderen Issuer) und das Geheimnis sehen, das jemand **in
+diesem Moment** eintippt. Sie kann keine gespeicherten Geheimnisse lesen.
+
+Wird der Kundenschlüssel gedreht, ändert sich das Schlüsselpaar; die Konsole
+erkennt das am Fingerabdruck und zeigt das Geheimnis als neu zu setzen.
+
+### D4 · Wartung als Auftrag, nicht als Endpunkt im Portal
+
+„Demodaten entfernen" und „Aktivitäten zurücksetzen" sind gehostet
+Wartungsaufträge in der Konsole: mit Grund (steht im Protokoll des Kunden)
+und Bestätigung durch Eintippen des Kürzels. Die Datenebene holt sie mit dem
+Soll-Zustand ab und führt jeden **genau einmal** aus — gesichert durch ein
+Advisory-Lock auf die Auftrags-Id und ein Audit-Ereignis
+`platform_maintenance_executed` mit der Auftrags-Id als Ziel, das auch das
+Zurücksetzen des Protokolls überlebt. Das Ergebnis geht mit der nächsten
+Zustandsmeldung zurück.
+
+Gehostet werden `/admin/demo-data/purge` und `/admin/audit/reset` nicht
+gemountet. On-prem bleibt alles wie bisher.
+
+### D5 · Neustart und Update gehören der Plattform
+
+Gehostet werden `/admin/system/*` nicht gemountet; die Konsole hat eine
+Seite „Plattform" mit Neustart und Update. Dasselbe Sicherheitsmodell wie
+vorher: die API legt nur eine Auftragsdatei ab, ein Host-Agent
+(`scripts/plattform-ops-agent.sh`, systemd-Timer, eingerichtet mit
+`plattform-aufbau.sh ops-agent`) kennt genau zwei Aufträge und führt sie aus.
+
+### D6 · Sicherungen werden geplant, geprüft und sind wiederherstellbar
+
+* **Täglich**: ein Zeitplaner in der Konsole sichert jeden aktiven Kunden
+  einmal am Tag (`COCKPIT_BACKUP_DAILY_AT`, UTC). „Einmal" wird an der
+  Datenbank entschieden, nicht im Speicher — ein Neustart zieht keine zweite.
+* **Prüfen und Wiederherstellen** bleiben auf dem Backup-Host (ADR-0016 D2).
+  Neu ist ein Prüfer (`cockpit_api.cli.backup_worker`), der sich seine
+  Arbeit bei der Konsole holt, die bestehenden Werkzeuge ausführt und die
+  Ergebnisse meldet. Sein Abruf ist zugleich sein Lebenszeichen, die
+  Oberfläche zeigt es. Auf einem Einzelhost startet ihn ein systemd-Timer in
+  einem **eigenen**, kurzlebigen Container, in den nur der private Schlüssel
+  eingehängt wird (`plattform-aufbau.sh backup-pruefer`).
+* **Wiederherstellung** lässt sich in der Oberfläche erfassen, durch eine
+  zweite Person freigeben und als umgeschaltet vermerken (ADR-0016 D5).
+
+### D7 · Der Connector lässt sich prüfen
+
+Der Reiter „AD-Connector" hat einen Verbindungstest: ein echter Auftrag
+`probe_service_connection_detailed` über Warteschlange, Agent und LDAPS ins
+AD. Verfällt er, holt der Agent nicht ab; sonst steht das Ergebnis da
+(Bind gelungen, DC nicht erreichbar, Dienstkonto abgewiesen …). Daneben steht
+der AD-Sync-Zustand aus der Zustandsmeldung.
+
+## Konsequenzen
+
+* Die Konsole sieht, was ankommt. „Hier eingestellt, dort nicht angekommen"
+  ist eine Zeile in der Übersicht und keine Fehlersuche in Logs.
+* Ein Kunde lässt sich vollständig aus der Konsole einrichten, Entra ID
+  eingeschlossen. Der Handgriff auf dem Anwendungsserver aus ADR-0017 D2
+  entfällt für die zwei versiegelbaren Geheimnisse.
+* Zwei neue Host-Helfer (Ops-Agent, Prüfer) laufen als root-Timer. Beide
+  führen nur Festgelegtes aus; was sie tun, steht im Skript, nicht im Auftrag.
+* Die Konsolen-Datenbank hat vier neue Tabellen (Migration 0017). Keine
+  davon enthält Personendaten oder lesbare Geheimnisse.
+
+## Alternativen verworfen
+
+* **Geheimnisse im Klartext in der Konsole.** Einfacher und genau der Ort,
+  an dem die Geheimnisse aller Kunden zusammenkämen (ADR-0017 D2).
+* **Geheimnisse über das CLI auf dem Anwendungsserver.** Der Weg aus
+  ADR-0017 D2; er wurde nie gebaut, und er verlangt für jeden Kunden eine
+  Shell auf dem Anwendungsserver. Die versiegelte Box erfüllt dieselbe
+  Zusage ohne diesen Handgriff.
+* **Die Konsole schreibt direkt ins Kundenschema.** Bricht ADR-0017 D3 (die
+  Datenebene zieht, die Konsole hat keinen Datenbankzugang zum Kunden).
+* **Prüfen in der Konsole.** Hiesse, den privaten Backup-Schlüssel neben die
+  Anwendung zu legen (ADR-0016 D2).
+
+## Nachtrag 2026-10-06 · Profil kam trotzdem nicht an
+
+Nach dem Einspielen stand der Kunde weiterhin auf „Schule". Die Ursache lag
+nicht in der Konsole, sondern im Schreibweg der Datenebene: der Abgleich
+schrieb `instance_profile` und `module_overrides` über `AppSettingsUpdate`,
+und dieses Schema kennt die beiden Felder nicht — Pydantic verwarf sie still.
+Der Abgleich erkannte den Unterschied bei jedem Lauf und schrieb ihn nie.
+
+Die beiden Felder gehen jetzt über `AppSettingsService.set_module_settings`
+(Audit-Aktion `platform_settings_reconciled`, wie die übrigen Felder). Ein
+Test verlangt, dass jedes abgleichbare Feld einen Schreibweg hat; ein zweiter
+spielt den Fall vom Dev-Host gegen eine echte Datenbank nach.
+
+## Nachtrag 2026-10-06 (2) · Die Datenebene erreichte die Konsole nie
+
+Das Abgleich-Werkzeug (`python -m magister_api.cli.abgleich`) zeigte auf dem
+Dev-Host die eigentliche Ursache: **jeder** Abruf der Konsole scheiterte an
+`CERTIFICATE_VERIFY_FAILED`. Die Konsole hat ihr Zertifikat aus der
+Plattform-CA. Die httpx-Clients der Datenebene prüften gegen die öffentlichen
+Wurzeln. Die Datenebene fiel daraufhin still auf ihren Ersatz-Mandanten
+`default` zurück: Schema `public`, Auffang für jeden Hostnamen. Der Kunde lief
+also gar nicht in seinem Schema, und nichts aus der Konsole kam je an — kein
+Profil, keine Einstellungen, keine Zustandsmeldung.
+
+Zwei Korrekturen:
+
+* **Vertrauen.** `MAGISTER_CONSOLE_CA_FILE` (im Container
+  `/run/magister/console-ca.pem`, vom Host `MAGISTER_CONSOLE_CA_PATH`) ist der
+  Anker für alle Wege zur Konsole: Registry, Soll-Zustand, Zustandsmeldung,
+  Schemastand, Connector-Aufträge. Gesetzt gilt nur diese Datei.
+  `plattform-aufbau.sh` trägt sie bei bestehenden Installationen nach.
+* **Kein Kunde im falschen Schema.** Gehostet und ohne Kundenliste der Konsole
+  ist der Ersatz-Mandant jetzt `provisioning`: 503 statt Bedienung, keine
+  Seeds, kein AD-Abgleich. Ein Ausfall der Konsole beim Start ist damit eine
+  Wartungsseite und keine Verwechslung von Schemas. Bestand **vor** dem Start
+  bleibt unberührt: ist die Kundenliste einmal geladen, gilt sie weiter, auch
+  wenn die Konsole danach ausfällt (ADR-0013 D4).
+
+## Nachtrag 2026-10-07 · Kunden aus der Konsole auf der Datenebene anbinden
+
+Nach der TLS-Korrektur übersprang die Datenebene den ersten in der
+Oberfläche angelegten Kunden: `fehlt MAGISTER_TENANT_DSN_…`. Die Konsole gibt
+Rollenpasswort und Kundenschlüssel beim Anlegen genau einmal aus und
+speichert beides nicht (ADR-0013 D4, ADR-0016 D8) — eingetragen hatte sie
+niemand. Das Aufbau-Skript tat es nur für seine eigenen Demo-Kunden.
+
+* `plattform-aufbau.sh kunde-anbinden [kürzel]`, auch bei jedem `up`: fehlt
+  der DSN, dreht die Konsole das Rollenpasswort und das Skript trägt den DSN
+  ein. Fehlt der Kundenschlüssel, entsteht ein neuer — nur wenn im Schema
+  kein Chiffrat liegt, sonst Abbruch mit Verweis auf den Passwortspeicher.
+  Schema und Daten bleiben unberührt.
+* Knopf in der Konsole (*Übersicht → Anbindung an die Datenebene*): ein
+  dritter Auftrag `attach` für den Ops-Agenten (D5), mit dem Kürzel als
+  einzigem Parameter, vom Agenten gegen das Kürzel-Muster geprüft. Die
+  Konsole bekommt dabei weder DSN noch Schlüssel zu sehen: beide entstehen
+  und bleiben auf dem Host.
+
+Verworfen: ein „Neu ausrollen"-Knopf. Schema und Daten waren in Ordnung; es
+fehlte nur die Verbindung. Ein Neuausrollen hätte das Risiko getragen,
+Daten zu überschreiben, ohne das eigentliche Problem zu lösen.
+
+## Nachtrag 2026-10-07 (2) · Überwachung des Plattform-Hosts
+
+Auf dem Dev-Host lief Caddy der Datenebene nicht, weil der Caddy aus dem
+Debian-Paket Port 80 hielt — sichtbar war das nur in einer Shell. Die
+Konsole zeigt jetzt unter *Plattform → Überwachung*:
+
+* jeden Container beider Stacks (läuft, gesund);
+* wer auf 80, 443, 4444 und 46200 lauscht, und ob es dieser Stack ist;
+* echte Anfragen durch Caddy: Umleitung auf 80, Kundenportal auf 443,
+  Konsole auf 4444, Connector-Kanal auf 46200, und je Kunde, ob er bedient
+  wird (401 ohne Anmeldung), in Wartung steht (503) oder der Datenebene
+  unbekannt ist (404);
+* Restlaufzeit der Serverzertifikate und Plattenbelegung.
+
+Erhoben wird auf dem Host, vom Ops-Agenten (D5), einmal je Minute
+(`scripts/plattform_zustand.py` → `ops/health.json`). Die Konsole bekommt
+dafür keinen Zugang zu Docker und zu den Ports; sie liest den Bericht und
+zeigt sein Alter — ein Bericht älter als drei Minuten ist selbst der Befund
+„Ops-Agent läuft nicht". Die Hostnamen für die Kunden-Proben legt die
+Konsole ab (`ops/probe-targets.json`); der Agent prüft jeden gegen ein
+Hostnamen-Muster, bevor er ihn benutzt.
+
+Offen: Benachrichtigung. Die Ansicht zeigt eine Störung, sie meldet sie
+nicht. Für Alarme ist weiterhin PRTG zuständig (ADR-0021 D6).
+
+## Nachtrag 2026-10-08 · Lokales Administrationskonto aus der Konsole
+
+Ein gehosteter Kunde ohne Entra ID zeigte „Kein Anmeldeweg eingerichtet":
+das lokale Notkonto (ADR-0015 D2) entsteht sonst nur aus
+`MAGISTER_LOCAL_ADMIN_*` beim Start — und das ist gehostet ab zwei Kunden
+ausdrücklich abgeschaltet (sonst teilten zwanzig Kunden ein Passwort).
+
+Jetzt: *Kunde → Einstellungen → Lokales Administrationskonto*.
+
+* Benutzername und Passwort werden in der Konsole eingegeben; das Passwort
+  wird sofort für die Installation dieses Kunden versiegelt (D3, Name
+  `local_admin_password`, eigene Liste `ONE_TIME_SEALABLE` neben den
+  Einstellungs-Geheimnissen) und reist als Wartungsauftrag
+  `local_admin_setup` (D4). Die Datenebene wendet ihn **genau einmal** an:
+  Konto anlegen oder Passwort setzen und entsperren, auf Wunsch den zweiten
+  Faktor zurücksetzen. Ist er abgeschlossen, löscht die Konsole das Siegel.
+* Einmal und nicht als Soll-Zustand: ändert der Kunde das Passwort im
+  Portal, stellt der nächste Abgleich es nicht zurück.
+* Den zweiten Faktor richtet die Person bei der ersten Anmeldung im Portal
+  selbst ein (TOTP, erzwungen, wie bisher). Das TOTP-Geheimnis entsteht in
+  der Datenebene und erreicht die Konsole nie — eine Konsole, die das
+  Passwort beim Eintippen sah, kann sich damit allein nicht anmelden.
+* Die Zustandsmeldung (D1) sagt, ob es das Konto gibt, ob es gesperrt ist
+  und ob TOTP eingerichtet ist.
+
+Nebenbei: ein Wartungsauftrag, dessen Ergebnis `ok: false` ist, wurde der
+Konsole bisher trotzdem als erfolgreich gemeldet. Die bisherigen zwei Arten
+konnten nicht scheitern; der neue kann es (Siegel lässt sich nicht öffnen).

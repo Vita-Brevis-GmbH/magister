@@ -18,10 +18,10 @@ Two modes:
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient, AdUserRecord, classify_kind_by_ou
@@ -143,6 +143,58 @@ class AdSyncService:
             return 0
         return await AdGroupCatalogRepository(self.session).upsert_from_ad(groups)
 
+    def _full_is_due(self, state: AdSyncState) -> bool:
+        """Muss dieser Lauf ein voller sein? (ADR-0022 D3)
+
+        Drei Gründe, und jeder für sich reicht:
+
+        * **Kein Cursor.** Erster Lauf oder zurückgesetzter Zustand — es gibt
+          nichts, wovon aus inkrementell gelesen werden könnte.
+        * **Noch nie voll gelaufen.** Ein Cursor ohne vollen Vorlauf hiesse,
+          der Cache wäre nie vollständig gewesen.
+        * **Der letzte volle Lauf ist zu alt.** `whenChanged` zeigt keine
+          Löschungen: ein gelöschtes Konto bliebe sonst für immer im Cache.
+          Deshalb ein voller Lauf im Takt von `ad_full_sync_hours`.
+        """
+        if state.last_when_changed is None:
+            return True
+        hours = self.settings.ad_full_sync_hours
+        if hours <= 0:
+            # Ausdrücklich abgeschaltet: jeder Lauf ist ein voller.
+            return True
+        last_full = state.last_full_sync_at
+        if last_full is None:
+            return True
+        if last_full.tzinfo is None:
+            # Ein ohne Zeitzone gelesener Wert (SQLite in Tests) wäre sonst
+            # ein Vergleich, der mit TypeError endet statt mit einer Antwort.
+            last_full = last_full.replace(tzinfo=UTC)
+        return datetime.now(UTC) - last_full >= timedelta(hours=hours)
+
+    async def _relax_idle_timeout(self) -> None:
+        """Die Leerlauf-Grenze für die Dauer des Verzeichnislaufs anheben.
+
+        ADR-0021 D3 setzt `idle_in_transaction_session_timeout` an der
+        Mandantenrolle auf 60 Sekunden. Das ist richtig für eine Anfrage und
+        falsch für diesen Lauf: hier steht die Transaktion offen, während das
+        Verzeichnis gelesen wird — bei einem gehosteten Kunden über den
+        Agenten, also Minuten. Ohne diese Zeile beendet Postgres die Sitzung
+        mitten im Abgleich, und im Protokoll steht ein Datenbankfehler, wo ein
+        langsames AD steht.
+
+        `SET LOCAL`: gilt nur in dieser Transaktion, endet mit ihr, kann also
+        nicht über den Pool weiterwandern. Die Grenze aus D3 bleibt für alles
+        andere stehen.
+        """
+        if self.session.bind.dialect.name != "postgresql":
+            # SQLite in Unit-Tests kennt die Einstellung nicht; sie ist auch
+            # kein Teil des Verhaltens, das dort geprüft wird.
+            return
+        ms = max(60_000, self.settings.ad_sync_transaction_idle_ms)
+        # Kein Bind-Parameter möglich: SET LOCAL nimmt keine. Der Wert kommt
+        # aus einer als int typisierten Einstellung, nicht aus einer Anfrage.
+        await self.session.execute(text(f"SET LOCAL idle_in_transaction_session_timeout = {ms}"))
+
     async def sync_all(
         self,
         *,
@@ -154,12 +206,12 @@ class AdSyncService:
     ) -> SyncResult:
         state = await self._load_state()
         cursor_before = state.last_when_changed
-        # If incremental was requested but we have no cursor yet, fall back to full.
         effective_mode: SyncMode = (
-            "full" if mode == "full" or cursor_before is None else "incremental"
+            "full" if mode == "full" or self._full_is_due(state) else "incremental"
         )
 
         try:
+            await self._relax_idle_timeout()
             records = await self.ad.search_users(
                 changed_since=cursor_before if effective_mode == "incremental" else None
             )

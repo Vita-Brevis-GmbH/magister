@@ -19,7 +19,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
 
-from fastapi.concurrency import run_in_threadpool
 from ldap3 import (
     ALL_ATTRIBUTES,
     BASE,
@@ -40,16 +39,17 @@ from ldap3 import (
 )
 from ldap3.core.exceptions import LDAPException
 from ldap3.protocol.microsoft import security_descriptor_control
-from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import escape_rdn
 
 from magister_api.ad import security_descriptor as sd
 from magister_api.ad.errors import (
+    PASSWORD_REJECTED,
     REASON_CONFIG,
     AdUnavailableError,
     AdUserParseError,
     classify_ldap_error,
 )
+from magister_api.ad.threadpool import run_in_threadpool
 from magister_api.config import Settings
 
 logger = logging.getLogger(__name__)
@@ -249,30 +249,6 @@ def classify_kind_by_ou(
     if any(_dn_under_ou(dn, ou) for ou in student_ous):
         return "student"
     return fallback_kind
-
-
-def _is_member_of_group(member_of: Any, group: str) -> bool:
-    """True if ``group`` appears in a ``memberOf`` list (direct membership only).
-
-    ``group`` may be a full group DN (e.g. ``CN=Magister,OU=Groups,DC=…``) or a
-    bare CN (e.g. ``Magister``). Matching is case-insensitive; nested/primary
-    group membership is NOT resolved (AD does not expand it into ``memberOf``).
-    """
-    if not member_of:
-        return False
-    if isinstance(member_of, str):
-        member_of = [member_of]
-    target = group.strip().lower()
-    if not target:
-        return False
-    target_cn = target[3:].split(",", 1)[0] if target.startswith("cn=") else target
-    for dn in member_of:
-        d = str(dn).strip().lower()
-        if d == target:
-            return True
-        if d.startswith("cn=") and d[3:].split(",", 1)[0] == target_cn:
-            return True
-    return False
 
 
 def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
@@ -956,10 +932,17 @@ class AdClient:
 
         conn, owned = self._acquire_connection()
         try:
-            ok = conn.modify(user_dn, changes)
-            if isinstance(ok, tuple):
-                ok = ok[0]
+            res = conn.modify(user_dn, changes)
+            ok = res[0] if isinstance(res, tuple) else res
             if not ok:
+                result: Any = res[1] if isinstance(res, tuple) else conn.result
+                code = result.get("result") if isinstance(result, dict) else None
+                # 19 constraintViolation (0000052D: Richtlinie, Verlauf,
+                # Mindestalter), 53 unwillingToPerform: das AD lehnt das
+                # Passwort ab — kein Ausfall, sondern eine Antwort an den
+                # Menschen vor dem Formular.
+                if code in (19, 53):
+                    raise AdUnavailableError(PASSWORD_REJECTED)
                 raise AdUnavailableError("ldap_modify_failed")
         except LDAPException as exc:
             raise AdUnavailableError("ldap_modify_failed") from exc
@@ -1046,73 +1029,6 @@ class AdClient:
                 pass
 
     # --- Direct AD-credential login ------------------------------------------
-
-    async def authenticate(self, *, login: str, password: str) -> AdUserRecord | None:
-        """Verify AD credentials + login-group membership for the direct-login path.
-
-        Returns the parsed :class:`AdUserRecord` on success, or ``None`` on any
-        failure (feature off, unknown user, wrong password, not in the login
-        group, misconfiguration). The single ``None`` return for every failure
-        avoids leaking which check failed (username enumeration). Never logs the
-        password; all ldap3 work runs in a worker thread.
-        """
-        if not self._settings.ad_login_enabled:
-            return None
-        return await run_in_threadpool(self._sync_authenticate, login, password)
-
-    def _sync_authenticate(self, login: str, password: str) -> AdUserRecord | None:
-        base = self._settings.ad_users_search_base
-        group = (self._settings.ad_login_group or "").strip()
-        if not base or not group:
-            logger.warning(
-                "AD login refused: search base or login group not configured "
-                "(base_set=%s, group_set=%s)",
-                bool(base),
-                bool(group),
-            )
-            return None
-        entry = self._sync_lookup_login_account(base, login)
-        if entry is None:
-            return None
-        dn, attrs = entry
-        # Authorize by group membership before spending a bind on the password.
-        if not _is_member_of_group(attrs.get("memberOf"), group):
-            return None
-        # Verify the password by binding as the user (LDAPS, service pool).
-        if not self._sync_probe_bind(dn, password):
-            return None
-        try:
-            return parse_ad_entry(attrs, dn)
-        except AdUserParseError:
-            return None
-
-    def _sync_lookup_login_account(
-        self, base: str, login: str
-    ) -> tuple[str, dict[str, Any]] | None:
-        """Find the AD account by sAMAccountName or userPrincipalName == login."""
-        conn, owned = self._acquire_connection()
-        try:
-            safe = escape_filter_chars(login)
-            search_filter = (
-                f"(&(objectClass=user)(|(sAMAccountName={safe})(userPrincipalName={safe})))"
-            )
-            _result, entries = self._single_search(
-                conn,
-                base=base,
-                search_filter=search_filter,
-                scope=SUBTREE,
-                attributes=list(DEFAULT_USER_ATTRIBUTES),
-            )
-            if not entries:
-                return None
-            entry = entries[0]
-            return entry.get("dn", ""), entry.get("attributes", {})
-        finally:
-            if owned:
-                try:
-                    conn.unbind()
-                except LDAPException:
-                    pass
 
     # --- Test helpers --------------------------------------------------------
 
@@ -1221,6 +1137,45 @@ class AdClient:
         except LDAPException as exc:
             logger.warning("ldap modify (%s) raised for %s: %s", attr, user_dn, exc)
             raise AdUnavailableError("ldap_modify_failed") from exc
+        finally:
+            if owned:
+                try:
+                    conn.unbind()
+                except LDAPException:
+                    pass
+
+    async def is_privileged_account(self, *, user_dn: str) -> bool:
+        """Is this object an AD-protected (privileged) account?
+
+        ``adminCount=1`` marks every account that is or was in a protected
+        group (AdminSDHolder); ``isCriticalSystemObject`` marks built-ins such
+        as krbtgt. The connector agent on the DC refuses any change to either
+        (ADR-0014 Nachtrag). Fails closed: a failed read raises.
+        """
+        return await run_in_threadpool(self._sync_is_privileged_account, user_dn)
+
+    def _sync_is_privileged_account(self, user_dn: str) -> bool:
+        conn, owned = self._acquire_connection()
+        try:
+            result, entries = self._single_search(
+                conn,
+                base=user_dn,
+                search_filter="(objectClass=*)",
+                scope=BASE,
+                attributes=["adminCount", "isCriticalSystemObject"],
+            )
+            detail = self._search_failure_detail(result)
+            if detail is not None:
+                raise AdUnavailableError(f"ldap_read_admincount_failed:{detail}")
+            for entry in entries:
+                attrs = entry.get("attributes") or {}
+                for name in ("adminCount", "isCriticalSystemObject"):
+                    raw = attrs.get(name)
+                    if isinstance(raw, list):
+                        raw = raw[0] if raw else None
+                    if raw is not None and str(raw).strip().upper() in {"1", "TRUE"}:
+                        return True
+            return False
         finally:
             if owned:
                 try:

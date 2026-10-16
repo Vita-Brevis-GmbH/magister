@@ -1,0 +1,173 @@
+import { ApiError, authHeaders, get } from "./client";
+
+/**
+ * Ein gebautes Paket des Connector-Agenten (ADR-0014).
+ *
+ * `sha256` kommt aus derselben Quelle wie die Datei — die Konsole rechnet die
+ * Prüfsumme beim Auflisten über den Inhalt. Sie beantwortet „ist die Datei
+ * heil angekommen?", nicht „kommt sie von Vita Brevis": das sagt die
+ * Paketsignatur (Entscheid E18).
+ */
+export interface AgentPackage {
+  filename: string;
+  size_bytes: number;
+  sha256: string;
+  modified_at: string;
+}
+
+export function listAgentPackages(): Promise<AgentPackage[]> {
+  return get("/api/agent-packages");
+}
+
+/**
+ * Ein Paket herunterladen.
+ *
+ * Wie beim Export geht ein einfacher `<a href>` nicht: der Endpunkt hängt am
+ * `Authorization`-Header, und eine Navigation des Browsers schickt keinen mit
+ * — sie endete in einem 401, das wie ein fehlendes Paket aussieht.
+ */
+export async function downloadAgentPackage(filename: string): Promise<void> {
+  const response = await fetch(`/api/agent-packages/${encodeURIComponent(filename)}`, {
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, (await response.text()).slice(0, 500));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Grösse in der Einheit, die ein Mensch liest. */
+export function readableSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KiB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+/** Windows oder unbekannt — nach der Endung, mehr weiss die API nicht. */
+export function platformOf(filename: string): string {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".msi") || lower.endsWith(".exe")) return "Windows";
+  return "—";
+}
+
+/** Ein Betriebssystem mit seinem aktuellen Paket — und dem, was davor kam. */
+export interface PlattformGruppe {
+  plattform: string;
+  aktuell: AgentPackage;
+  aeltere: AgentPackage[];
+}
+
+/** Reihenfolge der Gruppen. Was nicht drinsteht, kommt hinten nach Namen. */
+const PLATTFORM_ORDNUNG = ["Windows"];
+
+/**
+ * Die Pakete nach Betriebssystem bündeln, je Gruppe das neueste zuerst.
+ *
+ * Warum überhaupt: das Paketverzeichnis sammelt jeden CI-Lauf an. Nach einer
+ * Woche standen dort sieben Dateien in einer flachen Liste, und wer den Agenten
+ * installieren will, muss raten, welche die richtige ist. Die Frage beim
+ * Onboarding lautet „welches Paket für diesen Server?" — also wird genau das
+ * beantwortet, und die älteren Stände bleiben erreichbar, statt zu
+ * verschwinden: ein Rückschritt auf die vorige Fassung ist ein legitimer
+ * Schritt, wenn eine neue beim Kunden Ärger macht.
+ *
+ * Aussortiert wird nichts. Das Löschen alter Pakete gehört auf den Server
+ * (Aufbewahrung im Aufbau-Skript), nicht in eine Oberfläche, die sie nur
+ * anzeigt.
+ */
+export function nachPlattform(pakete: AgentPackage[]): PlattformGruppe[] {
+  const gruppen = new Map<string, AgentPackage[]>();
+  for (const paket of pakete) {
+    const schluessel = platformOf(paket.filename);
+    const liste = gruppen.get(schluessel);
+    if (liste) liste.push(paket);
+    else gruppen.set(schluessel, [paket]);
+  }
+
+  const aus: PlattformGruppe[] = [];
+  for (const [plattform, liste] of gruppen) {
+    // Nach Zeit, neueste zuerst. Bei gleichem Zeitstempel — zwei Dateien aus
+    // demselben CI-Lauf — entscheidet der Name absteigend, damit die höhere
+    // Version oben steht und die Reihenfolge überhaupt eindeutig ist.
+    const sortiert = [...liste].sort((a, b) => {
+      const zeit = Date.parse(b.modified_at) - Date.parse(a.modified_at);
+      return zeit !== 0 ? zeit : b.filename.localeCompare(a.filename);
+    });
+    aus.push({ plattform, aktuell: sortiert[0], aeltere: sortiert.slice(1) });
+  }
+
+  return aus.sort((a, b) => {
+    const ra = PLATTFORM_ORDNUNG.indexOf(a.plattform);
+    const rb = PLATTFORM_ORDNUNG.indexOf(b.plattform);
+    if (ra !== rb) return (ra < 0 ? PLATTFORM_ORDNUNG.length : ra) - (rb < 0 ? PLATTFORM_ORDNUNG.length : rb);
+    return a.plattform.localeCompare(b.plattform);
+  });
+}
+
+/** Das Stammzertifikat der Plattform, für `enroll --ca` auf dem DC. */
+export interface PlatformCa {
+  filename: string;
+  subject: string;
+  not_after: string;
+  /** SHA-256 über das Zertifikat (DER), nicht über die Datei. */
+  sha256: string;
+}
+
+export function getPlatformCa(): Promise<PlatformCa> {
+  return get("/api/agent-packages/platform-ca/info");
+}
+
+/** Herunterladen wie ein Paket: der Endpunkt braucht den Authorization-Header. */
+export async function downloadPlatformCa(): Promise<void> {
+  const response = await fetch("/api/agent-packages/platform-ca", { headers: authHeaders() });
+  if (!response.ok) {
+    throw new ApiError(response.status, (await response.text()).slice(0, 500));
+  }
+  const url = URL.createObjectURL(await response.blob());
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "root.pem";
+    link.click();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** Das neueste Agenten-MSI mit Fassung im Namen (für „Update verfügbar“). */
+export interface LatestAgent {
+  filename: string;
+  version: string;
+  sha256: string;
+  size_bytes: number;
+}
+
+export function getLatestAgent(): Promise<LatestAgent> {
+  return get("/api/agent-packages/latest");
+}
+
+/** `0.2.190` oder `0.2.190 (abc1234)` → [0, 2, 190]; sonst null. */
+export function parseVersion(text: string | null | undefined): number[] | null {
+  const match = /^\s*(\d+)\.(\d+)\.(\d+)/.exec(text ?? "");
+  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : null;
+}
+
+/** Ist `available` neuer als `running`? Unbekannte laufende Fassung zählt als alt. */
+export function isNewer(available: string, running: string | null | undefined): boolean {
+  const neu = parseVersion(available);
+  const alt = parseVersion(running);
+  if (!neu) return false;
+  if (!alt) return true;
+  for (let i = 0; i < 3; i++) {
+    if (neu[i]! !== alt[i]!) return neu[i]! > alt[i]!;
+  }
+  return false;
+}

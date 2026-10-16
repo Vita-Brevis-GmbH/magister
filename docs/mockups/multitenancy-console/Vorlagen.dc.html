@@ -1,0 +1,238 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&display=swap">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: #ffffff; color: #020817;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased;
+    }
+    a { color: #0f172a; text-decoration: none; }
+    a:hover { color: #020817; text-decoration: underline; text-underline-offset: 4px; }
+    .serif { font-family: Fraunces, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; }
+    .shell { max-width: 1280px; margin: 0 auto; padding: 0 16px; }
+    .muted { color: #64748b; }
+    .h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .h2 { font-size: 20px; line-height: 20px; font-weight: 600; letter-spacing: -0.025em; margin: 0; }
+    .topbar { height: 56px; background: #0f172a; color: #f8fafc; }
+    .navlink { padding: 6px 12px; border-radius: 6px; color: #94a3b8; font-weight: 500; }
+    .navlink.active { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
+    .card { border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border: 0; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; cursor: pointer; font-family: inherit; }
+    .btn-primary { background: #0f172a; color: #f8fafc; }
+    .btn-outline { background: #ffffff; color: #020817; border: 1px solid #e2e8f0; }
+    .btn-ghost { background: transparent; color: #64748b; }
+    .btn-sm { height: 36px; padding: 0 12px; }
+    .input { display: flex; align-items: center; gap: 8px; height: 40px; width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff; padding: 8px 12px; font-size: 14px; }
+    .ph { color: #64748b; }
+    .label { display: block; font-size: 14px; font-weight: 500; line-height: 16px; margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { height: 48px; padding: 0 16px; text-align: left; vertical-align: middle; font-weight: 500; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 16px; vertical-align: middle; border-bottom: 1px solid #e2e8f0; }
+    tbody tr:last-child td { border-bottom: 0; }
+    .pill { display: inline-flex; align-items: center; border-radius: 9999px; padding: 2px 10px; font-size: 12px; line-height: 16px; font-weight: 500; }
+    .pill-ok { background: #ecfdf5; color: #047857; box-shadow: inset 0 0 0 1px #a7f3d0; }
+    .pill-muted { background: #f1f5f9; color: #475569; box-shadow: inset 0 0 0 1px #e2e8f0; }
+    .pill-warn { background: #fffbeb; color: #b45309; box-shadow: inset 0 0 0 1px #fde68a; }
+    .pill-danger { background: #fff1f2; color: #be123c; box-shadow: inset 0 0 0 1px #fecdd3; }
+    .tab { padding: 10px 2px; margin-right: 24px; font-weight: 500; color: #64748b; border-bottom: 2px solid transparent; }
+    .tab.active { color: #020817; border-bottom-color: #0f172a; }
+    .note { border: 1px solid #e2e8f0; border-left: 3px solid #0f172a; border-radius: 6px; background: #f8fafc; padding: 12px 14px; }
+    .kv { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 24px; }
+  </style>
+</helmet>
+<div class="topbar">
+  <div class="shell" style="display: flex; height: 56px; align-items: center; justify-content: space-between;">
+    <div style="display: flex; align-items: center; gap: 28px;">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="serif" style="font-size: 18px; font-weight: 600; letter-spacing: -0.025em;">Magister Console</span>
+        <span style="font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b;">Vita Brevis</span>
+      </div>
+      <nav style="display: flex; align-items: center; gap: 4px; font-size: 14px;">
+        <span class="navlink">Kunden</span>
+        <span class="navlink active">Vorlagen</span>
+        <span class="navlink">Rechte</span>
+        <span class="navlink">Module</span>
+        <span class="navlink">Betrieb</span>
+        <span class="navlink">Audit</span>
+      </nav>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <span class="pill" style="background: rgba(248, 250, 252, 0.1); color: #e2e8f0; box-shadow: inset 0 0 0 1px rgba(226, 232, 240, 0.25);">Global Admin</span>
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 9999px; background: #334155; color: #f8fafc; font-size: 11px; font-weight: 600;">MH</span>
+    </div>
+  </div>
+</div>
+
+<div class="shell" style="padding-top: 32px; padding-bottom: 32px;">
+  <header style="display: flex; align-items: flex-start; justify-content: space-between; gap: 24px;">
+    <div>
+      <h1 class="serif h1">Globale Vorlagen</h1>
+      <p class="muted" style="margin: 6px 0 0;">Einmal gepflegt, in jeden Kunden ausgerollt. Ein Kunde kann nur &uuml;berschreiben, wo es erlaubt ist.</p>
+    </div>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-outline" type="button">Vorlage anlegen</button>
+      <button class="btn btn-primary" type="button">Auf Kunden anwenden</button>
+    </div>
+  </header>
+
+  <div style="display: flex; align-items: flex-end; border-bottom: 1px solid #e2e8f0; margin-top: 20px;">
+    <span class="tab active">Dokumentvorlagen</span>
+    <span class="tab">AD-Gruppen-Vorlagen</span>
+    <span class="tab">Modul-Voreinstellungen</span>
+    <span class="tab">Rollout-Verlauf</span>
+  </div>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr); gap: 24px; margin-top: 24px;">
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="card" style="overflow: hidden;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 300px;">Vorlage</th>
+              <th style="width: 130px;">Sprachen</th>
+              <th style="width: 96px;">Version</th>
+              <th style="width: 180px;">Kunde darf &uuml;berschreiben</th>
+              <th>Ge&auml;ndert</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <div style="font-weight: 500;">Anmeldebest&auml;tigung</div>
+                <div class="muted mono" style="font-size: 12.5px;">enrollment</div>
+              </td>
+              <td>de &middot; fr &middot; it</td>
+              <td class="mono">v5</td>
+              <td><span class="pill pill-muted">nein</span></td>
+              <td class="muted">02.09.2026</td>
+            </tr>
+            <tr>
+              <td>
+                <div style="font-weight: 500;">Klassenwechsel</div>
+                <div class="muted mono" style="font-size: 12.5px;">class_change</div>
+              </td>
+              <td>de &middot; fr</td>
+              <td class="mono">v3</td>
+              <td><span class="pill pill-ok">ja</span></td>
+              <td class="muted">18.08.2026</td>
+            </tr>
+            <tr>
+              <td>
+                <div style="font-weight: 500;">Passwort-Handout</div>
+                <div class="muted mono" style="font-size: 12.5px;">password_handout</div>
+              </td>
+              <td>de &middot; fr &middot; it &middot; en</td>
+              <td class="mono">v7</td>
+              <td><span class="pill pill-muted">nein</span></td>
+              <td class="muted">05.09.2026</td>
+            </tr>
+            <tr>
+              <td>
+                <div style="font-weight: 500;">Zugangsdaten-Klassenliste</div>
+                <div class="muted mono" style="font-size: 12.5px;">class_password_list</div>
+              </td>
+              <td>de</td>
+              <td class="mono">v2</td>
+              <td><span class="pill pill-ok">ja</span></td>
+              <td class="muted">30.06.2026</td>
+            </tr>
+            <tr>
+              <td>
+                <div style="font-weight: 500;">Eintrittsschreiben Firma</div>
+                <div class="muted mono" style="font-size: 12.5px;">onboarding_company</div>
+              </td>
+              <td>de &middot; en</td>
+              <td class="mono">v1</td>
+              <td><span class="pill pill-ok">ja</span></td>
+              <td class="muted">21.08.2026</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="padding: 20px 24px;">
+        <h2 class="serif h2" style="font-size: 16px;">Welche Fassung ein Kunde sieht</h2>
+        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; font-size: 13px;">
+          <span class="pill" style="background: #0f172a; color: #f8fafc;">Kunde + Standort</span>
+          <span class="muted">&rarr;</span>
+          <span class="pill pill-muted">Kunde</span>
+          <span class="muted">&rarr;</span>
+          <span class="pill pill-muted">Global</span>
+          <span class="muted">&rarr;</span>
+          <span class="pill pill-muted">eingebaut im Code</span>
+        </div>
+        <p class="muted" style="margin: 14px 0 0; font-size: 13px;">
+          Die erste vorhandene Fassung gewinnt. Globale Vorlagen liegen als Kopie im Kunden-Schema und
+          sind dort schreibgesch&uuml;tzt &mdash; das Rendern bleibt ein rein lokaler Lesezugriff, ohne
+          Verbindung zur Konsole. F&auml;llt die Konsole aus, drucken alle Kunden weiter.
+        </p>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Passwort-Handout v7 ausrollen</h2>
+        <div style="margin-top: 16px;">
+          <label class="label">Anwenden auf</label>
+          <div class="input" style="justify-content: space-between;">
+            <span>Alle Kunden mit Profil Schule</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div style="display: grid; gap: 12px; margin-top: 18px; font-size: 13px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span>Gemeinde Wattwil</span><span class="pill pill-muted mono">v6 &rarr; v7</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span>Stadt Uzwil</span><span class="pill pill-muted mono">v6 &rarr; v7</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span>Schulgemeinde Flawil</span><span class="pill pill-ok mono">v7</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span>Gemeinde Degersheim</span><span class="pill pill-muted mono">v6 &rarr; v7</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+            <span>Gemeinde Ebnat-Kappel</span><span class="pill pill-warn">eigene Fassung</span>
+          </div>
+        </div>
+        <p class="muted" style="margin: 16px 0 0; font-size: 13px;">
+          Ebnat-Kappel hat eine eigene Fassung und bleibt unver&auml;ndert. Der Kunde sieht den Hinweis
+          &bdquo;neue globale Fassung verf&uuml;gbar&ldquo; und kann zur&uuml;ck auf global wechseln.
+        </p>
+        <button class="btn btn-primary" type="button" style="width: 100%; margin-top: 18px;">Auf 4 Kunden ausrollen</button>
+      </div>
+
+      <div class="card" style="padding: 20px;">
+        <h2 class="serif h2" style="font-size: 16px;">Letzter Rollout</h2>
+        <div style="display: grid; gap: 10px; margin-top: 16px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Vorlage</span><span class="mono">enrollment v5</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Kunden</span><span>8 von 8</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Zeitpunkt</span><span>02.09.2026, 09:14</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; gap: 12px;">
+            <span class="muted">Ausgel&ouml;st von</span><span class="mono" style="font-size: 12px;">matthias.hadorn</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

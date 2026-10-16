@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, or_, select
@@ -26,6 +27,8 @@ class SessionRepository:
         ip: str | None,
         user_agent: str | None,
         auth_kind: str = "oidc",
+        operator_upn: str | None = None,
+        operator_jti: uuid.UUID | None = None,
     ) -> Session:
         now = utcnow()
         row = Session(
@@ -38,6 +41,9 @@ class SessionRepository:
             ip=ip,
             user_agent=user_agent,
             created_at=now,
+            # Nur bei auth_kind="operator" gesetzt (ADR-0019 D5).
+            operator_upn=operator_upn,
+            operator_jti=operator_jti,
         )
         self.session.add(row)
         await self.session.flush()

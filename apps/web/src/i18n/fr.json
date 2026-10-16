@@ -34,6 +34,10 @@
   "auth": {
     "login_title": "Connexion",
     "login_intro": "Connecte-toi avec ton compte.",
+    "login_checking": "Vérification des méthodes de connexion …",
+    "login_none_title": "Aucune méthode de connexion configurée",
+    "login_none_intro": "Pour cette installation, ni Entra ID n'est enregistré ni la connexion locale n'est activée. Tant que c'est le cas, personne ne peut entrer — pas même l'administration. Cela se configure dans la console de l'exploitant : enregistrer les paramètres OIDC ou activer le compte d'administration local.",
+    "login_capabilities_failed": "Impossible d'interroger les méthodes de connexion disponibles pour le moment. Il s'agit d'une erreur du serveur, pas de ta saisie. Recharge la page ; si cela persiste, préviens l'administration.",
     "login_button": "Se connecter avec Entra ID",
     "logged_in_as": "Connecté en tant que",
     "expires_at": "Session valable jusqu'à",
@@ -48,12 +52,38 @@
       "invalid_credentials": "Nom d'utilisateur ou mot de passe incorrect.",
       "account_locked": "Compte temporairement verrouillé après plusieurs échecs. Réessayez plus tard.",
       "local_login_disabled": "La connexion locale est désactivée.",
-      "ad_login_disabled": "La connexion AD n'est pas disponible."
+      "invalid_code": "Le code est incorrect. Saisissez le code actuel de l'application.",
+      "challenge_expired": "La procédure de connexion a expiré. Veuillez recommencer."
     },
-    "login_ad_disclosure": "Se connecter avec un compte AD",
-    "login_ad_username": "Nom d'utilisateur (AD)",
-    "login_ad_password": "Mot de passe",
-    "login_ad_submit": "Se connecter"
+    "totp_intro": "Saisissez le code à six chiffres de votre application d'authentification.",
+    "totp_code": "Code à usage unique",
+    "totp_submit": "Se connecter",
+    "totp_restart": "Recommencer",
+    "totp_recovery_hint": "À la place d'un code, vous pouvez aussi saisir un code de récupération.",
+    "enroll_title": "Configurer le deuxième facteur",
+    "enroll_intro": "Ce compte est l'accès de secours et exige un deuxième facteur. Scannez le code avec une application d'authentification et confirmez avec le code affiché.",
+    "enroll_qr_alt": "Code QR pour l'application d'authentification",
+    "enroll_secret_label": "Si la caméra ne fonctionne pas",
+    "enroll_submit": "Terminer la configuration",
+    "recovery_title": "Codes de récupération",
+    "recovery_intro": "Conservez ces codes en lieu sûr. Chacun est utilisable une seule fois et remplace le code à usage unique si vous n'avez pas votre téléphone. Ils ne sont affichés que maintenant.",
+    "recovery_continue": "Codes sauvegardés, continuer",
+    "oidc_errors": {
+      "title": "Connexion via Entra ID impossible",
+      "user_not_synced": "Votre compte n’est pas encore connu de Magister. Il doit se trouver dans une UO autorisée de l’AD et avoir été synchronisé une fois — ou être inscrit comme premier administrateur. Veuillez contacter l’informatique.",
+      "user_disabled": "Votre compte est désactivé dans l’AD.",
+      "oidc_no_oid_for_bootstrap": "Entra n’a pas transmis d’ID d’objet (oid). L’inscription d’application est-elle configurée pour les comptes professionnels de cet annuaire ?",
+      "oidc_missing_upn": "Entra n’a pas transmis de nom d’utilisateur (preferred_username). Vérifier les scopes « openid profile email ».",
+      "oidc_state_mismatch": "La connexion ne correspond pas (expirée ou démarrée dans une autre fenêtre). Veuillez vous reconnecter.",
+      "oidc_callback_invalid": "La connexion a expiré ou est incomplète. Veuillez vous reconnecter.",
+      "oidc_flow_tampered": "La connexion a été modifiée et donc interrompue. Veuillez vous reconnecter.",
+      "oidc_error": "Entra a interrompu la connexion ({{entra}}). Souvent : l’utilisateur n’est pas attribué à l’application ou a refusé le consentement.",
+      "oidc_discovery_failed": "Entra n’est pas joignable pour cette installation ou l’ID de locataire est incorrect. L’informatique vérifie les paramètres.",
+      "oidc_token_exchange_failed": "Entra a refusé la connexion de Magister — en général un secret client erroné ou expiré, ou une URI de redirection différente. L’informatique vérifie l’inscription d’application.",
+      "oidc_token_invalid": "Le jeton d’Entra n’était pas valide (émetteur ou ID client incorrects). L’informatique vérifie les paramètres.",
+      "oidc_no_id_token": "Entra n’a pas fourni de jeton d’ID. Vérifier le scope « openid ».",
+      "generic": "La connexion via Entra ID a échoué. Veuillez réessayer ; si cela persiste, contactez l’informatique."
+    }
   },
   "me": {
     "title": "Mon profil",
@@ -421,6 +451,9 @@
     "settings": {
       "title": "Paramètres système",
       "description": "Configuration OIDC et AD. Les changements prennent effet immédiatement.",
+      "description_managed": "La configuration système est gérée par l'exploitant. Ce qui reste ici, ce sont les actions sur vos propres données.",
+      "ad_actions_title": "Active Directory",
+      "ad_actions_desc": "Les paramètres de connexion sont gérés par l'exploitant. La synchronisation reste ici : elle lit votre AD et écrit dans vos données.",
       "mail_section": "Domaines e-mail",
       "mail_section_desc": "Domaines proposés dans le formulaire d'édition utilisateur.",
       "oidc_section": "Entra ID (OIDC)",
@@ -451,7 +484,16 @@
         "ad_search_failed": "Échec de la recherche AD. Vérifiez le DN de la base de recherche et que le compte de service peut lire cette sous-arborescence.",
         "ad_bind_failed": "Authentification AD refusée. Vérifiez le DN de bind et le mot de passe.",
         "ad_config": "Configuration AD incomplète. Vérifiez les contrôleurs de domaine et le compte de bind.",
-        "ad_unavailable": "AD injoignable."
+        "ad_unavailable": "AD injoignable.",
+        "ad_connector_scope": "Le connecteur AD a refusé la recherche : la base de recherche se trouve en dehors des UO autorisées dans le cockpit. Harmoniser la base de recherche et l’autorisation.",
+        "ad_connector_offline": "Le connecteur AD sur le contrôleur de domaine n’a pas répondu. Le service « Magister Connector-Agent » est-il démarré ?"
+      },
+      "sync_ad_reason_managed": {
+        "ad_search_base_missing": "La base de recherche (utilisateurs) n'est pas encore définie pour cette installation. Les réglages AD sont gérés par Vita Brevis — veuillez vous adresser à Vita Brevis.",
+        "ad_search_base_not_found": "La base de recherche configurée n'existe pas dans votre AD (noSuchObject). Les réglages AD sont gérés par Vita Brevis — veuillez lui communiquer le bon chemin d'OU.",
+        "ad_config": "La connexion AD de cette installation est incomplète. Veuillez vous adresser à Vita Brevis.",
+        "ad_connector_scope": "La base de recherche AD se trouve en dehors des UO autorisées. Vita Brevis gère l’autorisation — merci de le signaler.",
+        "ad_connector_offline": "Le connecteur AD sur votre contrôleur de domaine ne répond pas. Vérifiez que le service « Magister Connector-Agent » est démarré, sinon contactez Vita Brevis."
       },
       "save": "Enregistrer",
       "success": "Paramètres enregistrés.",
@@ -484,9 +526,6 @@
         "zyklus1_max_grade": "Cycle 1 jusqu'à l'année",
         "zyklus2_max_grade": "Cycle 2 jusqu'à l'année",
         "ad_groups_search_base": "Base de recherche des groupes (facultatif)",
-        "ad_login_enabled": "Activer la connexion AD",
-        "ad_login_group": "Groupe d'autorisation",
-        "ad_login_group_hint": "Groupe AD (DN ou CN) dont les membres peuvent se connecter via AD. Appartenance directe uniquement.",
         "ninja_enabled": "Activer NinjaOne",
         "ninja_enabled_hint": "Désactivé = le connecteur est inactif et rien ne s’affiche dans la vue détaillée.",
         "ninja_region": "Région (instance)",
@@ -510,9 +549,6 @@
       "password_store_hint": "Permet de stocker les mots de passe par utilisateur (chiffrés avec la clé serveur MAGISTER_AUDIT_KEY, pas dans la BD). Base pour les listes de mots de passe groupées.",
       "userconfig_title": "Configuration utilisateur – groupes AD par défaut",
       "userconfig_hint": "Les comptes nouvellement créés (import + création unique) sont automatiquement ajoutés à ces groupes AD — une DN de groupe par ligne. N'affecte que les nouveaux comptes.",
-      "ad_login_title": "Connexion AD",
-      "ad_login_enabled_hint": "Permet la connexion avec un nom d'utilisateur et un mot de passe AD (LDAPS) en plus d'Entra ID. Pas de MFA sur cette voie.",
-      "ad_login_group_required": "Sans groupe, personne ne peut se connecter via AD. Veuillez indiquer un groupe.",
       "danger_title": "Zone dangereuse",
       "purge_demo_desc": "Supprime définitivement les données d’exemple.",
       "purge_demo_button": "Supprimer les données de démo",
@@ -833,7 +869,8 @@
       "state_error": "erreur",
       "state_running": "en cours",
       "state_queued": "en file"
-    }
+    },
+    "managed_by_platform": "Le redémarrage, la mise à jour et la suppression de données ou d'activités sont effectués par Vita Brevis pour cette installation. Veuillez vous adresser à Vita Brevis."
   },
   "letters": {
     "button": "Lettre",
@@ -1194,7 +1231,8 @@
     "mod_imports": "Imports (synchro AD, import en masse)",
     "mod_departments": "Départements / équipes",
     "mod_reports": "Analyses et rapports",
-    "mod_devices": "Attribution d'appareils"
+    "mod_devices": "Attribution d'appareils",
+    "managed_by_platform": "Le profil et les modules sont gérés par Vita Brevis. Pour toute modification, veuillez vous adresser à Vita Brevis."
   },
   "departments": {
     "title": "Départements",
@@ -1299,5 +1337,54 @@
     "archive": "Archiver",
     "create_failed": "Échec de l’enregistrement.",
     "empty": "Aucun rôle d’accès."
+  },
+  "managed": {
+    "how": "Si vous avez besoin d'une modification, adressez-vous à votre interlocuteur chez Vita Brevis. Ce qui s'applique ici est visible dans le journal d'audit sous « platform_settings_reconciled ».",
+    "roles_desc": "Ce qu'un rôle est autorisé à faire est défini de manière centralisée. Qui détient quel rôle reste votre décision — dans l'encadré ci-dessous.",
+    "roles_title": "Matrice des droits gérée par Vita Brevis",
+    "settings_desc": "Les paramètres système de cette installation sont gérés de manière centralisée et ne se modifient pas ici.",
+    "settings_title": "Géré par Vita Brevis",
+    "who": "La gestion est assurée par Vita Brevis dans la console d'exploitation. Les modifications arrivent automatiquement ici et figurent dans votre journal d'audit."
+  },
+  "platform_tpl": {
+    "locked_title": "Imposé par l'exploitant",
+    "locked_desc": "Pour ce modèle, c'est la version de Vita Brevis qui s'applique. Votre propre texte reste enregistré et s'appliquera de nouveau dès que la consigne sera levée — il n'est pas supprimé.",
+    "update_title": "Nouvelle version globale disponible",
+    "update_desc": "Vita Brevis a livré la version {{version}} de ce modèle. Votre version reste en vigueur; vous pouvez lire la nouvelle et en reprendre ce qui vous convient.",
+    "applies_title": "Version de Vita Brevis en vigueur",
+    "applies_desc": "Vous n'avez pas de texte propre pour ce modèle. C'est la version de l'exploitant qui est imprimée; dès que vous enregistrez ici, la vôtre s'applique.",
+    "show": "Afficher la version de l'exploitant",
+    "hide": "Masquer la version de l'exploitant",
+    "acknowledge": "Vu",
+    "acknowledging": "Enregistrement …"
+  },
+  "operator": {
+    "banner_title": "Vita Brevis observe",
+    "banner_body": "{{operator}} a un accès en lecture à cette installation jusqu'à {{until}}.",
+    "banner_self_title": "Installation d'un client",
+    "banner_self_body": "Vous travaillez pour le compte d'un client, en lecture seule, jusqu'à {{until}}.",
+    "banner_reason": "Motif : {{reason}}",
+    "banner_reason_ticket": "Ticket {{ticket}} · {{reason}}",
+    "list_title": "Accès de Vita Brevis",
+    "list_intro": "Quand une personne de Vita Brevis a consulté cette installation, et pourquoi. Un tel accès est toujours en lecture seule, limité à une heure et exige un motif.",
+    "list_empty": "Personne de Vita Brevis n'a encore consulté cette installation.",
+    "col_when": "Début",
+    "col_who": "Qui",
+    "col_reason": "Motif",
+    "col_state": "État",
+    "state_running": "en cours",
+    "state_ended": "terminé",
+    "state_expired": "expiré",
+    "until": "Jusqu'à",
+    "redeem_title": "Ouvrir l'accès",
+    "redeem_pending": "Vérification du jeton …",
+    "redeem_ok": "L'accès est ouvert.",
+    "redeem_error": "Accès impossible.",
+    "redeem_error_hint": "Le jeton est expiré, déjà utilisé ou destiné à un autre client. En émettre un nouveau depuis la console.",
+    "redeem_readonly": "Cet accès est en lecture seule. Aucune modification n'est possible, et le client voit un bandeau tant qu'il est actif.",
+    "redeem_enter": "Vers l'installation",
+    "banner_link": "Voir les accès",
+    "me_card": "Quand une personne de Vita Brevis a consulté cette installation.",
+    "me_card_link": "Ouvrir la liste des accès"
   }
 }

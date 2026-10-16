@@ -8,11 +8,25 @@ from datetime import timedelta
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.auth.operator_guard import deny_unsafe_for_operator
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import RoleAssignment
 from magister_api.repositories.auth import RoleAssignmentRepository, SessionRepository
 from magister_api.repositories.base import ScopeContext
+
+
+@dataclass(frozen=True)
+class OperatorContext:
+    """Wer von Vita Brevis gerade zusieht (ADR-0019).
+
+    Steht an der Session und nicht in den Personendaten des Kunden: es gibt zu
+    einem Operator keine Zeile in ``ad_user_cache`` und keine Rollenzuweisung
+    (ADR-0019 D5).
+    """
+
+    upn: str
+    jti: object  # uuid.UUID
 
 
 @dataclass(frozen=True)
@@ -25,13 +39,31 @@ class AuthenticatedUser:
     school_scope: tuple[int, ...]
     roles: tuple[str, ...]
     expires_at: object  # datetime, kept untyped to avoid an import cycle in dataclasses
-    auth_kind: str = "oidc"  # "oidc" | "local"
+    auth_kind: str = "oidc"  # "oidc" | "local" | "operator"
+    #: Gesetzt genau dann, wenn ``auth_kind == "operator"``.
+    operator: OperatorContext | None = None
+
+    @property
+    def sees_whole_tenant(self) -> bool:
+        """Darf über alle Standorte hinweg **lesen**.
+
+        Zwei Fälle: der Admin des Kunden und ein Operator-Zugriff. Der
+        Unterschied zwischen ihnen ist nicht die Reichweite, sondern das
+        Schreiben — und das regelt die Methodenregel (ADR-0019 D1), nicht diese
+        Eigenschaft.
+        """
+        return self.is_admin or self.operator is not None
 
     def to_scope(self) -> ScopeContext:
         return ScopeContext(
             ad_object_guid=self.ad_object_guid,
             upn=self.upn,
-            is_admin=self.is_admin,
+            # Ein Operator sieht alle Standorte des Kunden: ein Support-Fall
+            # kennt keine Standortgrenze (ADR-0019 D5). Dass daraus kein
+            # Schreibrecht wird, leistet die Methodenregel in
+            # ``deny_unsafe_for_operator`` — nicht eine Rechteprüfung, die man
+            # vergessen kann.
+            is_admin=self.sees_whole_tenant,
             school_scope=self.school_scope,
             roles=self.roles,
         )
@@ -89,6 +121,22 @@ async def get_optional_user(
     if sess.expires_at <= utcnow():
         await sessions_repo.delete(cookie)
         return None
+
+    if sess.auth_kind == "operator":
+        # Eine Operator-Sitzung wird **nicht** verlängert: sie läuft ab, wenn
+        # sie abläuft. Ein gleitendes Fenster machte aus einer Stunde einen
+        # Arbeitstag, solange jemand das Fenster offen hat.
+        deny_unsafe_for_operator(request)
+        return AuthenticatedUser(
+            ad_object_guid="",
+            upn=sess.operator_upn or "",
+            is_admin=False,
+            school_scope=(),
+            roles=(),
+            expires_at=sess.expires_at,
+            auth_kind="operator",
+            operator=OperatorContext(upn=sess.operator_upn or "", jti=sess.operator_jti),
+        )
 
     # Sliding refresh — flush only; the session-per-request wrapper commits.
     await sessions_repo.touch(cookie, timedelta(minutes=settings.session_lifetime_minutes))

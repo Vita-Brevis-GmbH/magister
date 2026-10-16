@@ -49,3 +49,19 @@ deploy/compose/caddy_config/
 deploy/compose/postgres_data/
 deploy/compose/backups/
 tsconfig.tsbuildinfo
+
+# Die Entwicklungsumgebung aus scripts/dev-umgebung.sh. Darin liegen echte
+# Geheimnisse (Rollenpasswörter, Kundenschlüssel, private Zertifikatsschlüssel)
+# und Kundendumps — nichts davon gehört je in ein Repository, auch nicht als
+# Testwert: ein Beispielschlüssel im Verlauf ist ein Schlüssel, den jemand
+# irgendwann produktiv einsetzt.
+/dev/
+
+# Erzeugt von scripts/plattform-aufbau.sh: Test-CA, Schlüssel, Kundendumps.
+/plattform/
+/cockpit/deploy/certs/
+# Erzeugt von neueren pnpm-Fassungen, wenn sie Einstellungen ablegen — hier
+# gibt es keinen Workspace, und eine Datei ohne `packages:` bricht jeden
+# folgenden `pnpm install` ab.
+cockpit/web/pnpm-workspace.yaml
+apps/web/pnpm-workspace.yaml

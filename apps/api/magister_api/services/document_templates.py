@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.repositories.document_templates import DocumentTemplateRepository
 
 # The letter templates an operator may override (mirrors letters.ALLOWED_TEMPLATES).
@@ -146,9 +147,25 @@ class UnknownTemplateKeyError(ValueError):
 
 
 @dataclass(frozen=True)
-class RenderedTemplate:
+class ResolvedTemplate:
+    """Welche Fassung für einen Brief gilt — das Ergebnis der Kette (ADR-0018 D3).
+
+    `origin` und `locked` gehören ins Ergebnis und nicht in den Aufrufer: wer
+    einen Brief erzeugt, soll im Audit oder in der Vorschau sagen können,
+    *welche* Fassung gedruckt wurde. Ohne das Feld wäre „warum steht da ein
+    anderer Text als in meinem Editor?" eine Frage, die nur die Datenbank
+    beantwortet.
+    """
+
     subject: str | None
     body_html: str
+    #: "platform" oder "tenant".
+    origin: str
+    #: Die Plattformfassung, wenn eine gilt; sonst `None`.
+    version: int | None = None
+    #: Die Plattformfassung gilt, **weil** sie gesperrt ist — die eigene
+    #: Fassung des Kunden liegt daneben und wurde übergangen.
+    locked: bool = False
 
 
 def _sandbox() -> SandboxedEnvironment:
@@ -206,10 +223,98 @@ class DocumentTemplateService:
     async def resolve(
         self, *, key: str, language: str, school_id: int | None
     ) -> DocumentTemplate | None:
+        """Nur die eigene Fassung des Kunden — Standort vor global.
+
+        Für die Bearbeitungsfläche. Wer einen Brief **druckt**, nimmt
+        `resolve_effective`: dort entscheidet die vollständige Kette.
+        """
         return await self.repo.resolve(key=key, language=language, school_id=school_id)
+
+    async def resolve_effective(
+        self, *, key: str, language: str, school_id: int | None
+    ) -> ResolvedTemplate | None:
+        """Die Kette aus ADR-0018 D3, an **einer** Stelle.
+
+        1. Plattformfassung, wenn sie gesperrt ist (`may_override = False`)
+        2. eigene Fassung für diesen Standort
+        3. eigene globale Fassung
+        4. Plattformfassung
+        5. `None` — der Aufrufer nimmt die eingebaute Vorlage
+
+        Absichtlich eine Funktion und nicht drei Bedingungen in drei
+        Aufrufern: die Reihenfolge *ist* der Entscheid. Verstreut wäre sie
+        beim nächsten Umbau an zwei von drei Stellen richtig.
+        """
+        platform = await self.repo.platform_row(key=key, language=language)
+        if platform is not None and not platform.may_override:
+            # Der Kunde hat vielleicht eine eigene Fassung. Sie bleibt liegen
+            # (ADR-0018 D3) — gelöscht wird sie nicht, denn eine Sperre kann
+            # zurückgenommen werden.
+            return ResolvedTemplate(
+                subject=platform.subject,
+                body_html=platform.body_html,
+                origin="platform",
+                version=platform.version,
+                locked=True,
+            )
+        own = await self.repo.resolve(key=key, language=language, school_id=school_id)
+        if own is not None:
+            return ResolvedTemplate(subject=own.subject, body_html=own.body_html, origin="tenant")
+        if platform is not None:
+            return ResolvedTemplate(
+                subject=platform.subject,
+                body_html=platform.body_html,
+                origin="platform",
+                version=platform.version,
+            )
+        return None
 
     async def list_for_admin(self, *, school_id: int | None) -> list[DocumentTemplate]:
         return await self.repo.list_for_admin(school_id=school_id)
+
+    async def platform_state(self) -> dict[tuple[str, str], PlatformDocumentTemplate]:
+        """Die gelieferten Fassungen, nach `(key, language)` greifbar."""
+        return {(row.key, row.language): row for row in await self.repo.platform_rows()}
+
+    async def acknowledge(
+        self,
+        *,
+        template_id: int,
+        actor_upn: str | None,
+        actor_object_guid: str | None,
+        ip: str | None,
+        request_id: str,
+    ) -> DocumentTemplate | None:
+        """„Die neue globale Fassung habe ich gesehen" (ADR-0018 D4).
+
+        Quittiert wird die Fassung, die **gerade** geliefert ist — nicht eine
+        vom Aufrufer genannte Nummer. Sonst könnte eine Oberfläche mit einem
+        veralteten Stand eine Fassung quittieren, die noch nicht da ist, und
+        der Hinweis wäre für die nächste echte Lieferung verbraucht.
+        """
+        row = await self.repo.get(template_id)
+        if row is None:
+            return None
+        platform = await self.repo.platform_row(key=row.key, language=row.language)
+        if platform is None:
+            # Nichts zu quittieren. Kein Fehler: es kann sein, dass der
+            # Betreiber die Vorlage gerade zurückgezogen hat, während die
+            # Oberfläche den Hinweis noch anzeigte.
+            return row
+        row.platform_version_ack = platform.version
+        await self.repo.touch(row)
+        await self.audit.emit(
+            action="document_template_platform_acknowledged",
+            target_kind="document_template",
+            target_id=str(row.id),
+            actor_upn=actor_upn,
+            actor_object_guid=actor_object_guid,
+            school_id=row.school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={"key": row.key, "language": row.language, "version": platform.version},
+        )
+        return row
 
     async def save(
         self,
@@ -286,7 +391,7 @@ __all__ = [
     "STARTER_TEMPLATES",
     "COMPANY_STARTER_TEMPLATES",
     "DocumentTemplateService",
-    "RenderedTemplate",
+    "ResolvedTemplate",
     "TemplateRenderError",
     "UnknownTemplateKeyError",
     "sample_context",
