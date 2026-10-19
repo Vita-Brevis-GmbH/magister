@@ -41,8 +41,9 @@ const SCHOOL_KINDS: ImportKind[] = [
   "class_teachers",
   "students",
   "teachers",
+  "passwords",
 ];
-const COMPANY_KINDS: ImportKind[] = ["company_users"];
+const COMPANY_KINDS: ImportKind[] = ["company_users", "passwords"];
 
 function ImportsPage(): JSX.Element {
   const { t } = useTranslation();
@@ -396,7 +397,13 @@ function JobDetailModal({ jobId, onClose }: { jobId: number; onClose: () => void
                     <TableCell className="text-xs">
                       <code className="text-muted-foreground">{summarizeRow(r.raw_data)}</code>
                     </TableCell>
-                    <TableCell className="text-xs text-destructive">
+                    <TableCell
+                      className={
+                        r.action === "error"
+                          ? "text-xs text-destructive"
+                          : "text-xs text-amber-700 dark:text-amber-300"
+                      }
+                    >
                       {r.errors.length > 0 ? r.errors.join("; ") : ""}
                     </TableCell>
                   </TableRow>

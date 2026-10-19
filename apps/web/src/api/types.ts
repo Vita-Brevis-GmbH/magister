@@ -1144,7 +1144,8 @@ export type ImportKind =
   | "class_teachers"
   | "students"
   | "teachers"
-  | "company_users";
+  | "company_users"
+  | "passwords";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";
 

@@ -35,6 +35,7 @@ from magister_api.db import get_session
 from magister_api.models.import_job import (
     ALLOWED_IMPORT_KINDS,
     IMPORT_KIND_COMPANY_USERS,
+    IMPORT_KIND_PASSWORDS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
 )
@@ -73,11 +74,18 @@ require_import_access = require_capability(Capability.IMPORT_RUN)  # admin + sch
 
 def _authorize_kind(user: AuthenticatedUser, matrix: RbacMatrix, kind: str) -> None:
     """Enforce the per-kind capability rule. Raises 403 on mismatch."""
-    # Provisioning imports create AD accounts → USER_ADMINISTER (admin + SMI);
-    # structural imports need ORGUNIT_MANAGE (admin + Schulleitung).
+    # Provisioning imports create AD accounts and the password import sets AD
+    # passwords → USER_ADMINISTER (admin + SMI); structural imports need
+    # ORGUNIT_MANAGE (admin + Schulleitung).
     needed = (
         Capability.USER_ADMINISTER
-        if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS, IMPORT_KIND_COMPANY_USERS)
+        if kind
+        in (
+            IMPORT_KIND_STUDENTS,
+            IMPORT_KIND_TEACHERS,
+            IMPORT_KIND_COMPANY_USERS,
+            IMPORT_KIND_PASSWORDS,
+        )
         else Capability.ORGUNIT_MANAGE
     )
     if not has_capability(user, matrix, needed):

@@ -19,9 +19,11 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import delete as sqla_delete
 from sqlalchemy import func, select
+from sqlalchemy import update as sqla_update
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
 from magister_api.ad.client import AdClient
+from magister_api.ad.errors import AdUnavailableError, is_password_rejected
 from magister_api.ad.ou import (
     select_provision_groups,
     select_student_ou,
@@ -52,6 +54,7 @@ from magister_api.models.import_job import (
     IMPORT_KIND_CLASS_TEACHERS,
     IMPORT_KIND_CLASSES,
     IMPORT_KIND_COMPANY_USERS,
+    IMPORT_KIND_PASSWORDS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
     IMPORT_STATUS_APPLIED,
@@ -67,6 +70,7 @@ from magister_api.models.school_class import (
 )
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.group_templates import GroupTemplateRepository
+from magister_api.services.password_vault import PasswordVaultService
 from magister_api.tenancy.keys import keys_for
 
 logger = logging.getLogger(__name__)
@@ -236,6 +240,17 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             ],  # noqa: E501
         ],
     ),
+    IMPORT_KIND_PASSWORDS: (
+        # Bestehende Konten (Übernahme einer alten Anlage): das Passwort wird
+        # im AD gesetzt und im Tresor abgelegt (Klassen-Passwortlisten). Leere
+        # Schalter: force_change = nein, cannot_change_password = wie die
+        # Zielgruppe des Kontos, sonst wie bisher im AD.
+        ["upn", "password", "force_change", "cannot_change_password"],
+        [
+            ["anna.muster@schule.ch", "Sonne-Wald-42", "", "true"],
+            ["ben.beispiel@schule.ch", "Tiger-Berg-17", "", ""],
+        ],
+    ),
 }
 
 
@@ -257,7 +272,11 @@ OPTIONAL_HEADERS: dict[str, list[str]] = {
         "password_never_expires",
         "zielgruppe",
     ],
+    IMPORT_KIND_PASSWORDS: ["force_change", "cannot_change_password"],
 }
+
+# Längstes Passwort, das der Passwort-Import annimmt (AD: 256 Zeichen).
+_MAX_PASSWORD_LEN = 128
 
 # Local-part of an email address (mirrors schemas.user_attrs.UPN_LOCAL_RE) —
 # used to validate ``mail_aliases`` cells on the company import.
@@ -575,7 +594,18 @@ class ImportService:
         for i, raw in enumerate(reader, start=2):  # start=2 → header is row 1
             # Normalize whitespace.
             row = {k: (v or "").strip() for k, v in raw.items() if k}
-            action, errors = await self._classify(school_id, kind, row)
+            secret_enc: object | None = None
+            if kind == IMPORT_KIND_PASSWORDS:
+                # Das Passwort kommt nie in raw_data (das zeigt die Oberfläche
+                # an), sondern verschlüsselt in secret_enc bis zum Übernehmen.
+                password = row.pop("password", "")
+                action, errors = await self._classify_password(school_id, row, password)
+                if action != IMPORT_ACTION_ERROR:
+                    secret_enc = func.pgp_sym_encrypt(
+                        password, keys_for(self.session, self.settings).secrets_key
+                    )
+            else:
+                action, errors = await self._classify(school_id, kind, row)
             counts[action] += 1
             staged = ImportStagedRow(
                 job_id=job.id,
@@ -584,6 +614,8 @@ class ImportService:
                 action=action,
                 errors=errors,
             )
+            if secret_enc is not None:
+                staged.secret_enc = secret_enc  # pyright: ignore[reportAttributeAccessIssue]
             self.session.add(staged)
 
         job.summary = dict(counts)
@@ -1075,6 +1107,73 @@ class ImportService:
 
         return IMPORT_ACTION_CREATE, []
 
+    async def _password_target(self, school_id: int, upn: str) -> AdUserCache | None:
+        """Das Konto einer Passwort-Zeile — nur am Standort des Imports."""
+        stmt = select(AdUserCache).where(
+            AdUserCache.upn == upn,
+            AdUserCache.school_id == school_id,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def _cannot_change_default(self, user: AdUserCache) -> bool:
+        """Leere Spalte: wie die Zielgruppe des Kontos, sonst wie bisher."""
+        if user.group_template_id is not None:
+            tpl = await self.session.get(GroupTemplate, user.group_template_id)
+            if tpl is not None:
+                return tpl.cannot_change_password
+        return user.cannot_change_password
+
+    async def _classify_password(
+        self, school_id: int, row: dict[str, str], password: str
+    ) -> tuple[str, list[str]]:
+        """Passwort-Zeile prüfen. Fehlertexte nennen das Passwort nie.
+
+        Die Stärke prüft erst das AD beim Übernehmen: alte Anlagen haben für die
+        Unterstufe oft eine eigene, lockere Richtlinie (Fine-Grained Policy).
+        """
+        upn = (row.get("upn") or "").strip().lower()
+        if not upn:
+            return IMPORT_ACTION_ERROR, ["upn is required"]
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"upn {upn!r} appears more than once in this file"]
+        self._seen_upns.add(upn)
+        if not password:
+            return IMPORT_ACTION_ERROR, ["password is required"]
+        if len(password) > _MAX_PASSWORD_LEN or any(ord(c) < 32 for c in password):
+            return IMPORT_ACTION_ERROR, [
+                f"password is too long (max {_MAX_PASSWORD_LEN}) or contains control characters"
+            ]
+        user = await self._password_target(school_id, upn)
+        if user is None:
+            return IMPORT_ACTION_ERROR, [f"account {upn!r} not found at this school"]
+        if not user.enabled:
+            return IMPORT_ACTION_ERROR, [f"account {upn!r} is disabled"]
+        try:
+            force_change = _flag(row, "force_change", False)
+            cannot_change = _flag(
+                row, "cannot_change_password", await self._cannot_change_default(user)
+            )
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if force_change and cannot_change:
+            # Das AD verlangte ein neues Passwort, verböte aber das Ändern.
+            return IMPORT_ACTION_ERROR, [
+                "force_change and cannot_change_password cannot both be true"
+            ]
+        if not keys_for(self.session, self.settings).secrets_key:
+            return IMPORT_ACTION_ERROR, ["secrets key not configured"]
+        # Hinweise (keine Fehler): die Zeile setzt das Passwort im AD, legt es
+        # aber nicht im Tresor ab — vor dem Übernehmen sichtbar.
+        notes: list[str] = []
+        if not (await self._app_settings_row()).password_store_enabled:
+            notes.append("password vault is turned off: password is set in AD only")
+        elif force_change or not cannot_change:
+            notes.append(
+                "not stored in the vault: the account may change its password "
+                "(set cannot_change_password=true or assign a Zielgruppe)"
+            )
+        return IMPORT_ACTION_UPDATE, notes
+
     async def _lookup_user(self, upn: str, *, kind: str) -> AdUserCache | None:
         stmt = select(AdUserCache).where(
             AdUserCache.upn == upn,
@@ -1150,6 +1249,8 @@ class ImportService:
                     )
                 elif job.kind == IMPORT_KIND_COMPANY_USERS:
                     cred = await self._apply_company_user(job.school_id, staged, ip, request_id)
+                elif job.kind == IMPORT_KIND_PASSWORDS:
+                    await self._apply_password(job.school_id, staged, ip, request_id)
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
                 await sp.commit()
@@ -1181,6 +1282,7 @@ class ImportService:
         job.status = IMPORT_STATUS_APPLIED
         job.applied_at = now
         job.summary = {**job.summary, "applied": applied_counts}
+        await self._drop_secrets(job.id)
         await self.session.flush()
 
         # The actual mutations (teacher_provisioned / student_provisioned, or
@@ -1673,6 +1775,83 @@ class ImportService:
             force_change=force_change,
         )
 
+    async def _apply_password(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> None:
+        if self.ad is None:
+            raise ValueError("ad_client_unavailable")
+        row = staged.raw_data
+        upn = row["upn"].strip().lower()
+        key = keys_for(self.session, self.settings).secrets_key
+        if not key:
+            raise ValueError("secrets key not configured")
+        password = (
+            await self.session.execute(
+                select(func.pgp_sym_decrypt(ImportStagedRow.secret_enc, key)).where(
+                    ImportStagedRow.id == staged.id,
+                    ImportStagedRow.secret_enc.is_not(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if not password:
+            raise ValueError("password missing — upload the file again")
+        user = await self._password_target(school_id, upn)
+        if user is None or not user.enabled:
+            raise ValueError(f"account {upn!r} not found at this school")
+        force_change = _flag(row, "force_change", False)
+        cannot_change = _flag(
+            row, "cannot_change_password", await self._cannot_change_default(user)
+        )
+        user_dn = await self.ad.find_user_dn(user.ad_object_guid)
+        if not user_dn:
+            raise ValueError("account not found in AD")
+        try:
+            await self.ad.modify_password(
+                user_dn=user_dn, new_password=str(password), force_change=force_change
+            )
+        except AdUnavailableError as exc:
+            if is_password_rejected(exc):
+                raise ValueError("password rejected by AD policy") from exc
+            raise
+        if user.cannot_change_password != cannot_change:
+            await self.ad.set_cannot_change_password(user_dn=user_dn, value=cannot_change)
+            user.cannot_change_password = cannot_change
+
+        # Tresor nur, wenn das Passwort so bleibt (gleiche Regel wie überall).
+        settings_row = await self._app_settings_row()
+        store = bool(settings_row.password_store_enabled) and cannot_change and not force_change
+        vault = PasswordVaultService(self.session, self.settings)
+        if store:
+            await vault.store(user.ad_object_guid, str(password))
+        elif user.store_password:
+            await vault.clear(user.ad_object_guid)
+        user.store_password = store
+        await self.session.flush()
+        await self.audit.emit(
+            action="password_imported",
+            target_kind="ad_user",
+            target_id=user.ad_object_guid,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={
+                "upn": upn,
+                "force_change": force_change,
+                "cannot_change": cannot_change,
+                "stored": store,
+            },
+        )
+
+    async def _drop_secrets(self, job_id: int) -> None:
+        """Verschlüsselte Passwörter des Imports löschen (nach Übernehmen/Abbrechen)."""
+        await self.session.execute(
+            sqla_update(ImportStagedRow)
+            .where(ImportStagedRow.job_id == job_id, ImportStagedRow.secret_enc.is_not(None))
+            .values(secret_enc=None)
+        )
+
     # ----- Cancel -------------------------------------------------------
 
     async def cancel(self, *, job_id: int, ip: str | None, request_id: str) -> ImportJob:
@@ -1682,6 +1861,7 @@ class ImportService:
         if job.status != IMPORT_STATUS_STAGED:
             raise ImportJobBadStateError("import_job_not_staged")
         job.status = IMPORT_STATUS_CANCELLED
+        await self._drop_secrets(job.id)
         await self.session.flush()
         await self.audit.emit(
             action="import_cancelled",

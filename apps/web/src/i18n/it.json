@@ -796,7 +796,9 @@
     "kind_teachers": "Docenti",
     "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
     "kind_company_users": "Collaboratori",
-    "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo."
+    "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
+    "kind_passwords": "Password di account esistenti",
+    "kind_passwords_desc": "Riprendere le password note di account esistenti (p. es. da un vecchio impianto): Magister le imposta nell'AD e le salva nella cassaforte delle password, così che gli elenchi delle password per classe funzionino. Colonne: upn, password. Facoltativo: force_change (vuoto = no), cannot_change_password (vuoto = come il gruppo dell'account, altrimenti invariato). Una password viene salvata nella cassaforte solo se l'account non può cambiarla e la cassaforte è attiva. Le password restano cifrate fino all'applicazione e poi vengono eliminate; la robustezza la verifica l'AD."
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",

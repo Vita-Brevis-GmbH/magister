@@ -793,7 +793,9 @@
     "kind_teachers": "Lehrpersonen",
     "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe.",
     "kind_company_users": "Mitarbeitende",
-    "kind_company_users_desc": "Neue AD-Konten für Mitarbeitende anlegen (in der konfigurierten Firmen-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change, mail (leer = UPN), mail_aliases (weitere Adressen, mit Strichpunkt getrennt), cannot_change_password, password_never_expires. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe."
+    "kind_company_users_desc": "Neue AD-Konten für Mitarbeitende anlegen (in der konfigurierten Firmen-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change, mail (leer = UPN), mail_aliases (weitere Adressen, mit Strichpunkt getrennt), cannot_change_password, password_never_expires. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe.",
+    "kind_passwords": "Passwörter bestehender Konten",
+    "kind_passwords_desc": "Bekannte Passwörter bestehender Konten übernehmen (z. B. aus einer alten Anlage): Magister setzt sie im AD und legt sie im Passwort-Tresor ab, damit die Klassen-Passwortlisten funktionieren. Spalten: upn, password. Optional: force_change (leer = nein), cannot_change_password (leer = wie die Zielgruppe des Kontos, sonst wie bisher). In den Tresor kommt ein Passwort nur, wenn das Konto es nicht ändern darf und der Tresor eingeschaltet ist. Die Passwörter werden bis zum Übernehmen verschlüsselt zwischengespeichert und danach gelöscht; die Stärke prüft das AD."
   },
   "privacy": {
     "section_title": "Datenauskunft (revDSG Art. 25)",

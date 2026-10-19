@@ -282,6 +282,9 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-11** Audit-Liste: gefiltert, entschlüsselt; jede Mutation aus F-02…F-10 steht drin mit actor, action, target, ip, request_id.
 - [ ] **F-12** Per-User-Einstellungen: Sprache/Region/Formate wirken app-weit.
 - [ ] **F-13** Geräte (NinjaOne), falls konfiguriert: Liste je Schule gefiltert.
+- [ ] **F-14** Zielgruppen: neue Schule hat sofort „Schüler:in Zyklus 1/2/3" und „Lehrperson"; Einzel-Anlage mit Zyklus-1-Zielgruppe → lesbares Passwort, „darf nicht ändern", im Tresor; Anmelde-PDF direkt nach der Anlage.
+- [ ] **F-15** Zielgruppe nachträglich zuweisen (einzeln und als Sammelaktion): Gruppen der bisherigen Zielgruppe fallen im AD weg, die neuen kommen dazu; Hinweis „bleibt in seiner OU" bei anderer Kontoart.
+- [ ] **F-16** Passwort-Import (Art „Passwörter bestehender Konten"): Vorschau zeigt kein Passwort; nach Übernehmen Anmeldung mit dem importierten Passwort im AD möglich, Klassen-Passwortliste zeigt es; `import_staged_rows.secret_enc` ist danach leer; Konto anderer Schule → Zeilenfehler; Schulleitung → 403.
 
 ### 7.2 Firma (Kunde B)
 
