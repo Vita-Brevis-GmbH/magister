@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 import pytest_asyncio
@@ -60,7 +60,7 @@ async def _vault(session: AsyncSession, on: bool) -> None:
     await session.commit()
 
 
-async def _defaults(as_admin: AsyncClient, school_id: int) -> dict[str, dict[str, object]]:
+async def _defaults(as_admin: AsyncClient, school_id: int) -> dict[str, dict[str, Any]]:
     r = await as_admin.post("/admin/group-templates/defaults", json={"school_id": school_id})
     assert r.status_code == 200, r.text
     return {t["kind"]: t for t in r.json()}
