@@ -1,6 +1,6 @@
 """Passwort-Import: Import-Art "passwords", verschlüsselter Zwischenstand
 
-Revision ID: 0048_password_import
+Revision ID: 0048_kennwort_import
 Revises: 0047_zielgruppen
 Create Date: 2026-10-19
 
@@ -22,7 +22,7 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "0048_password_import"
+revision: str = "0048_kennwort_import"
 down_revision: str | Sequence[str] | None = "0047_zielgruppen"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
