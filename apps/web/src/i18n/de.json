@@ -761,7 +761,7 @@
     "kind_class_memberships_desc": "Schüler:innen einer Klasse zuweisen. UPN muss im AD existieren. Spalten: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Klassenlehrpersonen (KL/Co-KL/Stellvertretung) zuweisen. Spalten: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Neue Schüler:innen (AD-Accounts anlegen)",
-    "kind_students_desc": "Legt neue AD-Accounts an und weist sie einer Klasse zu. Passwörter werden generiert. Spalten: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "kind_students_desc": "Legt neue AD-Accounts an und weist sie einer Klasse zu. Passwörter werden generiert. Spalten: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe.",
     "credentials_ready": "{{count}} Account(s) angelegt — Zugangsdaten jetzt herunterladen",
     "credentials_hint": "Die Passwörter werden nur einmal angezeigt und nirgends gespeichert. Lade die PDFs (Handouts + Übersicht) jetzt herunter.",
     "download_handouts": "Zugangsdaten-PDFs herunterladen",
@@ -791,9 +791,9 @@
     "school_hint": "Der Import wird diesem {{unit}} zugeordnet.",
     "error_school_required": "Bitte zuerst den Ziel-{{unit}} auswählen.",
     "kind_teachers": "Lehrpersonen",
-    "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe.",
+    "kind_teachers_desc": "Neue AD-Lehrer-Konten anlegen (in der Lehrer-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change. Ohne Klasse/Stufe. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe.",
     "kind_company_users": "Mitarbeitende",
-    "kind_company_users_desc": "Neue AD-Konten für Mitarbeitende anlegen (in der konfigurierten Firmen-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change, mail (leer = UPN), mail_aliases (weitere Adressen, mit Strichpunkt getrennt), cannot_change_password, password_never_expires."
+    "kind_company_users_desc": "Neue AD-Konten für Mitarbeitende anlegen (in der konfigurierten Firmen-OU). Spalten: given_name, surname, display_name, upn, sam_account_name, force_change, mail (leer = UPN), mail_aliases (weitere Adressen, mit Strichpunkt getrennt), cannot_change_password, password_never_expires. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe."
   },
   "privacy": {
     "section_title": "Datenauskunft (revDSG Art. 25)",

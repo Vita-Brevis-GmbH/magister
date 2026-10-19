@@ -764,7 +764,7 @@
     "kind_class_memberships_desc": "Assegna alunni/e a una classe. L'UPN deve esistere in AD. Colonne: student_upn, class_name, valid_from, valid_to.",
     "kind_class_teachers_desc": "Assegna insegnanti di classe (titolare/co/supplente). Colonne: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Nuovi studenti (crea account AD)",
-    "kind_students_desc": "Crea nuovi account AD e li assegna a una classe. Le password vengono generate. Colonne: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change.",
+    "kind_students_desc": "Crea nuovi account AD e li assegna a una classe. Le password vengono generate. Colonne: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
     "credentials_ready": "{{count}} account creati — scarica ora le credenziali",
     "credentials_hint": "Le password vengono mostrate una sola volta e non vengono salvate. Scarica ora i PDF (documenti + panoramica).",
     "download_handouts": "Scarica i PDF delle credenziali",
@@ -794,9 +794,9 @@
     "school_hint": "L’importazione viene assegnata a questo {{unit}}.",
     "error_school_required": "Seleziona prima il {{unit}} di destinazione.",
     "kind_teachers": "Docenti",
-    "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno.",
+    "kind_teachers_desc": "Crea nuovi account AD docenti (nell'OU docenti). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change. Senza classe/anno. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
     "kind_company_users": "Collaboratori",
-    "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires."
+    "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo."
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",
