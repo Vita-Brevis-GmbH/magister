@@ -62,7 +62,28 @@ class DefaultsRequest(BaseModel):
     school_id: int
 
 
+class AssignRequest(BaseModel):
+    """Konten einer Zielgruppe zuordnen (einzeln oder als Sammelaktion)."""
+
+    ad_object_guids: list[str] = Field(min_length=1, max_length=500)
+    # "Darf nicht ändern", "läuft nie ab" und Tresor übernehmen.
+    apply_settings: bool = True
+
+
+class AssignResultOut(BaseModel):
+    ad_object_guid: str
+    ok: bool
+    error: str | None = None
+    added: list[str] = Field(default_factory=list)
+    removed: list[str] = Field(default_factory=list)
+    failed: list[str] = Field(default_factory=list)
+    # Kontoart der Zielgruppe passt nicht zum Konto — die OU bleibt.
+    ou_unchanged: bool = False
+
+
 __all__ = [
+    "AssignRequest",
+    "AssignResultOut",
     "DefaultsRequest",
     "GroupTemplateCreate",
     "GroupTemplateOut",

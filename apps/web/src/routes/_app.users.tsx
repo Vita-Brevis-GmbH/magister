@@ -16,6 +16,7 @@ import { SkeletonRow } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { UserAvatar } from "@/components/UserAvatar";
 import { UserStatusModal } from "@/components/UserStatusModal";
+import { ZielgruppeAssign } from "@/components/ZielgruppeAssign";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -60,6 +61,7 @@ function UsersPage(): JSX.Element {
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [attrsOpen, setAttrsOpen] = useState(false);
+  const [zielgruppeOpen, setZielgruppeOpen] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ ok: number; failed: number } | null>(null);
   const me = useCurrentUser();
@@ -141,6 +143,7 @@ function UsersPage(): JSX.Element {
 
   function clearSelection(): void {
     setSelected(new Set());
+    setZielgruppeOpen(false);
     setConfirmBulkDelete(false);
     setBulkResult(null);
   }
@@ -266,6 +269,17 @@ function UsersPage(): JSX.Element {
           >
             {t("users.bulk.attrs_button")}
           </Button>
+          {isAdmin ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={bulk.isPending}
+              onClick={() => setZielgruppeOpen((v) => !v)}
+            >
+              {t("zielgruppe_assign.bulk_button")}
+            </Button>
+          ) : null}
           {isAdmin && allSelectedDisabled ? (
             confirmBulkDelete ? (
               <span className="flex items-center gap-2">
@@ -306,6 +320,20 @@ function UsersPage(): JSX.Element {
           {bulk.isPending ? (
             <span className="text-muted-foreground">{t("common.loading")}</span>
           ) : null}
+        </div>
+      ) : null}
+
+      {isAdmin && zielgruppeOpen && selected.size > 0 ? (
+        <div className="rounded-md border bg-card p-3">
+          <ZielgruppeAssign
+            guids={[...selected]}
+            // Nur wenn alle gewählten am selben Standort sind, nach ihm filtern.
+            schoolId={
+              new Set(selectedUsers.map((u) => u.school_id)).size === 1
+                ? selectedUsers[0]?.school_id
+                : undefined
+            }
+          />
         </div>
       ) : null}
 

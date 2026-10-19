@@ -1412,5 +1412,26 @@
     "banner_link": "Voir les accès",
     "me_card": "Quand une personne de Vita Brevis a consulté cette installation.",
     "me_card_link": "Ouvrir la liste des accès"
+  },
+  "zielgruppe_assign": {
+    "section_title": "Groupe cible",
+    "section_desc": "Attribue le compte à un groupe cible. Les groupes de l’ancien groupe cible sont retirés, ceux du nouveau ajoutés. Le type de mot de passe s’applique aux réinitialisations futures.",
+    "label": "Groupe cible",
+    "none": "– Choisir un groupe cible –",
+    "apply_settings": "Reprendre les paramètres du groupe cible",
+    "apply_settings_hint": "« Ne peut pas changer le mot de passe », « N’expire jamais » et enregistrement du mot de passe. Aucun changement n’est forcé.",
+    "groups_hint": "Les groupes des groupes cibles complémentaires et ceux ajoutés à la main sont conservés. L’OU dans l’AD ne change pas.",
+    "submit_one": "Attribuer",
+    "submit_other": "Attribuer {{count}} comptes",
+    "bulk_button": "Attribuer un groupe cible",
+    "failed": "L’attribution a échoué.",
+    "result": "Attribués : {{ok}}, échecs : {{failed}}, groupes retirés : {{removed}}.",
+    "ou_unchanged_one": "Le type d’un compte ne correspond pas au groupe cible – il reste dans son OU actuelle.",
+    "ou_unchanged_other": "Le type de {{count}} comptes ne correspond pas au groupe cible – ils restent dans leur OU actuelle.",
+    "err_user_not_found": "Compte introuvable.",
+    "err_not_for_school": "Le groupe cible n’est pas disponible sur le site du compte.",
+    "err_user_not_in_ad": "Compte introuvable dans l’AD.",
+    "err_ad_unavailable": "AD indisponible.",
+    "err_unknown": "Erreur inconnue."
   }
 }

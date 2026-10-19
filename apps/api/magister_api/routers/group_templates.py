@@ -13,13 +13,18 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_manage
+from magister_api.auth.effective_settings import get_effective_settings
+from magister_api.auth.rbac import require_admin, require_manage
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.group_template import GroupTemplate
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.group_templates import (
+    AssignRequest,
+    AssignResultOut,
     DefaultsRequest,
     GroupTemplateCreate,
     GroupTemplateOut,
@@ -29,6 +34,10 @@ from magister_api.services.group_templates import (
     GroupTemplateNotFoundError,
     GroupTemplateService,
     SchoolForDefaultsNotFoundError,
+)
+from magister_api.services.zielgruppen_assign import (
+    ZielgruppenAssignService,
+    ZielgruppeNotFoundError,
 )
 
 router = APIRouter(prefix="/admin/group-templates", tags=["admin"])
@@ -138,6 +147,38 @@ async def ensure_default_group_templates(
     except SchoolForDefaultsNotFoundError as exc:
         raise HTTPException(status_code=404, detail="school_not_found") from exc
     return [_out(r, [payload.school_id]) for r in created]
+
+
+@router.post("/{template_id}/assign", response_model=list[AssignResultOut])
+async def assign_group_template(
+    template_id: int,
+    payload: AssignRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_effective_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> list[AssignResultOut]:
+    """Bestehende Konten dieser Zielgruppe zuordnen.
+
+    Gruppen der bisherigen Zielgruppe fallen weg, die der neuen kommen dazu;
+    optional werden die Konto-Einstellungen übernommen. Admin-only wie das
+    Anlegen, weil es AD-Gruppen schreibt. Ein Fehler bei einem Konto hält die
+    anderen nicht auf — das Ergebnis nennt ihn je Konto.
+    """
+    svc = ZielgruppenAssignService(session, settings, user.to_scope(), ad)
+    ip, request_id = _ip_request_id(request)
+    try:
+        results = await svc.assign(
+            template_id=template_id,
+            guids=payload.ad_object_guids,
+            apply_settings=payload.apply_settings,
+            ip=ip,
+            request_id=request_id,
+        )
+    except ZielgruppeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="group_template_not_found") from exc
+    return [AssignResultOut(**vars(r)) for r in results]
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)

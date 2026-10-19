@@ -40,6 +40,8 @@ class AdUserOut(BaseModel):
     password_never_expires: bool = False
     cannot_change_password: bool = False
     store_password: bool = False
+    # Zielgruppe, nach der das Konto angelegt oder der es zugeordnet wurde.
+    group_template_id: int | None = None
     ad_groups: list[str] = Field(default_factory=list)
     mail_aliases: list[str] = Field(default_factory=list)
 

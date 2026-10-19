@@ -262,3 +262,147 @@ async def test_single_handout_is_one_pdf_and_admin_only(
     assert (
         await as_admin.post("/ad/users/handout", json=body | {"credentials": []})
     ).status_code == 400
+
+
+async def _create(
+    as_admin: AsyncClient, school_id: int, sam: str, template_id: int | None, ou_key: str
+) -> str:
+    r = await as_admin.post(
+        "/ad/users",
+        json={
+            "given_name": "Kim",
+            "surname": sam,
+            "sam_account_name": sam,
+            "user_principal_name": f"{sam}@schule.ch",
+            "ou_key": ou_key,
+            "school_id": school_id,
+            "group_template_id": template_id,
+        },
+    )
+    assert r.status_code == 201, r.text
+    return str(r.json()["ad_object_guid"])
+
+
+async def _zyklus_groups(session: AsyncSession, school_id: int) -> None:
+    school = await session.get(School, school_id)
+    assert school is not None
+    school.ad_groups_student_zyklus2 = ["CN=Z2,DC=schule,DC=local"]
+    school.ad_groups_student_zyklus3 = ["CN=Z3,DC=schule,DC=local"]
+    school.ad_groups_teacher = ["CN=LP,DC=schule,DC=local"]
+    await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_assign_swaps_the_groups_of_the_previous_zielgruppe(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    mock_ad: AdClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    await _ous(db_session, school_a)
+    await _zyklus_groups(db_session, school_a)
+    tpls = await _defaults(as_admin, school_a)
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    guid = await _create(
+        as_admin, school_a, "kz2", int(tpls["student_zyklus2"]["id"]), "student_zyklus2"
+    )
+    # Zusätzlich eine Gruppe von Hand: sie gehört keiner Zielgruppe und bleibt.
+    row = await db_session.get(AdUserCache, guid)
+    assert row is not None
+    row.ad_groups = ["CN=Z2,DC=schule,DC=local", "CN=Tool-X,DC=schule,DC=local"]
+    await db_session.commit()
+
+    z3 = tpls["student_zyklus3"]
+    r = await as_admin.post(
+        f"/admin/group-templates/{z3['id']}/assign", json={"ad_object_guids": [guid]}
+    )
+    assert r.status_code == 200, r.text
+    (res,) = r.json()
+    assert res["ok"] is True
+    assert res["removed"] == ["CN=Z2,DC=schule,DC=local"]
+    assert res["added"] == ["CN=Z3,DC=schule,DC=local"]
+    assert res["ou_unchanged"] is False
+    await db_session.refresh(row)
+    assert row.group_template_id == z3["id"]
+    # Zyklus 3 ändert selbst: die Einstellungen der Zielgruppe sind übernommen.
+    assert row.cannot_change_password is False
+    assert row.password_never_expires is False
+    assert row.store_password is False
+
+
+@pytest.mark.asyncio
+async def test_assign_without_known_zielgruppe_drops_standard_groups_only(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    mock_ad: AdClient,
+    db_session: AsyncSession,
+    school_a: int,
+) -> None:
+    await _ous(db_session, school_a)
+    await _zyklus_groups(db_session, school_a)
+    tpls = await _defaults(as_admin, school_a)
+    app.dependency_overrides[get_ad_client] = lambda: mock_ad
+    guid = await _create(as_admin, school_a, "legacy", None, "student_zyklus2")
+    row = await db_session.get(AdUserCache, guid)
+    assert row is not None
+    # Altes Konto: keine Zielgruppe bekannt.
+    row.group_template_id = None
+    row.ad_groups = ["CN=Z2,DC=schule,DC=local", "CN=Tool-X,DC=schule,DC=local"]
+    await db_session.commit()
+
+    r = await as_admin.post(
+        f"/admin/group-templates/{tpls['teacher']['id']}/assign",
+        json={"ad_object_guids": [guid], "apply_settings": False},
+    )
+    (res,) = r.json()
+    assert res["ok"] is True
+    assert res["removed"] == ["CN=Z2,DC=schule,DC=local"]
+    assert res["added"] == ["CN=LP,DC=schule,DC=local"]
+    # Lehrperson-Zielgruppe auf ein Schülerkonto: die OU bleibt, das wird gesagt.
+    assert res["ou_unchanged"] is True
+
+
+@pytest.mark.asyncio
+async def test_assign_reports_per_account_errors_and_needs_admin(
+    as_admin: AsyncClient,
+    as_schulleitung_a: AsyncClient,
+    db_session: AsyncSession,
+    school_a: int,
+    school_b: int,
+) -> None:
+    tpls = await _defaults(as_admin, school_a)
+    tid = tpls["teacher"]["id"]
+    db_session.add(
+        AdUserCache(
+            ad_object_guid="00000000-0000-0000-0000-0000000000b1",
+            upn="b@schule.ch",
+            kind="teacher",
+            enabled=True,
+            school_id=school_b,
+        )
+    )
+    await db_session.commit()
+    r = await as_admin.post(
+        f"/admin/group-templates/{tid}/assign",
+        json={
+            "ad_object_guids": [
+                "00000000-0000-0000-0000-0000000000b1",
+                "00000000-0000-0000-0000-00000000dead",
+            ]
+        },
+    )
+    assert r.status_code == 200, r.text
+    errors = {x["ad_object_guid"][-4:]: x["error"] for x in r.json()}
+    assert errors == {"00b1": "not_for_school", "dead": "user_not_found"}
+    denied = await as_schulleitung_a.post(
+        f"/admin/group-templates/{tid}/assign",
+        json={"ad_object_guids": ["00000000-0000-0000-0000-0000000000b1"]},
+    )
+    assert denied.status_code == 403
+    assert (
+        await as_admin.post(
+            "/admin/group-templates/999999/assign",
+            json={"ad_object_guids": ["00000000-0000-0000-0000-0000000000b1"]},
+        )
+    ).status_code == 404

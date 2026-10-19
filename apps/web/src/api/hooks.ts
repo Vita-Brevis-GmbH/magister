@@ -52,6 +52,7 @@ import type {
   GroupTemplateOut,
   GroupTemplateCreate,
   GroupTemplateUpdate,
+  ZielgruppeAssignResult,
   DepartmentMembershipOut,
   UserDepartmentOut,
   ManagerRoleOut,
@@ -463,6 +464,26 @@ export function useEnsureDefaultGroupTemplates() {
         body: { school_id: schoolId },
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+/** Bestehende Konten einer Zielgruppe zuordnen (Gruppen tauschen, Einstellungen). */
+export function useAssignZielgruppe() {
+  const qc = useQueryClient();
+  return useMutation<
+    ZielgruppeAssignResult[],
+    ApiError,
+    { templateId: number; guids: string[]; applySettings: boolean }
+  >({
+    mutationFn: ({ templateId, guids, applySettings }) =>
+      apiFetch<ZielgruppeAssignResult[]>(`/admin/group-templates/${templateId}/assign`, {
+        method: "POST",
+        body: { ad_object_guids: guids, apply_settings: applySettings },
+      }),
+    onSuccess: (_res, vars) => {
+      void qc.invalidateQueries({ queryKey: ["users"] });
+      for (const g of vars.guids) void qc.invalidateQueries({ queryKey: queryKeys.user(g) });
+    },
   });
 }
 

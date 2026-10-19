@@ -1412,5 +1412,26 @@
     "banner_link": "Vedere gli accessi",
     "me_card": "Quando qualcuno di Vita Brevis ha consultato questa installazione.",
     "me_card_link": "Aprire l'elenco degli accessi"
+  },
+  "zielgruppe_assign": {
+    "section_title": "Gruppo di destinazione",
+    "section_desc": "Assegna l’account a un gruppo di destinazione. I gruppi del gruppo precedente vengono rimossi, quelli del nuovo aggiunti. Il tipo di password vale per i ripristini futuri.",
+    "label": "Gruppo di destinazione",
+    "none": "– Scegli un gruppo –",
+    "apply_settings": "Applica le impostazioni del gruppo",
+    "apply_settings_hint": "«Non può cambiare la password», «La password non scade mai» e salvataggio della password. Nessun cambio viene forzato.",
+    "groups_hint": "I gruppi da gruppi aggiuntivi e quelli impostati a mano restano. L’OU nell’AD non cambia.",
+    "submit_one": "Assegna",
+    "submit_other": "Assegna {{count}} account",
+    "bulk_button": "Assegna gruppo di destinazione",
+    "failed": "Assegnazione non riuscita.",
+    "result": "Assegnati: {{ok}}, non riusciti: {{failed}}, gruppi rimossi: {{removed}}.",
+    "ou_unchanged_one": "Il tipo di un account non corrisponde al gruppo – resta nella sua OU attuale.",
+    "ou_unchanged_other": "Il tipo di {{count}} account non corrisponde al gruppo – restano nella loro OU attuale.",
+    "err_user_not_found": "Account non trovato.",
+    "err_not_for_school": "Il gruppo non è disponibile nella sede dell’account.",
+    "err_user_not_in_ad": "Account non trovato nell’AD.",
+    "err_ad_unavailable": "AD non raggiungibile.",
+    "err_unknown": "Errore sconosciuto."
   }
 }

@@ -1409,5 +1409,26 @@
     "banner_link": "Zugriffe ansehen",
     "me_card": "Wann jemand von Vita Brevis diese Installation angesehen hat.",
     "me_card_link": "Liste der Zugriffe öffnen"
+  },
+  "zielgruppe_assign": {
+    "section_title": "Zielgruppe",
+    "section_desc": "Ordnet das Konto einer Zielgruppe zu. Die Gruppen der bisherigen Zielgruppe fallen weg, die der neuen kommen dazu. Die Passwortart gilt für künftige Resets.",
+    "label": "Zielgruppe",
+    "none": "– Zielgruppe wählen –",
+    "apply_settings": "Konto-Einstellungen der Zielgruppe übernehmen",
+    "apply_settings_hint": "„Darf Passwort nicht ändern“, „Passwort läuft nie ab“ und Passwort speichern. Eine Passwortänderung wird nicht erzwungen.",
+    "groups_hint": "Gruppen aus Zusatz-Zielgruppen und von Hand gesetzte bleiben erhalten. Die Ablage-OU im AD ändert sich nicht.",
+    "submit_one": "Zuordnen",
+    "submit_other": "{{count}} Konten zuordnen",
+    "bulk_button": "Zielgruppe zuweisen",
+    "failed": "Zuordnen fehlgeschlagen.",
+    "result": "Zugeordnet: {{ok}}, fehlgeschlagen: {{failed}}, Gruppen entfernt: {{removed}}.",
+    "ou_unchanged_one": "Bei einem Konto passt die Kontoart nicht zur Zielgruppe – es bleibt in seiner bisherigen OU.",
+    "ou_unchanged_other": "Bei {{count}} Konten passt die Kontoart nicht zur Zielgruppe – sie bleiben in ihrer bisherigen OU.",
+    "err_user_not_found": "Konto nicht gefunden.",
+    "err_not_for_school": "Die Zielgruppe ist am Standort des Kontos nicht verfügbar.",
+    "err_user_not_in_ad": "Konto im AD nicht gefunden.",
+    "err_ad_unavailable": "AD nicht erreichbar.",
+    "err_unknown": "Unbekannter Fehler."
   }
 }

@@ -1409,5 +1409,26 @@
     "banner_link": "View access log",
     "me_card": "When someone from Vita Brevis looked at this installation.",
     "me_card_link": "Open the access list"
+  },
+  "zielgruppe_assign": {
+    "section_title": "Target group",
+    "section_desc": "Assigns the account to a target group. Groups of the previous target group are removed, those of the new one added. The password type applies to future resets.",
+    "label": "Target group",
+    "none": "– Choose target group –",
+    "apply_settings": "Apply the target group's account settings",
+    "apply_settings_hint": "“Cannot change password”, “Password never expires” and storing the password. No password change is forced.",
+    "groups_hint": "Groups from add-on target groups and manually set ones are kept. The OU in AD does not change.",
+    "submit_one": "Assign",
+    "submit_other": "Assign {{count}} accounts",
+    "bulk_button": "Assign target group",
+    "failed": "Assignment failed.",
+    "result": "Assigned: {{ok}}, failed: {{failed}}, groups removed: {{removed}}.",
+    "ou_unchanged_one": "One account's type does not match the target group – it stays in its current OU.",
+    "ou_unchanged_other": "{{count}} accounts' type does not match the target group – they stay in their current OU.",
+    "err_user_not_found": "Account not found.",
+    "err_not_for_school": "The target group is not available at the account's site.",
+    "err_user_not_in_ad": "Account not found in AD.",
+    "err_ad_unavailable": "AD unavailable.",
+    "err_unknown": "Unknown error."
   }
 }

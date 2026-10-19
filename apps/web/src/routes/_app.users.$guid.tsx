@@ -30,6 +30,7 @@ import {
 } from "@/api/hooks";
 import type { AdUserOut, DeviceOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
+import { ZielgruppeAssign } from "@/components/ZielgruppeAssign";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
@@ -852,6 +853,22 @@ function UserDetailPage(): JSX.Element {
                   value={form.jahrgangsstufe}
                   onChange={(v) => setField("jahrgangsstufe", v)}
                   hint={t("users.field.jahrgangsstufe_hint")}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {me.data?.is_admin ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t("zielgruppe_assign.section_title")}</CardTitle>
+                <CardDescription>{t("zielgruppe_assign.section_desc")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ZielgruppeAssign
+                  guids={[user.ad_object_guid]}
+                  schoolId={user.school_id}
+                  currentTemplateId={user.group_template_id}
                 />
               </CardContent>
             </Card>

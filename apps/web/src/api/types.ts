@@ -399,6 +399,18 @@ export interface GroupTemplateCreate extends Partial<ZielgruppenOptions> {
   school_ids?: number[];
 }
 
+/** Ergebnis je Konto beim Zuordnen einer Zielgruppe. */
+export interface ZielgruppeAssignResult {
+  ad_object_guid: string;
+  ok: boolean;
+  error: string | null;
+  added: string[];
+  removed: string[];
+  failed: string[];
+  // Kontoart der Zielgruppe passt nicht zum Konto — die OU bleibt.
+  ou_unchanged: boolean;
+}
+
 export interface GroupTemplateUpdate extends Partial<ZielgruppenOptions> {
   name?: string | null;
   description?: string | null;
@@ -539,6 +551,8 @@ export interface AdUserOut {
   cannot_change_password: boolean;
   /** Vault: keep the last set password encrypted in Magister. */
   store_password: boolean;
+  // Zielgruppe, nach der das Konto angelegt oder der es zugeordnet wurde.
+  group_template_id?: number | null;
   /** Synced AD group memberships (memberOf DNs). */
   ad_groups: string[];
   /** Secondary SMTP addresses (aliases) mirrored from proxyAddresses. */
