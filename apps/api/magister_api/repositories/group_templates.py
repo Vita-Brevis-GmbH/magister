@@ -18,6 +18,17 @@ from magister_api.models.group_template import (
     GroupTemplateSchool,
 )
 
+#: Anlage-Vorgaben einer Zielgruppe, die Create/Update durchreichen.
+OPTION_FIELDS: frozenset[str] = frozenset(
+    {
+        "password_profile",
+        "force_change",
+        "cannot_change_password",
+        "password_never_expires",
+        "store_password",
+    }
+)
+
 
 class GroupTemplateRepository:
     def __init__(self, session: AsyncSession) -> None:
@@ -77,6 +88,7 @@ class GroupTemplateRepository:
         kind: str | None,
         ad_groups: list[str],
         school_ids: list[int],
+        options: dict[str, object] | None = None,
     ) -> GroupTemplate:
         row = GroupTemplate(
             name=name,
@@ -84,6 +96,7 @@ class GroupTemplateRepository:
             kind=kind,
             ad_groups=list(ad_groups),
             status=GROUP_TEMPLATE_STATUS_ACTIVE,
+            **(options or {}),
         )
         self.session.add(row)
         await self.session.flush()
@@ -99,7 +112,11 @@ class GroupTemplateRepository:
         kind: str | None = None,
         ad_groups: list[str] | None = None,
         school_ids: list[int] | None = None,
+        options: dict[str, object] | None = None,
     ) -> GroupTemplate:
+        for key, value in (options or {}).items():
+            if key in OPTION_FIELDS and value is not None:
+                setattr(row, key, value)
         if name is not None:
             row.name = name
         if description is not None:

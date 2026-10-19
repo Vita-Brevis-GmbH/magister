@@ -138,7 +138,7 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             # lässt den nächsten Test nur die Änderungen holen — also nichts —
             # und der sieht aus, als synchronisiere er nicht mehr. Vorher lief
             # jeder Lauf voll, deshalb fiel die Lücke nie auf.
-            "ad_user_cache, ad_sync_state, schools, "
+            "ad_user_cache, ad_sync_state, schools, group_templates, "
             "local_admins, app_settings, user_preferences RESTART IDENTITY CASCADE"
         )
         # The migration inserts the singleton; recreate it after each

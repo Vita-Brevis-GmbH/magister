@@ -26,7 +26,7 @@
     "modules": "Module & Funktionen",
     "departments": "Abteilungen",
     "document_templates": "Vorlagen",
-    "group_templates": "Zielrollen"
+    "group_templates": "Zielgruppen"
   },
   "auth": {
     "login_title": "Anmeldung",
@@ -655,7 +655,7 @@
       "ou_company": "{{unit}}-Benutzer",
       "submit": "Anlegen",
       "created_title": "Benutzer angelegt",
-      "created_desc": "Das temporäre Passwort wird nur jetzt angezeigt. Beim ersten Login muss es geändert werden.",
+      "created_desc": "Das Passwort wird nur jetzt angezeigt. Notieren oder gleich das Anmelde-PDF herunterladen.",
       "temp_password": "Temporäres Passwort",
       "temp_hint": "Sicher an die Person übergeben. Es wird nicht erneut angezeigt.",
       "to_users": "Zur Benutzerliste",
@@ -673,11 +673,14 @@
       "password_never_expires": "Passwort läuft nie ab",
       "class_assign_failed": "Konto erstellt, aber die Klassenzuweisung ist fehlgeschlagen. Bitte manuell zuweisen.",
       "can_change_password": "Benutzer kann Passwort ändern",
-      "group_template": "Zielrolle (Gruppen)",
-      "group_template_default": "Standard-Gruppen (aus Provisioning)",
-      "group_template_hint": "Optional. Ersetzt die Standard-Gruppen durch die gewählte Zielrolle.",
-      "err_template_not_found": "Zielrolle nicht gefunden.",
-      "err_template_not_for_school": "Die Zielrolle ist an diesem Standort nicht verfügbar."
+      "group_template": "Zielgruppe",
+      "group_template_default": "Ohne Zielgruppe (Standard-Gruppen des Standorts)",
+      "group_template_hint": "Legt Kontoart, Gruppen, Passwortart und Konto-Einstellungen fest. Die Einstellungen unten lassen sich im Einzelfall übersteuern.",
+      "err_template_not_found": "Zielgruppe nicht gefunden.",
+      "err_template_not_for_school": "Die Zielgruppe ist an diesem Standort nicht verfügbar.",
+      "ou_from_template": "Durch die Zielgruppe festgelegt.",
+      "download_pdf": "Anmelde-PDF herunterladen",
+      "pdf_failed": "Das Anmelde-PDF konnte nicht erstellt werden."
     },
     "user_settings": {
       "title": "Userkonfiguration",
@@ -1119,7 +1122,7 @@
         "ad_ou_company_users": "OU Mitarbeitende (Ziel-OU)",
         "ad_groups_company": "Standard-Gruppen Mitarbeitende"
       },
-      "groups_moved_hint": "AD-Gruppen-Vorlagen werden jetzt zentral unter „Zielrollen“ verwaltet."
+      "groups_moved_hint": "AD-Gruppen-Vorlagen werden jetzt zentral unter „Zielgruppen“ verwaltet."
     }
   },
   "user_groups": {
@@ -1313,27 +1316,50 @@
     "load_starter": "Standardvorlage laden"
   },
   "group_templates": {
-    "title": "Zielrollen (AD-Gruppen)",
-    "intro": "Wiederverwendbare AD-Gruppen-Vorlagen für Berechtigungen. Beim Anlegen von Benutzern nach {{unit_plural}} gefiltert wählbar.",
-    "new_title": "Neue Zielrolle",
-    "new_desc": "Name, AD-Gruppen und Geltungsbereich festlegen.",
+    "title": "Zielgruppen",
+    "intro": "Eine Zielgruppe legt fest, wie ein Konto angelegt wird: Kontoart, AD-Gruppen, Passwortart und Konto-Einstellungen. Beim Anlegen von Benutzern nach {{unit_plural}} gefiltert wählbar.",
+    "new_title": "Neue Zielgruppe",
+    "new_desc": "Name, Kontoart, Passwortart, AD-Gruppen und Geltungsbereich festlegen.",
     "name": "Name",
-    "name_placeholder": "z. B. Tool-X Zugang",
+    "name_placeholder": "z. B. Klassenhilfe",
     "description": "Beschreibung",
     "groups_label": "AD-Gruppen",
-    "groups_hint": "Gruppen, die dieser Rolle Zugriff geben.",
+    "groups_hint": "Gruppen, in die Konten dieser Zielgruppe aufgenommen werden.",
     "schools_label": "{{unit_plural}}",
     "schools_hint": "Nur an den gewählten {{unit_plural}} verfügbar.",
-    "schools_global_hint": "Ohne Auswahl gilt die Rolle für alle {{unit_plural}}.",
+    "schools_global_hint": "Ohne Auswahl gilt die Zielgruppe für alle {{unit_plural}}.",
     "no_schools": "Keine {{unit_plural}} vorhanden.",
     "global_badge": "Global (alle)",
     "count_groups": "{{count}} Gruppen",
-    "create": "Zielrolle anlegen",
+    "create": "Zielgruppe anlegen",
     "save": "Speichern",
     "edit": "Bearbeiten",
     "archive": "Archivieren",
     "create_failed": "Speichern fehlgeschlagen.",
-    "empty": "Noch keine Zielrollen."
+    "empty": "Noch keine Zielgruppen.",
+    "kind_label": "Kontoart (bestimmt die Ablage-OU)",
+    "kind_none": "Keine feste Kontoart – beim Anlegen wählen",
+    "profile_label": "Passwortart",
+    "profile_readable": "Einfach – zwei Wörter und Zahl (z. B. Tiger-Wolke-47)",
+    "profile_teacher": "Lehrperson – 12 Zeichen, Sonderzeichen der CH-Tastatur",
+    "profile_complex": "Komplex – 14 Zeichen",
+    "profile_hint": "Gilt beim Anlegen und bei jedem späteren Zurücksetzen des Passworts.",
+    "profile_short_readable": "Einfaches Passwort",
+    "profile_short_teacher": "Lehrpersonen-Passwort",
+    "profile_short_complex": "Komplexes Passwort",
+    "options_label": "Konto-Einstellungen beim Anlegen",
+    "opt_force_change": "Passwortänderung bei erster Anmeldung erzwingen",
+    "opt_can_change": "Benutzer kann Passwort ändern",
+    "opt_never_expires": "Passwort läuft nie ab",
+    "opt_store": "Passwort in Magister speichern (Klassen-Passwortliste)",
+    "opt_store_hint": "Wirkt nur, wenn der Benutzer das Passwort nicht ändern kann und der Passworttresor eingeschaltet ist.",
+    "badge_stored": "Passwort gespeichert",
+    "defaults_title": "Standard-Zielgruppen",
+    "defaults_desc": "Ergänzt für einen {{unit}} die fehlenden Standard-Zielgruppen (Schüler:in Zyklus 1–3, Lehrperson). Bestehende bleiben unverändert.",
+    "defaults_button": "Fehlende ergänzen",
+    "defaults_done": "Ergänzt: {{names}}",
+    "defaults_none": "Alle Standard-Zielgruppen sind vorhanden.",
+    "defaults_failed": "Ergänzen fehlgeschlagen."
   },
   "managed": {
     "how": "Brauchen Sie eine Änderung, wenden Sie sich an Ihre Ansprechperson bei Vita Brevis. Was hier gilt, sehen Sie im Audit-Protokoll unter „platform_settings_reconciled“.",

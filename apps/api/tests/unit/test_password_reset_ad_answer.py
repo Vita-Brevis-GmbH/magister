@@ -88,7 +88,15 @@ def _service(kind: str, ad: _Ad) -> tuple[Any, _Audit, type[Exception], str]:
 
 
 def _person() -> Any:
-    return SimpleNamespace(enabled=True, ad_object_guid="g-1", school_id=1, store_password=False)
+    # Ohne Zielgruppe: die Passwortart folgt der Kontoart, keine DB-Abfrage.
+    return SimpleNamespace(
+        enabled=True,
+        ad_object_guid="g-1",
+        school_id=1,
+        store_password=False,
+        group_template_id=None,
+        kind="student",
+    )
 
 
 KINDS = ["student", "teacher", "user"]

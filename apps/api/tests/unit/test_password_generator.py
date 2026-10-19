@@ -9,7 +9,10 @@ from magister_api.ad.password import (
     _TEACHER_SPECIAL,
     DEFAULT_LENGTH,
     MIN_LENGTH,
+    PASSWORD_PROFILES,
     count_charset_classes,
+    default_profile_for_kind,
+    generate_for_profile,
     generate_password,
     generate_readable_password,
     generate_teacher_password,
@@ -128,3 +131,42 @@ class TestPolicyGate:
     )
     def test_rejects_non_compliant(self, pw: str) -> None:
         assert not passes_default_complexity(pw)
+
+
+class TestPasswordProfiles:
+    """Passwortart je Zielgruppe (Migration 0047)."""
+
+    def test_readable_profile_is_word_word_digits(self) -> None:
+        pw = generate_for_profile("readable")
+        words = pw.split("-")
+        assert len(words) == 3 and words[2].isdigit()
+        assert passes_default_complexity(pw)
+
+    def test_teacher_profile_uses_swiss_keyboard_specials(self) -> None:
+        pw = generate_for_profile("teacher")
+        assert len(pw) == MIN_LENGTH
+        assert any(c in _TEACHER_SPECIAL for c in pw)
+
+    @pytest.mark.parametrize("profile", ["complex", None, "unbekannt"])
+    def test_complex_and_unknown_fall_back_to_complex(self, profile: str | None) -> None:
+        assert len(generate_for_profile(profile)) == DEFAULT_LENGTH
+
+    @pytest.mark.parametrize("profile", PASSWORD_PROFILES)
+    def test_every_profile_passes_ad_complexity(self, profile: str) -> None:
+        for _ in range(50):
+            assert passes_default_complexity(generate_for_profile(profile))
+
+    @pytest.mark.parametrize(
+        ("kind", "expected"),
+        [
+            ("student", "readable"),
+            ("student_zyklus1", "readable"),
+            ("student_zyklus3", "readable"),
+            ("teacher", "teacher"),
+            ("company", "teacher"),
+            (None, "complex"),
+            ("admin", "complex"),
+        ],
+    )
+    def test_default_profile_for_kind(self, kind: str | None, expected: str) -> None:
+        assert default_profile_for_kind(kind) == expected

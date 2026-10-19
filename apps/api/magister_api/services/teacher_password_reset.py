@@ -16,11 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, is_password_rejected
-from magister_api.ad.password import generate_password, passes_default_complexity
+from magister_api.ad.password import generate_for_profile, passes_default_complexity
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
 from magister_api.repositories.base import ScopeContext
+from magister_api.services.zielgruppen import password_profile_for
 
 
 class TeacherDisabledError(RuntimeError):
@@ -70,7 +71,9 @@ class TeacherPasswordResetService:
             raise TeacherDisabledError(teacher.ad_object_guid)
 
         if mode == "generate":
-            new_password = generate_password()
+            # Passwortart der Zielgruppe des Kontos (sonst nach Kontoart).
+            profile = await password_profile_for(self.session, teacher)
+            new_password = generate_for_profile(profile)
             assert passes_default_complexity(new_password)
             response_password: str | None = new_password
         else:

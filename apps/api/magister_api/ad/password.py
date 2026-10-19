@@ -124,6 +124,35 @@ def count_charset_classes(pw: str) -> int:
     return classes
 
 
+#: Passwortarten, die eine Zielgruppe wählen kann. ``readable`` ist das
+#: Kinderpasswort (``Tiger-Wolke-47``), ``teacher`` das 12-stellige mit
+#: Sonderzeichen von der Schweizer Tastatur, ``complex`` das 14-stellige.
+PASSWORD_PROFILES: tuple[str, ...] = ("readable", "teacher", "complex")
+
+
+def default_profile_for_kind(kind: str | None) -> str:
+    """Passwortart für ein Konto ohne Zielgruppe — nach Kontoart.
+
+    Schüler:innen bekommen das lesbare Passwort, Lehrpersonen und
+    Mitarbeitende das Lehrpersonen-Passwort. So wie der CSV-Import es schon
+    immer tat; vorher gab das einzelne Anlegen allen das komplexe.
+    """
+    if kind is not None and kind.startswith("student"):
+        return "readable"
+    if kind in ("teacher", "company"):
+        return "teacher"
+    return "complex"
+
+
+def generate_for_profile(profile: str | None) -> str:
+    """Ein Passwort der gewählten Art; Unbekanntes fällt auf ``complex``."""
+    if profile == "readable":
+        return generate_readable_password()
+    if profile == "teacher":
+        return generate_teacher_password()
+    return generate_password()
+
+
 def passes_default_complexity(pw: str) -> bool:
     """True if ``pw`` satisfies AD's default 12+chars, 3-of-4-classes policy."""
     return len(pw) >= MIN_LENGTH and count_charset_classes(pw) >= 3
@@ -132,6 +161,9 @@ def passes_default_complexity(pw: str) -> bool:
 __all__ = [
     "DEFAULT_LENGTH",
     "MIN_LENGTH",
+    "PASSWORD_PROFILES",
+    "default_profile_for_kind",
+    "generate_for_profile",
     "count_charset_classes",
     "generate_password",
     "generate_readable_password",

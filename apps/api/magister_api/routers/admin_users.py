@@ -6,8 +6,11 @@ Distinct from the bulk student import (imports router) — this is the one-off
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
@@ -18,11 +21,13 @@ from magister_api.config import Settings
 from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.routers.admin_sync import get_ad_client
+from magister_api.schemas.imports import HandoutRequest
 from magister_api.schemas.user_admin import (
     AdUserCreateRequest,
     AdUserCreateResponse,
     AdUserDeleteResponse,
 )
+from magister_api.services.handouts import HandoutEntry, render_handout_pdf
 from magister_api.services.user_admin import UserAdminError, UserAdminService
 
 router = APIRouter(prefix="/ad/users", tags=["ad"])
@@ -78,7 +83,48 @@ async def create_ad_user(
         # A duplicate DN/UPN/sAMAccountName also surfaces here.
         raise HTTPException(status_code=503, detail="ad_unavailable") from exc
     return AdUserCreateResponse(
-        ad_object_guid=created.ad_object_guid, temp_password=created.temp_password
+        ad_object_guid=created.ad_object_guid,
+        temp_password=created.temp_password,
+        force_change=created.force_change,
+    )
+
+
+@router.post("/handout")
+async def render_single_handout(
+    body: HandoutRequest,
+    _user: AuthenticatedUser = Depends(require_admin),
+) -> Response:
+    """Anmelde-PDF für ein soeben einzeln angelegtes Konto.
+
+    Zustandslos wie ``/imports/handouts``: die Seite schickt das einmal
+    angezeigte Passwort zurück, hier wird nichts gespeichert und nichts
+    protokolliert. Ein PDF statt des ZIPs mit Klassenübersicht.
+    """
+    if not body.credentials:
+        raise HTTPException(status_code=400, detail="no_credentials")
+    entries = [
+        HandoutEntry(
+            upn=c.upn,
+            sam_account_name=c.sam_account_name,
+            display_name=c.display_name,
+            class_name=c.class_name,
+            password=c.password,
+            force_change=c.force_change,
+        )
+        for c in body.credentials
+    ]
+    pdf = await run_in_threadpool(
+        render_handout_pdf,
+        entries,
+        language=body.language,
+        school_name=body.school_name,
+        generated_on=date.today().strftime("%d.%m.%Y"),
+        audience=body.audience,
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="zugangsdaten.pdf"'},
     )
 
 

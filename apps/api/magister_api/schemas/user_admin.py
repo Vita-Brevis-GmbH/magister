@@ -16,17 +16,17 @@ class AdUserCreateRequest(BaseModel):
     ou_key: str = Field(description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3")
     # Target school — its per-school AD config drives the OU + default groups.
     school_id: int = Field(ge=1)
-    # Optional "Zielrolle" (group template) — when set, its AD groups are applied
-    # instead of the school's per-Zyklus/company default groups. Must be offered
-    # at ``school_id`` (linked to it, or global).
+    # Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortart und
+    # Konto-Einstellungen fest (``ou_key`` wird dann von ihr übersteuert). Muss
+    # an ``school_id`` angeboten werden (verknüpft oder global).
     group_template_id: int | None = Field(default=None, ge=1)
     # Optional display name; derived from given+surname when blank.
     display_name: str | None = Field(default=None, max_length=128)
-    # AD account flags (parity with the bulk import). Defaults are the safe /
-    # most common choices for a freshly provisioned account.
-    force_change: bool = True
-    cannot_change_password: bool = False
-    password_never_expires: bool = False
+    # AD account flags. ``None`` = aus der Zielgruppe übernehmen (ohne
+    # Zielgruppe: bei erster Anmeldung ändern, sonst nichts).
+    force_change: bool | None = None
+    cannot_change_password: bool | None = None
+    password_never_expires: bool | None = None
     # Per-student grade (-1 = 1. KG, 0 = 2. KG, 1..13). Ignored for teachers.
     jahrgangsstufe: int | None = Field(default=None, ge=-1, le=13)
 

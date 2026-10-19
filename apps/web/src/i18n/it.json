@@ -29,7 +29,7 @@
     "modules": "Moduli e funzioni",
     "departments": "Reparti",
     "document_templates": "Modelli",
-    "group_templates": "Ruoli di accesso"
+    "group_templates": "Gruppi di destinazione"
   },
   "auth": {
     "login_title": "Accedi",
@@ -658,7 +658,7 @@
       "ou_company": "Utente {{unit}}",
       "submit": "Crea",
       "created_title": "Utente creato",
-      "created_desc": "La password temporanea è mostrata solo ora. Deve essere cambiata al primo accesso.",
+      "created_desc": "La password è mostrata solo ora. Annotala o scarica subito il PDF di accesso.",
       "temp_password": "Password temporanea",
       "temp_hint": "Consegnala in modo sicuro alla persona. Non verrà più mostrata.",
       "to_users": "All'elenco utenti",
@@ -676,11 +676,14 @@
       "password_never_expires": "La password non scade mai",
       "class_assign_failed": "Account creato, ma l'assegnazione alla classe non è riuscita. Assegnare manualmente.",
       "can_change_password": "L'utente può cambiare la password",
-      "group_template": "Ruolo di accesso (gruppi)",
-      "group_template_default": "Gruppi predefiniti (provisioning)",
-      "group_template_hint": "Facoltativo. Sostituisce i gruppi predefiniti con il ruolo scelto.",
-      "err_template_not_found": "Ruolo di accesso non trovato.",
-      "err_template_not_for_school": "Il ruolo non è disponibile in questa sede."
+      "group_template": "Gruppo di destinazione",
+      "group_template_default": "Senza gruppo (gruppi predefiniti della sede)",
+      "group_template_hint": "Definisce tipo di account, gruppi, tipo di password e impostazioni. Le impostazioni sotto possono essere modificate caso per caso.",
+      "err_template_not_found": "Gruppo di destinazione non trovato.",
+      "err_template_not_for_school": "Il gruppo di destinazione non è disponibile in questa sede.",
+      "ou_from_template": "Definito dal gruppo di destinazione.",
+      "download_pdf": "Scarica il PDF di accesso",
+      "pdf_failed": "Impossibile creare il PDF di accesso."
     },
     "user_settings": {
       "title": "Configurazione utenti",
@@ -1122,7 +1125,7 @@
         "ad_ou_company_users": "OU collaboratori (OU di destinazione)",
         "ad_groups_company": "Gruppi predefiniti collaboratori"
       },
-      "groups_moved_hint": "I modelli di gruppi AD sono ora gestiti centralmente in «Ruoli di accesso»."
+      "groups_moved_hint": "I modelli di gruppi AD sono ora gestiti in «Gruppi di destinazione»."
     }
   },
   "user_groups": {
@@ -1316,27 +1319,50 @@
     "load_starter": "Carica modello predefinito"
   },
   "group_templates": {
-    "title": "Ruoli di accesso (gruppi AD)",
-    "intro": "Modelli di gruppi AD riutilizzabili per le autorizzazioni. Selezionabili durante la creazione di utenti, filtrati per {{unit_plural}}.",
-    "new_title": "Nuovo ruolo di accesso",
-    "new_desc": "Imposta nome, gruppi AD e ambito.",
+    "title": "Gruppi di destinazione",
+    "intro": "Un gruppo di destinazione definisce come viene creato un account: tipo di account, gruppi AD, tipo di password e impostazioni. Selezionabile durante la creazione di utenti, filtrato per {{unit_plural}}.",
+    "new_title": "Nuovo gruppo di destinazione",
+    "new_desc": "Imposta nome, tipo di account, tipo di password, gruppi AD e ambito.",
     "name": "Nome",
-    "name_placeholder": "es. accesso Tool-X",
+    "name_placeholder": "es. Aiuto di classe",
     "description": "Descrizione",
     "groups_label": "Gruppi AD",
-    "groups_hint": "Gruppi a cui questo ruolo dà accesso.",
+    "groups_hint": "Gruppi a cui vengono aggiunti gli account di questo gruppo.",
     "schools_label": "{{unit_plural}}",
     "schools_hint": "Disponibile solo nei {{unit_plural}} selezionati.",
-    "schools_global_hint": "Senza selezione il ruolo vale per tutti i {{unit_plural}}.",
+    "schools_global_hint": "Senza selezione il gruppo vale per tutti i {{unit_plural}}.",
     "no_schools": "Nessun {{unit_plural}} disponibile.",
     "global_badge": "Globale (tutti)",
     "count_groups": "{{count}} gruppi",
-    "create": "Crea ruolo",
+    "create": "Crea gruppo di destinazione",
     "save": "Salva",
     "edit": "Modifica",
     "archive": "Archivia",
     "create_failed": "Salvataggio non riuscito.",
-    "empty": "Nessun ruolo di accesso."
+    "empty": "Nessun gruppo di destinazione.",
+    "kind_label": "Tipo di account (determina l’OU)",
+    "kind_none": "Nessun tipo fisso – da scegliere alla creazione",
+    "profile_label": "Tipo di password",
+    "profile_readable": "Semplice – due parole e un numero (es. Tiger-Wolke-47)",
+    "profile_teacher": "Docente – 12 caratteri, simboli della tastiera svizzera",
+    "profile_complex": "Complessa – 14 caratteri",
+    "profile_hint": "Vale alla creazione e a ogni successivo ripristino della password.",
+    "profile_short_readable": "Password semplice",
+    "profile_short_teacher": "Password docente",
+    "profile_short_complex": "Password complessa",
+    "options_label": "Impostazioni dell’account alla creazione",
+    "opt_force_change": "Forza il cambio password al primo accesso",
+    "opt_can_change": "L’utente può cambiare la password",
+    "opt_never_expires": "La password non scade mai",
+    "opt_store": "Salva la password in Magister (elenco della classe)",
+    "opt_store_hint": "Ha effetto solo se l’utente non può cambiare la password e la cassaforte è attiva.",
+    "badge_stored": "Password salvata",
+    "defaults_title": "Gruppi di destinazione standard",
+    "defaults_desc": "Aggiunge per un {{unit}} i gruppi standard mancanti (studente ciclo 1–3, docente). Quelli esistenti restano invariati.",
+    "defaults_button": "Aggiungi mancanti",
+    "defaults_done": "Aggiunti: {{names}}",
+    "defaults_none": "Tutti i gruppi standard esistono.",
+    "defaults_failed": "Aggiunta non riuscita."
   },
   "managed": {
     "how": "Se serve una modifica, rivolgetevi al vostro referente presso Vita Brevis. Ciò che vale qui è visibile nel registro di audit alla voce «platform_settings_reconciled».",

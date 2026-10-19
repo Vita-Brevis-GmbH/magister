@@ -6,11 +6,13 @@ import {
   useAdGroups,
   useArchiveGroupTemplate,
   useCreateGroupTemplate,
+  useEnsureDefaultGroupTemplates,
   useGroupTemplates,
+  useInstanceProfile,
   useSchools,
   useUpdateGroupTemplate,
 } from "@/api/hooks";
-import type { GroupTemplateOut, SchoolOut } from "@/api/types";
+import type { GroupTemplateOut, PasswordProfile, SchoolOut, ZielgruppenOptions } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,15 +24,67 @@ export const Route = createFileRoute("/_app/admin/group-templates")({
   component: GroupTemplatesPage,
 });
 
-interface Draft {
+interface Draft extends ZielgruppenOptions {
   name: string;
   description: string;
+  kind: string;
   ad_groups: string[];
   school_ids: number[];
 }
 
+// Kontoarten, die eine Zielgruppe festlegen kann (= ou_key beim Anlegen).
+const SCHOOL_KINDS = ["teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3"];
+const PROFILES: PasswordProfile[] = ["readable", "teacher", "complex"];
+
+const selectClasses =
+  "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
+
 function emptyDraft(): Draft {
-  return { name: "", description: "", ad_groups: [], school_ids: [] };
+  return {
+    name: "",
+    description: "",
+    kind: "",
+    ad_groups: [],
+    school_ids: [],
+    password_profile: "complex",
+    force_change: true,
+    cannot_change_password: false,
+    password_never_expires: false,
+    store_password: false,
+  };
+}
+
+function draftFrom(tpl: GroupTemplateOut): Draft {
+  return {
+    name: tpl.name,
+    description: tpl.description ?? "",
+    kind: tpl.kind ?? "",
+    ad_groups: [...tpl.ad_groups],
+    school_ids: [...tpl.school_ids],
+    password_profile: (PROFILES as string[]).includes(tpl.password_profile)
+      ? tpl.password_profile
+      : "complex",
+    force_change: tpl.force_change,
+    cannot_change_password: tpl.cannot_change_password,
+    password_never_expires: tpl.password_never_expires,
+    store_password: tpl.store_password,
+  };
+}
+
+function bodyFrom(draft: Draft) {
+  return {
+    name: draft.name.trim(),
+    description: draft.description.trim() || null,
+    // "custom" statt leer: das Backend behandelt nur bekannte Kontoarten als OU.
+    kind: draft.kind || "custom",
+    ad_groups: draft.ad_groups,
+    school_ids: draft.school_ids,
+    password_profile: draft.password_profile,
+    force_change: draft.force_change,
+    cannot_change_password: draft.cannot_change_password,
+    password_never_expires: draft.password_never_expires,
+    store_password: draft.store_password,
+  };
 }
 
 function GroupTemplatesPage(): JSX.Element {
@@ -46,15 +100,7 @@ function GroupTemplatesPage(): JSX.Element {
 
   function submit(): void {
     if (!draft.name.trim()) return;
-    create.mutate(
-      {
-        name: draft.name.trim(),
-        description: draft.description.trim() || null,
-        ad_groups: draft.ad_groups,
-        school_ids: draft.school_ids,
-      },
-      { onSuccess: () => setDraft(emptyDraft()) },
-    );
+    create.mutate(bodyFrom(draft), { onSuccess: () => setDraft(emptyDraft()) });
   }
 
   return (
@@ -65,6 +111,8 @@ function GroupTemplatesPage(): JSX.Element {
           {t("group_templates.intro", { unit_plural: terms.unit_plural })}
         </p>
       </header>
+
+      <DefaultsCard schools={schoolList} />
 
       <Card>
         <CardHeader>
@@ -110,6 +158,65 @@ function useAdGroupsData() {
   return useAdGroups().data ?? [];
 }
 
+// Fehlende Standard-Zielgruppen (Zyklus 1–3, Lehrperson) für einen Standort
+// ergänzen — für Standorte von vor der Einführung oder nach dem Archivieren.
+function DefaultsCard({ schools }: { schools: SchoolOut[] }): JSX.Element | null {
+  const { t } = useTranslation();
+  const terms = useTerms();
+  const ensure = useEnsureDefaultGroupTemplates();
+  const [schoolId, setSchoolId] = useState("");
+  const selected = schoolId || (schools.length === 1 ? String(schools[0].id) : "");
+  if (schools.length === 0) return null;
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("group_templates.defaults_title")}</CardTitle>
+        <CardDescription>
+          {t("group_templates.defaults_desc", { unit: terms.unit })}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex gap-2">
+          <select
+            aria-label={t("group_templates.schools_label", { unit_plural: terms.unit_plural })}
+            className={selectClasses}
+            value={selected}
+            onChange={(e) => {
+              setSchoolId(e.target.value);
+              ensure.reset();
+            }}
+          >
+            <option value="">—</option>
+            {schools.map((s) => (
+              <option key={s.id} value={String(s.id)}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          <Button
+            className="shrink-0"
+            disabled={!selected || ensure.isPending}
+            onClick={() => ensure.mutate(Number(selected))}
+          >
+            {t("group_templates.defaults_button")}
+          </Button>
+        </div>
+        {ensure.isError ? (
+          <p className="text-sm text-destructive">{t("group_templates.defaults_failed")}</p>
+        ) : ensure.data ? (
+          <p className="text-sm text-muted-foreground">
+            {ensure.data.length === 0
+              ? t("group_templates.defaults_none")
+              : t("group_templates.defaults_done", {
+                  names: ensure.data.map((d) => d.name).join(", "),
+                })}
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 function TemplateFields({
   draft,
   onChange,
@@ -123,6 +230,9 @@ function TemplateFields({
 }): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
+  const { tt } = terms;
+  const isCompany = (useInstanceProfile().data ?? "school") === "company";
+  const kinds = isCompany ? ["company"] : SCHOOL_KINDS;
 
   function toggleSchool(id: number, checked: boolean): void {
     onChange({
@@ -150,6 +260,72 @@ function TemplateFields({
           maxLength={2000}
         />
       </div>
+      <div className="space-y-1">
+        <Label htmlFor="tpl-kind">{t("group_templates.kind_label")}</Label>
+        <select
+          id="tpl-kind"
+          className={selectClasses}
+          value={draft.kind}
+          onChange={(e) => onChange({ ...draft, kind: e.target.value })}
+        >
+          <option value="">{t("group_templates.kind_none")}</option>
+          {kinds.map((k) => (
+            <option key={k} value={k}>
+              {tt(`admin.user_new.ou_${k}`)}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="tpl-profile">{t("group_templates.profile_label")}</Label>
+        <select
+          id="tpl-profile"
+          className={selectClasses}
+          value={draft.password_profile}
+          onChange={(e) =>
+            onChange({ ...draft, password_profile: e.target.value as PasswordProfile })
+          }
+        >
+          {PROFILES.map((p) => (
+            <option key={p} value={p}>
+              {t(`group_templates.profile_${p}`)}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">{t("group_templates.profile_hint")}</p>
+      </div>
+      <fieldset className="space-y-2 rounded-md border p-3">
+        <legend className="px-1 text-sm font-medium">{t("group_templates.options_label")}</legend>
+        <Check
+          checked={draft.force_change}
+          onChange={(v) => onChange({ ...draft, force_change: v })}
+          label={t("group_templates.opt_force_change")}
+        />
+        <Check
+          checked={!draft.cannot_change_password}
+          onChange={(v) =>
+            onChange({
+              ...draft,
+              cannot_change_password: !v,
+              // Ein änderbares Passwort wäre in der Klassenliste bald falsch.
+              store_password: v ? false : draft.store_password,
+            })
+          }
+          label={t("group_templates.opt_can_change")}
+        />
+        <Check
+          checked={draft.password_never_expires}
+          onChange={(v) => onChange({ ...draft, password_never_expires: v })}
+          label={t("group_templates.opt_never_expires")}
+        />
+        <Check
+          checked={draft.store_password}
+          disabled={!draft.cannot_change_password}
+          onChange={(v) => onChange({ ...draft, store_password: v })}
+          label={t("group_templates.opt_store")}
+          hint={t("group_templates.opt_store_hint")}
+        />
+      </fieldset>
       <GroupPicker
         label={t("group_templates.groups_label")}
         hint={t("group_templates.groups_hint")}
@@ -188,6 +364,36 @@ function TemplateFields({
   );
 }
 
+function Check({
+  checked,
+  onChange,
+  label,
+  hint,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  hint?: string;
+  disabled?: boolean;
+}): JSX.Element {
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input
+        type="checkbox"
+        className="mt-0.5 h-4 w-4 rounded border-input"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>
+        {label}
+        {hint ? <span className="block text-xs text-muted-foreground">{hint}</span> : null}
+      </span>
+    </label>
+  );
+}
+
 function TemplateRow({
   tpl,
   schools,
@@ -201,38 +407,17 @@ function TemplateRow({
   const archive = useArchiveGroupTemplate();
   const catalog = useAdGroupsData();
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<Draft>(() => ({
-    name: tpl.name,
-    description: tpl.description ?? "",
-    ad_groups: [...tpl.ad_groups],
-    school_ids: [...tpl.school_ids],
-  }));
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(tpl));
 
   function startEdit(): void {
-    setDraft({
-      name: tpl.name,
-      description: tpl.description ?? "",
-      ad_groups: [...tpl.ad_groups],
-      school_ids: [...tpl.school_ids],
-    });
+    setDraft(draftFrom(tpl));
     update.reset();
     setEditing(true);
   }
 
   function save(): void {
     if (!draft.name.trim()) return;
-    update.mutate(
-      {
-        id: tpl.id,
-        body: {
-          name: draft.name.trim(),
-          description: draft.description.trim() || null,
-          ad_groups: draft.ad_groups,
-          school_ids: draft.school_ids,
-        },
-      },
-      { onSuccess: () => setEditing(false) },
-    );
+    update.mutate({ id: tpl.id, body: bodyFrom(draft) }, { onSuccess: () => setEditing(false) });
   }
 
   const scopeLabel =
@@ -274,7 +459,14 @@ function TemplateRow({
                 <p className="text-sm text-muted-foreground">{tpl.description}</p>
               ) : null}
               <p className="text-xs text-muted-foreground">
-                {t("group_templates.count_groups", { count: tpl.ad_groups.length })} ·{" "}
+                {SCHOOL_KINDS.includes(tpl.kind ?? "") || tpl.kind === "company"
+                  ? `${terms.tt(`admin.user_new.ou_${tpl.kind}`)} · `
+                  : null}
+                {t(`group_templates.profile_short_${tpl.password_profile}`)}
+                {tpl.store_password && tpl.cannot_change_password
+                  ? ` · ${t("group_templates.badge_stored")}`
+                  : null}{" "}
+                · {t("group_templates.count_groups", { count: tpl.ad_groups.length })} ·{" "}
                 <span
                   title={t("group_templates.schools_label", { unit_plural: terms.unit_plural })}
                 >

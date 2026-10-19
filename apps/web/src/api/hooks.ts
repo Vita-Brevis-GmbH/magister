@@ -422,7 +422,7 @@ export function useRemoveUserFromDepartment(guid: string) {
   });
 }
 
-// AD group templates ("Zielrollen"). `schoolId` filters the list to templates
+// Zielgruppen (group_templates). `schoolId` filters the list to templates
 // offered at that Standort (linked or global); omit for the full catalog.
 export function useGroupTemplates(schoolId?: number, enabled = true) {
   return useQuery<GroupTemplateOut[]>({
@@ -449,6 +449,19 @@ export function useUpdateGroupTemplate() {
   return useMutation<GroupTemplateOut, ApiError, { id: number; body: GroupTemplateUpdate }>({
     mutationFn: ({ id, body }) =>
       apiFetch<GroupTemplateOut>(`/admin/group-templates/${id}`, { method: "PATCH", body }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+/** Fehlende Standard-Zielgruppen (Zyklus 1–3, Lehrperson) eines Standorts ergänzen. */
+export function useEnsureDefaultGroupTemplates() {
+  const qc = useQueryClient();
+  return useMutation<GroupTemplateOut[], ApiError, number>({
+    mutationFn: (schoolId) =>
+      apiFetch<GroupTemplateOut[]>("/admin/group-templates/defaults", {
+        method: "POST",
+        body: { school_id: schoolId },
+      }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
   });
 }
@@ -1506,6 +1519,44 @@ export async function downloadHandouts(
   a.href = url;
   a.download =
     audience === "teachers" ? "lehrpersonen-zugangsdaten.zip" : "schueler-zugangsdaten.zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Anmelde-PDF für ein einzeln angelegtes Konto: schickt das einmal angezeigte
+ * Passwort an den zustandslosen Renderer und lädt das PDF herunter. Nichts
+ * davon wird gespeichert.
+ */
+export async function downloadNewUserPdf(
+  credential: ProvisionedCredential,
+  schoolName: string,
+  language = "de",
+  audience: "students" | "teachers" = "students",
+): Promise<void> {
+  const csrf = document.cookie.match(/(?:^|; )magister_csrf=([^;]+)/)?.[1];
+  const res = await fetch(`${API_BASE}/ad/users/handout`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
+    },
+    body: JSON.stringify({
+      credentials: [credential],
+      school_name: schoolName,
+      language,
+      audience,
+    }),
+  });
+  if (!res.ok) throw new ApiError(res.status, "handout_render_failed", await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `zugangsdaten-${credential.sam_account_name || "konto"}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();

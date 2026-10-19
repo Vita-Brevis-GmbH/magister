@@ -29,7 +29,7 @@
     "modules": "Modules et fonctions",
     "departments": "Départements",
     "document_templates": "Modèles",
-    "group_templates": "Rôles d’accès"
+    "group_templates": "Groupes cibles"
   },
   "auth": {
     "login_title": "Connexion",
@@ -658,7 +658,7 @@
       "ou_company": "Utilisateur {{unit}}",
       "submit": "Créer",
       "created_title": "Utilisateur créé",
-      "created_desc": "Le mot de passe temporaire n'est affiché que maintenant. Il doit être changé à la première connexion.",
+      "created_desc": "Le mot de passe n’est affiché que maintenant. Notez-le ou téléchargez tout de suite le PDF de connexion.",
       "temp_password": "Mot de passe temporaire",
       "temp_hint": "Remettez-le en main propre de façon sûre. Il ne sera plus affiché.",
       "to_users": "Vers la liste des utilisateurs",
@@ -676,11 +676,14 @@
       "password_never_expires": "Le mot de passe n'expire jamais",
       "class_assign_failed": "Compte créé, mais l'affectation à la classe a échoué. Veuillez l'affecter manuellement.",
       "can_change_password": "L'utilisateur peut changer le mot de passe",
-      "group_template": "Rôle d’accès (groupes)",
-      "group_template_default": "Groupes par défaut (provisionnement)",
-      "group_template_hint": "Facultatif. Remplace les groupes par défaut par le rôle choisi.",
-      "err_template_not_found": "Rôle d’accès introuvable.",
-      "err_template_not_for_school": "Le rôle n’est pas disponible sur ce site."
+      "group_template": "Groupe cible",
+      "group_template_default": "Sans groupe cible (groupes par défaut du site)",
+      "group_template_hint": "Définit le type de compte, les groupes, le type de mot de passe et les paramètres. Les paramètres ci-dessous peuvent être modifiés au cas par cas.",
+      "err_template_not_found": "Groupe cible introuvable.",
+      "err_template_not_for_school": "Le groupe cible n’est pas disponible sur ce site.",
+      "ou_from_template": "Défini par le groupe cible.",
+      "download_pdf": "Télécharger le PDF de connexion",
+      "pdf_failed": "Le PDF de connexion n’a pas pu être créé."
     },
     "user_settings": {
       "title": "Configuration utilisateur",
@@ -1122,7 +1125,7 @@
         "ad_ou_company_users": "OU collaborateurs (OU cible)",
         "ad_groups_company": "Groupes par défaut collaborateurs"
       },
-      "groups_moved_hint": "Les modèles de groupes AD sont désormais gérés de manière centralisée sous « Rôles d’accès »."
+      "groups_moved_hint": "Les modèles de groupes AD sont désormais gérés sous « Groupes cibles »."
     }
   },
   "user_groups": {
@@ -1316,27 +1319,50 @@
     "load_starter": "Charger le modèle par défaut"
   },
   "group_templates": {
-    "title": "Rôles d’accès (groupes AD)",
-    "intro": "Modèles de groupes AD réutilisables pour les autorisations. Sélectionnables à la création d’utilisateurs, filtrés par {{unit_plural}}.",
-    "new_title": "Nouveau rôle d’accès",
-    "new_desc": "Définir le nom, les groupes AD et la portée.",
+    "title": "Groupes cibles",
+    "intro": "Un groupe cible définit comment un compte est créé : type de compte, groupes AD, type de mot de passe et paramètres du compte. Sélectionnable à la création d’utilisateurs, filtré par {{unit_plural}}.",
+    "new_title": "Nouveau groupe cible",
+    "new_desc": "Définir le nom, le type de compte, le type de mot de passe, les groupes AD et la portée.",
     "name": "Nom",
-    "name_placeholder": "p. ex. accès Tool-X",
+    "name_placeholder": "p. ex. Aide de classe",
     "description": "Description",
     "groups_label": "Groupes AD",
-    "groups_hint": "Groupes auxquels ce rôle donne accès.",
+    "groups_hint": "Groupes auxquels les comptes de ce groupe cible sont ajoutés.",
     "schools_label": "{{unit_plural}}",
     "schools_hint": "Disponible uniquement dans les {{unit_plural}} sélectionnés.",
-    "schools_global_hint": "Sans sélection, le rôle s’applique à tous les {{unit_plural}}.",
+    "schools_global_hint": "Sans sélection, le groupe cible s’applique à tous les {{unit_plural}}.",
     "no_schools": "Aucun {{unit_plural}} disponible.",
     "global_badge": "Global (tous)",
     "count_groups": "{{count}} groupes",
-    "create": "Créer le rôle",
+    "create": "Créer le groupe cible",
     "save": "Enregistrer",
     "edit": "Modifier",
     "archive": "Archiver",
     "create_failed": "Échec de l’enregistrement.",
-    "empty": "Aucun rôle d’accès."
+    "empty": "Aucun groupe cible.",
+    "kind_label": "Type de compte (détermine l’OU)",
+    "kind_none": "Pas de type fixe – à choisir à la création",
+    "profile_label": "Type de mot de passe",
+    "profile_readable": "Simple – deux mots et un nombre (p. ex. Tiger-Wolke-47)",
+    "profile_teacher": "Enseignant·e – 12 caractères, symboles du clavier suisse",
+    "profile_complex": "Complexe – 14 caractères",
+    "profile_hint": "S’applique à la création et à chaque réinitialisation ultérieure.",
+    "profile_short_readable": "Mot de passe simple",
+    "profile_short_teacher": "Mot de passe enseignant·e",
+    "profile_short_complex": "Mot de passe complexe",
+    "options_label": "Paramètres du compte à la création",
+    "opt_force_change": "Forcer le changement de mot de passe à la première connexion",
+    "opt_can_change": "L’utilisateur peut changer le mot de passe",
+    "opt_never_expires": "Le mot de passe n’expire jamais",
+    "opt_store": "Enregistrer le mot de passe dans Magister (liste de la classe)",
+    "opt_store_hint": "Effectif uniquement si l’utilisateur ne peut pas changer le mot de passe et que le coffre est activé.",
+    "badge_stored": "Mot de passe enregistré",
+    "defaults_title": "Groupes cibles standard",
+    "defaults_desc": "Ajoute les groupes cibles standard manquants (élève cycle 1–3, enseignant·e) pour un {{unit}}. Les existants ne changent pas.",
+    "defaults_button": "Ajouter les manquants",
+    "defaults_done": "Ajoutés : {{names}}",
+    "defaults_none": "Tous les groupes cibles standard existent.",
+    "defaults_failed": "L’ajout a échoué."
   },
   "managed": {
     "how": "Si vous avez besoin d'une modification, adressez-vous à votre interlocuteur chez Vita Brevis. Ce qui s'applique ici est visible dans le journal d'audit sous « platform_settings_reconciled ».",

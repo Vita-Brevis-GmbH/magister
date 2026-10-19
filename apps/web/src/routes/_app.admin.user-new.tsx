@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "@/api/client";
 import {
+  downloadNewUserPdf,
   useClasses,
   useCreateAdUser,
   useGroupTemplates,
@@ -11,7 +12,7 @@ import {
   useMailDomains,
   useSchools,
 } from "@/api/hooks";
-import type { AdUserOuKey } from "@/api/types";
+import type { AdUserOuKey, GroupTemplateOut, ProvisionedCredential } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -61,8 +62,16 @@ function createErrorKey(err: ApiError): string {
   return "errors.generic";
 }
 
+// Für das Anmelde-PDF: was nach dem Anlegen bekannt ist. Das Passwort lebt nur
+// in diesem Zustand der Seite und geht ungespeichert an den PDF-Renderer.
+interface Created {
+  credential: ProvisionedCredential;
+  audience: "students" | "teachers";
+  schoolName: string;
+}
+
 function NewUserPage(): JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { tt } = useTerms();
   const navigate = useNavigate();
   const create = useCreateAdUser();
@@ -77,7 +86,8 @@ function NewUserPage(): JSX.Element {
   const useDomainPicker = domains.length > 0;
 
   const [form, setForm] = useState(INITIAL);
-  const [password, setPassword] = useState<string | null>(null);
+  const [created, setCreated] = useState<Created | null>(null);
+  const [pdfState, setPdfState] = useState<"idle" | "busy" | "failed">("idle");
   const [classWarn, setClassWarn] = useState(false);
 
   // Zielrollen (group templates) offered at the picked Standort. Optional: when
@@ -89,10 +99,33 @@ function NewUserPage(): JSX.Element {
   // Company provisions a single "company" category into the org unit's company
   // OU; school offers teacher + student Zyklen. Students carry a grade + class.
   const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
-  const ouKey: AdUserOuKey = isCompany ? "company" : form.ou_key;
-  const isStudent = !isCompany && form.ou_key !== "teacher";
+  // Eine Zielgruppe mit fester Kontoart legt die OU fest (das Backend
+  // übersteuert ou_key ebenso); ohne sie wählt man die Kontoart selbst.
+  const selectedTemplate = templates.find((tpl) => String(tpl.id) === form.group_template_id);
+  const templateKind = (ouKeys as string[]).includes(selectedTemplate?.kind ?? "")
+    ? (selectedTemplate?.kind as AdUserOuKey)
+    : null;
+  const ouKey: AdUserOuKey = isCompany ? "company" : (templateKind ?? form.ou_key);
+  const isStudent = !isCompany && ouKey !== "teacher";
+
+  // Zielgruppe gewählt → ihre Konto-Einstellungen vorbelegen (übersteuerbar).
+  function pickTemplate(id: string): void {
+    const tpl: GroupTemplateOut | undefined = templates.find((x) => String(x.id) === id);
+    setForm((prev) => ({
+      ...prev,
+      group_template_id: id,
+      ...(tpl
+        ? {
+            force_change: tpl.force_change,
+            cannot_change_password: tpl.cannot_change_password,
+            password_never_expires: tpl.password_never_expires,
+          }
+        : {}),
+    }));
+  }
 
   const schoolList = schools.data ?? [];
+  const activeClasses = (classes.data ?? []).filter((c) => c.status === "active");
   // Pre-select the target org unit when there is exactly one to choose from.
   useEffect(() => {
     const list = schools.data ?? [];
@@ -128,7 +161,8 @@ function NewUserPage(): JSX.Element {
     e.preventDefault();
     if (!form.school_id) return;
     if (useDomainPicker && !form.upn_local.trim()) return;
-    setPassword(null);
+    setCreated(null);
+    setPdfState("idle");
     setClassWarn(false);
     const grade = form.jahrgangsstufe.trim();
     create.mutate(
@@ -161,13 +195,38 @@ function NewUserPage(): JSX.Element {
               setClassWarn(true);
             }
           }
-          setPassword(res.temp_password);
+          const display = form.display_name.trim() || `${form.given_name} ${form.surname}`.trim();
+          const className = isStudent
+            ? (activeClasses.find((c) => String(c.id) === form.class_id)?.name ?? "")
+            : "";
+          setCreated({
+            credential: {
+              upn: composedUpn,
+              sam_account_name: form.sam_account_name,
+              display_name: display,
+              class_name: className,
+              password: res.temp_password,
+              force_change: res.force_change,
+            },
+            audience: isStudent ? "students" : "teachers",
+            schoolName: schoolList.find((s) => String(s.id) === form.school_id)?.name ?? "",
+          });
         },
       },
     );
   }
 
-  if (password) {
+  async function downloadPdf(c: Created): Promise<void> {
+    setPdfState("busy");
+    try {
+      await downloadNewUserPdf(c.credential, c.schoolName, i18n.language, c.audience);
+      setPdfState("idle");
+    } catch {
+      setPdfState("failed");
+    }
+  }
+
+  if (created) {
     return (
       <div className="mx-auto max-w-lg space-y-6">
         <Card>
@@ -179,14 +238,25 @@ function NewUserPage(): JSX.Element {
             <div className="space-y-1">
               <Label>{t("admin.user_new.temp_password")}</Label>
               <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm">
-                {password}
+                {created.credential.password}
               </div>
               <p className="text-xs text-muted-foreground">{t("admin.user_new.temp_hint")}</p>
             </div>
             {classWarn ? (
               <p className="text-sm text-amber-600">{t("admin.user_new.class_assign_failed")}</p>
             ) : null}
-            <div className="flex gap-2">
+            {pdfState === "failed" ? (
+              <p className="text-sm text-destructive">{t("admin.user_new.pdf_failed")}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pdfState === "busy"}
+                onClick={() => void downloadPdf(created)}
+              >
+                {t("admin.user_new.download_pdf")}
+              </Button>
               <Button type="button" onClick={() => navigate({ to: "/users" })}>
                 {t("admin.user_new.to_users")}
               </Button>
@@ -194,7 +264,8 @@ function NewUserPage(): JSX.Element {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setPassword(null);
+                  setCreated(null);
+                  setPdfState("idle");
                   setClassWarn(false);
                   setForm(INITIAL);
                 }}
@@ -207,8 +278,6 @@ function NewUserPage(): JSX.Element {
       </div>
     );
   }
-
-  const activeClasses = (classes.data ?? []).filter((c) => c.status === "active");
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -311,34 +380,13 @@ function NewUserPage(): JSX.Element {
               </select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="ou">{t("admin.user_new.ou")}</Label>
-              <select
-                id="ou"
-                className={selectClasses}
-                value={ouKey}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, ou_key: e.target.value as AdUserOuKey }))
-                }
-              >
-                {ouKeys.map((k) => (
-                  <option key={k} value={k}>
-                    {tt(`admin.user_new.ou_${k}`)}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">{t("admin.user_new.ou_hint")}</p>
-            </div>
-
-            <div className="space-y-1">
               <Label htmlFor="ziel">{t("admin.user_new.group_template")}</Label>
               <select
                 id="ziel"
                 className={selectClasses}
                 value={form.group_template_id}
                 disabled={!form.school_id}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, group_template_id: e.target.value }))
-                }
+                onChange={(e) => pickTemplate(e.target.value)}
               >
                 <option value="">{t("admin.user_new.group_template_default")}</option>
                 {templates.map((tpl) => (
@@ -349,6 +397,30 @@ function NewUserPage(): JSX.Element {
               </select>
               <p className="text-xs text-muted-foreground">
                 {t("admin.user_new.group_template_hint")}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="ou">{t("admin.user_new.ou")}</Label>
+              <select
+                id="ou"
+                className={selectClasses}
+                value={ouKey}
+                disabled={templateKind !== null}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, ou_key: e.target.value as AdUserOuKey }))
+                }
+              >
+                {ouKeys.map((k) => (
+                  <option key={k} value={k}>
+                    {tt(`admin.user_new.ou_${k}`)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {templateKind !== null
+                  ? t("admin.user_new.ou_from_template")
+                  : t("admin.user_new.ou_hint")}
               </p>
             </div>
 

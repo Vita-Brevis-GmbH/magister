@@ -26,7 +26,7 @@
     "modules": "Modules & Features",
     "departments": "Departments",
     "document_templates": "Templates",
-    "group_templates": "Access roles"
+    "group_templates": "Target groups"
   },
   "auth": {
     "login_title": "Sign in",
@@ -655,7 +655,7 @@
       "ou_company": "{{unit}} user",
       "submit": "Create",
       "created_title": "User created",
-      "created_desc": "The temporary password is shown only now. It must be changed at first sign-in.",
+      "created_desc": "The password is shown only now. Note it or download the sign-in PDF right away.",
       "temp_password": "Temporary password",
       "temp_hint": "Hand it to the person securely. It will not be shown again.",
       "to_users": "To the user list",
@@ -673,11 +673,14 @@
       "password_never_expires": "Password never expires",
       "class_assign_failed": "Account created, but the class assignment failed. Please assign it manually.",
       "can_change_password": "User can change password",
-      "group_template": "Access role (groups)",
-      "group_template_default": "Default groups (from provisioning)",
-      "group_template_hint": "Optional. Replaces the default groups with the chosen role.",
-      "err_template_not_found": "Access role not found.",
-      "err_template_not_for_school": "The role is not available at this location."
+      "group_template": "Target group",
+      "group_template_default": "No target group (site default groups)",
+      "group_template_hint": "Sets account type, groups, password type and account settings. The settings below can be overridden case by case.",
+      "err_template_not_found": "Target group not found.",
+      "err_template_not_for_school": "The target group is not available at this site.",
+      "ou_from_template": "Set by the target group.",
+      "download_pdf": "Download sign-in PDF",
+      "pdf_failed": "The sign-in PDF could not be created."
     },
     "user_settings": {
       "title": "User configuration",
@@ -1119,7 +1122,7 @@
         "ad_ou_company_users": "OU employees (target OU)",
         "ad_groups_company": "Default groups employees"
       },
-      "groups_moved_hint": "AD group templates are now managed centrally under “Access roles”."
+      "groups_moved_hint": "AD group templates are now managed centrally under “Target groups”."
     }
   },
   "user_groups": {
@@ -1313,27 +1316,50 @@
     "load_starter": "Load default template"
   },
   "group_templates": {
-    "title": "Access roles (AD groups)",
-    "intro": "Reusable AD group templates for permissions. Selectable when creating users, filtered by {{unit_plural}}.",
-    "new_title": "New access role",
-    "new_desc": "Set name, AD groups and scope.",
+    "title": "Target groups",
+    "intro": "A target group defines how an account is created: account type, AD groups, password type and account settings. Selectable when creating users, filtered by {{unit_plural}}.",
+    "new_title": "New target group",
+    "new_desc": "Set name, account type, password type, AD groups and scope.",
     "name": "Name",
-    "name_placeholder": "e.g. Tool-X access",
+    "name_placeholder": "e.g. Class assistant",
     "description": "Description",
     "groups_label": "AD groups",
-    "groups_hint": "Groups this role grants access to.",
+    "groups_hint": "Groups accounts of this target group are added to.",
     "schools_label": "{{unit_plural}}",
     "schools_hint": "Available only at the selected {{unit_plural}}.",
-    "schools_global_hint": "With none selected the role applies to all {{unit_plural}}.",
+    "schools_global_hint": "With none selected the target group applies to all {{unit_plural}}.",
     "no_schools": "No {{unit_plural}} available.",
     "global_badge": "Global (all)",
     "count_groups": "{{count}} groups",
-    "create": "Create role",
+    "create": "Create target group",
     "save": "Save",
     "edit": "Edit",
     "archive": "Archive",
     "create_failed": "Saving failed.",
-    "empty": "No access roles yet."
+    "empty": "No target groups yet.",
+    "kind_label": "Account type (determines the OU)",
+    "kind_none": "No fixed account type – choose when creating",
+    "profile_label": "Password type",
+    "profile_readable": "Simple – two words and a number (e.g. Tiger-Wolke-47)",
+    "profile_teacher": "Teacher – 12 characters, Swiss keyboard symbols",
+    "profile_complex": "Complex – 14 characters",
+    "profile_hint": "Applies when creating and on every later password reset.",
+    "profile_short_readable": "Simple password",
+    "profile_short_teacher": "Teacher password",
+    "profile_short_complex": "Complex password",
+    "options_label": "Account settings at creation",
+    "opt_force_change": "Force password change at first logon",
+    "opt_can_change": "User can change password",
+    "opt_never_expires": "Password never expires",
+    "opt_store": "Store password in Magister (class password list)",
+    "opt_store_hint": "Only takes effect if the user cannot change the password and the password vault is enabled.",
+    "badge_stored": "Password stored",
+    "defaults_title": "Default target groups",
+    "defaults_desc": "Adds the missing default target groups (student cycle 1–3, teacher) for a {{unit}}. Existing ones stay unchanged.",
+    "defaults_button": "Add missing",
+    "defaults_done": "Added: {{names}}",
+    "defaults_none": "All default target groups exist.",
+    "defaults_failed": "Adding failed."
   },
   "managed": {
     "how": "If you need a change, contact your Vita Brevis representative. What applies here is visible in the audit log under “platform_settings_reconciled”.",

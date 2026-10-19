@@ -98,6 +98,12 @@ class AdUserCache(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # Zielgruppe, nach der das Konto angelegt oder der es später zugeordnet
+    # wurde (Magister-only, von der Synchronisation nicht berührt). Bestimmt
+    # die Passwortart bei Resets und welche Gruppen ein Wechsel entfernt.
+    group_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("group_templates.id", ondelete="SET NULL"), nullable=True
+    )
     # AD group memberships (``memberOf`` DNs), refreshed on every sync. Purely
     # informational in Magister — display only.
     ad_groups: Mapped[list[str]] = mapped_column(
