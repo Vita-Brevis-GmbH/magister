@@ -74,7 +74,7 @@ interface Created {
   schoolName: string;
 }
 
-function NewUserPage(): JSX.Element {
+export function NewUserPage(): JSX.Element {
   const { t, i18n } = useTranslation();
   const { tt } = useTerms();
   const navigate = useNavigate();
@@ -478,7 +478,7 @@ function NewUserPage(): JSX.Element {
                   ? t("admin.user_new.ou_from_template")
                   : ou !== "" || !form.school_id
                     ? t("admin.user_new.ou_hint_own_ou")
-                    : t("admin.user_new.ou_hint")}
+                    : tt("admin.user_new.ou_hint")}
               </p>
             </div>
 
