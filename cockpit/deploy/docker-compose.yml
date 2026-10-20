@@ -19,9 +19,14 @@
 #
 # Before the first start: build the console UI, otherwise the listener answers
 # 404 on everything but /api/* — `cd cockpit/web && pnpm install && pnpm build`.
+# Jeder Dienst mit `restart: unless-stopped`: nach einem Neustart des Hosts
+# (nächtliches Patchen) kommt die Konsole von selbst wieder — und mit ihr die
+# Kundenliste, die die Datenebene bei ihr abholt. Ohne die Zeile blieb die
+# Konsole aus, und jede Kundenseite war "unbekannt".
 services:
   postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
       POSTGRES_USER: cockpit
       POSTGRES_PASSWORD: cockpit
@@ -33,6 +38,7 @@ services:
       - cockpit-pg:/var/lib/postgresql/data
   api:
     build: ../api
+    restart: unless-stopped
     environment:
       COCKPIT_DATABASE_URL: postgresql+asyncpg://cockpit:cockpit@postgres:5432/cockpit
       COCKPIT_BOOTSTRAP_TOKEN: ${COCKPIT_BOOTSTRAP_TOKEN:-change-me-in-prod}
@@ -124,6 +130,7 @@ services:
       retries: 3
   caddy:
     image: caddy:2.8-alpine
+    restart: unless-stopped
     depends_on: [api]
     # THE line that keeps the console off the internet: published on the
     # management address only. Never change the left-hand side to 0.0.0.0 —

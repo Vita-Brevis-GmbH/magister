@@ -43,6 +43,9 @@ services:
       MAGISTER_CONSOLE_REGISTRY_TOKEN: ${MAGISTER_CONSOLE_REGISTRY_TOKEN:?MAGISTER_CONSOLE_REGISTRY_TOKEN is required}
       MAGISTER_CONSOLE_MANAGEMENT_MARKER: ${MAGISTER_CONSOLE_MANAGEMENT_MARKER:?MAGISTER_CONSOLE_MANAGEMENT_MARKER is required — ohne Marker verwirft die Konsole die Anfrage mit 404}
       MAGISTER_CONSOLE_REGISTRY_INTERVAL_S: ${MAGISTER_CONSOLE_REGISTRY_INTERVAL_S:-300}
+      # Zwischenstand der Kundenliste: nach einem Neustart des Hosts bedient
+      # die Datenebene damit, auch wenn die Konsole noch nicht oben ist.
+      MAGISTER_CONSOLE_REGISTRY_CACHE: /var/lib/magister/registry.json
       # Die Konsole hat ihr Zertifikat aus der Plattform-CA, die in keinem
       # öffentlichen Zertifikatsspeicher steht. Ohne diesen Anker scheitert
       # jeder Abruf an CERTIFICATE_VERIFY_FAILED — und die Datenebene bedient
@@ -60,6 +63,8 @@ services:
     volumes:
       # Nur die Wurzel, nur lesend. Kein Schlüssel der CA verlässt deren Ort.
       - ${MAGISTER_CONSOLE_CA_PATH:?MAGISTER_CONSOLE_CA_PATH is required — Wurzel der Plattform-CA (PEM), damit die Datenebene der Konsole traut}:/run/magister/console-ca.pem:ro
+      # Eigenes Volume: der Zwischenstand überlebt auch ein Update.
+      - registry_state:/var/lib/magister
 
   caddy:
     environment:
@@ -86,6 +91,10 @@ services:
     # ihr Zertifikat von der Anwendung bekommt. Hier liegt es vorher da.
     entrypoint: ["caddy"]
     command: ["run", "--config", "/etc/caddy/magister/${MAGISTER_TENANT_CADDYFILE:-Caddyfile.mandanten}", "--adapter", "caddyfile"]
+
+volumes:
+  # Zwischenstand der Kundenliste (MAGISTER_CONSOLE_REGISTRY_CACHE).
+  registry_state:
 
 networks:
   plattform:

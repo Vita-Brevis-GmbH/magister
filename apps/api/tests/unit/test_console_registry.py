@@ -209,3 +209,90 @@ class TestLastGoodState:
         context.init_tenancy(settings)
         assert await context.refresh_from_console(settings) is False
         await context.dispose_tenancy()
+
+
+class TestRestartWithoutConsole:
+    """Nach einem Neustart des Hosts (nächtliches Patchen) ist die Konsole oft
+    noch nicht oben, wenn die Datenebene startet. Ohne Zwischenstand gab es
+    dann keinen "letzten guten Stand" — und jede Kundenseite war unbekannt."""
+
+    @staticmethod
+    def _settings(cache: str) -> Any:
+        from magister_api.config import Settings
+
+        return Settings(
+            console_registry_url="http://console.test/api/tenants/registry",
+            console_registry_token="t",  # type: ignore[arg-type]
+            console_registry_cache=cache,
+            audit_key="k",  # type: ignore[arg-type]
+            session_secret="s",  # type: ignore[arg-type]
+            csrf_secret="c",  # type: ignore[arg-type]
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_restart_without_console_serves_the_last_known_customers(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        import os
+
+        from magister_api.tenancy import console_registry, context
+
+        for key, value in ENV.items():
+            monkeypatch.setenv(key, value)
+        cache = tmp_path / "state" / "registry.json"
+        settings = self._settings(str(cache))
+        payload = [_entry("alpha"), _entry("beta")]
+
+        # 1) Die Konsole antwortet: Liste gilt, Zwischenstand liegt auf der Platte.
+        async def _ok(*_: object, on_payload: Any = None, **__: object) -> Any:
+            registry = registry_from_console_payload(payload, environ=ENV)
+            if on_payload is not None:
+                on_payload(payload)
+            return registry
+
+        context.init_tenancy(settings)
+        monkeypatch.setattr(context, "fetch_registry", _ok)
+        assert await context.refresh_from_console(settings) is True
+        assert cache.is_file()
+        assert oct(os.stat(cache).st_mode & 0o777) == "0o600"
+        # Keine DSN, kein Passwort im Zwischenstand.
+        assert "postgresql" not in cache.read_text() and "pw@" not in cache.read_text()
+        await context.dispose_tenancy()
+
+        # 2) Neustart, Konsole noch nicht oben: Kunden aus dem Zwischenstand.
+        async def _down(*_: object, **__: object) -> None:
+            raise console_registry.ConsoleUnavailableError("Konsole nicht erreichbar: Neustart")
+
+        context.init_tenancy(settings)
+        monkeypatch.setattr(context, "fetch_registry", _down)
+        assert await context.refresh_from_console(settings) is False
+        assert {t.slug for t in context.get_registry().tenants} == {"alpha", "beta"}
+        assert context._console_seen is True  # pyright: ignore[reportPrivateUsage]
+        await context.dispose_tenancy()
+
+    @pytest.mark.asyncio
+    async def test_without_a_snapshot_the_loop_asks_again_soon(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+    ) -> None:
+        import asyncio
+
+        from magister_api.tenancy import console_registry, context
+
+        settings = self._settings(str(tmp_path / "missing.json"))
+        context.init_tenancy(settings)
+        calls: list[int] = []
+
+        async def _down(*_: object, **__: object) -> None:
+            calls.append(1)
+            raise console_registry.ConsoleUnavailableError("Konsole nicht erreichbar")
+
+        monkeypatch.setattr(context, "fetch_registry", _down)
+        monkeypatch.setattr(context, "STARTUP_RETRY_S", 0.01)
+        stop = asyncio.Event()
+        task = asyncio.create_task(context.console_refresh_loop(settings, stop=stop))
+        await asyncio.sleep(0.2)
+        stop.set()
+        await task
+        # Intervall wäre 300 s: mehr als ein Versuch heisst, es wird kurz getaktet.
+        assert len(calls) > 2
+        await context.dispose_tenancy()

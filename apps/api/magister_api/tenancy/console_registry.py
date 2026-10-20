@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import Any
 
 import httpx
@@ -129,6 +129,7 @@ async def fetch_registry(
     token: str,
     timeout_s: float = 5.0,
     management_marker: str = "",
+    on_payload: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> TenantRegistry:
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     if management_marker:
@@ -152,4 +153,9 @@ async def fetch_registry(
         raise ConsoleUnavailableError(f"Antwort der Konsole ist kein JSON: {exc}") from exc
     if not isinstance(payload, list):
         raise ConsoleUnavailableError("Antwort der Konsole ist keine Liste von Mandanten.")
-    return registry_from_console_payload(payload)
+    registry = registry_from_console_payload(payload)
+    # Erst nach erfolgreicher Übersetzung: der Zwischenstand auf der Platte
+    # (siehe context.py) soll nur eine Liste halten, die auch taugt.
+    if on_payload is not None:
+        on_payload(payload)
+    return registry

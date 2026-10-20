@@ -10,7 +10,12 @@ Anfragepfad, dieselbe Auflösung, dieselbe Sitzungs-Einrichtung — nur n=1.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from starlette.requests import Request
@@ -19,6 +24,7 @@ from magister_api.config import Settings, get_settings
 from magister_api.tenancy.console_registry import (
     ConsoleUnavailableError,
     fetch_registry,
+    registry_from_console_payload,
 )
 from magister_api.tenancy.engines import TenantEngineRegistry
 from magister_api.tenancy.registry import (
@@ -37,6 +43,13 @@ REQUEST_STATE_ATTR = "tenant"
 
 _registry: TenantRegistry | None = None
 _engines: TenantEngineRegistry | None = None
+#: Hat dieser Prozess die Konsole schon einmal erreicht (oder ihren
+#: Zwischenstand geladen)? Bis dahin fragt die Schleife in kurzen Abständen.
+_console_seen = False
+
+#: Wie oft die Schleife fragt, solange die Konsole noch nie geantwortet hat —
+#: nach einem Neustart des Hosts kommt sie oft erst nach der Datenebene hoch.
+STARTUP_RETRY_S = 15
 
 
 class TenantNotResolvedError(RuntimeError):
@@ -134,7 +147,7 @@ async def refresh_from_console(settings: Settings | None = None) -> bool:
     Das ist die Zusage aus ADR-0013 D4: eine Störung in der Verwaltung ist
     kein Ausfall des Betriebs.
     """
-    global _registry
+    global _registry, _console_seen
     s = settings or get_settings()
     if not s.console_registry_url:
         return False
@@ -143,12 +156,19 @@ async def refresh_from_console(settings: Settings | None = None) -> bool:
             s.console_registry_url,
             token=s.console_registry_token.get_secret_value(),
             management_marker=s.console_management_marker.get_secret_value(),
+            on_payload=lambda payload: _write_cache(s, payload),
         )
     except (ConsoleUnavailableError, TenantConfigError) as exc:
         # WARNING, nicht ERROR: der Betrieb läuft weiter. Aber sichtbar, denn
         # ein neu angelegter Kunde kommt bis zur Behebung nicht durch.
         logger.warning("Konsolen-Registry nicht übernommen, letzter guter Stand bleibt: %s", exc)
+        # Gleich nach dem Start gibt es keinen "letzten guten Stand" im
+        # Speicher — dann den auf der Platte. Sonst stünde nach jedem
+        # Neustart des Hosts jede Kundenseite still, bis die Konsole da ist.
+        if not _console_seen:
+            _console_seen = _load_cache(s)
         return False
+    _console_seen = True
     previous = {t.slug for t in _registry.tenants} if _registry is not None else set()
     _registry = fresh
     current = {t.slug for t in fresh.tenants}
@@ -175,18 +195,72 @@ async def console_refresh_loop(
     stop = stop or asyncio.Event()
     while not stop.is_set():
         await refresh_from_console(s)
+        # Bis zur ersten Antwort kurz takten: nach einem Neustart des Hosts
+        # ist die Konsole oft noch nicht oben, und fünf Minuten ohne
+        # Kundenliste wären fünf Minuten Ausfall.
+        wait = (
+            s.console_registry_interval_s
+            if _console_seen
+            else min(STARTUP_RETRY_S, s.console_registry_interval_s)
+        )
         try:
-            await asyncio.wait_for(stop.wait(), timeout=s.console_registry_interval_s)
+            await asyncio.wait_for(stop.wait(), timeout=wait)
         except TimeoutError:
             continue
 
 
+def _write_cache(settings: Settings, payload: list[dict[str, Any]]) -> None:
+    """Die Antwort der Konsole auf die Platte legen (atomar, nur für uns lesbar).
+
+    Darin steht, was die Konsole an die Datenebene schickt: Kürzel,
+    Hostnamen, Schemas, Status — keine DSN, keine Passwörter (die kommen aus
+    der Umgebung). Ein Fehler hier ist kein Fehler des Abrufs.
+    """
+    path = settings.console_registry_cache
+    if not path:
+        return
+    target = Path(path)
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".registry-")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, target)
+    except OSError as exc:
+        logger.warning("Zwischenstand der Kundenliste nicht geschrieben (%s): %s", path, exc)
+
+
+def _load_cache(settings: Settings) -> bool:
+    """Den letzten Stand der Konsole von der Platte übernehmen. ``True`` bei Erfolg."""
+    global _registry
+    path = settings.console_registry_cache
+    if not path or not Path(path).is_file():
+        return False
+    try:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        cached = registry_from_console_payload(payload)
+    except (OSError, ValueError, TenantConfigError) as exc:
+        logger.warning("Zwischenstand der Kundenliste unbrauchbar (%s): %s", path, exc)
+        return False
+    _registry = cached
+    stamp = datetime.fromtimestamp(Path(path).stat().st_mtime, UTC).isoformat(timespec="seconds")
+    logger.warning(
+        "Konsole nicht erreichbar — Kundenliste aus dem Zwischenstand vom %s: %d Mandant(en). "
+        "Neue oder geänderte Kunden kommen erst mit der Konsole.",
+        stamp,
+        len(cached.tenants),
+    )
+    return True
+
+
 async def dispose_tenancy() -> None:
-    global _registry, _engines
+    global _registry, _engines, _console_seen
     if _engines is not None:
         await _engines.dispose_all()
     _registry = None
     _engines = None
+    _console_seen = False
 
 
 def tenant_from_request(request: Request) -> Tenant:

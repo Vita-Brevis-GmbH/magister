@@ -16,6 +16,8 @@ on:
   pull_request:
     paths:
       - "scripts/**"
+      - "cockpit/deploy/docker-compose*.yml"
+      - "deploy/compose/docker-compose*.yml"
       - ".github/workflows/scripts-ci.yml"
 
 permissions:
@@ -46,3 +48,6 @@ jobs:
 
       - name: Host-Agent führt nur bekannte Aufträge aus
         run: ./scripts/tests/plattform-ops-agent.test.sh
+
+      - name: Jeder Dienst kommt nach einem Neustart des Hosts wieder
+        run: ./scripts/tests/compose-neustart.test.sh

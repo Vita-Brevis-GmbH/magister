@@ -95,6 +95,10 @@ class Settings(BaseSettings):
     # Wie oft im Hintergrund nachgeladen wird. Ein Ausfall der Konsole ändert
     # nichts am Betrieb — der letzte gute Stand bleibt gültig.
     console_registry_interval_s: int = Field(default=300, ge=30)
+    # Zwischenstand der Kundenliste auf der Platte. Ist die Konsole beim Start
+    # nicht erreichbar (Neustart des Hosts), bedient die Datenebene damit
+    # weiter, statt jede Kundenseite als unbekannt abzuweisen. Leer = aus.
+    console_registry_cache: str = Field(default="")
     # Vertrauensanker für das Serverzertifikat der Konsole (PEM, Pfad im
     # Container). Die Konsole hat ihr Zertifikat aus der Plattform-CA, und
     # die steht in keinem öffentlichen Zertifikatsspeicher. Leer heisst:

@@ -316,7 +316,7 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 ## 9 · Stufe 8 — Betrieb
 
 - [ ] **B-01** Update-Weg: `git pull && ./scripts/plattform-aufbau.sh` auf einem laufenden System → keine Unterbrechung länger als der Neustart, Konsole danach erreichbar (Fehler, der zweimal passiert ist).
-- [ ] **B-02** Neustart des ganzen Hosts → alles kommt von selbst wieder, Agenten verbinden sich neu.
+- [ ] **B-02** Neustart des ganzen Hosts (`reboot`) → alles kommt von selbst wieder, Agenten verbinden sich neu; `docker ps` zeigt Konsole und Datenebene, Kundenseiten antworten ohne Eingriff. Gegenprobe: Konsole nach dem Neustart gestoppt (`docker stop deploy-api-1`) → Kundenseiten antworten trotzdem (Log: „Kundenliste aus dem Zwischenstand"), nach `docker start` holt die Datenebene die Liste binnen 15 s.
 - [ ] **B-03** Postgres-Neustart während Last → Anfragen scheitern kurz, Pools erholen sich ohne Neustart der API.
 - [ ] **B-04** Plattenplatz: WAL-Archiv und Dumps nach einer Woche messen (Reserve 32 GB, E17).
 - [ ] **B-05** Runbooks folgen können: eine zweite Person legt mit [kunde-anlegen-konsole.md](kunde-anlegen-konsole.md) und [kunden-onboarding.md](kunden-onboarding.md) einen Kunden an, ohne nachzufragen. Jede Rückfrage ist ein Doku-Befund.

@@ -431,6 +431,31 @@ damit verschlüsselt ist; sonst bricht es ab und verlangt den bisherigen aus
 dem Passwortspeicher. Einen neu erzeugten Schlüssel danach in den
 Passwortspeicher übernehmen.
 
+## 5e · Neustart des Hosts (nächtliches Patchen)
+
+Nach einem `reboot` kommt alles von selbst wieder — ohne Eingriff:
+
+* **Jeder Dienst** in Konsole und Datenebene hat `restart: unless-stopped`
+  (`scripts/tests/compose-neustart.test.sh` hält das fest).
+* **Docker und containerd** starten beim Booten; `up`/`update` schaltet sie
+  ein, falls nicht (`systemctl enable`).
+* **Die Verwaltungsadresse** (`--bind`) darf Docker auch dann veröffentlichen,
+  wenn die Netzwerkkarte erst nach Docker hochkommt
+  (`/etc/sysctl.d/90-magister-plattform.conf`, `net.ipv4.ip_nonlocal_bind=1`).
+  Ohne das scheitert `<bind>:4444` beim Booten, und Docker versucht es nicht
+  noch einmal.
+* **Die Datenebene** hält die Kundenliste der Konsole als Zwischenstand auf der
+  Platte (Volume `registry_state`). Ist die Konsole beim Start noch nicht da,
+  bedient sie damit weiter und fragt alle 15 s nach, bis die Konsole antwortet.
+  Neue oder geänderte Kunden kommen erst mit der Konsole.
+
+Prüfen nach dem Neustart:
+
+```bash
+docker ps --format '{{.Names}}  {{.Status}}'
+./scripts/plattform-aufbau.sh status
+```
+
 ## 6 · Anhalten und Abbauen
 
 ```bash

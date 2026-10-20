@@ -348,6 +348,42 @@ preflight() {
   done
 }
 
+# Nach einem Neustart des Hosts (nächtliches Patchen) muss alles von selbst
+# wiederkommen. Die Container tun das mit `restart: unless-stopped` — aber nur,
+# wenn Docker beim Booten startet und die Verwaltungsadresse dann schon
+# gebunden werden kann. Kommt die Netzwerkkarte nach Docker hoch, scheitert
+# das Veröffentlichen von <bind>:4444 mit "cannot assign requested address",
+# und Docker versucht es nicht noch einmal: die Konsole bliebe aus.
+neustartfest() {
+  if ! command -v systemctl >/dev/null || [ ! -d /run/systemd/system ]; then
+    return 0  # kein systemd (Container, CI) — nichts einzurichten
+  fi
+  if [ "$(id -u)" -ne 0 ]; then
+    warn "Nicht als root: Start beim Booten nicht geprüft (systemctl enable docker containerd)."
+    return 0
+  fi
+  local dienst
+  for dienst in docker containerd; do
+    systemctl list-unit-files "$dienst.service" >/dev/null 2>&1 || continue
+    if ! systemctl is-enabled --quiet "$dienst" 2>/dev/null; then
+      say "$dienst beim Booten starten (systemctl enable $dienst)"
+      systemctl enable "$dienst" >/dev/null 2>&1 || warn "systemctl enable $dienst gescheitert."
+    fi
+  done
+  case "$BIND" in
+    ""|127.0.0.1|0.0.0.0) return 0 ;;
+  esac
+  local conf=/etc/sysctl.d/90-magister-plattform.conf
+  if [ "$(sysctl -n net.ipv4.ip_nonlocal_bind 2>/dev/null)" != "1" ] || [ ! -f "$conf" ]; then
+    say "Verwaltungsadresse $BIND auch vor dem Netz bindbar (net.ipv4.ip_nonlocal_bind=1)"
+    printf '%s\n' \
+      "# magister-plattform: Docker darf $BIND:4444 veröffentlichen, auch wenn" \
+      "# die Adresse beim Booten noch nicht anliegt (sonst bleibt die Konsole aus)." \
+      "net.ipv4.ip_nonlocal_bind = 1" >"$conf"
+    sysctl -q -p "$conf" >/dev/null 2>&1 || warn "sysctl $conf nicht angewandt."
+  fi
+}
+
 # Wer hält diesen Port? Ein Container dieses Stacks ist in Ordnung (er wird
 # gleich ersetzt). Alles andere hält Caddy mitten im Lauf auf — und dann
 # fehlt alles, was danach käme (Kunden anbinden). Deshalb hier abbrechen,
@@ -1241,6 +1277,7 @@ cmd_up() {
   # halbe Plattform (scripts/tests/plattform-konfig.test.sh).
   if [ -n "${PLATTFORM_NUR_KONFIG:-}" ]; then cmd_konfig; return 0; fi
   preflight
+  neustartfest
   eigenes_zertifikat_pruefen
   make_ca
   write_env
