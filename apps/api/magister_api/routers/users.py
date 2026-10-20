@@ -52,6 +52,7 @@ from magister_api.services.credential_pdf import (
 from magister_api.services.credential_pdf import (
     UserNotInAdError as CredentialUserNotInAdError,
 )
+from magister_api.services.upn_domains import upn_domains
 from magister_api.services.user_attrs import (
     AdminOnlyFieldError,
     DomainAllowlistEmptyError,
@@ -148,7 +149,13 @@ async def mail_domains(
     admin-settings surface.
     """
     eff = await AppSettingsService(session, settings).get_effective()
-    return {"domains": list(eff.mail_domains)}
+    return {
+        "domains": list(eff.mail_domains),
+        # Für den UPN zusätzlich, was das AD kennt (services/upn_domains.py).
+        "upn_domains": await upn_domains(
+            session, mail_domains=eff.mail_domains, users_search_base=eff.ad_users_search_base
+        ),
+    }
 
 
 @router.get("/{ad_object_guid}", response_model=AdUserOut)
@@ -240,7 +247,8 @@ async def patch_user_attributes(
     user, target = user_and_target
 
     settings_svc = AppSettingsService(session, settings)
-    mail_domains = (await settings_svc.get_effective()).mail_domains
+    eff = await settings_svc.get_effective()
+    mail_domains = eff.mail_domains
 
     svc = UserAttributesService(session, settings, user.to_scope(), ad)
     ip, request_id = _ip_request_id(request)
@@ -249,6 +257,9 @@ async def patch_user_attributes(
             target=target,
             payload=payload,
             mail_domains=mail_domains,
+            upn_domains=await upn_domains(
+                session, mail_domains=mail_domains, users_search_base=eff.ad_users_search_base
+            ),
             ip=ip,
             request_id=request_id,
         )
@@ -322,7 +333,8 @@ async def rename_apply(
     """
     user, target = user_and_target
     settings_svc = AppSettingsService(session, settings)
-    mail_domains = (await settings_svc.get_effective()).mail_domains
+    eff = await settings_svc.get_effective()
+    mail_domains = eff.mail_domains
     svc = UserRenameService(UserAttributesService(session, settings, user.to_scope(), ad))
     ip, request_id = _ip_request_id(request)
     try:
@@ -330,6 +342,9 @@ async def rename_apply(
             target=target,
             req=payload,
             mail_domains=mail_domains,
+            upn_domains=await upn_domains(
+                session, mail_domains=mail_domains, users_search_base=eff.ad_users_search_base
+            ),
             ip=ip,
             request_id=request_id,
         )

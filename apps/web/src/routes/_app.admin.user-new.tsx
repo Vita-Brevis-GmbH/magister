@@ -82,11 +82,11 @@ function NewUserPage(): JSX.Element {
   const classes = useClasses();
   const schools = useSchools();
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
-  // Configured UPN/mail domains (app_settings.mail_domains): when present, the
-  // UPN is composed as localpart + a domain picked from a dropdown; otherwise
-  // the admin types the full UPN (fallback for instances with no domains set).
+  // UPN-Domains (Mail-Domains plus was das AD kennt): when present, the UPN is
+  // composed as localpart + a domain picked from a dropdown; otherwise the
+  // admin types the full UPN (fallback for instances with no domains at all).
   const mailDomainsQ = useMailDomains();
-  const domains = mailDomainsQ.data?.domains ?? [];
+  const domains = mailDomainsQ.data?.upn_domains ?? mailDomainsQ.data?.domains ?? [];
   const useDomainPicker = domains.length > 0;
 
   const [form, setForm] = useState(INITIAL);
@@ -158,7 +158,7 @@ function NewUserPage(): JSX.Element {
   }, [schools.data]);
   // Default the UPN domain to the first configured one.
   useEffect(() => {
-    const list = mailDomainsQ.data?.domains ?? [];
+    const list = mailDomainsQ.data?.upn_domains ?? mailDomainsQ.data?.domains ?? [];
     if (list.length > 0) {
       setForm((prev) => (prev.upn_domain === "" ? { ...prev, upn_domain: list[0] } : prev));
     }

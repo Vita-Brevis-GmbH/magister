@@ -139,6 +139,7 @@ class UserAttributesService:
         ip: str | None,
         request_id: str,
         audit_action: str = "user_attribute_changed",
+        upn_domains: list[str] | None = None,
     ) -> UserAttributesResult:
         # ------------------------------------------------------------------
         # 1) Slice the payload into "what the caller actually wants to change".
@@ -160,6 +161,8 @@ class UserAttributesService:
         # ------------------------------------------------------------------
         # 3) Domain allowlist: UPN + mail (when present and non-empty).
         # ------------------------------------------------------------------
+        # Der UPN darf jedes Suffix tragen, das das AD kennt (``upn_domains``,
+        # siehe services/upn_domains.py); die Mail-Adresse nur Mail-Domains.
         for field in ("upn", "mail"):
             if field not in provided:
                 continue
@@ -168,9 +171,12 @@ class UserAttributesService:
                 # Empty / None for `mail` clears the field — allowed.
                 continue
             domain = new_val.rsplit("@", 1)[1]
-            if not mail_domains:
+            allowed_here = (
+                upn_domains if field == "upn" and upn_domains is not None else mail_domains
+            )
+            if not allowed_here:
                 raise DomainAllowlistEmptyError(field)
-            if domain not in {d.lower() for d in mail_domains}:
+            if domain not in {d.lower() for d in allowed_here}:
                 raise DomainNotAllowedError(f"{field}:{domain}")
 
         # Aliases run through the same allowlist (validated shape from Pydantic).

@@ -639,7 +639,10 @@ export interface RenameApplyRequest {
 }
 
 export interface MailDomainsOut {
+  /** Mail-Domains aus den Einstellungen — für Mail-Adressen. */
   domains: string[];
+  /** Für den UPN: Mail-Domains plus was das AD kennt (Domäne, Suffixe der Konten). */
+  upn_domains?: string[];
 }
 
 // --- Document templates (M6 Feature B) ---

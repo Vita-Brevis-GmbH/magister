@@ -512,7 +512,7 @@ class TestDomainAllowlist:
             app.dependency_overrides.pop(get_ad_client, None)
 
     @pytest.mark.asyncio
-    async def test_upn_change_blocked_when_allowlist_empty(
+    async def test_upn_may_use_suffixes_known_from_ad(
         self,
         app: FastAPI,
         as_admin: AsyncClient,
@@ -520,18 +520,53 @@ class TestDomainAllowlist:
         school_a: int,
         mock_ad: AdClient,
     ) -> None:
+        # Keine Mail-Domains konfiguriert: der UPN darf trotzdem jedes Suffix
+        # tragen, das ein Konto im AD schon hat — die Mail-Adresse nicht.
         await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
-        # mail_domains stays empty (default).
+        await _seed_user(
+            db_session,
+            school_id=school_a,
+            guid=STUDENT_GUID,
+            kind="student",
+            upn="kind@andere.example.ch",
+        )
         app.dependency_overrides[get_ad_client] = lambda: mock_ad
         try:
-            r = await as_admin.patch(
-                f"/users/{TEACHER_GUID}",
-                json={"upn": "x@schule.example.ch"},
-            )
+            r = await as_admin.patch(f"/users/{TEACHER_GUID}", json={"upn": "x@andere.example.ch"})
+            assert r.status_code == 200, r.text
+            assert r.json()["upn"] == "x@andere.example.ch"
+            r = await as_admin.patch(f"/users/{TEACHER_GUID}", json={"upn": "x@neu.example.ch"})
+            assert r.status_code == 422
+            assert r.json()["detail"].startswith("domain_not_allowed:upn:neu.example.ch")
+            r = await as_admin.patch(f"/users/{TEACHER_GUID}", json={"mail": "x@andere.example.ch"})
             assert r.status_code == 422
             assert r.json()["detail"].startswith("mail_domains_not_configured:")
         finally:
             app.dependency_overrides.pop(get_ad_client, None)
+
+    @pytest.mark.asyncio
+    async def test_domain_list_offers_ad_suffixes_for_the_upn(
+        self,
+        as_admin: AsyncClient,
+        db_session: AsyncSession,
+        school_a: int,
+    ) -> None:
+        await _seed_user(db_session, school_id=school_a, guid=TEACHER_GUID)
+        await _set_mail_domains(db_session, ["mail.example.ch"])
+        await db_session.execute(
+            update(AppSettings)
+            .where(AppSettings.id == 1)
+            .values(ad_users_search_base="OU=Benutzer,DC=Schule,DC=local")
+        )
+        await db_session.commit()
+        r = await as_admin.get("/users/mail-domains")
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["domains"] == ["mail.example.ch"]
+        # Mail-Domains zuerst, dann was das AD kennt: Suffixe der Konten
+        # und der DNS-Name der Domäne aus der Suchbasis.
+        assert body["upn_domains"][0] == "mail.example.ch"
+        assert {"schule.example.ch", "schule.local"} <= set(body["upn_domains"])
 
 
 class TestConflicts:

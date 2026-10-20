@@ -138,6 +138,8 @@ function UserDetailPage(): JSX.Element {
 
   const canChangeLogin = me.data?.is_admin ?? false;
   const domains = mailDomainsQ.data?.domains ?? [];
+  // Der UPN darf zusätzlich jedes Suffix tragen, das das AD kennt.
+  const upnDomains = mailDomainsQ.data?.upn_domains ?? domains;
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -615,7 +617,7 @@ function UserDetailPage(): JSX.Element {
                 domainValue={form.upn_domain}
                 onLocal={(v) => setField("upn_local", v)}
                 onDomain={(v) => setField("upn_domain", v)}
-                domains={domains}
+                domains={upnDomains}
                 disabled={!canChangeLogin}
                 label={t("users.field.upn")}
                 disabledHint={t("users.field.login_admin_only")}
