@@ -57,6 +57,28 @@ def _resolve_extension_schema() -> str:
     return schema
 
 
+#: Umbenannte Revisionen: alter Name → neuer. ``0048_password_import`` stand
+#: ein paar Stunden auf dem Branch, bevor sie umbenannt wurde ("password" im
+#: Schemastand löste den Registry-Test der Konsole aus). Ein Schema, das in
+#: der Zeit migriert wurde, trüge sonst einen Stand, den Alembic nicht mehr
+#: findet ("Can't locate revision") — und bliebe für immer in Wartung.
+RENAMED_REVISIONS: dict[str, str] = {"0048_password_import": "0048_kennwort_import"}
+
+
+def _heal_renamed_revisions(connection: Connection, schema: str) -> None:
+    """Einen umbenannten Stand im Zielschema auf den neuen Namen setzen."""
+    table = f"{quote_identifier(schema, field='schema')}.alembic_version"
+    # Schemaqualifiziert: über den search_path fände to_regclass sonst die
+    # Tabelle im Erweiterungsschema (public = der Stand der Datenebene selbst).
+    if connection.execute(text("SELECT to_regclass(:t)"), {"t": table}).scalar() is None:
+        return
+    for old, new in RENAMED_REVISIONS.items():
+        connection.execute(
+            text(f"UPDATE {table} SET version_num = :new WHERE version_num = :old"),  # noqa: S608
+            {"new": new, "old": old},
+        )
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=_resolve_url(),
@@ -113,6 +135,7 @@ def do_run_migrations(connection: Connection) -> None:
         # Zielschema landen. Das Erweiterungsschema muss mit drauf, sonst findet
         # eine Migration ``gen_random_uuid`` und Co. nicht.
         connection.exec_driver_sql(f"SET search_path TO {path}")
+        _heal_renamed_revisions(connection, schema)
         context.run_migrations()
 
 

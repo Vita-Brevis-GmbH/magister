@@ -18,6 +18,8 @@
 #                                     # Kunden auf der Datenebene nachtragen (Daten bleiben)
 #   ./scripts/plattform-aufbau.sh rollenpasswort-neu <kürzel>  # neues Rollenpasswort
 #                                     # setzen UND in den DSN schreiben, Datenebene neu starten
+#   ./scripts/plattform-aufbau.sh kunden-migrieren [--ohne-sicherung]  # Kundenschemas
+#                                     # auf den Code-Stand bringen (macht `up` auch selbst)
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
@@ -1171,6 +1173,50 @@ kunden_anbinden() {
   fi
 }
 
+# Kundenschemas auf den Stand des Codes bringen. Die Datenebene migriert beim
+# Start nur ihr eigenes Schema (public) — die Kundenschemas blieben stehen, und
+# nach einem Update mit neuer Migration antwortete jeder Kunde mit 503
+# „Wartung" (Schemastand ≠ Code-Kopf). Passiert beim Update vom 19.10.2026.
+kunden_migrieren() {
+  local liste kopf
+  local -a faellig=()
+  liste="$(konsole_kunden)" || die "Kundenliste der Konsole nicht abrufbar (Grund oben)."
+  kopf="$(dc_daten exec -T magister-api python -c \
+    'from magister_api.tenancy.version import HEAD_REVISION as h; print(h)' 2>/dev/null \
+    | tr -d '[:space:]')"
+  [ -n "$kopf" ] || die "Code-Kopf der Datenebene nicht lesbar — läuft magister-api? (docker compose ps)"
+  # Fällig: aktive oder ruhende Kunden, deren gemeldeter Stand vom Kopf
+  # abweicht. „-" heisst nie gemeldet = Bereitstellung nicht durch; die setzt
+  # die Konsole fort, nicht dieses Skript.
+  mapfile -t faellig < <(awk -v k="$kopf" \
+    '($7 == "active" || $7 == "suspended") && $8 != "-" && $8 != k { print $1 }' <<<"$liste")
+  if [ "${#faellig[@]}" -eq 0 ]; then
+    say "Kundenschemas auf dem Stand des Codes ($kopf)"
+    return 0
+  fi
+  say "Kundenschemas migrieren auf $kopf: ${faellig[*]}"
+  # Rückfahrkarte zuerst: eine verschlüsselte Sicherung der ganzen Datenbank
+  # (ADR-0016 D6). Ohne sie wird nicht migriert — der Kunde bleibt dann in
+  # Wartung, aber kein Schema ist halb umgebaut ohne Weg zurück.
+  if [ "${OHNE_SICHERUNG:-0}" -eq 1 ]; then
+    warn "--ohne-sicherung: es wird ohne Rückfahrkarte migriert (ADR-0016 D6)."
+  else
+    dc_daten exec -T pg-backup /usr/local/bin/backup.sh \
+      || die "Sicherung vor der Migration gescheitert (Grund oben) — Kundenschemas NICHT migriert. Ohne Sicherung, ausdrücklich: $0 kunden-migrieren --ohne-sicherung"
+  fi
+  kunden_migrieren_lauf "${faellig[@]}"
+}
+
+kunden_migrieren_lauf() {  # $@ = Kürzel
+  # Jeder Kunde mit seiner eigenen Rolle (macht das Werkzeug); --keep-going,
+  # damit ein kaputter Kunde nicht die übrigen in Wartung lässt. Der Dump je
+  # Kunde entfällt: die Sicherung oben deckt alle Schemas ab, und im Abbild
+  # der Datenebene gibt es weder pg_dump noch age.
+  dc_daten exec -T magister-api python -m magister_api.cli.tenants migrate \
+    --no-dump --keep-going --only "$@" \
+    || die "Migration nicht für alle Kunden durch (Meldungen oben). Die übrigen sind migriert; erneut: $0 kunden-migrieren"
+}
+
 # Ein einzelner Kunde, nach Kürzel.
 kunde_anbinden_kuerzel() {  # $1 = Kürzel
   local liste zeile
@@ -1201,6 +1247,7 @@ cmd_up() {
   start_daten
   make_kunden
   kunden_anbinden
+  kunden_migrieren
   agentenpakete_auffrischen
   cmd_status
   if [ "${DATEN_FEHLER:-0}" -eq 1 ]; then
@@ -1576,6 +1623,9 @@ if { [ "$BEFEHL" = "kunde-anbinden" ] || [ "$BEFEHL" = "rollenpasswort-neu" ]; }
    && [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
   KUNDE_SLUG="$1"; shift
 fi
+if [ "$BEFEHL" = "kunden-migrieren" ] && [ "${1:-}" = "--ohne-sicherung" ]; then
+  OHNE_SICHERUNG=1; shift
+fi
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -1617,9 +1667,10 @@ case "$BEFEHL" in
     else
       kunden_anbinden
     fi ;;
+  kunden-migrieren) kunden_migrieren ;;
   rollenpasswort-neu)
     [ -n "${KUNDE_SLUG:-}" ] || die "Kürzel fehlt: $0 rollenpasswort-neu <kürzel>"
     ROLLE_NEU=1
     kunde_anbinden_kuerzel "$KUNDE_SLUG" ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden, rollenpasswort-neu)" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden, kunden-migrieren, rollenpasswort-neu)" ;;
 esac

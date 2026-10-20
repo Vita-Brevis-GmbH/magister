@@ -455,3 +455,21 @@ def add_parser(subparsers: argparse._SubParsersAction) -> None:  # type: ignore[
         "(gilt nicht für den Kanarienvogel)",
     )
     migrate.set_defaults(func=cmd_migrate)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Einstieg im Abbild der Datenebene: ``python -m magister_api.cli.tenants migrate``.
+
+    Dort liegt ``scripts/magister-cli`` nicht, und nur dort lösen die DSN der
+    Kunden auf (``@postgres:5432`` im Docker-Netz). ``plattform-aufbau.sh up``
+    ruft das nach jedem Update auf — vorher migrierte niemand die Kunden-
+    schemas, und ein Update mit neuer Migration stellte alle Kunden auf 503.
+    """
+    parser = argparse.ArgumentParser(prog="python -m magister_api.cli.tenants")
+    add_parser(parser.add_subparsers(dest="command", required=True))
+    args = parser.parse_args(["tenants", *(sys.argv[1:] if argv is None else argv)])
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

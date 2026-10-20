@@ -88,7 +88,7 @@ Die Antwort sieht so aus:
 |---|---|---|
 | `registry` | Der Hostname zeigt hierher, aber kein Kunde beansprucht ihn. | DNS oder Kundeneintrag in der Konsole korrigieren. Der häufigste Betriebsfehler. |
 | `tenant_status` | Kunde in Bereitstellung oder Offboarding — er wird nicht bedient. | Bereitstellung in der Konsole weiterführen („Weiter ab …"). Bei `1` (gesperrt) ist es eine Entscheidung, keine Störung. |
-| `schema_version` | Das Schema hängt hinter dem Code. Die Seite antwortet mit Wartung. | `magister-cli tenants migrate` für diesen Kunden. Genau der Fall, den die Versions-Schranke absichtlich erzwingt. |
+| `schema_version` | Das Schema hängt hinter dem Code. Die Seite antwortet mit Wartung. | Auf dem Plattform-Host `./scripts/plattform-aufbau.sh kunden-migrieren` (macht `update` seit 20.10.2026 selbst), sonst `magister-cli tenants migrate` für diesen Kunden. Genau der Fall, den die Versions-Schranke absichtlich erzwingt. |
 | `tenant_key` | Der Kundenschlüssel fehlt in der Umgebung. | `MAGISTER_TENANT_AUDIT_KEY_<REF>` und Verwandte setzen, Dienst neu starten. |
 | `database` | Die Verbindung **als Mandantenrolle** scheitert. | Rollenpasswort, DSN-Verweis, Postgres. Die Prüfung deckt DSN, Anmeldung, Schema und Scope in einem Schritt ab. |
 | `ad_sync` | Seit über 24 Stunden kein vollständiger Abgleich. | Agent, Dienstkonto, Domänencontroller — Sensor 4 sagt meist, welcher. Neue Konten kommen bis dahin nicht an. |
