@@ -683,14 +683,18 @@
       "group_template_hint": "Definisce tipo di account, gruppi, tipo di password e impostazioni. Le impostazioni sotto possono essere modificate caso per caso.",
       "err_template_not_found": "Gruppo di destinazione non trovato.",
       "err_template_not_for_school": "Il gruppo di destinazione non è disponibile in questa sede.",
-      "err_ou_outside_school": "L'OU del gruppo non si trova in questa sede (manca un'OU con la sua sigla). La sincronizzazione AD non assegnerebbe l'account a nessuna sede – adatta l'OU del gruppo.",
-      "ou_of_template": "Creato nell'OU del gruppo: {{ou}}",
+      "err_ou_outside_school": "L'OU di destinazione non si trova nella {{unit}} (manca un'OU con la sua sigla nel percorso). La sincronizzazione AD non assegnerebbe l'account a nessuna {{unit}}.",
       "ou_from_template": "Definito dal gruppo di destinazione.",
       "download_pdf": "Scarica il PDF di accesso",
       "pdf_failed": "Impossibile creare il PDF di accesso.",
       "unit_none": "– senza {{unit}} –",
-      "unit_none_hint": "Senza {{unit}} solo con un gruppo globale con una propria OU di destinazione (p. es. «Altri»). L'account non appartiene allora a nessuna {{unit}} – lo vedono solo gli admin.",
-      "err_ou_required": "Senza sede serve un gruppo con una propria OU di destinazione."
+      "unit_none_hint": "Senza {{unit}} l'account viene creato nell'OU di destinazione qui sotto e non appartiene a nessuna {{unit}} – lo vedono solo gli admin.",
+      "err_ou_required": "Senza {{unit}} serve un'OU di destinazione.",
+      "target_ou": "OU di destinazione",
+      "target_ou_optional": "OU di destinazione (facoltativa)",
+      "target_ou_hint_unit": "Vuoto = l'OU della {{unit}} per il tipo di account scelto. Se indicata, deve trovarsi nella {{unit}} (un'OU con la sua sigla nel percorso).",
+      "target_ou_hint_no_unit": "Obbligatoria senza {{unit}}: qui l'account viene creato nell'AD.",
+      "ou_hint_own_ou": "Qui il tipo di account determina solo il tipo di password e il genere di account in Magister – l'account viene creato nell'OU di destinazione qui sopra."
     },
     "user_settings": {
       "title": "Configurazione utenti",

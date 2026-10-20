@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cleanOu, ouInUnit, ouValid } from "@/lib/ou";
 import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/group-templates")({
@@ -39,16 +40,6 @@ const PROFILES: PasswordProfile[] = ["readable", "teacher", "complex"];
 // Kontoarten mit fester OU (die des Standorts) — sonst darf die Zielgruppe
 // eine eigene Ziel-OU haben. Gleiche Liste wie FIXED_KINDS im Backend.
 const FIXED_KINDS = [...SCHOOL_KINDS, "company"];
-// Ein DN unterhalb einer Domäne, wie im Backend (schemas/group_templates.py).
-const OU_DN_RE = /^(OU|CN)=[^,]+(,(OU|CN)=[^,]+)*(,DC=[^,]+)+$/i;
-
-function cleanOu(ou: string): string {
-  return ou
-    .split(",")
-    .map((p) => p.trim())
-    .join(",")
-    .trim();
-}
 
 // Festes Passwort: nur dann legt Magister es im Tresor ab (wie password_stays
 // im Backend). Sonst gäbe die Klassenliste bald ein falsches Passwort aus.
@@ -62,8 +53,7 @@ function withVaultRule(d: Draft): Draft {
 }
 
 function ouInvalid(draft: Draft): boolean {
-  const ou = cleanOu(draft.ad_ou);
-  return !FIXED_KINDS.includes(draft.kind) && ou !== "" && !OU_DN_RE.test(ou);
+  return !FIXED_KINDS.includes(draft.kind) && !ouValid(draft.ad_ou);
 }
 
 const selectClasses =
@@ -411,7 +401,7 @@ function OuField({
 }): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
-  const ou = cleanOu(draft.ad_ou).toUpperCase();
+  const ou = cleanOu(draft.ad_ou);
   // Dieselbe Regel wie der AD-Abgleich: OU=<Kürzel> muss im DN vorkommen,
   // sonst ordnet er das Konto keinem Standort zu. Magister lehnt die Anlage
   // an solchen Standorten ab — hier sieht man es vorher.
@@ -420,9 +410,7 @@ function OuField({
       ? schools
       : schools.filter((s) => draft.school_ids.includes(s.id));
   const outside =
-    ou && !ouInvalid(draft)
-      ? offered.filter((s) => !ou.includes(`OU=${s.scope_short.toUpperCase()}`))
-      : [];
+    ou && !ouInvalid(draft) ? offered.filter((s) => !ouInUnit(ou, s.scope_short)) : [];
   return (
     <div className="space-y-1">
       <Label htmlFor="tpl-ou">{t("group_templates.ou_label")}</Label>

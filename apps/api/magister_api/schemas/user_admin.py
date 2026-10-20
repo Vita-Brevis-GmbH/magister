@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from magister_api.schemas.common import Upn
+from magister_api.schemas.group_templates import clean_ou
 
 
 class AdUserCreateRequest(BaseModel):
@@ -22,6 +23,10 @@ class AdUserCreateRequest(BaseModel):
     # Konto-Einstellungen fest (``ou_key`` wird dann von ihr übersteuert). Muss
     # an ``school_id`` angeboten werden (verknüpft oder global).
     group_template_id: int | None = Field(default=None, ge=1)
+    # Ziel-OU für dieses Konto. Nur ohne Zielgruppe oder bei einer Zielgruppe
+    # ohne feste Kontoart; gewinnt vor deren Ziel-OU. Ohne Standort Pflicht
+    # (sonst die der Zielgruppe), mit Standort optional (leer = seine OU).
+    ad_ou: str | None = Field(default=None, max_length=512)
     # Optional display name; derived from given+surname when blank.
     display_name: str | None = Field(default=None, max_length=128)
     # AD account flags. ``None`` = aus der Zielgruppe übernehmen (ohne
@@ -31,6 +36,8 @@ class AdUserCreateRequest(BaseModel):
     password_never_expires: bool | None = None
     # Per-student grade (-1 = 1. KG, 0 = 2. KG, 1..13). Ignored for teachers.
     jahrgangsstufe: int | None = Field(default=None, ge=-1, le=13)
+
+    _ou = field_validator("ad_ou")(clean_ou)
 
 
 class AdUserCreateResponse(BaseModel):

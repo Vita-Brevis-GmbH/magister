@@ -683,14 +683,18 @@
       "group_template_hint": "Définit le type de compte, les groupes, le type de mot de passe et les paramètres. Les paramètres ci-dessous peuvent être modifiés au cas par cas.",
       "err_template_not_found": "Groupe cible introuvable.",
       "err_template_not_for_school": "Le groupe cible n’est pas disponible sur ce site.",
-      "err_ou_outside_school": "L'OU du groupe cible ne se trouve pas dans ce site (aucune OU avec son code). La synchronisation AD n'attribuerait le compte à aucun site – adaptez l'OU du groupe cible.",
-      "ou_of_template": "Créé dans l'OU du groupe cible : {{ou}}",
+      "err_ou_outside_school": "L'OU cible ne se trouve pas dans le {{unit}} (aucune OU avec son code dans le chemin). La synchronisation AD n'attribuerait le compte à aucun {{unit}}.",
       "ou_from_template": "Défini par le groupe cible.",
       "download_pdf": "Télécharger le PDF de connexion",
       "pdf_failed": "Le PDF de connexion n’a pas pu être créé.",
       "unit_none": "– sans {{unit}} –",
-      "unit_none_hint": "Sans {{unit}}, uniquement avec un groupe cible global disposant de sa propre OU cible (p. ex. « Autres »). Le compte n'appartient alors à aucun {{unit}} – seuls les admins le voient.",
-      "err_ou_required": "Sans site, il faut un groupe cible avec sa propre OU cible."
+      "unit_none_hint": "Sans {{unit}}, le compte est créé dans l'OU cible ci-dessous et n'appartient à aucun {{unit}} – seuls les admins le voient.",
+      "err_ou_required": "Sans {{unit}}, une OU cible est obligatoire.",
+      "target_ou": "OU cible",
+      "target_ou_optional": "OU cible (facultatif)",
+      "target_ou_hint_unit": "Vide = l'OU du {{unit}} pour le type de compte choisi. Si indiquée, elle doit se trouver dans le {{unit}} (une OU avec son code dans le chemin).",
+      "target_ou_hint_no_unit": "Obligatoire sans {{unit}} : le compte est créé ici dans l'AD.",
+      "ou_hint_own_ou": "Ici, le type de compte ne définit que le type de mot de passe et le genre de compte dans Magister – le compte est créé dans l'OU cible ci-dessus."
     },
     "user_settings": {
       "title": "Configuration utilisateur",

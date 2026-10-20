@@ -680,14 +680,18 @@
       "group_template_hint": "Sets account type, groups, password type and account settings. The settings below can be overridden case by case.",
       "err_template_not_found": "Target group not found.",
       "err_template_not_for_school": "The target group is not available at this site.",
-      "err_ou_outside_school": "The target group's OU is not inside this site (no OU with its short code). The AD sync would not assign the account to any site – adjust the target group's OU.",
-      "ou_of_template": "Created in the target group's OU: {{ou}}",
+      "err_ou_outside_school": "The target OU is not inside the {{unit}} (no OU with its short code in the path). The AD sync would assign the account to no {{unit}}.",
       "ou_from_template": "Set by the target group.",
       "download_pdf": "Download sign-in PDF",
       "pdf_failed": "The sign-in PDF could not be created.",
       "unit_none": "– no {{unit}} –",
-      "unit_none_hint": "Without a {{unit}} only with a global target group that has its own target OU (e.g. “Other”). The account then belongs to no {{unit}} – only admins see it.",
-      "err_ou_required": "Without a site, a target group with its own target OU is required."
+      "unit_none_hint": "Without a {{unit}} the account is created in the target OU below and belongs to no {{unit}} – only admins see it.",
+      "err_ou_required": "Without a {{unit}} a target OU is required.",
+      "target_ou": "Target OU",
+      "target_ou_optional": "Target OU (optional)",
+      "target_ou_hint_unit": "Blank = the {{unit}}'s OU for the chosen account type. If given, it must lie inside the {{unit}} (an OU with its short code in the path).",
+      "target_ou_hint_no_unit": "Required without a {{unit}}: the account is created here in AD.",
+      "ou_hint_own_ou": "Here the account type only sets the password type and account kind in Magister – the account goes into the target OU above."
     },
     "user_settings": {
       "title": "User configuration",

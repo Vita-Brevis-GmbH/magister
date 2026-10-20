@@ -14,7 +14,7 @@ PasswordProfile = Literal["readable", "teacher", "complex"]
 _OU_DN_RE = re.compile(r"^(OU|CN)=[^,]+(,(OU|CN)=[^,]+)*(,DC=[^,]+)+$", re.IGNORECASE)
 
 
-def _clean_ou(value: str | None) -> str | None:
+def clean_ou(value: str | None) -> str | None:
     """Leerzeichen um die Kommas weg; "" bleibt "" (= Ziel-OU entfernen)."""
     if value is None:
         return None
@@ -39,7 +39,7 @@ class GroupTemplateCreate(BaseModel):
     # Ziel-OU (nur bei freier Kontoart wirksam); leer = OU des Standorts.
     ad_ou: str | None = Field(default=None, max_length=512)
 
-    _ou = field_validator("ad_ou")(_clean_ou)
+    _ou = field_validator("ad_ou")(clean_ou)
 
 
 class GroupTemplateUpdate(BaseModel):
@@ -58,7 +58,7 @@ class GroupTemplateUpdate(BaseModel):
     # "" entfernt die Ziel-OU, None lässt sie, wie sie ist.
     ad_ou: str | None = Field(default=None, max_length=512)
 
-    _ou = field_validator("ad_ou")(_clean_ou)
+    _ou = field_validator("ad_ou")(clean_ou)
 
 
 class GroupTemplateOut(BaseModel):
@@ -112,4 +112,5 @@ __all__ = [
     "GroupTemplateOut",
     "GroupTemplateUpdate",
     "PasswordProfile",
+    "clean_ou",
 ]

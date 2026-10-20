@@ -798,6 +798,8 @@ export interface AdUserCreateRequest {
   mail?: string | null;
   ou_key: AdUserOuKey;
   school_id: number | null;
+  // Ziel-OU (nur ohne feste Kontoart); ohne Standort Pflicht.
+  ad_ou?: string | null;
   // Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortart und
   // Konto-Einstellungen fest (übersteuert ou_key). Muss an school_id angeboten sein.
   group_template_id?: number | null;

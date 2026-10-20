@@ -680,14 +680,18 @@
       "group_template_hint": "Legt Kontoart, Gruppen, Passwortart und Konto-Einstellungen fest. Die Einstellungen unten lassen sich im Einzelfall übersteuern.",
       "err_template_not_found": "Zielgruppe nicht gefunden.",
       "err_template_not_for_school": "Die Zielgruppe ist an diesem Standort nicht verfügbar.",
-      "err_ou_outside_school": "Die Ziel-OU der Zielgruppe liegt nicht in diesem Standort (OU mit seinem Kürzel fehlt). Der AD-Abgleich würde das Konto keinem Standort zuordnen – Ziel-OU der Zielgruppe anpassen.",
-      "ou_of_template": "Ablage in der Ziel-OU der Zielgruppe: {{ou}}",
+      "err_ou_outside_school": "Die Ziel-OU liegt nicht im {{unit}} (OU mit seinem Kürzel fehlt im Pfad). Der AD-Abgleich würde das Konto keinem {{unit}} zuordnen.",
       "ou_from_template": "Durch die Zielgruppe festgelegt.",
       "download_pdf": "Anmelde-PDF herunterladen",
       "pdf_failed": "Das Anmelde-PDF konnte nicht erstellt werden.",
       "unit_none": "– ohne {{unit}} –",
-      "unit_none_hint": "Ohne {{unit}} nur mit einer globalen Zielgruppe mit eigener Ziel-OU (z. B. „Sonstige“). Das Konto gehört dann keinem {{unit}} an – nur Admins sehen es.",
-      "err_ou_required": "Ohne Standort braucht es eine Zielgruppe mit eigener Ziel-OU."
+      "unit_none_hint": "Ohne {{unit}} wird das Konto in der Ziel-OU darunter abgelegt und gehört keinem {{unit}} an – nur Admins sehen es.",
+      "err_ou_required": "Ohne {{unit}} braucht es eine Ziel-OU.",
+      "target_ou": "Ziel-OU",
+      "target_ou_optional": "Ziel-OU (optional)",
+      "target_ou_hint_unit": "Leer = die OU des {{unit}}s für die gewählte Kontoart. Angegeben muss sie im {{unit}} liegen (OU mit seinem Kürzel im Pfad).",
+      "target_ou_hint_no_unit": "Pflicht ohne {{unit}}: hier wird das Konto im AD abgelegt.",
+      "ou_hint_own_ou": "Die Kontoart bestimmt hier nur Passwortart und Konto-Typ in Magister – abgelegt wird in der Ziel-OU oben."
     },
     "user_settings": {
       "title": "Userkonfiguration",

@@ -23,7 +23,7 @@ from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache, RoleAssignment, Session
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
-from magister_api.models.group_template import GroupTemplate
+from magister_api.models.group_template import FIXED_KINDS, GroupTemplate
 from magister_api.models.school import School
 from magister_api.models.subject_teacher_role import SubjectTeacherRole
 from magister_api.models.user_preferences import UserPreference
@@ -129,6 +129,7 @@ class UserAdminService:
         ou_key: str,
         school_id: int | None,
         group_template_id: int | None = None,
+        ad_ou: str | None = None,
         display_name: str | None = None,
         force_change: bool | None = None,
         cannot_change_password: bool | None = None,
@@ -154,15 +155,19 @@ class UserAdminService:
             ou_key = tpl.kind
         if ou_key not in OU_CHOICES:
             raise UserAdminError("invalid_ou_choice")
-        if tpl is not None and tpl.ad_ou:
-            # Eigene Ziel-OU der Zielgruppe (nur bei freier Kontoart gesetzt):
-            # die OU des Standorts braucht es dann nicht. Mit Standort muss sie
+        # Eigene Ziel-OU: die bei der Anlage angegebene, sonst die der
+        # Zielgruppe. Bei fester Kontoart legt der Standort die OU fest.
+        if ad_ou and tpl is not None and tpl.kind in FIXED_KINDS:
+            raise UserAdminError("ou_not_allowed_for_kind")
+        own_ou = ad_ou or (tpl.ad_ou if tpl is not None else None)
+        if own_ou:
+            # Die OU des Standorts braucht es dann nicht. Mit Standort muss sie
             # in ihm liegen, sonst verlöre der nächste Abgleich die Zuordnung.
-            if school is not None and not ou_within_school(tpl.ad_ou, school.scope_short):
+            if school is not None and not ou_within_school(own_ou, school.scope_short):
                 raise UserAdminError("ou_outside_school")
-            ou_dn, group_dns = tpl.ad_ou, []
+            ou_dn, group_dns = own_ou, []
         elif school is None:
-            # Ohne Standort gibt es keine Standort-OU — nur die der Zielgruppe.
+            # Ohne Standort gibt es keine Standort-OU — nur eine eigene.
             raise UserAdminError("ou_required_without_school")
         else:
             ou_dn, group_dns = await self._provision_target(ou_key, school)
@@ -273,6 +278,7 @@ class UserAdminService:
                 "upn": record.upn,
                 "ou_key": ou_key,
                 "group_template_id": group_template_id,
+                "own_ou": bool(own_ou),
                 "profile": profile,
                 "vaulted": stored,
             },

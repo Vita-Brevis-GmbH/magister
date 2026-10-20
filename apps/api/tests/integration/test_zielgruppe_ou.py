@@ -202,3 +202,68 @@ async def test_import_with_named_free_zielgruppe_uses_its_ou(
         app.dependency_overrides.pop(imports_ad_client, None)
     assert applied.status_code == 200, applied.text
     assert seen == [GUEST_OU]
+
+
+OTHER_OU = "OU=Sonstige,DC=schule,DC=local"
+
+
+def _plain(upn: str, **extra: Any) -> dict[str, Any]:
+    local = upn.split("@")[0]
+    return {
+        "given_name": "Ohne",
+        "surname": local,
+        "sam_account_name": local[:20],
+        "user_principal_name": upn,
+        "ou_key": "student_zyklus1",
+        **extra,
+    }
+
+
+@pytest.mark.asyncio
+async def test_explicit_ou_at_creation(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    school_a: int,
+    mock_ad: tuple[AdClient, list[str]],
+    _ous: None,
+) -> None:
+    ad, seen = mock_ad
+    # Ohne Standort, ohne Zielgruppe: die angegebene OU — auch für Schüler:innen.
+    r = await _create(as_admin, app, ad, _plain("ohne1@schule.ch", ad_ou=OTHER_OU))
+    assert r.status_code == 201, r.text
+    # Ohne Standort und ohne OU: abgelehnt, nichts im AD.
+    r = await _create(as_admin, app, ad, _plain("ohne2@schule.ch"))
+    assert r.status_code == 422
+    assert r.json()["detail"] == "ou_required_without_school"
+    # Die angegebene OU gewinnt vor der Ziel-OU der Zielgruppe.
+    free = await _template(as_admin, school_a, kind="custom", ad_ou=GUEST_OU)
+    r = await _create(
+        as_admin,
+        app,
+        ad,
+        _plain(
+            "mit1@schule.ch",
+            school_id=school_a,
+            group_template_id=free["id"],
+            ad_ou="OU=Extern,OU=A,DC=schule,DC=local",
+        ),
+    )
+    assert r.status_code == 201, r.text
+    # Mit Standort muss sie in ihm liegen.
+    r = await _create(
+        as_admin, app, ad, _plain("mit2@schule.ch", school_id=school_a, ad_ou=OTHER_OU)
+    )
+    assert r.status_code == 409
+    assert r.json()["detail"] == "ou_outside_school"
+    # Bei fester Kontoart legt der Standort die OU fest.
+    fixed = await _template(as_admin, school_a, kind="teacher")
+    r = await _create(
+        as_admin,
+        app,
+        ad,
+        _plain("mit3@schule.ch", school_id=school_a, group_template_id=fixed["id"], ad_ou=GUEST_OU),
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"] == "ou_not_allowed_for_kind"
+    assert seen == [OTHER_OU, "OU=Extern,OU=A,DC=schule,DC=local"]

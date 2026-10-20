@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cleanOu, ouInUnit, ouValid } from "@/lib/ou";
 import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/user-new")({
@@ -45,6 +46,7 @@ const INITIAL = {
   school_id: "",
   ou_key: "teacher" as AdUserOuKey,
   group_template_id: "",
+  ad_ou: "",
   jahrgangsstufe: "",
   class_id: "",
   force_change: true,
@@ -94,17 +96,19 @@ function NewUserPage(): JSX.Element {
 
   // Zielrollen (group templates) offered at the picked Standort. Optional: when
   // none is chosen the school's default provisioning groups apply. Ohne
-  // Standort nur globale Zielgruppen mit eigener Ziel-OU — sonst gäbe es
-  // keinen Ablageort (das Backend prüft dasselbe).
+  // Standort nur globale Zielgruppen ohne feste Kontoart — eine feste legt die
+  // OU über den Standort fest, und den gibt es dann nicht.
   const selectedSchoolId = form.school_id ? Number(form.school_id) : undefined;
   const templatesQ = useGroupTemplates(selectedSchoolId);
+  const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
   const templates = (templatesQ.data ?? []).filter(
-    (tpl) => selectedSchoolId !== undefined || (tpl.school_ids.length === 0 && !!tpl.ad_ou),
+    (tpl) =>
+      selectedSchoolId !== undefined ||
+      (tpl.school_ids.length === 0 && !(ouKeys as string[]).includes(tpl.kind ?? "")),
   );
 
   // Company provisions a single "company" category into the org unit's company
   // OU; school offers teacher + student Zyklen. Students carry a grade + class.
-  const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
   // Eine Zielgruppe mit fester Kontoart legt die OU fest (das Backend
   // übersteuert ou_key ebenso); ohne sie wählt man die Kontoart selbst.
   const selectedTemplate = templates.find((tpl) => String(tpl.id) === form.group_template_id);
@@ -113,8 +117,15 @@ function NewUserPage(): JSX.Element {
     : null;
   const ouKey: AdUserOuKey = isCompany ? "company" : (templateKind ?? form.ou_key);
   const isStudent = !isCompany && ouKey !== "teacher";
-  // Ohne Standort braucht es eine Zielgruppe mit eigener Ziel-OU.
-  const placeable = !!form.school_id || !!selectedTemplate?.ad_ou;
+  // Ziel-OU: sichtbar ohne Standort (dann Pflicht) oder wenn keine feste
+  // Kontoart die OU vorgibt (dann optional: leer = OU des Standorts).
+  const showOu = !form.school_id || templateKind === null;
+  const ou = showOu ? cleanOu(form.ad_ou) : "";
+  const ouBad = !ouValid(ou);
+  const selectedSchool = schools.data?.find((s) => String(s.id) === form.school_id);
+  const ouOutside =
+    !!selectedSchool && ou !== "" && !ouBad && !ouInUnit(ou, selectedSchool.scope_short);
+  const placeable = (!!form.school_id || ou !== "") && !ouBad && !ouOutside;
 
   // Zielgruppe gewählt → ihre Konto-Einstellungen vorbelegen (übersteuerbar).
   function pickTemplate(id: string): void {
@@ -122,6 +133,8 @@ function NewUserPage(): JSX.Element {
     setForm((prev) => ({
       ...prev,
       group_template_id: id,
+      // Ziel-OU der Zielgruppe vorbelegen (überschreibbar).
+      ad_ou: tpl?.ad_ou ?? "",
       ...(tpl
         ? {
             force_change: tpl.force_change,
@@ -184,6 +197,7 @@ function NewUserPage(): JSX.Element {
         ou_key: ouKey,
         school_id: form.school_id ? Number(form.school_id) : null,
         group_template_id: form.group_template_id ? Number(form.group_template_id) : null,
+        ad_ou: ou || null,
         force_change: form.force_change,
         cannot_change_password: form.cannot_change_password,
         password_never_expires: form.password_never_expires,
@@ -392,6 +406,36 @@ function NewUserPage(): JSX.Element {
                 </p>
               )}
             </div>
+            {showOu ? (
+              <div className="space-y-1">
+                <Label htmlFor="target-ou">
+                  {form.school_id
+                    ? t("admin.user_new.target_ou_optional")
+                    : t("admin.user_new.target_ou")}
+                </Label>
+                <Input
+                  id="target-ou"
+                  value={form.ad_ou}
+                  onChange={(e) => setForm((prev) => ({ ...prev, ad_ou: e.target.value }))}
+                  placeholder={t("group_templates.ou_placeholder")}
+                  maxLength={512}
+                  required={!form.school_id}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {form.school_id
+                    ? tt("admin.user_new.target_ou_hint_unit")
+                    : tt("admin.user_new.target_ou_hint_no_unit")}
+                </p>
+                {ouBad ? (
+                  <p className="text-xs text-destructive">{t("group_templates.ou_invalid")}</p>
+                ) : null}
+                {ouOutside ? (
+                  <p className="text-xs text-destructive">
+                    {tt("admin.user_new.err_ou_outside_school")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="space-y-1">
               <Label htmlFor="ziel">{t("admin.user_new.group_template")}</Label>
               <select
@@ -432,13 +476,10 @@ function NewUserPage(): JSX.Element {
               <p className="text-xs text-muted-foreground">
                 {templateKind !== null
                   ? t("admin.user_new.ou_from_template")
-                  : t("admin.user_new.ou_hint")}
+                  : ou !== "" || !form.school_id
+                    ? t("admin.user_new.ou_hint_own_ou")
+                    : t("admin.user_new.ou_hint")}
               </p>
-              {selectedTemplate?.ad_ou ? (
-                <p className="text-xs text-muted-foreground">
-                  {t("admin.user_new.ou_of_template", { ou: selectedTemplate.ad_ou })}
-                </p>
-              ) : null}
             </div>
 
             {isStudent && form.school_id ? (
