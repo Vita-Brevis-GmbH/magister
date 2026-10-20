@@ -16,7 +16,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient, AdUserRecord
-from magister_api.ad.ou import select_provision_groups
+from magister_api.ad.ou import ou_within_school, select_provision_groups
 from magister_api.ad.password import default_profile_for_kind, generate_for_profile
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
@@ -154,7 +154,14 @@ class UserAdminService:
             ou_key = tpl.kind
         if ou_key not in OU_CHOICES:
             raise UserAdminError("invalid_ou_choice")
-        ou_dn, group_dns = await self._provision_target(ou_key, school)
+        if tpl is not None and tpl.ad_ou:
+            # Eigene Ziel-OU der Zielgruppe (nur bei freier Kontoart gesetzt):
+            # die OU des Standorts braucht es dann nicht.
+            if not ou_within_school(tpl.ad_ou, school.scope_short):
+                raise UserAdminError("ou_outside_school")
+            ou_dn, group_dns = tpl.ad_ou, []
+        else:
+            ou_dn, group_dns = await self._provision_target(ou_key, school)
         if tpl is not None:
             group_dns = list(tpl.ad_groups or [])
         # Ein ausdrücklich gesetzter Wert gewinnt; sonst die Zielgruppe; sonst

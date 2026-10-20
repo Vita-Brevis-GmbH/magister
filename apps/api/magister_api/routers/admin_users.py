@@ -37,6 +37,7 @@ _ERROR_STATUS = {
     "user_not_disabled": status.HTTP_409_CONFLICT,
     "ou_not_configured": status.HTTP_409_CONFLICT,
     "invalid_ou_choice": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    "ou_outside_school": status.HTTP_409_CONFLICT,
     "school_not_found": status.HTTP_404_NOT_FOUND,
     "group_template_not_found": status.HTTP_404_NOT_FOUND,
     "group_template_not_for_school": status.HTTP_409_CONFLICT,

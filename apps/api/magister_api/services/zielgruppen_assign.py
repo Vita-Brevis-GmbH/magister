@@ -13,9 +13,9 @@ Stufenwechsel. Pro Konto:
   der Tresor-Schalter werden übernommen. "Bei erster Anmeldung ändern" nicht:
   bei einem bestehenden Konto hiesse das, die Person beim nächsten Login zu
   einem neuen Passwort zu zwingen — das ist ein Reset, keine Zuordnung.
-* **Ablage-OU** bleibt. Passt die Kontoart der Zielgruppe nicht zum Konto,
-  meldet das Ergebnis ``ou_unchanged`` — das Verschieben im AD kann der
-  Connector (noch) nicht.
+* **Ablage-OU** bleibt. Passt die Kontoart der Zielgruppe nicht zum Konto
+  oder liegt es nicht in ihrer eigenen Ziel-OU, meldet das Ergebnis
+  ``ou_unchanged`` — das Verschieben im AD kann der Connector (noch) nicht.
 
 Gruppen schreibt :class:`UserGroupsService` (best-effort, auditiert); dazu
 kommt ein eigenes Audit-Event ``zielgruppe_assigned`` je Konto.
@@ -150,6 +150,7 @@ class ZielgruppenAssignService:
             )
             if apply_settings:
                 await self._apply_settings(user, tpl)
+            outside_own_ou = await self._outside_own_ou(tpl, user)
         except UserNotInAdError:
             return AssignResult(guid, ok=False, error="user_not_in_ad")
         except AdUnavailableError:
@@ -157,7 +158,7 @@ class ZielgruppenAssignService:
 
         user.group_template_id = tpl.id
         await self.session.flush()
-        ou_unchanged = (
+        ou_unchanged = outside_own_ou or (
             tpl.kind in VORGABEN
             and _category(tpl.kind) is not None
             and _category(tpl.kind) != _category(user.kind)
@@ -189,6 +190,15 @@ class ZielgruppenAssignService:
             failed=groups.failed,
             ou_unchanged=ou_unchanged,
         )
+
+    async def _outside_own_ou(self, tpl: GroupTemplate, user: AdUserCache) -> bool:
+        """Hat die Zielgruppe eine eigene Ziel-OU und liegt das Konto woanders?"""
+        if not tpl.ad_ou:
+            return False
+        user_dn = await self.ad.find_user_dn(user.ad_object_guid)
+        if not user_dn:
+            raise UserNotInAdError(user.ad_object_guid)
+        return not user_dn.lower().endswith("," + tpl.ad_ou.lower())
 
     async def _apply_settings(self, user: AdUserCache, tpl: GroupTemplate) -> None:
         """ "Darf nicht ändern", "läuft nie ab" und Tresor nach der Zielgruppe."""

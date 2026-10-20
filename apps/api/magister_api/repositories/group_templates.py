@@ -12,6 +12,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.group_template import (
+    FIXED_KINDS,
     GROUP_TEMPLATE_STATUS_ACTIVE,
     GROUP_TEMPLATE_STATUS_ARCHIVED,
     GroupTemplate,
@@ -26,8 +27,15 @@ OPTION_FIELDS: frozenset[str] = frozenset(
         "cannot_change_password",
         "password_never_expires",
         "store_password",
+        "ad_ou",
     }
 )
+
+
+def _fix_ou(row: GroupTemplate) -> None:
+    """Ziel-OU nur bei freier Kontoart; "" heisst entfernen."""
+    if not row.ad_ou or row.kind in FIXED_KINDS:
+        row.ad_ou = None
 
 
 class GroupTemplateRepository:
@@ -98,6 +106,7 @@ class GroupTemplateRepository:
             status=GROUP_TEMPLATE_STATUS_ACTIVE,
             **(options or {}),
         )
+        _fix_ou(row)
         self.session.add(row)
         await self.session.flush()
         await self._set_links(row.id, school_ids)
@@ -125,6 +134,7 @@ class GroupTemplateRepository:
             row.kind = kind
         if ad_groups is not None:
             row.ad_groups = list(ad_groups)
+        _fix_ou(row)
         await self.session.flush()
         if school_ids is not None:
             await self._set_links(row.id, school_ids)

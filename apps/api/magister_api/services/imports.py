@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError, is_password_rejected
 from magister_api.ad.ou import (
+    ou_within_school,
     select_provision_groups,
     select_student_ou,
     zyklus_for_jahrgangsstufe,
@@ -442,6 +443,19 @@ _ZIELGRUPPE_KINDS: dict[str, tuple[str, ...]] = {
 _FIXED_KINDS = frozenset(k for ks in _ZIELGRUPPE_KINDS.values() for k in ks)
 
 
+def _own_ou(tpl: GroupTemplate | None, school: School) -> str | None:
+    """Ziel-OU einer Zielgruppe mit freier Kontoart, sonst ``None`` (= OU des
+    Standorts). Liegt sie nicht im Standort, ``ValueError``: der nächste
+    AD-Abgleich ordnete das Konto sonst keinem Standort zu."""
+    if tpl is None or not tpl.ad_ou:
+        return None
+    if not ou_within_school(tpl.ad_ou, school.scope_short):
+        raise ValueError(
+            f"zielgruppe OU {tpl.ad_ou!r} is outside this school (no OU={school.scope_short})"
+        )
+    return tpl.ad_ou
+
+
 class ImportService:
     def __init__(
         self,
@@ -842,8 +856,11 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
         try:
-            await self._zielgruppe(school_id, row, import_kind=IMPORT_KIND_STUDENTS, auto_kind=None)
+            named = await self._zielgruppe(
+                school_id, row, import_kind=IMPORT_KIND_STUDENTS, auto_kind=None
+            )
         except ValueError as exc:
             errors.append(str(exc))
         if errors:
@@ -869,7 +886,11 @@ class ImportService:
             return IMPORT_ACTION_ERROR, [f"class {class_name!r} not found in school"]
 
         school = await self._school_row(school_id)
-        ou = select_student_ou(
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        ou = own_ou or select_student_ou(
             jahrgangsstufe=cls.jahrgangsstufe,
             ou_zyklus3=school.ad_ou_students_zyklus3,
             ou_other=school.ad_ou_students_other,
@@ -941,8 +962,11 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
         try:
-            await self._zielgruppe(school_id, row, import_kind=IMPORT_KIND_TEACHERS, auto_kind=None)
+            named = await self._zielgruppe(
+                school_id, row, import_kind=IMPORT_KIND_TEACHERS, auto_kind=None
+            )
         except ValueError as exc:
             errors.append(str(exc))
         if errors:
@@ -973,7 +997,11 @@ class ImportService:
         if settings_row.mail_domains and domain not in settings_row.mail_domains:
             return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
         school = await self._school_row(school_id)
-        if not school.ad_ou_teachers:
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if not (own_ou or school.ad_ou_teachers):
             return IMPORT_ACTION_ERROR, ["teacher OU not configured for this school"]
 
         # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
@@ -1041,8 +1069,9 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
         try:
-            await self._zielgruppe(
+            named = await self._zielgruppe(
                 school_id, row, import_kind=IMPORT_KIND_COMPANY_USERS, auto_kind=None
             )
         except ValueError as exc:
@@ -1087,7 +1116,11 @@ class ImportService:
             return IMPORT_ACTION_ERROR, alias_errors
 
         school = await self._school_row(school_id)
-        if not school.ad_ou_company_users:
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if not (own_ou or school.ad_ou_company_users):
             return IMPORT_ACTION_ERROR, ["company-users OU not configured for this Standort"]
 
         # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
@@ -1448,8 +1481,6 @@ class ImportService:
             zyklus1_max=settings_row.zyklus1_max_grade,
             zyklus2_max=settings_row.zyklus2_max_grade,
         )
-        if not ou:
-            raise ValueError("target_ou_not_configured")
 
         zyklus = zyklus_for_jahrgangsstufe(
             jahrgangsstufe,
@@ -1461,6 +1492,9 @@ class ImportService:
         tpl = await self._zielgruppe(
             school_id, row, import_kind=IMPORT_KIND_STUDENTS, auto_kind=f"student_zyklus{zyklus}"
         )
+        ou = _own_ou(tpl, school) or ou
+        if not ou:
+            raise ValueError("target_ou_not_configured")
         if tpl is not None:
             group_dns = list(tpl.ad_groups or [])
             password = generate_for_profile(tpl.password_profile)
@@ -1566,13 +1600,12 @@ class ImportService:
 
         settings_row = await self._app_settings_row()
         school = await self._school_row(school_id)
-        ou = school.ad_ou_teachers
-        if not ou:
-            raise ValueError("teacher_ou_not_configured")
-
         tpl = await self._zielgruppe(
             school_id, row, import_kind=IMPORT_KIND_TEACHERS, auto_kind="teacher"
         )
+        ou = _own_ou(tpl, school) or school.ad_ou_teachers
+        if not ou:
+            raise ValueError("teacher_ou_not_configured")
         if tpl is not None:
             group_dns = list(tpl.ad_groups or [])
             password = generate_for_profile(tpl.password_profile)
@@ -1675,9 +1708,6 @@ class ImportService:
 
         settings_row = await self._app_settings_row()
         school = await self._school_row(school_id)
-        ou = school.ad_ou_company_users
-        if not ou:
-            raise ValueError("company_ou_not_configured")
         aliases, _ = _parse_aliases_cell(
             row.get("mail_aliases", ""),
             primary=mail,
@@ -1687,6 +1717,9 @@ class ImportService:
         tpl = await self._zielgruppe(
             school_id, row, import_kind=IMPORT_KIND_COMPANY_USERS, auto_kind="company"
         )
+        ou = _own_ou(tpl, school) or school.ad_ou_company_users
+        if not ou:
+            raise ValueError("company_ou_not_configured")
         group_dns = (
             list(tpl.ad_groups or []) if tpl is not None else list(school.ad_groups_company or [])
         )

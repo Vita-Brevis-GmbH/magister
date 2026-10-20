@@ -30,11 +30,30 @@ interface Draft extends ZielgruppenOptions {
   kind: string;
   ad_groups: string[];
   school_ids: number[];
+  ad_ou: string;
 }
 
 // Kontoarten, die eine Zielgruppe festlegen kann (= ou_key beim Anlegen).
 const SCHOOL_KINDS = ["teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3"];
 const PROFILES: PasswordProfile[] = ["readable", "teacher", "complex"];
+// Kontoarten mit fester OU (die des Standorts) — sonst darf die Zielgruppe
+// eine eigene Ziel-OU haben. Gleiche Liste wie FIXED_KINDS im Backend.
+const FIXED_KINDS = [...SCHOOL_KINDS, "company"];
+// Ein DN unterhalb einer Domäne, wie im Backend (schemas/group_templates.py).
+const OU_DN_RE = /^(OU|CN)=[^,]+(,(OU|CN)=[^,]+)*(,DC=[^,]+)+$/i;
+
+function cleanOu(ou: string): string {
+  return ou
+    .split(",")
+    .map((p) => p.trim())
+    .join(",")
+    .trim();
+}
+
+function ouInvalid(draft: Draft): boolean {
+  const ou = cleanOu(draft.ad_ou);
+  return !FIXED_KINDS.includes(draft.kind) && ou !== "" && !OU_DN_RE.test(ou);
+}
 
 const selectClasses =
   "flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50";
@@ -51,6 +70,7 @@ function emptyDraft(): Draft {
     cannot_change_password: false,
     password_never_expires: false,
     store_password: false,
+    ad_ou: "",
   };
 }
 
@@ -68,6 +88,7 @@ function draftFrom(tpl: GroupTemplateOut): Draft {
     cannot_change_password: tpl.cannot_change_password,
     password_never_expires: tpl.password_never_expires,
     store_password: tpl.store_password,
+    ad_ou: tpl.ad_ou ?? "",
   };
 }
 
@@ -84,6 +105,8 @@ function bodyFrom(draft: Draft) {
     cannot_change_password: draft.cannot_change_password,
     password_never_expires: draft.password_never_expires,
     store_password: draft.store_password,
+    // "" entfernt eine gesetzte Ziel-OU; bei fester Kontoart gilt die des Standorts.
+    ad_ou: FIXED_KINDS.includes(draft.kind) ? "" : cleanOu(draft.ad_ou),
   };
 }
 
@@ -99,7 +122,7 @@ function GroupTemplatesPage(): JSX.Element {
   const schoolList = schools.data ?? [];
 
   function submit(): void {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim() || ouInvalid(draft)) return;
     create.mutate(bodyFrom(draft), { onSuccess: () => setDraft(emptyDraft()) });
   }
 
@@ -129,7 +152,10 @@ function GroupTemplatesPage(): JSX.Element {
           {create.isError ? (
             <p className="text-sm text-destructive">{t("group_templates.create_failed")}</p>
           ) : null}
-          <Button onClick={submit} disabled={create.isPending || !draft.name.trim()}>
+          <Button
+            onClick={submit}
+            disabled={create.isPending || !draft.name.trim() || ouInvalid(draft)}
+          >
             {t("group_templates.create")}
           </Button>
         </CardContent>
@@ -276,6 +302,9 @@ function TemplateFields({
           ))}
         </select>
       </div>
+      {FIXED_KINDS.includes(draft.kind) ? null : (
+        <OuField draft={draft} onChange={onChange} schools={schools} />
+      )}
       <div className="space-y-1">
         <Label htmlFor="tpl-profile">{t("group_templates.profile_label")}</Label>
         <select
@@ -364,6 +393,58 @@ function TemplateFields({
   );
 }
 
+/** Ziel-OU einer Zielgruppe ohne feste Kontoart (optional). */
+function OuField({
+  draft,
+  onChange,
+  schools,
+}: {
+  draft: Draft;
+  onChange: (d: Draft) => void;
+  schools: SchoolOut[];
+}): JSX.Element {
+  const { t } = useTranslation();
+  const terms = useTerms();
+  const ou = cleanOu(draft.ad_ou).toUpperCase();
+  // Dieselbe Regel wie der AD-Abgleich: OU=<Kürzel> muss im DN vorkommen,
+  // sonst ordnet er das Konto keinem Standort zu. Magister lehnt die Anlage
+  // an solchen Standorten ab — hier sieht man es vorher.
+  const offered =
+    draft.school_ids.length === 0
+      ? schools
+      : schools.filter((s) => draft.school_ids.includes(s.id));
+  const outside =
+    ou && !ouInvalid(draft)
+      ? offered.filter((s) => !ou.includes(`OU=${s.scope_short.toUpperCase()}`))
+      : [];
+  return (
+    <div className="space-y-1">
+      <Label htmlFor="tpl-ou">{t("group_templates.ou_label")}</Label>
+      <Input
+        id="tpl-ou"
+        value={draft.ad_ou}
+        onChange={(e) => onChange({ ...draft, ad_ou: e.target.value })}
+        placeholder={t("group_templates.ou_placeholder")}
+        maxLength={512}
+      />
+      <p className="text-xs text-muted-foreground">
+        {t("group_templates.ou_hint", { unit: terms.unit })}
+      </p>
+      {ouInvalid(draft) ? (
+        <p className="text-xs text-destructive">{t("group_templates.ou_invalid")}</p>
+      ) : null}
+      {outside.length > 0 ? (
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          {t("group_templates.ou_outside", {
+            names: outside.map((s) => s.name).join(", "),
+            unit: terms.unit,
+          })}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function Check({
   checked,
   onChange,
@@ -416,7 +497,7 @@ function TemplateRow({
   }
 
   function save(): void {
-    if (!draft.name.trim()) return;
+    if (!draft.name.trim() || ouInvalid(draft)) return;
     update.mutate({ id: tpl.id, body: bodyFrom(draft) }, { onSuccess: () => setEditing(false) });
   }
 
@@ -438,7 +519,11 @@ function TemplateRow({
               <p className="text-sm text-destructive">{t("group_templates.create_failed")}</p>
             ) : null}
             <div className="flex gap-2">
-              <Button size="sm" disabled={update.isPending || !draft.name.trim()} onClick={save}>
+              <Button
+                size="sm"
+                disabled={update.isPending || !draft.name.trim() || ouInvalid(draft)}
+                onClick={save}
+              >
                 {t("group_templates.save")}
               </Button>
               <Button
@@ -463,6 +548,7 @@ function TemplateRow({
                   ? `${terms.tt(`admin.user_new.ou_${tpl.kind}`)} · `
                   : null}
                 {t(`group_templates.profile_short_${tpl.password_profile}`)}
+                {tpl.ad_ou ? ` · ${t("group_templates.ou_badge", { ou: tpl.ad_ou })}` : null}
                 {tpl.store_password && tpl.cannot_change_password
                   ? ` · ${t("group_templates.badge_stored")}`
                   : null}{" "}

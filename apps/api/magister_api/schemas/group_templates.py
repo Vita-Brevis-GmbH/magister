@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 PasswordProfile = Literal["readable", "teacher", "complex"]
+
+# Ziel-OU: ein DN unterhalb einer Domäne ("OU=Gäste,DC=schule,DC=local").
+_OU_DN_RE = re.compile(r"^(OU|CN)=[^,]+(,(OU|CN)=[^,]+)*(,DC=[^,]+)+$", re.IGNORECASE)
+
+
+def _clean_ou(value: str | None) -> str | None:
+    """Leerzeichen um die Kommas weg; "" bleibt "" (= Ziel-OU entfernen)."""
+    if value is None:
+        return None
+    cleaned = ",".join(part.strip() for part in value.strip().split(","))
+    if cleaned and not _OU_DN_RE.match(cleaned):
+        raise ValueError("ad_ou must be a DN like OU=Name,DC=schule,DC=local")
+    return cleaned
 
 
 class GroupTemplateCreate(BaseModel):
@@ -22,6 +36,10 @@ class GroupTemplateCreate(BaseModel):
     cannot_change_password: bool = False
     password_never_expires: bool = False
     store_password: bool = False
+    # Ziel-OU (nur bei freier Kontoart wirksam); leer = OU des Standorts.
+    ad_ou: str | None = Field(default=None, max_length=512)
+
+    _ou = field_validator("ad_ou")(_clean_ou)
 
 
 class GroupTemplateUpdate(BaseModel):
@@ -37,6 +55,10 @@ class GroupTemplateUpdate(BaseModel):
     cannot_change_password: bool | None = None
     password_never_expires: bool | None = None
     store_password: bool | None = None
+    # "" entfernt die Ziel-OU, None lässt sie, wie sie ist.
+    ad_ou: str | None = Field(default=None, max_length=512)
+
+    _ou = field_validator("ad_ou")(_clean_ou)
 
 
 class GroupTemplateOut(BaseModel):
@@ -54,6 +76,7 @@ class GroupTemplateOut(BaseModel):
     cannot_change_password: bool
     password_never_expires: bool
     store_password: bool
+    ad_ou: str | None = None
     created_at: datetime
     updated_at: datetime
 

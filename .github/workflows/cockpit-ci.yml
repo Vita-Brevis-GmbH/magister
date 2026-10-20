@@ -60,7 +60,7 @@ jobs:
       # Abhaengigkeiten (SQLAlchemy, asyncpg, pydantic) hat die Konsole selbst.
       # Ein zweites `uv sync` in apps/api braucht es deshalb nicht.
       COCKPIT_TEST_MAGISTER_API_DIR: ${{ github.workspace }}/apps/api
-      COCKPIT_TEST_SCHEMA_VERSION: "0048_kennwort_import"
+      COCKPIT_TEST_SCHEMA_VERSION: "0049_zielgruppe_ou"
     steps:
       - uses: actions/checkout@v4
 

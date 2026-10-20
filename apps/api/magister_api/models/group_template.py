@@ -33,6 +33,12 @@ ALLOWED_STATUSES: frozenset[str] = frozenset(
     {GROUP_TEMPLATE_STATUS_ACTIVE, GROUP_TEMPLATE_STATUS_ARCHIVED}
 )
 
+#: Kontoarten mit fester Ablage-OU (die des Standorts). Eine Zielgruppe ohne
+#: eine davon ("custom" oder leer) darf eine eigene Ziel-OU haben (``ad_ou``).
+FIXED_KINDS: frozenset[str] = frozenset(
+    {"teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3", "company"}
+)
+
 
 class GroupTemplate(Base):
     __tablename__ = "group_templates"
@@ -68,6 +74,9 @@ class GroupTemplate(Base):
     store_password: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Ziel-OU neuer Konten (Migration 0049) — nur bei freier Kontoart; leer =
+    # die OU des Standorts für die bei der Anlage gewählte Kontoart.
+    ad_ou: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )

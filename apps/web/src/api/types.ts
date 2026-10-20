@@ -387,6 +387,8 @@ export interface GroupTemplateOut extends ZielgruppenOptions {
   ad_groups: string[];
   school_ids: number[];
   status: string;
+  // Ziel-OU neuer Konten — nur bei freier Kontoart; null = OU des Standorts.
+  ad_ou: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -397,6 +399,7 @@ export interface GroupTemplateCreate extends Partial<ZielgruppenOptions> {
   kind?: string | null;
   ad_groups?: string[];
   school_ids?: number[];
+  ad_ou?: string | null;
 }
 
 /** Ergebnis je Konto beim Zuordnen einer Zielgruppe. */
@@ -417,6 +420,8 @@ export interface GroupTemplateUpdate extends Partial<ZielgruppenOptions> {
   kind?: string | null;
   ad_groups?: string[] | null;
   school_ids?: number[] | null;
+  // "" entfernt die Ziel-OU.
+  ad_ou?: string | null;
 }
 
 export interface DepartmentMembershipOut {

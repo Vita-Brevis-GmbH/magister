@@ -49,6 +49,7 @@ _OPTIONS = (
     "cannot_change_password",
     "password_never_expires",
     "store_password",
+    "ad_ou",
 )
 
 

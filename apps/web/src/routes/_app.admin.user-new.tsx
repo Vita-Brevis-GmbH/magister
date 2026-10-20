@@ -56,6 +56,7 @@ function createErrorKey(err: ApiError): string {
   if (err.code === "group_template_not_found") return "admin.user_new.err_template_not_found";
   if (err.code === "group_template_not_for_school")
     return "admin.user_new.err_template_not_for_school";
+  if (err.code === "ou_outside_school") return "admin.user_new.err_ou_outside_school";
   if (err.status === 409) return "admin.user_new.err_ou_not_configured";
   if (err.status === 503) return "admin.user_new.err_ad";
   if (err.status === 422) return "admin.user_new.err_invalid";
@@ -422,6 +423,11 @@ function NewUserPage(): JSX.Element {
                   ? t("admin.user_new.ou_from_template")
                   : t("admin.user_new.ou_hint")}
               </p>
+              {selectedTemplate?.ad_ou ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("admin.user_new.ou_of_template", { ou: selectedTemplate.ad_ou })}
+                </p>
+              ) : null}
             </div>
 
             {isStudent ? (

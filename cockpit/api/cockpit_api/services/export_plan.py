@@ -110,6 +110,7 @@ PERSON = (
     "password_never_expires",
     "cannot_change_password",
     "store_password",
+    "group_template_id",
     "last_sync_at",
     "ad_missing_since",
 )
@@ -312,10 +313,19 @@ EXPORT_TABLES: tuple[ExportTable, ...] = (
             "kind",
             "ad_groups",
             "status",
+            "password_profile",
+            "force_change",
+            "cannot_change_password",
+            "password_never_expires",
+            "store_password",
+            "ad_ou",
             "created_at",
             "updated_at",
         ),
-        description="Gruppenvorlagen: welche AD-Gruppen bei einer Rolle gesetzt werden.",
+        description=(
+            "Zielgruppen: AD-Gruppen, Passwortart, Konto-Vorgaben und Ziel-OU neuer "
+            "Konten. ad_user_cache.group_template_id verweist hierher."
+        ),
     ),
     ExportTable(
         table="group_template_schools",
