@@ -50,6 +50,17 @@ function cleanOu(ou: string): string {
     .trim();
 }
 
+// Festes Passwort: nur dann legt Magister es im Tresor ab (wie password_stays
+// im Backend). Sonst gäbe die Klassenliste bald ein falsches Passwort aus.
+function passwordStays(d: ZielgruppenOptions): boolean {
+  return !d.force_change && d.cannot_change_password && d.password_never_expires;
+}
+
+/** Schalter ändern; fällt das feste Passwort weg, geht der Tresor mit aus. */
+function withVaultRule(d: Draft): Draft {
+  return passwordStays(d) ? d : { ...d, store_password: false };
+}
+
 function ouInvalid(draft: Draft): boolean {
   const ou = cleanOu(draft.ad_ou);
   return !FIXED_KINDS.includes(draft.kind) && ou !== "" && !OU_DN_RE.test(ou);
@@ -327,29 +338,22 @@ function TemplateFields({
         <legend className="px-1 text-sm font-medium">{t("group_templates.options_label")}</legend>
         <Check
           checked={draft.force_change}
-          onChange={(v) => onChange({ ...draft, force_change: v })}
+          onChange={(v) => onChange(withVaultRule({ ...draft, force_change: v }))}
           label={t("group_templates.opt_force_change")}
         />
         <Check
           checked={!draft.cannot_change_password}
-          onChange={(v) =>
-            onChange({
-              ...draft,
-              cannot_change_password: !v,
-              // Ein änderbares Passwort wäre in der Klassenliste bald falsch.
-              store_password: v ? false : draft.store_password,
-            })
-          }
+          onChange={(v) => onChange(withVaultRule({ ...draft, cannot_change_password: !v }))}
           label={t("group_templates.opt_can_change")}
         />
         <Check
           checked={draft.password_never_expires}
-          onChange={(v) => onChange({ ...draft, password_never_expires: v })}
+          onChange={(v) => onChange(withVaultRule({ ...draft, password_never_expires: v }))}
           label={t("group_templates.opt_never_expires")}
         />
         <Check
           checked={draft.store_password}
-          disabled={!draft.cannot_change_password}
+          disabled={!passwordStays(draft)}
           onChange={(v) => onChange({ ...draft, store_password: v })}
           label={t("group_templates.opt_store")}
           hint={t("group_templates.opt_store_hint")}
@@ -363,7 +367,9 @@ function TemplateFields({
         onChange={(next) => onChange({ ...draft, ad_groups: next })}
       />
       <div className="space-y-1">
-        <Label>{t("group_templates.schools_label", { unit_plural: terms.unit_plural })}</Label>
+        <Label>
+          {t("group_templates.schools_label_optional", { unit_plural: terms.unit_plural })}
+        </Label>
         <p className="text-xs text-muted-foreground">
           {draft.school_ids.length === 0
             ? t("group_templates.schools_global_hint", { unit_plural: terms.unit_plural })
@@ -549,7 +555,7 @@ function TemplateRow({
                   : null}
                 {t(`group_templates.profile_short_${tpl.password_profile}`)}
                 {tpl.ad_ou ? ` · ${t("group_templates.ou_badge", { ou: tpl.ad_ou })}` : null}
-                {tpl.store_password && tpl.cannot_change_password
+                {tpl.store_password && passwordStays(tpl)
                   ? ` · ${t("group_templates.badge_stored")}`
                   : null}{" "}
                 · {t("group_templates.count_groups", { count: tpl.ad_groups.length })} ·{" "}

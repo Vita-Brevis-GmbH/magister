@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.password import password_stays
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
@@ -104,6 +105,10 @@ class UserNotInAdError(LookupError):
 
 class AdminOnlyFieldError(PermissionError):
     """SMI attempted to change a field reserved to admins."""
+
+
+class StorePasswordNotAllowedError(ValueError):
+    """Tresor einschalten, obwohl das Passwort nicht so bleibt."""
 
 
 @dataclass(frozen=True)
@@ -193,6 +198,23 @@ class UserAttributesService:
 
         if not actual_changes:
             return UserAttributesResult(changed_keys=[])
+
+        # Tresor nur, wenn das Passwort so bleibt (kann nicht ändern + läuft
+        # nie ab; erzwungene Änderung gibt es hier nicht). Einschalten ohne
+        # das ist ein Fehler; nimmt eine Änderung eine der Bedingungen weg,
+        # geht der Tresor mit aus — die Kopie wäre bald falsch.
+        if actual_changes.get("store_password", target.store_password) and not password_stays(
+            force_change=False,
+            cannot_change_password=bool(
+                actual_changes.get("cannot_change_password", target.cannot_change_password)
+            ),
+            password_never_expires=bool(
+                actual_changes.get("password_never_expires", target.password_never_expires)
+            ),
+        ):
+            if actual_changes.get("store_password") is True:
+                raise StorePasswordNotAllowedError("store_password")
+            actual_changes["store_password"] = False
 
         if "upn" in actual_changes:
             await self._check_upn_unique(actual_changes["upn"], target.ad_object_guid)
@@ -344,6 +366,7 @@ class UserAttributesService:
 
 __all__ = [
     "AdminOnlyFieldError",
+    "StorePasswordNotAllowedError",
     "DomainAllowlistEmptyError",
     "DomainNotAllowedError",
     "UpnConflictError",

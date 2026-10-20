@@ -595,7 +595,19 @@ function BulkAttrsModal({
             value={neverExp}
             onChange={setNeverExp}
           />
-          <TriField label={t("users.field.store_password")} value={store} onChange={setStore} />
+          <TriField
+            label={t("users.field.store_password")}
+            value={store}
+            onChange={(v) => {
+              setStore(v);
+              // Tresor nur bei festem Passwort: beide Schalter mit setzen.
+              if (v === "yes") {
+                setCannot("yes");
+                setNeverExp("yes");
+              }
+            }}
+          />
+          <p className="text-xs text-muted-foreground">{t("users.bulk.store_hint")}</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>

@@ -284,6 +284,8 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-13** Geräte (NinjaOne), falls konfiguriert: Liste je Schule gefiltert.
 - [ ] **F-14** Zielgruppen: neue Schule hat sofort „Schüler:in Zyklus 1/2/3" und „Lehrperson"; Einzel-Anlage mit Zyklus-1-Zielgruppe → lesbares Passwort, „darf nicht ändern", im Tresor; Anmelde-PDF direkt nach der Anlage.
 - [ ] **F-15** Zielgruppe nachträglich zuweisen (einzeln und als Sammelaktion): Gruppen der bisherigen Zielgruppe fallen im AD weg, die neuen kommen dazu; Hinweis „bleibt in seiner OU" bei anderer Kontoart.
+- [ ] **F-17** Tresor nur bei festem Passwort: in der Zielgruppe und beim Konto lässt sich „Passwort in Magister speichern" nur mit „Änderung erzwingen" aus, „Benutzer kann Passwort ändern" aus und „läuft nie ab" an setzen; „läuft nie ab" wieder ausschalten → gespeichertes Passwort weg. Reset mit erzwungener Änderung → kein Passwort im Tresor.
+- [ ] **F-18** Anlage ohne Standort: globale Zielgruppe ohne feste Kontoart mit Ziel-OU `OU=Sonstige,…` → Konto ohne Standort in dieser OU; ohne Ziel-OU → verständliche Meldung, nichts im AD.
 - [ ] **F-16** Passwort-Import (Art „Passwörter bestehender Konten"): Vorschau zeigt kein Passwort; nach Übernehmen Anmeldung mit dem importierten Passwort im AD möglich, Klassen-Passwortliste zeigt es; `import_staged_rows.secret_enc` ist danach leer; Konto anderer Schule → Zeilenfehler; Schulleitung → 403.
 
 ### 7.2 Firma (Kunde B)

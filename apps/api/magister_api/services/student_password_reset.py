@@ -140,11 +140,22 @@ class StudentPasswordResetService:
         )
 
         # Keep the password vault in sync for opt-in users (global switch gated).
+        # Nur ein Passwort, das so bleibt, kommt in den Tresor; ein Reset mit
+        # erzwungener Änderung macht die alte Kopie falsch — die fällt weg.
         if student.store_password:
-            from magister_api.services.password_vault import PasswordVaultService
+            from magister_api.services.password_vault import (
+                PasswordVaultService,
+                password_stays,
+            )
 
             vault = PasswordVaultService(self.session, self.settings)
-            if await vault.enabled():
+            if not password_stays(
+                force_change=force_change,
+                cannot_change_password=student.cannot_change_password,
+                password_never_expires=student.password_never_expires,
+            ):
+                await vault.clear(student.ad_object_guid)
+            elif await vault.enabled():
                 await vault.store(student.ad_object_guid, new_password)
 
         return PasswordResetResult(

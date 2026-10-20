@@ -36,7 +36,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.group_template import GroupTemplate
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.group_templates import GroupTemplateRepository
-from magister_api.services.password_vault import PasswordVaultService
+from magister_api.services.password_vault import PasswordVaultService, password_stays
 from magister_api.services.user_groups import UserGroupsService, UserNotInAdError
 from magister_api.services.zielgruppen import VORGABEN
 
@@ -220,10 +220,15 @@ class ZielgruppenAssignService:
                     user_dn=user_dn, value=tpl.cannot_change_password
                 )
                 user.cannot_change_password = tpl.cannot_change_password
-        # Tresor nur bei "darf nicht ändern" — sonst veraltet die Kopie. Das
-        # Passwort selbst kennt Magister hier nicht; es kommt mit dem nächsten
-        # Reset oder dem Passwort-Import in den Tresor.
-        store = tpl.store_password and tpl.cannot_change_password
+        # Tresor nur, wenn das Passwort so bleibt — sonst veraltet die Kopie.
+        # "Bei erster Anmeldung ändern" wird hier nicht gesetzt, zählt also
+        # nicht. Das Passwort selbst kennt Magister hier nicht; es kommt mit
+        # dem nächsten Reset oder dem Passwort-Import in den Tresor.
+        store = tpl.store_password and password_stays(
+            force_change=False,
+            cannot_change_password=tpl.cannot_change_password,
+            password_never_expires=tpl.password_never_expires,
+        )
         if user.store_password and not store:
             await PasswordVaultService(self.session, self.settings).clear(user.ad_object_guid)
         user.store_password = store

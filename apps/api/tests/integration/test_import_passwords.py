@@ -28,7 +28,7 @@ from magister_api.services.password_vault import PasswordVaultService
 
 pytestmark = pytest.mark.postgres
 
-HEADER = "upn,password,force_change,cannot_change_password"
+HEADER = "upn,password,force_change,cannot_change_password,password_never_expires"
 LIA = "00000000-0000-0000-0000-00000000a001"
 TIM = "00000000-0000-0000-0000-00000000a002"
 OFF = "00000000-0000-0000-0000-00000000a003"
@@ -62,6 +62,7 @@ async def _setup(db_session: AsyncSession, school_a: int, school_b: int) -> None
     settings = await db_session.get(AppSettings, 1)
     assert settings is not None
     settings.password_store_enabled = True
+    # Lia hat ein festes Passwort (kann nicht ändern, läuft nie ab), Tim nicht.
     for guid, upn, school, enabled, cannot in (
         (LIA, "lia@schule.ch", school_a, True, True),
         (TIM, "tim@schule.ch", school_a, True, False),
@@ -76,6 +77,7 @@ async def _setup(db_session: AsyncSession, school_a: int, school_b: int) -> None
                 kind="student",
                 enabled=enabled,
                 cannot_change_password=cannot,
+                password_never_expires=cannot,
             )
         )
     await db_session.commit()
@@ -194,7 +196,9 @@ async def test_cannot_change_column_enables_the_vault(
     mock_ad: AdClient,
     _setup: None,
 ) -> None:
-    job = await _stage(as_admin, f"{HEADER}\ntim@schule.ch,Tiger-Berg-17,false,true\n", school_a)
+    job = await _stage(
+        as_admin, f"{HEADER}\ntim@schule.ch,Tiger-Berg-17,false,true,true\n", school_a
+    )
     assert job["rows"][0]["errors"] == []
     await _apply(as_admin, app, mock_ad, job["id"])
     db_session.expire_all()
@@ -202,6 +206,7 @@ async def test_cannot_change_column_enables_the_vault(
         await db_session.execute(select(AdUserCache).where(AdUserCache.ad_object_guid == TIM))
     ).scalar_one()
     assert tim.cannot_change_password is True
+    assert tim.password_never_expires is True
     assert tim.store_password is True
     assert await PasswordVaultService(db_session, app_settings).get(TIM) == "Tiger-Berg-17"
 
@@ -243,3 +248,28 @@ async def test_schulleitung_may_not_import_passwords(
         files={"file": ("pw.csv", csv, "text/csv")},
     )
     assert r.status_code == 201, r.text
+
+
+@pytest.mark.asyncio
+async def test_password_that_expires_is_set_but_not_stored(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    app_settings: Settings,
+    school_a: int,
+    mock_ad: AdClient,
+    _setup: None,
+) -> None:
+    # Kann nicht ändern, aber läuft ab: kein festes Passwort, also kein Tresor.
+    job = await _stage(
+        as_admin, f"{HEADER}\nlia@schule.ch,Sonne-Wald-42,false,true,false\n", school_a
+    )
+    assert "not stored in the vault" in job["rows"][0]["errors"][0]
+    await _apply(as_admin, app, mock_ad, job["id"])
+    db_session.expire_all()
+    lia = (
+        await db_session.execute(select(AdUserCache).where(AdUserCache.ad_object_guid == LIA))
+    ).scalar_one()
+    assert lia.password_never_expires is False
+    assert lia.store_password is False
+    assert await PasswordVaultService(db_session, app_settings).get(LIA) is None

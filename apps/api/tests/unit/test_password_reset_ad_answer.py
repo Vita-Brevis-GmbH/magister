@@ -174,3 +174,58 @@ def test_the_rejection_code_is_recognised_only_exactly() -> None:
 )
 def test_sync_failures_get_their_own_reason(message: str, reason: str) -> None:
     assert classify_sync_failure(AdUnavailableError(message)) == reason
+
+
+class _Vault:
+    """Merkt sich, was der Reset mit dem Tresor macht."""
+
+    calls: list[str] = []
+
+    def __init__(self, session: Any, settings: Any) -> None:
+        pass
+
+    async def enabled(self) -> bool:
+        return True
+
+    async def store(self, ad_object_guid: str, plaintext: str) -> None:
+        _Vault.calls.append("store")
+
+    async def clear(self, ad_object_guid: str) -> None:
+        _Vault.calls.append("clear")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    ("force_change", "never_expires", "expected"),
+    [
+        (False, True, "store"),  # festes Passwort: in den Tresor
+        (True, True, "clear"),  # erzwungene Änderung: die Kopie wäre bald falsch
+        (False, False, "clear"),  # läuft ab: ebenso
+    ],
+)
+async def test_reset_stores_only_a_password_that_stays(
+    kind: str,
+    force_change: bool,
+    never_expires: bool,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from magister_api.services import password_vault
+
+    monkeypatch.setattr(password_vault, "PasswordVaultService", _Vault)
+    _Vault.calls = []
+    svc, _audit, _error, arg = _service(kind, _Ad())
+    person = _person()
+    person.store_password = True
+    person.cannot_change_password = True
+    person.password_never_expires = never_expires
+    await svc.reset(
+        **{arg: person},
+        mode="manual",
+        manual_password=GOOD,
+        force_change=force_change,
+        ip=None,
+        request_id="r",
+    )
+    assert _Vault.calls == [expected]

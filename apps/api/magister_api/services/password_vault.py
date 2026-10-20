@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy import update as sqla_update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.password import password_stays
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.auth import AdUserCache
@@ -72,4 +73,4 @@ class PasswordVaultService:
         )
 
 
-__all__ = ["PasswordVaultService"]
+__all__ = ["PasswordVaultService", "password_stays"]

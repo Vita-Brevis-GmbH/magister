@@ -317,7 +317,8 @@
       "groups_refresh": "Aggiorna dall’AD",
       "groups_reapply": "Riassegna i diritti",
       "groups_action_failed": "Azione non riuscita.",
-      "groups_reapply_partial": "{{count}} gruppo/i non impostabili nell’AD."
+      "groups_reapply_partial": "{{count}} gruppo/i non impostabili nell’AD.",
+      "error_store_requires_fixed": "Salvare la password richiede «L'utente può cambiare la password» disattivato e «La password non scade mai» attivato."
     },
     "field": {
       "display_name": "Nome visualizzato",
@@ -347,7 +348,7 @@
       "password_never_expires": "La password non scade mai",
       "password_never_expires_hint": "Imposta il flag AD DONT_EXPIRE_PASSWD.",
       "store_password": "Salva la password in Magister",
-      "store_password_hint": "Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'attivazione globale nelle Impostazioni.",
+      "store_password_hint": "Solo per una password fissa: «L'utente può cambiare la password» disattivato e «La password non scade mai» attivato. Cifrata (chiave del server). Alla consegna delle credenziali viene usata questa password invece di una nuova. Richiede l'abilitazione globale nelle impostazioni.",
       "ad_groups": "Gruppi AD",
       "can_change_password": "L'utente può cambiare la password",
       "mail_aliases": "Indirizzi aggiuntivi (alias)",
@@ -375,7 +376,8 @@
       "attrs_apply": "Applica",
       "tri_keep": "invariato",
       "tri_yes": "Sì",
-      "tri_no": "No"
+      "tri_no": "No",
+      "store_hint": "Salvare la password imposta anche «L'utente non può cambiare la password» e «La password non scade mai» – altrimenti la password salvata sarebbe presto sbagliata."
     },
     "devices": {
       "section_title": "Dispositivi",
@@ -685,7 +687,10 @@
       "ou_of_template": "Creato nell'OU del gruppo: {{ou}}",
       "ou_from_template": "Definito dal gruppo di destinazione.",
       "download_pdf": "Scarica il PDF di accesso",
-      "pdf_failed": "Impossibile creare il PDF di accesso."
+      "pdf_failed": "Impossibile creare il PDF di accesso.",
+      "unit_none": "– senza {{unit}} –",
+      "unit_none_hint": "Senza {{unit}} solo con un gruppo globale con una propria OU di destinazione (p. es. «Altri»). L'account non appartiene allora a nessuna {{unit}} – lo vedono solo gli admin.",
+      "err_ou_required": "Senza sede serve un gruppo con una propria OU di destinazione."
     },
     "user_settings": {
       "title": "Configurazione utenti",
@@ -800,7 +805,7 @@
     "kind_company_users": "Collaboratori",
     "kind_company_users_desc": "Crea nuovi account AD per i collaboratori (nell'OU aziendale configurata). Colonne: given_name, surname, display_name, upn, sam_account_name, force_change, mail (vuoto = UPN), mail_aliases (indirizzi aggiuntivi, separati da punto e virgola), cannot_change_password, password_never_expires. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
     "kind_passwords": "Password di account esistenti",
-    "kind_passwords_desc": "Riprendere le password note di account esistenti (p. es. da un vecchio impianto): Magister le imposta nell'AD e le salva nella cassaforte delle password, così che gli elenchi delle password per classe funzionino. Colonne: upn, password. Facoltativo: force_change (vuoto = no), cannot_change_password (vuoto = come il gruppo dell'account, altrimenti invariato). Una password viene salvata nella cassaforte solo se l'account non può cambiarla e la cassaforte è attiva. Le password restano cifrate fino all'applicazione e poi vengono eliminate; la robustezza la verifica l'AD."
+    "kind_passwords_desc": "Riprendere le password note di account esistenti (p. es. da un vecchio impianto): Magister le imposta nell'AD e le salva nella cassaforte, così che gli elenchi delle password per classe funzionino. Colonne: upn, password. Facoltativo: force_change (vuoto = no), cannot_change_password e password_never_expires (vuoto = come il gruppo dell'account, altrimenti invariato). Una password viene salvata nella cassaforte solo se è fissa – force_change no, cannot_change_password sì, password_never_expires sì – e la cassaforte è attiva. Le password restano cifrate fino all'applicazione e poi vengono eliminate; la robustezza la verifica l'AD."
   },
   "privacy": {
     "section_title": "Esportazione dati (revDSG art. 25)",
@@ -1347,9 +1352,9 @@
     "kind_label": "Tipo di account (determina l’OU)",
     "kind_none": "Nessun tipo fisso – da scegliere alla creazione",
     "ou_label": "OU di destinazione (facoltativa)",
-    "ou_placeholder": "OU=Ospiti,OU=SIGLA,DC=scuola,DC=local",
+    "ou_placeholder": "OU=Altri,OU=SIGLA,DC=scuola,DC=local",
     "ou_hint": "I nuovi account di questo gruppo vengono creati in questa OU. Vuoto = l'OU della {{unit}} per il tipo di account scelto alla creazione. L'OU deve trovarsi nella {{unit}} (un'OU con la sua sigla nel percorso), altrimenti la sincronizzazione AD non assegna l'account a nessuna {{unit}}.",
-    "ou_invalid": "Inserisci un percorso completo, p. es. OU=Ospiti,OU=SIGLA,DC=scuola,DC=local.",
+    "ou_invalid": "Inserisci un percorso completo, p. es. OU=Altri,OU=SIGLA,DC=scuola,DC=local.",
     "ou_outside": "Non si trova in: {{names}}. Lì la creazione di account con questo gruppo viene rifiutata.",
     "ou_badge": "OU {{ou}}",
     "profile_label": "Tipo di password",
@@ -1365,14 +1370,15 @@
     "opt_can_change": "L’utente può cambiare la password",
     "opt_never_expires": "La password non scade mai",
     "opt_store": "Salva la password in Magister (elenco della classe)",
-    "opt_store_hint": "Ha effetto solo se l’utente non può cambiare la password e la cassaforte è attiva.",
+    "opt_store_hint": "Possibile solo se «Forza il cambio al primo accesso» e «L'utente può cambiare la password» sono disattivati e «La password non scade mai» è attivato – altrimenti la password salvata sarebbe presto sbagliata. La cassaforte deve essere attiva.",
     "badge_stored": "Password salvata",
     "defaults_title": "Gruppi di destinazione standard",
     "defaults_desc": "Aggiunge per un {{unit}} i gruppi standard mancanti (studente ciclo 1–3, docente). Quelli esistenti restano invariati.",
     "defaults_button": "Aggiungi mancanti",
     "defaults_done": "Aggiunti: {{names}}",
     "defaults_none": "Tutti i gruppi standard esistono.",
-    "defaults_failed": "Aggiunta non riuscita."
+    "defaults_failed": "Aggiunta non riuscita.",
+    "schools_label_optional": "{{unit_plural}} (facoltativo)"
   },
   "managed": {
     "how": "Se serve una modifica, rivolgetevi al vostro referente presso Vita Brevis. Ciò che vale qui è visibile nel registro di audit alla voce «platform_settings_reconciled».",

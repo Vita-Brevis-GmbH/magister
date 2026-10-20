@@ -71,7 +71,7 @@ from magister_api.models.school_class import (
 )
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.group_templates import GroupTemplateRepository
-from magister_api.services.password_vault import PasswordVaultService
+from magister_api.services.password_vault import PasswordVaultService, password_stays
 from magister_api.tenancy.keys import keys_for
 
 logger = logging.getLogger(__name__)
@@ -244,12 +244,13 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
     IMPORT_KIND_PASSWORDS: (
         # Bestehende Konten (Übernahme einer alten Anlage): das Passwort wird
         # im AD gesetzt und im Tresor abgelegt (Klassen-Passwortlisten). Leere
-        # Schalter: force_change = nein, cannot_change_password = wie die
-        # Zielgruppe des Kontos, sonst wie bisher im AD.
-        ["upn", "password", "force_change", "cannot_change_password"],
+        # Schalter: force_change = nein, cannot_change_password und
+        # password_never_expires = wie die Zielgruppe des Kontos, sonst wie
+        # bisher im AD.
+        ["upn", "password", "force_change", "cannot_change_password", "password_never_expires"],
         [
-            ["anna.muster@schule.ch", "Sonne-Wald-42", "", "true"],
-            ["ben.beispiel@schule.ch", "Tiger-Berg-17", "", ""],
+            ["anna.muster@schule.ch", "Sonne-Wald-42", "", "true", "true"],
+            ["ben.beispiel@schule.ch", "Tiger-Berg-17", "", "", ""],
         ],
     ),
 }
@@ -273,7 +274,7 @@ OPTIONAL_HEADERS: dict[str, list[str]] = {
         "password_never_expires",
         "zielgruppe",
     ],
-    IMPORT_KIND_PASSWORDS: ["force_change", "cannot_change_password"],
+    IMPORT_KIND_PASSWORDS: ["force_change", "cannot_change_password", "password_never_expires"],
 }
 
 # Längstes Passwort, das der Passwort-Import annimmt (AD: 256 Zeichen).
@@ -537,19 +538,19 @@ class ImportService:
         return next((t for t in offered if t.kind == auto_kind), None)
 
     def _vault_columns(
-        self, cannot_change_password: bool, password: str, settings_row: AppSettings
+        self, password_stays_valid: bool, password: str, settings_row: AppSettings
     ) -> tuple[bool, object | None]:
         """Return ``(store_password, password_enc)`` for a provisioned account.
 
-        Only accounts that **cannot change their password** are vaulted: their
-        password stays valid, so a stored copy stays correct. For accounts that
-        can change it, a stored copy would silently go stale, so it is never
-        saved. Storage is additionally gated by the global
-        ``password_store_enabled`` switch; when off, nothing is stored. The
-        password is encrypted with pgcrypto (same key as the audit/secret
-        columns) only when it is actually being stored.
+        Only accounts whose password **stays** are vaulted (``password_stays``:
+        no forced change, cannot change, never expires): a stored copy stays
+        correct. Otherwise it would silently go stale, so it is never saved.
+        Storage is additionally gated by the global ``password_store_enabled``
+        switch; when off, nothing is stored. The password is encrypted with
+        pgcrypto (same key as the audit/secret columns) only when it is
+        actually being stored.
         """
-        store_pw = bool(settings_row.password_store_enabled) and cannot_change_password
+        store_pw = bool(settings_row.password_store_enabled) and password_stays_valid
         # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
         # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
         key = keys_for(self.session, self.settings).secrets_key
@@ -1148,13 +1149,26 @@ class ImportService:
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
-    async def _cannot_change_default(self, user: AdUserCache) -> bool:
-        """Leere Spalte: wie die Zielgruppe des Kontos, sonst wie bisher."""
-        if user.group_template_id is not None:
-            tpl = await self.session.get(GroupTemplate, user.group_template_id)
-            if tpl is not None:
-                return tpl.cannot_change_password
-        return user.cannot_change_password
+    async def _password_flags(
+        self, row: dict[str, str], user: AdUserCache
+    ) -> tuple[bool, bool, bool]:
+        """``(force_change, cannot_change, never_expires)`` einer Passwort-Zeile.
+
+        Leere Spalte: force_change = nein; die beiden anderen wie die
+        Zielgruppe des Kontos, sonst wie bisher. ``ValueError`` bei Unsinn.
+        """
+        tpl = (
+            await self.session.get(GroupTemplate, user.group_template_id)
+            if user.group_template_id is not None
+            else None
+        )
+        cannot = tpl.cannot_change_password if tpl else user.cannot_change_password
+        never = tpl.password_never_expires if tpl else user.password_never_expires
+        return (
+            _flag(row, "force_change", False),
+            _flag(row, "cannot_change_password", cannot),
+            _flag(row, "password_never_expires", never),
+        )
 
     async def _classify_password(
         self, school_id: int, row: dict[str, str], password: str
@@ -1182,10 +1196,7 @@ class ImportService:
         if not user.enabled:
             return IMPORT_ACTION_ERROR, [f"account {upn!r} is disabled"]
         try:
-            force_change = _flag(row, "force_change", False)
-            cannot_change = _flag(
-                row, "cannot_change_password", await self._cannot_change_default(user)
-            )
+            force_change, cannot_change, never_expires = await self._password_flags(row, user)
         except ValueError as exc:
             return IMPORT_ACTION_ERROR, [str(exc)]
         if force_change and cannot_change:
@@ -1200,10 +1211,15 @@ class ImportService:
         notes: list[str] = []
         if not (await self._app_settings_row()).password_store_enabled:
             notes.append("password vault is turned off: password is set in AD only")
-        elif force_change or not cannot_change:
+        elif not password_stays(
+            force_change=force_change,
+            cannot_change_password=cannot_change,
+            password_never_expires=never_expires,
+        ):
             notes.append(
-                "not stored in the vault: the account may change its password "
-                "(set cannot_change_password=true or assign a Zielgruppe)"
+                "not stored in the vault: only with force_change=false, "
+                "cannot_change_password=true and password_never_expires=true "
+                "(set the columns or assign a Zielgruppe)"
             )
         return IMPORT_ACTION_UPDATE, notes
 
@@ -1533,7 +1549,14 @@ class ImportService:
         )
 
         store_pw, password_enc = self._vault_columns(
-            cannot_change_password and (tpl is None or tpl.store_password), password, settings_row
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
         )
         self.session.add(
             AdUserCache(
@@ -1645,7 +1668,14 @@ class ImportService:
         )
 
         store_pw, password_enc = self._vault_columns(
-            cannot_change_password and (tpl is None or tpl.store_password), password, settings_row
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
         )
         self.session.add(
             AdUserCache(
@@ -1765,7 +1795,14 @@ class ImportService:
                 logger.exception("company import: failed to set proxyAddresses for %s", upn)
 
         store_pw, password_enc = self._vault_columns(
-            cannot_change_password and (tpl is None or tpl.store_password), password, settings_row
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
         )
         self.session.add(
             AdUserCache(
@@ -1831,10 +1868,7 @@ class ImportService:
         user = await self._password_target(school_id, upn)
         if user is None or not user.enabled:
             raise ValueError(f"account {upn!r} not found at this school")
-        force_change = _flag(row, "force_change", False)
-        cannot_change = _flag(
-            row, "cannot_change_password", await self._cannot_change_default(user)
-        )
+        force_change, cannot_change, never_expires = await self._password_flags(row, user)
         user_dn = await self.ad.find_user_dn(user.ad_object_guid)
         if not user_dn:
             raise ValueError("account not found in AD")
@@ -1849,10 +1883,17 @@ class ImportService:
         if user.cannot_change_password != cannot_change:
             await self.ad.set_cannot_change_password(user_dn=user_dn, value=cannot_change)
             user.cannot_change_password = cannot_change
+        if user.password_never_expires != never_expires:
+            await self.ad.set_password_never_expires(user_dn=user_dn, value=never_expires)
+            user.password_never_expires = never_expires
 
         # Tresor nur, wenn das Passwort so bleibt (gleiche Regel wie überall).
         settings_row = await self._app_settings_row()
-        store = bool(settings_row.password_store_enabled) and cannot_change and not force_change
+        store = bool(settings_row.password_store_enabled) and password_stays(
+            force_change=force_change,
+            cannot_change_password=cannot_change,
+            password_never_expires=never_expires,
+        )
         vault = PasswordVaultService(self.session, self.settings)
         if store:
             await vault.store(user.ad_object_guid, str(password))
@@ -1873,6 +1914,7 @@ class ImportService:
                 "upn": upn,
                 "force_change": force_change,
                 "cannot_change": cannot_change,
+                "never_expires": never_expires,
                 "stored": store,
             },
         )

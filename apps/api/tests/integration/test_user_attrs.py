@@ -67,6 +67,7 @@ async def _seed_user(
     kind: str = "teacher",
     upn: str = "old@schule.example.ch",
     cannot_change_password: bool = False,
+    password_never_expires: bool = False,
     store_password: bool = False,
 ) -> None:
     db_session.add(
@@ -79,6 +80,7 @@ async def _seed_user(
             kind=kind,
             enabled=True,
             cannot_change_password=cannot_change_password,
+            password_never_expires=password_never_expires,
             store_password=store_password,
         )
     )
@@ -158,14 +160,17 @@ class TestCredentialPdf:
         school_a: int,
         mock_ad: AdClient,
     ) -> None:
-        # store_password + global vault on: first PDF sets & stores a password,
-        # the second reuses the stored one without touching AD again.
+        # store_password + global vault on + festes Passwort (kann nicht
+        # ändern, läuft nie ab): first PDF sets & stores a password, the
+        # second reuses the stored one without touching AD again.
         await _enable_vault(db_session)
         await _seed_user(
             db_session,
             school_id=school_a,
             guid=STUDENT_GUID,
             kind="student",
+            cannot_change_password=True,
+            password_never_expires=True,
             store_password=True,
         )
         app.dependency_overrides[get_ad_client] = lambda: mock_ad

@@ -57,6 +57,7 @@ function createErrorKey(err: ApiError): string {
   if (err.code === "group_template_not_for_school")
     return "admin.user_new.err_template_not_for_school";
   if (err.code === "ou_outside_school") return "admin.user_new.err_ou_outside_school";
+  if (err.code === "ou_required_without_school") return "admin.user_new.err_ou_required";
   if (err.status === 409) return "admin.user_new.err_ou_not_configured";
   if (err.status === 503) return "admin.user_new.err_ad";
   if (err.status === 422) return "admin.user_new.err_invalid";
@@ -92,10 +93,14 @@ function NewUserPage(): JSX.Element {
   const [classWarn, setClassWarn] = useState(false);
 
   // Zielrollen (group templates) offered at the picked Standort. Optional: when
-  // none is chosen the school's default provisioning groups apply.
+  // none is chosen the school's default provisioning groups apply. Ohne
+  // Standort nur globale Zielgruppen mit eigener Ziel-OU — sonst gäbe es
+  // keinen Ablageort (das Backend prüft dasselbe).
   const selectedSchoolId = form.school_id ? Number(form.school_id) : undefined;
-  const templatesQ = useGroupTemplates(selectedSchoolId, !!selectedSchoolId);
-  const templates = templatesQ.data ?? [];
+  const templatesQ = useGroupTemplates(selectedSchoolId);
+  const templates = (templatesQ.data ?? []).filter(
+    (tpl) => selectedSchoolId !== undefined || (tpl.school_ids.length === 0 && !!tpl.ad_ou),
+  );
 
   // Company provisions a single "company" category into the org unit's company
   // OU; school offers teacher + student Zyklen. Students carry a grade + class.
@@ -108,6 +113,8 @@ function NewUserPage(): JSX.Element {
     : null;
   const ouKey: AdUserOuKey = isCompany ? "company" : (templateKind ?? form.ou_key);
   const isStudent = !isCompany && ouKey !== "teacher";
+  // Ohne Standort braucht es eine Zielgruppe mit eigener Ziel-OU.
+  const placeable = !!form.school_id || !!selectedTemplate?.ad_ou;
 
   // Zielgruppe gewählt → ihre Konto-Einstellungen vorbelegen (übersteuerbar).
   function pickTemplate(id: string): void {
@@ -160,7 +167,7 @@ function NewUserPage(): JSX.Element {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
-    if (!form.school_id) return;
+    if (!placeable) return;
     if (useDomainPicker && !form.upn_local.trim()) return;
     setCreated(null);
     setPdfState("idle");
@@ -175,7 +182,7 @@ function NewUserPage(): JSX.Element {
         user_principal_name: composedUpn,
         mail: form.mail || null,
         ou_key: ouKey,
-        school_id: Number(form.school_id),
+        school_id: form.school_id ? Number(form.school_id) : null,
         group_template_id: form.group_template_id ? Number(form.group_template_id) : null,
         force_change: form.force_change,
         cannot_change_password: form.cannot_change_password,
@@ -186,7 +193,7 @@ function NewUserPage(): JSX.Element {
         onSuccess: async (res) => {
           // Optional class membership (students only) — reuse the class-roster
           // endpoint. A membership failure must not hide the created password.
-          if (isStudent && form.class_id) {
+          if (isStudent && form.school_id && form.class_id) {
             try {
               await apiFetch(`/classes/${form.class_id}/students`, {
                 method: "POST",
@@ -372,13 +379,18 @@ function NewUserPage(): JSX.Element {
                   }))
                 }
               >
-                <option value="">{tt("admin.user_new.unit_placeholder")}</option>
+                <option value="">{tt("admin.user_new.unit_none")}</option>
                 {schoolList.map((s) => (
                   <option key={s.id} value={String(s.id)}>
                     {s.name}
                   </option>
                 ))}
               </select>
+              {form.school_id ? null : (
+                <p className="text-xs text-muted-foreground">
+                  {tt("admin.user_new.unit_none_hint")}
+                </p>
+              )}
             </div>
             <div className="space-y-1">
               <Label htmlFor="ziel">{t("admin.user_new.group_template")}</Label>
@@ -386,7 +398,6 @@ function NewUserPage(): JSX.Element {
                 id="ziel"
                 className={selectClasses}
                 value={form.group_template_id}
-                disabled={!form.school_id}
                 onChange={(e) => pickTemplate(e.target.value)}
               >
                 <option value="">{t("admin.user_new.group_template_default")}</option>
@@ -430,7 +441,7 @@ function NewUserPage(): JSX.Element {
               ) : null}
             </div>
 
-            {isStudent ? (
+            {isStudent && form.school_id ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="grade">{t("admin.user_new.jahrgangsstufe")}</Label>
@@ -492,7 +503,7 @@ function NewUserPage(): JSX.Element {
             <Button
               type="submit"
               disabled={
-                create.isPending || !form.school_id || (useDomainPicker && !form.upn_local.trim())
+                create.isPending || !placeable || (useDomainPicker && !form.upn_local.trim())
               }
             >
               {create.isPending ? t("common.loading") : t("admin.user_new.submit")}

@@ -30,7 +30,7 @@ from magister_api.models.user_preferences import UserPreference
 from magister_api.repositories.ad_users import AdUserCacheSyncRepository
 from magister_api.repositories.group_templates import GroupTemplateRepository
 from magister_api.services.devices import release_person_devices
-from magister_api.services.password_vault import PasswordVaultService
+from magister_api.services.password_vault import PasswordVaultService, password_stays
 
 # Categories offered to the admin. Determine both the target OU and the default
 # AD groups. Students are split by Zyklus (1/2/3); the OU still only has two
@@ -91,18 +91,18 @@ class UserAdminService:
         )
         return ou, groups
 
-    async def _template(self, template_id: int, school_id: int) -> GroupTemplate:
+    async def _template(self, template_id: int, school_id: int | None) -> GroupTemplate:
         """Die gewählte Zielgruppe, geprüft gegen den Ziel-Standort.
 
         Sie muss aktiv sein und an ``school_id`` angeboten werden — dort
-        verknüpft oder global (ohne Standort-Bindung).
+        verknüpft oder global (ohne Standort-Bindung). Ohne Standort nur global.
         """
         repo = GroupTemplateRepository(self.session)
         tpl = await repo.get(template_id)
         if tpl is None or tpl.status != "active":
             raise UserAdminError("group_template_not_found")
         links = (await repo.school_ids_for([tpl.id])).get(tpl.id, [])
-        if links and school_id not in links:
+        if links and (school_id is None or school_id not in links):
             raise UserAdminError("group_template_not_for_school")
         return tpl
 
@@ -127,7 +127,7 @@ class UserAdminService:
         user_principal_name: str,
         mail: str | None,
         ou_key: str,
-        school_id: int,
+        school_id: int | None,
         group_template_id: int | None = None,
         display_name: str | None = None,
         force_change: bool | None = None,
@@ -139,8 +139,8 @@ class UserAdminService:
         ip: str | None,
         request_id: str,
     ) -> CreatedUser:
-        school = await self.session.get(School, school_id)
-        if school is None:
+        school = await self.session.get(School, school_id) if school_id is not None else None
+        if school_id is not None and school is None:
             raise UserAdminError("school_not_found")
         # Die Zielgruppe bestimmt Kontoart (und damit die OU), Gruppen,
         # Passwortart und die Konto-Einstellungen. Ohne Zielgruppe gilt die
@@ -156,10 +156,14 @@ class UserAdminService:
             raise UserAdminError("invalid_ou_choice")
         if tpl is not None and tpl.ad_ou:
             # Eigene Ziel-OU der Zielgruppe (nur bei freier Kontoart gesetzt):
-            # die OU des Standorts braucht es dann nicht.
-            if not ou_within_school(tpl.ad_ou, school.scope_short):
+            # die OU des Standorts braucht es dann nicht. Mit Standort muss sie
+            # in ihm liegen, sonst verlöre der nächste Abgleich die Zuordnung.
+            if school is not None and not ou_within_school(tpl.ad_ou, school.scope_short):
                 raise UserAdminError("ou_outside_school")
             ou_dn, group_dns = tpl.ad_ou, []
+        elif school is None:
+            # Ohne Standort gibt es keine Standort-OU — nur die der Zielgruppe.
+            raise UserAdminError("ou_required_without_school")
         else:
             ou_dn, group_dns = await self._provision_target(ou_key, school)
         if tpl is not None:
@@ -229,9 +233,17 @@ class UserAdminService:
         if cache is not None:
             cache.cannot_change_password = cannot_change_password
             cache.group_template_id = tpl.id if tpl is not None else None
-            # Tresor nur für "darf nicht ändern": ein änderbares Passwort wäre
-            # in der Klassenliste bald falsch (wie beim Import).
-            if tpl is not None and tpl.store_password and cannot_change_password:
+            # Tresor nur, wenn das Passwort so bleibt: ein änderbares oder
+            # ablaufendes wäre in der Klassenliste bald falsch (wie beim Import).
+            if (
+                tpl is not None
+                and tpl.store_password
+                and password_stays(
+                    force_change=force_change,
+                    cannot_change_password=cannot_change_password,
+                    password_never_expires=password_never_expires,
+                )
+            ):
                 vault = PasswordVaultService(self.session, self.settings)
                 if await vault.enabled():
                     cache.store_password = True
@@ -239,8 +251,10 @@ class UserAdminService:
                     await vault.store(guid, password)
                     stored = True
             # We know the target school explicitly — set it directly rather than
-            # relying on the OU/scope_short resolver.
-            cache.school_id = school_id
+            # relying on the OU/scope_short resolver. Ohne Standort bleibt, was
+            # der Resolver aus der OU liest — genau das tut auch der Abgleich.
+            if school_id is not None:
+                cache.school_id = school_id
             if kind == "student" and jahrgangsstufe is not None:
                 cache.jahrgangsstufe = jahrgangsstufe
             await self.session.flush()

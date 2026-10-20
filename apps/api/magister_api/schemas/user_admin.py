@@ -15,7 +15,9 @@ class AdUserCreateRequest(BaseModel):
     mail: str | None = Field(default=None, max_length=320)
     ou_key: str = Field(description="teacher | student_zyklus1 | student_zyklus2 | student_zyklus3")
     # Target school — its per-school AD config drives the OU + default groups.
-    school_id: int = Field(ge=1)
+    # Optional: ohne Standort braucht es eine globale Zielgruppe mit eigener
+    # Ziel-OU (z. B. "Sonstige"); das Konto gehört dann keinem Standort.
+    school_id: int | None = Field(default=None, ge=1)
     # Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortart und
     # Konto-Einstellungen fest (``ou_key`` wird dann von ihr übersteuert). Muss
     # an ``school_id`` angeboten werden (verknüpft oder global).

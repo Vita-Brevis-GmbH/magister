@@ -32,7 +32,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.devices import DeviceRepository
-from magister_api.services.password_vault import PasswordVaultService
+from magister_api.services.password_vault import PasswordVaultService, password_stays
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "letters" / "templates"
 
@@ -132,7 +132,15 @@ class CredentialPdfService:
         #  3) cannot-change user → reset to a readable PW + print it;
         #  4) otherwise → mask.
         vault = PasswordVaultService(self.session, self.settings)
-        store_active = bool(target.store_password) and await vault.enabled()
+        store_active = (
+            bool(target.store_password)
+            and password_stays(
+                force_change=False,
+                cannot_change_password=target.cannot_change_password,
+                password_never_expires=target.password_never_expires,
+            )
+            and await vault.enabled()
+        )
         do_reset = False
         used_stored = False
         shown_password: str | None = None

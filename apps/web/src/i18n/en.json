@@ -314,7 +314,8 @@
       "groups_refresh": "Refresh from AD",
       "groups_reapply": "Re-apply rights",
       "groups_action_failed": "Action failed.",
-      "groups_reapply_partial": "{{count}} group(s) could not be set in AD."
+      "groups_reapply_partial": "{{count}} group(s) could not be set in AD.",
+      "error_store_requires_fixed": "Storing the password requires “User can change password” off and “Password never expires” on."
     },
     "field": {
       "display_name": "Display name",
@@ -344,7 +345,7 @@
       "password_never_expires": "Password never expires",
       "password_never_expires_hint": "Sets the AD DONT_EXPIRE_PASSWD flag.",
       "store_password": "Store password in Magister",
-      "store_password_hint": "Encrypted (server key). When handing out credentials this password is used instead of a new one. Requires the global switch in Settings.",
+      "store_password_hint": "Only for a fixed password: “User can change password” off and “Password never expires” on. Encrypted (server key). When issuing credentials this password is used instead of a new one. Requires the global switch in Settings.",
       "ad_groups": "AD groups",
       "can_change_password": "User can change password",
       "mail_aliases": "Additional addresses (aliases)",
@@ -372,7 +373,8 @@
       "attrs_apply": "Apply",
       "tri_keep": "unchanged",
       "tri_yes": "Yes",
-      "tri_no": "No"
+      "tri_no": "No",
+      "store_hint": "Storing the password also sets “User cannot change password” and “Password never expires” – otherwise the stored password would soon be wrong."
     },
     "devices": {
       "section_title": "Devices",
@@ -682,7 +684,10 @@
       "ou_of_template": "Created in the target group's OU: {{ou}}",
       "ou_from_template": "Set by the target group.",
       "download_pdf": "Download sign-in PDF",
-      "pdf_failed": "The sign-in PDF could not be created."
+      "pdf_failed": "The sign-in PDF could not be created.",
+      "unit_none": "– no {{unit}} –",
+      "unit_none_hint": "Without a {{unit}} only with a global target group that has its own target OU (e.g. “Other”). The account then belongs to no {{unit}} – only admins see it.",
+      "err_ou_required": "Without a site, a target group with its own target OU is required."
     },
     "user_settings": {
       "title": "User configuration",
@@ -797,7 +802,7 @@
     "kind_company_users": "Employees",
     "kind_company_users_desc": "Create new AD accounts for employees (in the configured company OU). Columns: given_name, surname, display_name, upn, sam_account_name, force_change, mail (blank = UPN), mail_aliases (extra addresses, semicolon-separated), cannot_change_password, password_never_expires. Optional: zielgruppe (target group name; blank = the default target group of the account type or cycle). Blank setting columns take the target group's defaults.",
     "kind_passwords": "Passwords of existing accounts",
-    "kind_passwords_desc": "Take over known passwords of existing accounts (e.g. from an old setup): Magister sets them in AD and stores them in the password vault so the class password lists work. Columns: upn, password. Optional: force_change (blank = no), cannot_change_password (blank = as the account's target group, otherwise unchanged). A password goes into the vault only if the account cannot change it and the vault is turned on. The passwords are kept encrypted until applied and deleted afterwards; AD checks their strength."
+    "kind_passwords_desc": "Take over known passwords of existing accounts (e.g. from an old setup): Magister sets them in AD and stores them in the password vault so the class password lists work. Columns: upn, password. Optional: force_change (blank = no), cannot_change_password and password_never_expires (blank = as the account's target group, otherwise unchanged). A password goes into the vault only if it is fixed – force_change no, cannot_change_password yes, password_never_expires yes – and the vault is on. The passwords are kept encrypted until applied and deleted afterwards; AD checks their strength."
   },
   "privacy": {
     "section_title": "Data export (revDSG Art. 25)",
@@ -1344,9 +1349,9 @@
     "kind_label": "Account type (determines the OU)",
     "kind_none": "No fixed account type – choose when creating",
     "ou_label": "Target OU (optional)",
-    "ou_placeholder": "OU=Guests,OU=CODE,DC=school,DC=local",
+    "ou_placeholder": "OU=Other,OU=CODE,DC=school,DC=local",
     "ou_hint": "New accounts of this target group are created in this OU. Blank = the {{unit}}'s OU for the account type chosen at creation. The OU must lie inside the {{unit}} (an OU with its short code in the path), otherwise the AD sync assigns the account to no {{unit}}.",
-    "ou_invalid": "Please enter a full path, e.g. OU=Guests,OU=CODE,DC=school,DC=local.",
+    "ou_invalid": "Please enter a full path, e.g. OU=Other,OU=CODE,DC=school,DC=local.",
     "ou_outside": "Not inside: {{names}}. Creating accounts with this target group is refused there.",
     "ou_badge": "OU {{ou}}",
     "profile_label": "Password type",
@@ -1362,14 +1367,15 @@
     "opt_can_change": "User can change password",
     "opt_never_expires": "Password never expires",
     "opt_store": "Store password in Magister (class password list)",
-    "opt_store_hint": "Only takes effect if the user cannot change the password and the password vault is enabled.",
+    "opt_store_hint": "Only possible when “Force password change at first sign-in” and “User can change password” are off and “Password never expires” is on – otherwise the stored password would soon be wrong. The password vault must be enabled.",
     "badge_stored": "Password stored",
     "defaults_title": "Default target groups",
     "defaults_desc": "Adds the missing default target groups (student cycle 1–3, teacher) for a {{unit}}. Existing ones stay unchanged.",
     "defaults_button": "Add missing",
     "defaults_done": "Added: {{names}}",
     "defaults_none": "All default target groups exist.",
-    "defaults_failed": "Adding failed."
+    "defaults_failed": "Adding failed.",
+    "schools_label_optional": "{{unit_plural}} (optional)"
   },
   "managed": {
     "how": "If you need a change, contact your Vita Brevis representative. What applies here is visible in the audit log under “platform_settings_reconciled”.",

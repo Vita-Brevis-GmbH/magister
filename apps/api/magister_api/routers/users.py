@@ -56,6 +56,7 @@ from magister_api.services.user_attrs import (
     AdminOnlyFieldError,
     DomainAllowlistEmptyError,
     DomainNotAllowedError,
+    StorePasswordNotAllowedError,
     UpnConflictError,
     UserAttributesService,
     UserNotInAdError,
@@ -256,6 +257,11 @@ async def patch_user_attributes(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"admin_only_field:{exc}",
         ) from exc
+    except StorePasswordNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="store_password_requires_fixed_password",
+        ) from exc
     except DomainAllowlistEmptyError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -331,6 +337,10 @@ async def rename_apply(
         raise HTTPException(status_code=422, detail=f"rename_invalid:{exc}") from exc
     except AdminOnlyFieldError as exc:
         raise HTTPException(status_code=403, detail=f"admin_only_field:{exc}") from exc
+    except StorePasswordNotAllowedError as exc:
+        raise HTTPException(
+            status_code=422, detail="store_password_requires_fixed_password"
+        ) from exc
     except DomainAllowlistEmptyError as exc:
         raise HTTPException(status_code=422, detail=f"mail_domains_not_configured:{exc}") from exc
     except DomainNotAllowedError as exc:

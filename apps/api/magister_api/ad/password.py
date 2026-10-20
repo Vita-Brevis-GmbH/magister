@@ -153,6 +153,19 @@ def generate_for_profile(profile: str | None) -> str:
     return generate_password()
 
 
+def password_stays(
+    *, force_change: bool, cannot_change_password: bool, password_never_expires: bool
+) -> bool:
+    """Bleibt ein gesetztes Passwort gültig? Nur dann legt Magister es ab.
+
+    Alle drei müssen stimmen: keine erzwungene Änderung bei der ersten
+    Anmeldung, der Benutzer kann es nicht ändern, und es läuft nie ab. Sonst
+    stünde in der Klassen-Passwortliste bald ein falsches Passwort — oder ein
+    Konto mit abgelaufenem Passwort, das es nicht ändern darf, wäre gesperrt.
+    """
+    return cannot_change_password and password_never_expires and not force_change
+
+
 def passes_default_complexity(pw: str) -> bool:
     """True if ``pw`` satisfies AD's default 12+chars, 3-of-4-classes policy."""
     return len(pw) >= MIN_LENGTH and count_charset_classes(pw) >= 3
@@ -169,4 +182,5 @@ __all__ = [
     "generate_readable_password",
     "generate_teacher_password",
     "passes_default_complexity",
+    "password_stays",
 ]

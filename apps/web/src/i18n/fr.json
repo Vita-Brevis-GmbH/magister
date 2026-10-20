@@ -317,7 +317,8 @@
       "groups_refresh": "Actualiser depuis l’AD",
       "groups_reapply": "Réattribuer les droits",
       "groups_action_failed": "Échec de l’action.",
-      "groups_reapply_partial": "{{count}} groupe(s) n’ont pas pu être définis dans l’AD."
+      "groups_reapply_partial": "{{count}} groupe(s) n’ont pas pu être définis dans l’AD.",
+      "error_store_requires_fixed": "L'enregistrement du mot de passe exige « L'utilisateur peut changer le mot de passe » désactivé et « Le mot de passe n'expire jamais » activé."
     },
     "field": {
       "display_name": "Nom affiché",
@@ -347,7 +348,7 @@
       "password_never_expires": "Le mot de passe n'expire jamais",
       "password_never_expires_hint": "Active l'indicateur AD DONT_EXPIRE_PASSWD.",
       "store_password": "Enregistrer le mot de passe dans Magister",
-      "store_password_hint": "Chiffré (clé serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'activation globale dans les Paramètres.",
+      "store_password_hint": "Uniquement pour un mot de passe fixe : « L'utilisateur peut changer le mot de passe » désactivé et « Le mot de passe n'expire jamais » activé. Chiffré (clé du serveur). Lors de la remise des identifiants, ce mot de passe est utilisé au lieu d'un nouveau. Nécessite l'autorisation globale dans les paramètres.",
       "ad_groups": "Groupes AD",
       "can_change_password": "L'utilisateur peut changer le mot de passe",
       "mail_aliases": "Adresses supplémentaires (alias)",
@@ -375,7 +376,8 @@
       "attrs_apply": "Appliquer",
       "tri_keep": "inchangé",
       "tri_yes": "Oui",
-      "tri_no": "Non"
+      "tri_no": "Non",
+      "store_hint": "Enregistrer le mot de passe active aussi « L'utilisateur ne peut pas changer le mot de passe » et « Le mot de passe n'expire jamais » – sinon le mot de passe enregistré serait bientôt faux."
     },
     "devices": {
       "section_title": "Appareils",
@@ -685,7 +687,10 @@
       "ou_of_template": "Créé dans l'OU du groupe cible : {{ou}}",
       "ou_from_template": "Défini par le groupe cible.",
       "download_pdf": "Télécharger le PDF de connexion",
-      "pdf_failed": "Le PDF de connexion n’a pas pu être créé."
+      "pdf_failed": "Le PDF de connexion n’a pas pu être créé.",
+      "unit_none": "– sans {{unit}} –",
+      "unit_none_hint": "Sans {{unit}}, uniquement avec un groupe cible global disposant de sa propre OU cible (p. ex. « Autres »). Le compte n'appartient alors à aucun {{unit}} – seuls les admins le voient.",
+      "err_ou_required": "Sans site, il faut un groupe cible avec sa propre OU cible."
     },
     "user_settings": {
       "title": "Configuration utilisateur",
@@ -800,7 +805,7 @@
     "kind_company_users": "Collaborateurs",
     "kind_company_users_desc": "Créer de nouveaux comptes AD pour les collaborateurs (dans l'OU d'entreprise configurée). Colonnes : given_name, surname, display_name, upn, sam_account_name, force_change, mail (vide = UPN), mail_aliases (adresses supplémentaires, séparées par des points-virgules), cannot_change_password, password_never_expires. Facultatif : zielgruppe (nom du groupe cible ; vide = groupe cible standard du type de compte ou du cycle). Les colonnes de paramètres vides reprennent les valeurs du groupe cible.",
     "kind_passwords": "Mots de passe de comptes existants",
-    "kind_passwords_desc": "Reprendre les mots de passe connus de comptes existants (p. ex. d'une ancienne installation) : Magister les définit dans l'AD et les enregistre dans le coffre à mots de passe pour que les listes de mots de passe par classe fonctionnent. Colonnes : upn, password. Facultatif : force_change (vide = non), cannot_change_password (vide = selon le groupe cible du compte, sinon inchangé). Un mot de passe n'est enregistré dans le coffre que si le compte ne peut pas le modifier et que le coffre est activé. Les mots de passe sont conservés chiffrés jusqu'à l'application, puis supprimés ; l'AD vérifie leur robustesse."
+    "kind_passwords_desc": "Reprendre les mots de passe connus de comptes existants (p. ex. d'une ancienne installation) : Magister les définit dans l'AD et les enregistre dans le coffre pour que les listes de mots de passe par classe fonctionnent. Colonnes : upn, password. Facultatif : force_change (vide = non), cannot_change_password et password_never_expires (vide = selon le groupe cible du compte, sinon inchangé). Un mot de passe n'est enregistré dans le coffre que s'il est fixe – force_change non, cannot_change_password oui, password_never_expires oui – et que le coffre est activé. Les mots de passe sont conservés chiffrés jusqu'à l'application, puis supprimés ; l'AD vérifie leur robustesse."
   },
   "privacy": {
     "section_title": "Export de données (LPD art. 25)",
@@ -1347,9 +1352,9 @@
     "kind_label": "Type de compte (détermine l’OU)",
     "kind_none": "Pas de type fixe – à choisir à la création",
     "ou_label": "OU cible (facultatif)",
-    "ou_placeholder": "OU=Invites,OU=CODE,DC=ecole,DC=local",
+    "ou_placeholder": "OU=Autres,OU=CODE,DC=ecole,DC=local",
     "ou_hint": "Les nouveaux comptes de ce groupe cible sont créés dans cette OU. Vide = l'OU du {{unit}} pour le type de compte choisi à la création. L'OU doit se trouver dans le {{unit}} (une OU avec son code dans le chemin), sinon la synchronisation AD n'attribue le compte à aucun {{unit}}.",
-    "ou_invalid": "Veuillez indiquer un chemin complet, p. ex. OU=Invites,OU=CODE,DC=ecole,DC=local.",
+    "ou_invalid": "Veuillez indiquer un chemin complet, p. ex. OU=Autres,OU=CODE,DC=ecole,DC=local.",
     "ou_outside": "Hors de : {{names}}. La création de comptes avec ce groupe cible y est refusée.",
     "ou_badge": "OU {{ou}}",
     "profile_label": "Type de mot de passe",
@@ -1365,14 +1370,15 @@
     "opt_can_change": "L’utilisateur peut changer le mot de passe",
     "opt_never_expires": "Le mot de passe n’expire jamais",
     "opt_store": "Enregistrer le mot de passe dans Magister (liste de la classe)",
-    "opt_store_hint": "Effectif uniquement si l’utilisateur ne peut pas changer le mot de passe et que le coffre est activé.",
+    "opt_store_hint": "Possible uniquement si « Forcer le changement à la première connexion » et « L'utilisateur peut changer le mot de passe » sont désactivés et « Le mot de passe n'expire jamais » est activé – sinon le mot de passe enregistré serait bientôt faux. Le coffre doit être activé.",
     "badge_stored": "Mot de passe enregistré",
     "defaults_title": "Groupes cibles standard",
     "defaults_desc": "Ajoute les groupes cibles standard manquants (élève cycle 1–3, enseignant·e) pour un {{unit}}. Les existants ne changent pas.",
     "defaults_button": "Ajouter les manquants",
     "defaults_done": "Ajoutés : {{names}}",
     "defaults_none": "Tous les groupes cibles standard existent.",
-    "defaults_failed": "L’ajout a échoué."
+    "defaults_failed": "L’ajout a échoué.",
+    "schools_label_optional": "{{unit_plural}} (facultatif)"
   },
   "managed": {
     "how": "Si vous avez besoin d'une modification, adressez-vous à votre interlocuteur chez Vita Brevis. Ce qui s'applique ici est visible dans le journal d'audit sous « platform_settings_reconciled ».",
