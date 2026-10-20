@@ -167,37 +167,63 @@ def _key_check(tenant: Tenant, registry: TenantRegistry, settings: Settings) -> 
     return Check("tenant_key", OK, "vorhanden")
 
 
-def _sync_check(has_state: bool, last_full: datetime | None, settings: Settings) -> Check:
-    """Alter des letzten vollständigen Abgleichs.
+def _minutes_since(when: datetime) -> float:
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - when).total_seconds() / 60
+
+
+def _sync_check(
+    has_state: bool,
+    last_full: datetime | None,
+    settings: Settings,
+    last_run: datetime | None = None,
+) -> Check:
+    """Wann wurde zuletzt abgeglichen — und wann zuletzt vollständig?
+
+    Zwei Takte, zwei Massstäbe: inkrementell läuft alle
+    ``ad_sync_interval_minutes``, vollständig alle ``ad_full_sync_hours``
+    (der findet Löschungen). Früher wurde der *vollständige* gegen das
+    *Intervall* gemessen — und die Prüfung warnte nach 45 Minuten bei jedem
+    Kunden, dessen Abgleich tadellos lief.
 
     Nimmt Werte und kein ORM-Objekt: alles, was hier ankommt, wurde in der
     Sitzung gelesen, die es noch gab (siehe `_database_checks`).
     """
     if not has_state:
         return Check("ad_sync", WARNING, "noch nie gelaufen")
-    last = last_full
-    if last is None:
+    if last_full is None:
         return Check("ad_sync", WARNING, "noch kein vollständiger Abgleich")
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=UTC)
-    age = datetime.now(UTC) - last
-    minutes = age.total_seconds() / 60
+    full_minutes = _minutes_since(last_full)
+    run_minutes = _minutes_since(last_run) if last_run is not None else full_minutes
+    run_minutes = min(run_minutes, full_minutes)
     interval = max(1, settings.ad_sync_interval_minutes)
-    if age.total_seconds() >= SYNC_CRITICAL_HOURS * 3600:
+    if run_minutes >= SYNC_CRITICAL_HOURS * 60:
         return Check(
             "ad_sync",
             CRITICAL,
-            f"letzter vollständiger Abgleich vor {minutes / 60:.0f} Stunden — "
+            f"letzter Abgleich vor {run_minutes / 60:.0f} Stunden — "
             "neue Konten kommen nicht an, ausgetretene stehen noch in den Listen",
         )
-    if minutes >= SYNC_MISSED_WARNING * max(interval, 1):
+    if run_minutes >= SYNC_MISSED_WARNING * interval:
         return Check(
             "ad_sync",
             WARNING,
-            f"letzter vollständiger Abgleich vor {minutes:.0f} Minuten "
-            f"(Intervall {interval} Minuten)",
+            f"letzter Abgleich vor {run_minutes:.0f} Minuten (Intervall {interval} Minuten)",
         )
-    return Check("ad_sync", OK, f"vor {minutes:.0f} Minuten")
+    full_hours = settings.ad_full_sync_hours
+    if full_hours > 0 and full_minutes >= full_hours * 60 + SYNC_MISSED_WARNING * interval:
+        return Check(
+            "ad_sync",
+            WARNING,
+            f"letzter vollständiger Abgleich vor {full_minutes / 60:.0f} Stunden "
+            f"(Takt {full_hours} Stunden) — Löschungen im AD kommen erst damit an",
+        )
+    return Check(
+        "ad_sync",
+        OK,
+        f"vor {run_minutes:.0f} Minuten (vollständig vor {full_minutes / 60:.0f} Stunden)",
+    )
 
 
 async def _database_checks(
@@ -233,11 +259,20 @@ async def _database_checks(
         # der Entwicklungsumgebung aufgefallen, sobald ein Kunde zum ersten
         # Mal abgeglichen hatte; vorher gab es keine Zeile und damit keinen
         # Zugriff.
-        row = (await session.execute(select(AdSyncState.last_full_sync_at).limit(1))).first()
+        row = (
+            await session.execute(
+                select(AdSyncState.last_full_sync_at, AdSyncState.updated_at).limit(1)
+            )
+        ).first()
         await session.rollback()
     return [
         Check("database", OK, f"erreichbar als {tenant.db_role or 'Verbindungsrolle'}"),
-        _sync_check(row is not None, None if row is None else row[0], settings),
+        _sync_check(
+            row is not None,
+            None if row is None else row[0],
+            settings,
+            None if row is None else row[1],
+        ),
     ]
 
 

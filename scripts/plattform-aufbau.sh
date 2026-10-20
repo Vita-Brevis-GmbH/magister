@@ -950,7 +950,10 @@ konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
 }
 
 # Die Kunden der Konsole, eine Zeile je Kunde:
-#   slug id dsn_ref db_role schema key_id status schema_version
+#   slug id dsn_ref db_role schema key_id status schema_version hostname
+# Der Hostname steht als letztes Feld: er ist frei wählbar und muss nicht
+# <slug>.<domäne> lauten (hwb unter gmp.…). Wer prüft, ob ein Kunde
+# antwortet, fragt diesen Namen — sonst prüft er den falschen Kunden.
 # Scheitert laut (HTTP-Code und Anfang der Antwort), statt eine leere Liste
 # zu liefern. EIN Ort, der die Antwort zerlegt: vorher taten es drei, und
 # zwei davon schnitten den HTTP-Code falsch ab (`echo` hängt ein Zeilenende
@@ -966,7 +969,7 @@ if code != "200":
 for t in json.loads(rumpf):
     print(t["slug"], t["id"], t["dsn_ref"], t["db_role"], t["schema_name"],
           t.get("audit_key_id") or t["slug"] + "-v1", t["status"],
-          t.get("schema_version") or "-")
+          t.get("schema_version") or "-", t.get("hostname") or "-")
 ' "$antwort"
 }
 
@@ -1285,7 +1288,7 @@ namen_der_plattform() {
   # Ist die Konsole nicht erreichbar, werden nur die beiden Plattformnamen
   # geprüft — ein Kundenname aus einer Liste, die es nicht gibt, wäre geraten.
   if liste="$(konsole_kunden 2>/dev/null)" && [ -n "$liste" ]; then
-    awk -v d="$DOMAIN" 'NF {print $1 "." d}' <<<"$liste"
+    awk -v d="$DOMAIN" 'NF {print (NF >= 9 && $9 != "-") ? $9 : $1 "." d}' <<<"$liste"
   fi
 }
 
@@ -1405,26 +1408,31 @@ cmd_status() {
   dc_konsole ps --format '  konsole  {{.Service}}  {{.Status}}' 2>/dev/null || true
   dc_daten ps --format '  daten    {{.Service}}  {{.Status}}' 2>/dev/null || true
   local token liste
-  local -a slugs=()
+  local -a slugs=() hosts=()
   token="$(grep -oP '(?<=^MAGISTER_HEALTH_TOKEN=).*' "$REPO/deploy/compose/.env" 2>/dev/null || true)"
   # Die Kunden der Konsole, nicht die Demo-Liste: in Produktion gibt es
   # thun und bern nicht, und eine Zeile „keine Antwort" für einen Kunden,
   # den es nicht gibt, verdeckt die echten.
   if liste="$(konsole_kunden 2>/dev/null)" && [ -n "$liste" ]; then
     mapfile -t slugs < <(awk '$7 == "active" || $7 == "suspended" {print $1}' <<<"$liste")
+    # Gefragt wird der Hostname aus der Konsole, nicht <slug>.<domäne>.
+    mapfile -t hosts < <(awk -v d="$DOMAIN" '$7 == "active" || $7 == "suspended" {
+      print (NF >= 9 && $9 != "-") ? $9 : $1 "." d }' <<<"$liste")
   elif [ "$ART" != "prod" ]; then
     slugs=("${KUNDEN[@]}")
+    for slug in "${slugs[@]}"; do hosts+=("$slug.$DOMAIN"); done
   fi
   [ "${#slugs[@]}" -gt 0 ] || printf '  (noch keine Kunden)\n'
-  for slug in "${slugs[@]}"; do
-    local antwort
-    antwort="$(curl -sS -k --noproxy '*' --resolve "$slug.$DOMAIN:443:127.0.0.1" \
+  local i
+  for i in "${!slugs[@]}"; do
+    local antwort slug="${slugs[$i]}" host="${hosts[$i]}"
+    antwort="$(curl -sS -k --noproxy '*' --resolve "$host:443:127.0.0.1" \
       -H "X-Magister-Health: $token" \
-      "https://$slug.$DOMAIN/healthz/stack" 2>/dev/null || true)"
+      "https://$host/healthz/stack" 2>/dev/null || true)"
     if [ -z "$antwort" ]; then
-      printf '  %-8s keine Antwort\n' "$slug"
+      printf '  %-8s %s  keine Antwort\n' "$slug" "$host"
     else
-      python3 - "$antwort" "$slug" <<'PY'
+      python3 - "$antwort" "$slug" "$host" <<'PY'
 import json, sys
 try:
     daten = json.loads(sys.argv[1])
@@ -1433,7 +1441,7 @@ except ValueError:
 stufe = {0: "Stufe 0 (ok)", 1: "Stufe 1 (warning)", 2: "Stufe 2 (critical)"}
 schlimm = [c for c in daten.get("checks", []) if c["status"] > 0]
 zusatz = f" — {schlimm[0]['name']}: {schlimm[0]['detail']}" if schlimm else ""
-print(f"  {sys.argv[2]:<8} {stufe.get(daten.get('status'), '?')}{zusatz}")
+print(f"  {sys.argv[2]:<8} {sys.argv[3]}  {stufe.get(daten.get('status'), '?')}{zusatz}")
 PY
     fi
   done

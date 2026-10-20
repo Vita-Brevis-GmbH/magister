@@ -314,6 +314,10 @@ class AdSyncService:
         state.last_when_changed = cursor_after
         state.last_synced_count = synced
         state.last_mode = effective_mode
+        # Ausdrücklich: ein inkrementeller Lauf ohne Änderungen ändert sonst
+        # keine Spalte, und `onupdate` schriebe die Zeit des Laufs nicht. Die
+        # Gesundheitsprüfung liest hier, wann zuletzt abgeglichen wurde.
+        state.updated_at = now
         if effective_mode == "full":
             state.last_full_sync_at = now
 
