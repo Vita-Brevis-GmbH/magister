@@ -365,7 +365,7 @@ export interface DepartmentUpdate {
 
 /** AD group template ("Zielrolle"): a reusable bundle of AD group DNs,
  *  assignable to one or more Standorte and chosen at user-create. */
-/** Passwortart einer Zielgruppe — gilt beim Anlegen und bei jedem Reset. */
+/** Passwortstärke einer Zielgruppe — gilt beim Anlegen und bei jedem Reset. */
 export type PasswordProfile = "readable" | "teacher" | "complex";
 
 /** Anlage-Vorgaben einer Zielgruppe. */
@@ -377,7 +377,7 @@ export interface ZielgruppenOptions {
   store_password: boolean;
 }
 
-// Zielgruppe (Tabelle group_templates): Kontoart, AD-Gruppen, Passwortart und
+// Zielgruppe (Tabelle group_templates): Kontoart, AD-Gruppen, Passwortstärke und
 // Konto-Einstellungen für neu angelegte Konten.
 export interface GroupTemplateOut extends ZielgruppenOptions {
   id: number;
@@ -803,7 +803,7 @@ export interface AdUserCreateRequest {
   school_id: number | null;
   // Ziel-OU (nur ohne feste Kontoart); ohne Standort Pflicht.
   ad_ou?: string | null;
-  // Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortart und
+  // Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortstärke und
   // Konto-Einstellungen fest (übersteuert ou_key). Muss an school_id angeboten sein.
   group_template_id?: number | null;
   display_name?: string | null;

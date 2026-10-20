@@ -52,8 +52,22 @@ function withVaultRule(d: Draft): Draft {
   return passwordStays(d) ? d : { ...d, store_password: false };
 }
 
+// Ziel-OU: sichtbar bei freier Kontoart oder ohne Standort; ohne Standort
+// Pflicht (dort gibt es keine Standort-OU). Wie die API (services/group_templates.py).
+function ouVisible(draft: Draft): boolean {
+  return !FIXED_KINDS.includes(draft.kind) || draft.school_ids.length === 0;
+}
+
+function ouRequired(draft: Draft): boolean {
+  return draft.school_ids.length === 0;
+}
+
+function ouMissing(draft: Draft): boolean {
+  return ouRequired(draft) && cleanOu(draft.ad_ou) === "";
+}
+
 function ouInvalid(draft: Draft): boolean {
-  return !FIXED_KINDS.includes(draft.kind) && !ouValid(draft.ad_ou);
+  return ouVisible(draft) && (!ouValid(draft.ad_ou) || ouMissing(draft));
 }
 
 const selectClasses =
@@ -106,12 +120,13 @@ function bodyFrom(draft: Draft) {
     cannot_change_password: draft.cannot_change_password,
     password_never_expires: draft.password_never_expires,
     store_password: draft.store_password,
-    // "" entfernt eine gesetzte Ziel-OU; bei fester Kontoart gilt die des Standorts.
-    ad_ou: FIXED_KINDS.includes(draft.kind) ? "" : cleanOu(draft.ad_ou),
+    // "" entfernt eine gesetzte Ziel-OU; bei fester Kontoart mit Standorten
+    // gilt deren OU.
+    ad_ou: ouVisible(draft) ? cleanOu(draft.ad_ou) : "",
   };
 }
 
-function GroupTemplatesPage(): JSX.Element {
+export function GroupTemplatesPage(): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
   const q = useGroupTemplates();
@@ -303,9 +318,6 @@ function TemplateFields({
           ))}
         </select>
       </div>
-      {FIXED_KINDS.includes(draft.kind) ? null : (
-        <OuField draft={draft} onChange={onChange} schools={schools} />
-      )}
       <div className="space-y-1">
         <Label htmlFor="tpl-profile">{t("group_templates.profile_label")}</Label>
         <select
@@ -385,11 +397,12 @@ function TemplateFields({
           )}
         </div>
       </div>
+      {ouVisible(draft) ? <OuField draft={draft} onChange={onChange} schools={schools} /> : null}
     </div>
   );
 }
 
-/** Ziel-OU einer Zielgruppe ohne feste Kontoart (optional). */
+/** Ziel-OU der Zielgruppe — unter den Standorten; ohne Standort Pflicht. */
 function OuField({
   draft,
   onChange,
@@ -402,29 +415,38 @@ function OuField({
   const { t } = useTranslation();
   const terms = useTerms();
   const ou = cleanOu(draft.ad_ou);
+  const required = ouRequired(draft);
   // Dieselbe Regel wie der AD-Abgleich: OU=<Kürzel> muss im DN vorkommen,
   // sonst ordnet er das Konto keinem Standort zu. Magister lehnt die Anlage
   // an solchen Standorten ab — hier sieht man es vorher.
-  const offered =
-    draft.school_ids.length === 0
-      ? schools
-      : schools.filter((s) => draft.school_ids.includes(s.id));
-  const outside =
-    ou && !ouInvalid(draft) ? offered.filter((s) => !ouInUnit(ou, s.scope_short)) : [];
+  const offered = schools.filter((s) => draft.school_ids.includes(s.id));
+  const outside = ou && ouValid(ou) ? offered.filter((s) => !ouInUnit(ou, s.scope_short)) : [];
   return (
     <div className="space-y-1">
-      <Label htmlFor="tpl-ou">{t("group_templates.ou_label")}</Label>
+      <Label htmlFor="tpl-ou">
+        {required ? t("group_templates.ou_label_required") : t("group_templates.ou_label")}
+      </Label>
       <Input
         id="tpl-ou"
         value={draft.ad_ou}
         onChange={(e) => onChange({ ...draft, ad_ou: e.target.value })}
         placeholder={t("group_templates.ou_placeholder")}
         maxLength={512}
+        required={required}
       />
       <p className="text-xs text-muted-foreground">
-        {t("group_templates.ou_hint", { unit: terms.unit })}
+        {required
+          ? t("group_templates.ou_hint_required", {
+              unit: terms.unit,
+              unit_plural: terms.unit_plural,
+            })
+          : t("group_templates.ou_hint", { unit: terms.unit })}
       </p>
-      {ouInvalid(draft) ? (
+      {ouMissing(draft) ? (
+        <p className="text-xs text-destructive">
+          {t("group_templates.ou_required", { unit: terms.unit })}
+        </p>
+      ) : !ouValid(draft.ad_ou) ? (
         <p className="text-xs text-destructive">{t("group_templates.ou_invalid")}</p>
       ) : null}
       {outside.length > 0 ? (

@@ -33,6 +33,7 @@ from magister_api.schemas.group_templates import (
 from magister_api.services.group_templates import (
     GroupTemplateNotFoundError,
     GroupTemplateService,
+    OuRequiredWithoutSchoolError,
     SchoolForDefaultsNotFoundError,
 )
 from magister_api.services.zielgruppen_assign import (
@@ -86,16 +87,19 @@ async def create_group_template(
 ) -> GroupTemplateOut:
     svc = GroupTemplateService(session, settings, user.to_scope())
     ip, request_id = _ip_request_id(request)
-    row, sids = await svc.create(
-        name=payload.name,
-        description=payload.description,
-        kind=payload.kind,
-        ad_groups=payload.ad_groups,
-        school_ids=payload.school_ids,
-        options=_options(payload),
-        ip=ip,
-        request_id=request_id,
-    )
+    try:
+        row, sids = await svc.create(
+            name=payload.name,
+            description=payload.description,
+            kind=payload.kind,
+            ad_groups=payload.ad_groups,
+            school_ids=payload.school_ids,
+            options=_options(payload),
+            ip=ip,
+            request_id=request_id,
+        )
+    except OuRequiredWithoutSchoolError as exc:
+        raise HTTPException(status_code=422, detail="ad_ou_required_without_school") from exc
     return _out(row, sids)
 
 
@@ -124,6 +128,8 @@ async def patch_group_template(
         )
     except GroupTemplateNotFoundError as exc:
         raise HTTPException(status_code=404, detail="group_template_not_found") from exc
+    except OuRequiredWithoutSchoolError as exc:
+        raise HTTPException(status_code=422, detail="ad_ou_required_without_school") from exc
     return _out(row, sids)
 
 

@@ -680,7 +680,7 @@
       "can_change_password": "L'utente può cambiare la password",
       "group_template": "Gruppo di destinazione",
       "group_template_default": "Senza gruppo (gruppi predefiniti della sede)",
-      "group_template_hint": "Definisce tipo di account, gruppi, tipo di password e impostazioni. Le impostazioni sotto possono essere modificate caso per caso.",
+      "group_template_hint": "Definisce tipo di account, gruppi, robustezza della password e impostazioni. Le impostazioni sotto possono essere modificate caso per caso.",
       "err_template_not_found": "Gruppo di destinazione non trovato.",
       "err_template_not_for_school": "Il gruppo di destinazione non è disponibile in questa sede.",
       "err_ou_outside_school": "L'OU di destinazione non si trova nella {{unit}} (manca un'OU con la sua sigla nel percorso). La sincronizzazione AD non assegnerebbe l'account a nessuna {{unit}}.",
@@ -694,7 +694,7 @@
       "target_ou_optional": "OU di destinazione (facoltativa)",
       "target_ou_hint_unit": "Vuoto = l'OU della {{unit}} per il tipo di account scelto. Se indicata, deve trovarsi nella {{unit}} (un'OU con la sua sigla nel percorso).",
       "target_ou_hint_no_unit": "Obbligatoria senza {{unit}}: qui l'account viene creato nell'AD.",
-      "ou_hint_own_ou": "Qui il tipo di account determina solo il tipo di password e il genere di account in Magister – l'account viene creato nell'OU di destinazione qui sopra."
+      "ou_hint_own_ou": "Qui il tipo di account determina solo la robustezza della password e il genere di account in Magister – l'account viene creato nell'OU di destinazione qui sopra."
     },
     "user_settings": {
       "title": "Configurazione utenti",
@@ -1333,9 +1333,9 @@
   },
   "group_templates": {
     "title": "Gruppi di destinazione",
-    "intro": "Un gruppo di destinazione definisce come viene creato un account: tipo di account, gruppi AD, tipo di password e impostazioni. Selezionabile durante la creazione di utenti, filtrato per {{unit_plural}}.",
+    "intro": "Un gruppo di destinazione definisce come viene creato un account: tipo di account, gruppi AD, robustezza della password e impostazioni. Selezionabile durante la creazione di utenti, filtrato per {{unit_plural}}.",
     "new_title": "Nuovo gruppo di destinazione",
-    "new_desc": "Imposta nome, tipo di account, tipo di password, gruppi AD e ambito.",
+    "new_desc": "Imposta nome, tipo di account, robustezza della password, gruppi AD e ambito.",
     "name": "Nome",
     "name_placeholder": "es. Aiuto di classe",
     "description": "Descrizione",
@@ -1361,7 +1361,7 @@
     "ou_invalid": "Inserisci un percorso completo, p. es. OU=Altri,OU=SIGLA,DC=scuola,DC=local.",
     "ou_outside": "Non si trova in: {{names}}. Lì la creazione di account con questo gruppo viene rifiutata.",
     "ou_badge": "OU {{ou}}",
-    "profile_label": "Tipo di password",
+    "profile_label": "Robustezza della password",
     "profile_readable": "Semplice – due parole e un numero (es. Tiger-Wolke-47)",
     "profile_teacher": "Docente – 12 caratteri, simboli della tastiera svizzera",
     "profile_complex": "Complessa – 14 caratteri",
@@ -1382,7 +1382,10 @@
     "defaults_done": "Aggiunti: {{names}}",
     "defaults_none": "Tutti i gruppi standard esistono.",
     "defaults_failed": "Aggiunta non riuscita.",
-    "schools_label_optional": "{{unit_plural}} (facoltativo)"
+    "schools_label_optional": "{{unit_plural}} (facoltativo)",
+    "ou_label_required": "OU di destinazione",
+    "ou_hint_required": "Obbligatoria senza {{unit}}: qui vengono creati gli account di questo gruppo creati senza {{unit}}. In una {{unit}}, un tipo di account fisso usa l'OU di quella {{unit}}.",
+    "ou_required": "Senza {{unit}} l'OU di destinazione è obbligatoria."
   },
   "managed": {
     "how": "Se serve una modifica, rivolgetevi al vostro referente presso Vita Brevis. Ciò che vale qui è visibile nel registro di audit alla voce «platform_settings_reconciled».",
@@ -1435,7 +1438,7 @@
   },
   "zielgruppe_assign": {
     "section_title": "Gruppo di destinazione",
-    "section_desc": "Assegna l’account a un gruppo di destinazione. I gruppi del gruppo precedente vengono rimossi, quelli del nuovo aggiunti. Il tipo di password vale per i ripristini futuri.",
+    "section_desc": "Assegna l’account a un gruppo di destinazione. I gruppi del gruppo precedente vengono rimossi, quelli del nuovo aggiunti. La robustezza della password vale per i ripristini futuri.",
     "label": "Gruppo di destinazione",
     "none": "– Scegli un gruppo –",
     "apply_settings": "Applica le impostazioni del gruppo",

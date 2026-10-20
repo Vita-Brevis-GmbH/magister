@@ -33,15 +33,17 @@ OPTION_FIELDS: frozenset[str] = frozenset(
 )
 
 
-def _normalize(row: GroupTemplate) -> None:
+def _normalize(row: GroupTemplate, *, has_links: bool) -> None:
     """Was sich widerspricht, wird beim Speichern gerade gezogen.
 
-    * Ziel-OU nur bei freier Kontoart; "" heisst entfernen.
+    * Ziel-OU bei freier Kontoart oder ohne Standort (dort ist sie die OU für
+      Konten, die ohne Standort angelegt werden); bei fester Kontoart mit
+      Standorten legt deren OU fest. "" heisst entfernen.
     * "Im Tresor ablegen" nur, wenn das Passwort so bleibt (keine erzwungene
       Änderung, kann nicht ändern, läuft nie ab) — sonst gäbe die Klassen-
       Passwortliste bald ein falsches Passwort aus.
     """
-    if not row.ad_ou or row.kind in FIXED_KINDS:
+    if not row.ad_ou or (row.kind in FIXED_KINDS and has_links):
         row.ad_ou = None
     if row.store_password and not password_stays(
         force_change=row.force_change,
@@ -119,7 +121,7 @@ class GroupTemplateRepository:
             status=GROUP_TEMPLATE_STATUS_ACTIVE,
             **(options or {}),
         )
-        _normalize(row)
+        _normalize(row, has_links=bool(school_ids))
         self.session.add(row)
         await self.session.flush()
         await self._set_links(row.id, school_ids)
@@ -147,7 +149,11 @@ class GroupTemplateRepository:
             row.kind = kind
         if ad_groups is not None:
             row.ad_groups = list(ad_groups)
-        _normalize(row)
+        if school_ids is None:
+            has_links = bool((await self.school_ids_for([row.id])).get(row.id))
+        else:
+            has_links = bool(school_ids)
+        _normalize(row, has_links=has_links)
         await self.session.flush()
         if school_ids is not None:
             await self._set_links(row.id, school_ids)

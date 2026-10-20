@@ -60,6 +60,8 @@ async def _vault_on(db_session: AsyncSession) -> None:
 
 
 async def _template(as_admin: AsyncClient, **body: Any) -> dict[str, Any]:
+    # Ohne Standort braucht eine Zielgruppe eine Ziel-OU.
+    body.setdefault("ad_ou", OTHER_OU)
     r = await as_admin.post("/admin/group-templates", json={"name": "T", **body})
     assert r.status_code == 201, r.text
     return dict(r.json())
@@ -172,15 +174,14 @@ async def test_create_without_school_needs_a_global_zielgruppe_with_ou(
     assert row.school_id is None
     assert row.group_template_id == other["id"]
 
-    # Ohne Standort und ohne Ziel-OU gibt es keinen Ablageort.
-    no_ou = await _template(as_admin, kind="custom")
-    r = await _create(
-        as_admin, app, mock_ad, _new_user("extern2@schule.ch", group_template_id=no_ou["id"])
-    )
+    # Ohne Standort und ohne Ziel-OU gibt es keinen Ablageort: eine solche
+    # Zielgruppe lässt sich gar nicht speichern, eine Anlage ohne beides nicht.
+    r = await as_admin.post("/admin/group-templates", json={"name": "Ohne alles", "kind": "custom"})
     assert r.status_code == 422
-    assert r.json()["detail"] == "ou_required_without_school"
+    assert r.json()["detail"] == "ad_ou_required_without_school"
     r = await _create(as_admin, app, mock_ad, _new_user("extern3@schule.ch"))
     assert r.status_code == 422
+    assert r.json()["detail"] == "ou_required_without_school"
 
     # Eine an Standorte gebundene Zielgruppe gibt es ohne Standort nicht.
     bound = await _template(as_admin, kind="custom", ad_ou=OTHER_OU, school_ids=[school_a])

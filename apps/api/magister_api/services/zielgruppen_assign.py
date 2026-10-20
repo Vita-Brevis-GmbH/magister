@@ -193,7 +193,8 @@ class ZielgruppenAssignService:
 
     async def _outside_own_ou(self, tpl: GroupTemplate, user: AdUserCache) -> bool:
         """Hat die Zielgruppe eine eigene Ziel-OU und liegt das Konto woanders?"""
-        if not tpl.ad_ou:
+        if not tpl.ad_ou or tpl.kind in VORGABEN:
+            # Feste Kontoart: über die OU entscheidet die Kontoart (oben).
             return False
         user_dn = await self.ad.find_user_dn(user.ad_object_guid)
         if not user_dn:

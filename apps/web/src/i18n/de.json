@@ -677,7 +677,7 @@
       "can_change_password": "Benutzer kann Passwort ändern",
       "group_template": "Zielgruppe",
       "group_template_default": "Ohne Zielgruppe (Standard-Gruppen des Standorts)",
-      "group_template_hint": "Legt Kontoart, Gruppen, Passwortart und Konto-Einstellungen fest. Die Einstellungen unten lassen sich im Einzelfall übersteuern.",
+      "group_template_hint": "Legt Kontoart, Gruppen, Passwortstärke und Konto-Einstellungen fest. Die Einstellungen unten lassen sich im Einzelfall übersteuern.",
       "err_template_not_found": "Zielgruppe nicht gefunden.",
       "err_template_not_for_school": "Die Zielgruppe ist an diesem Standort nicht verfügbar.",
       "err_ou_outside_school": "Die Ziel-OU liegt nicht im {{unit}} (OU mit seinem Kürzel fehlt im Pfad). Der AD-Abgleich würde das Konto keinem {{unit}} zuordnen.",
@@ -691,7 +691,7 @@
       "target_ou_optional": "Ziel-OU (optional)",
       "target_ou_hint_unit": "Leer = die OU des {{unit}}s für die gewählte Kontoart. Angegeben muss sie im {{unit}} liegen (OU mit seinem Kürzel im Pfad).",
       "target_ou_hint_no_unit": "Pflicht ohne {{unit}}: hier wird das Konto im AD abgelegt.",
-      "ou_hint_own_ou": "Die Kontoart bestimmt hier nur Passwortart und Konto-Typ in Magister – abgelegt wird in der Ziel-OU oben."
+      "ou_hint_own_ou": "Die Kontoart bestimmt hier nur Passwortstärke und Konto-Typ in Magister – abgelegt wird in der Ziel-OU oben."
     },
     "user_settings": {
       "title": "Userkonfiguration",
@@ -1330,9 +1330,9 @@
   },
   "group_templates": {
     "title": "Zielgruppen",
-    "intro": "Eine Zielgruppe legt fest, wie ein Konto angelegt wird: Kontoart, AD-Gruppen, Passwortart und Konto-Einstellungen. Beim Anlegen von Benutzern nach {{unit_plural}} gefiltert wählbar.",
+    "intro": "Eine Zielgruppe legt fest, wie ein Konto angelegt wird: Kontoart, AD-Gruppen, Passwortstärke und Konto-Einstellungen. Beim Anlegen von Benutzern nach {{unit_plural}} gefiltert wählbar.",
     "new_title": "Neue Zielgruppe",
-    "new_desc": "Name, Kontoart, Passwortart, AD-Gruppen und Geltungsbereich festlegen.",
+    "new_desc": "Name, Kontoart, Passwortstärke, AD-Gruppen und Geltungsbereich festlegen.",
     "name": "Name",
     "name_placeholder": "z. B. Klassenhilfe",
     "description": "Beschreibung",
@@ -1358,7 +1358,7 @@
     "ou_invalid": "Bitte einen vollständigen Pfad angeben, z. B. OU=Sonstige,OU=KÜRZEL,DC=schule,DC=local.",
     "ou_outside": "Liegt nicht in: {{names}}. Dort wird die Anlage mit dieser Zielgruppe abgelehnt.",
     "ou_badge": "OU {{ou}}",
-    "profile_label": "Passwortart",
+    "profile_label": "Passwortstärke",
     "profile_readable": "Einfach – zwei Wörter und Zahl (z. B. Tiger-Wolke-47)",
     "profile_teacher": "Lehrperson – 12 Zeichen, Sonderzeichen der CH-Tastatur",
     "profile_complex": "Komplex – 14 Zeichen",
@@ -1379,7 +1379,10 @@
     "defaults_done": "Ergänzt: {{names}}",
     "defaults_none": "Alle Standard-Zielgruppen sind vorhanden.",
     "defaults_failed": "Ergänzen fehlgeschlagen.",
-    "schools_label_optional": "{{unit_plural}} (optional)"
+    "schools_label_optional": "{{unit_plural}} (optional)",
+    "ou_label_required": "Ziel-OU",
+    "ou_hint_required": "Pflicht ohne {{unit}}: hier landen die Konten dieser Zielgruppe, die ohne {{unit}} angelegt werden. An einem {{unit}} gilt bei fester Kontoart dessen OU.",
+    "ou_required": "Ohne {{unit}} ist die Ziel-OU Pflicht."
   },
   "managed": {
     "how": "Brauchen Sie eine Änderung, wenden Sie sich an Ihre Ansprechperson bei Vita Brevis. Was hier gilt, sehen Sie im Audit-Protokoll unter „platform_settings_reconciled“.",
@@ -1432,7 +1435,7 @@
   },
   "zielgruppe_assign": {
     "section_title": "Zielgruppe",
-    "section_desc": "Ordnet das Konto einer Zielgruppe zu. Die Gruppen der bisherigen Zielgruppe fallen weg, die der neuen kommen dazu. Die Passwortart gilt für künftige Resets.",
+    "section_desc": "Ordnet das Konto einer Zielgruppe zu. Die Gruppen der bisherigen Zielgruppe fallen weg, die der neuen kommen dazu. Die Passwortstärke gilt für künftige Resets.",
     "label": "Zielgruppe",
     "none": "– Zielgruppe wählen –",
     "apply_settings": "Konto-Einstellungen der Zielgruppe übernehmen",

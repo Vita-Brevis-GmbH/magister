@@ -677,7 +677,7 @@
       "can_change_password": "User can change password",
       "group_template": "Target group",
       "group_template_default": "No target group (site default groups)",
-      "group_template_hint": "Sets account type, groups, password type and account settings. The settings below can be overridden case by case.",
+      "group_template_hint": "Sets account type, groups, password strength and account settings. The settings below can be overridden case by case.",
       "err_template_not_found": "Target group not found.",
       "err_template_not_for_school": "The target group is not available at this site.",
       "err_ou_outside_school": "The target OU is not inside the {{unit}} (no OU with its short code in the path). The AD sync would assign the account to no {{unit}}.",
@@ -691,7 +691,7 @@
       "target_ou_optional": "Target OU (optional)",
       "target_ou_hint_unit": "Blank = the {{unit}}'s OU for the chosen account type. If given, it must lie inside the {{unit}} (an OU with its short code in the path).",
       "target_ou_hint_no_unit": "Required without a {{unit}}: the account is created here in AD.",
-      "ou_hint_own_ou": "Here the account type only sets the password type and account kind in Magister – the account goes into the target OU above."
+      "ou_hint_own_ou": "Here the account type only sets the password strength and account kind in Magister – the account goes into the target OU above."
     },
     "user_settings": {
       "title": "User configuration",
@@ -1330,9 +1330,9 @@
   },
   "group_templates": {
     "title": "Target groups",
-    "intro": "A target group defines how an account is created: account type, AD groups, password type and account settings. Selectable when creating users, filtered by {{unit_plural}}.",
+    "intro": "A target group defines how an account is created: account type, AD groups, password strength and account settings. Selectable when creating users, filtered by {{unit_plural}}.",
     "new_title": "New target group",
-    "new_desc": "Set name, account type, password type, AD groups and scope.",
+    "new_desc": "Set name, account type, password strength, AD groups and scope.",
     "name": "Name",
     "name_placeholder": "e.g. Class assistant",
     "description": "Description",
@@ -1358,7 +1358,7 @@
     "ou_invalid": "Please enter a full path, e.g. OU=Other,OU=CODE,DC=school,DC=local.",
     "ou_outside": "Not inside: {{names}}. Creating accounts with this target group is refused there.",
     "ou_badge": "OU {{ou}}",
-    "profile_label": "Password type",
+    "profile_label": "Password strength",
     "profile_readable": "Simple – two words and a number (e.g. Tiger-Wolke-47)",
     "profile_teacher": "Teacher – 12 characters, Swiss keyboard symbols",
     "profile_complex": "Complex – 14 characters",
@@ -1379,7 +1379,10 @@
     "defaults_done": "Added: {{names}}",
     "defaults_none": "All default target groups exist.",
     "defaults_failed": "Adding failed.",
-    "schools_label_optional": "{{unit_plural}} (optional)"
+    "schools_label_optional": "{{unit_plural}} (optional)",
+    "ou_label_required": "Target OU",
+    "ou_hint_required": "Required without a {{unit}}: accounts of this target group created without a {{unit}} go here. At a {{unit}}, a fixed account type uses that {{unit}}'s OU.",
+    "ou_required": "Without a {{unit}} the target OU is required."
   },
   "managed": {
     "how": "If you need a change, contact your Vita Brevis representative. What applies here is visible in the audit log under “platform_settings_reconciled”.",
@@ -1432,7 +1435,7 @@
   },
   "zielgruppe_assign": {
     "section_title": "Target group",
-    "section_desc": "Assigns the account to a target group. Groups of the previous target group are removed, those of the new one added. The password type applies to future resets.",
+    "section_desc": "Assigns the account to a target group. Groups of the previous target group are removed, those of the new one added. The password strength applies to future resets.",
     "label": "Target group",
     "none": "– Choose target group –",
     "apply_settings": "Apply the target group's account settings",

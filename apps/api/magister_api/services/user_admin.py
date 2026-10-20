@@ -157,9 +157,12 @@ class UserAdminService:
             raise UserAdminError("invalid_ou_choice")
         # Eigene Ziel-OU: die bei der Anlage angegebene, sonst die der
         # Zielgruppe. Bei fester Kontoart legt der Standort die OU fest.
-        if ad_ou and tpl is not None and tpl.kind in FIXED_KINDS:
+        # Bei fester Kontoart mit Standort legt der Standort die OU fest; ohne
+        # Standort gilt die der Zielgruppe (oder die angegebene).
+        fixed_with_school = tpl is not None and tpl.kind in FIXED_KINDS and school is not None
+        if ad_ou and fixed_with_school:
             raise UserAdminError("ou_not_allowed_for_kind")
-        own_ou = ad_ou or (tpl.ad_ou if tpl is not None else None)
+        own_ou = ad_ou or (tpl.ad_ou if tpl is not None and not fixed_with_school else None)
         if own_ou:
             # Die OU des Standorts braucht es dann nicht. Mit Standort muss sie
             # in ihm liegen, sonst verlöre der nächste Abgleich die Zuordnung.

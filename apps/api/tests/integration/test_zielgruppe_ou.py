@@ -267,3 +267,44 @@ async def test_explicit_ou_at_creation(
     assert r.status_code == 422
     assert r.json()["detail"] == "ou_not_allowed_for_kind"
     assert seen == [OTHER_OU, "OU=Extern,OU=A,DC=schule,DC=local"]
+
+
+@pytest.mark.asyncio
+async def test_without_school_the_zielgruppe_needs_an_ou_also_with_fixed_kind(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    school_a: int,
+    mock_ad: tuple[AdClient, list[str]],
+    _ous: None,
+) -> None:
+    ad, seen = mock_ad
+    # Ohne Standort: Pflicht, auch bei fester Kontoart.
+    r = await as_admin.post("/admin/group-templates", json={"name": "Global LP", "kind": "teacher"})
+    assert r.status_code == 422
+    assert r.json()["detail"] == "ad_ou_required_without_school"
+    glob = await as_admin.post(
+        "/admin/group-templates",
+        json={"name": "Global LP", "kind": "teacher", "ad_ou": OTHER_OU},
+    )
+    assert glob.status_code == 201, glob.text
+    assert glob.json()["ad_ou"] == OTHER_OU
+    # Standort wieder abwählen ohne OU geht nicht; mit Standort fällt sie bei
+    # fester Kontoart weg (dort gilt die OU des Standorts).
+    bound = await _template(as_admin, school_a, kind="teacher")
+    r = await as_admin.patch(f"/admin/group-templates/{bound['id']}", json={"school_ids": []})
+    assert r.status_code == 422
+
+    # Anlage ohne Standort: die OU der globalen Zielgruppe.
+    r = await _create(
+        as_admin, app, ad, _plain("global1@schule.ch", group_template_id=glob.json()["id"])
+    )
+    assert r.status_code == 201, r.text
+    # Mit Standort: dessen Lehrpersonen-OU, nicht die der Zielgruppe.
+    r = await _create(
+        as_admin,
+        app,
+        ad,
+        _plain("global2@schule.ch", school_id=school_a, group_template_id=glob.json()["id"]),
+    )
+    assert r.status_code == 201, r.text
+    assert seen == [OTHER_OU, "OU=Lehrer,OU=A,DC=schule,DC=local"]

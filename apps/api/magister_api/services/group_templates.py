@@ -23,6 +23,22 @@ class SchoolForDefaultsNotFoundError(LookupError):
     pass
 
 
+class OuRequiredWithoutSchoolError(ValueError):
+    """Eine Zielgruppe ohne Standort braucht eine Ziel-OU.
+
+    Ohne Standort gibt es keine Standort-OU; die Konten dieser Zielgruppe
+    (angelegt ohne Standort) landen in ihrer Ziel-OU.
+    """
+
+
+def _resulting_ou(options: dict[str, object] | None, current: str | None) -> str | None:
+    """Ziel-OU nach dem Speichern: neu angegeben ("" = entfernen) oder die bisherige."""
+    value = (options or {}).get("ad_ou")
+    if value is None:
+        return current
+    return str(value) or None
+
+
 class GroupTemplateService:
     def __init__(self, session: AsyncSession, settings: Settings, scope: ScopeContext) -> None:
         self.session = session
@@ -62,6 +78,8 @@ class GroupTemplateService:
         ip: str | None,
         request_id: str,
     ) -> tuple[GroupTemplate, list[int]]:
+        if not school_ids and not _resulting_ou(options, None):
+            raise OuRequiredWithoutSchoolError("ad_ou")
         row = await self.repo.create(
             name=name,
             description=description,
@@ -101,7 +119,10 @@ class GroupTemplateService:
         ip: str | None,
         request_id: str,
     ) -> tuple[GroupTemplate, list[int]]:
-        row, _ = await self.get(template_id)
+        row, current_links = await self.get(template_id)
+        links_after = current_links if school_ids is None else school_ids
+        if not links_after and not _resulting_ou(options, row.ad_ou):
+            raise OuRequiredWithoutSchoolError("ad_ou")
         row = await self.repo.update(
             row,
             name=name,

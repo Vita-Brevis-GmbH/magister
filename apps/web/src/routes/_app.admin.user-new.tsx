@@ -96,15 +96,13 @@ export function NewUserPage(): JSX.Element {
 
   // Zielrollen (group templates) offered at the picked Standort. Optional: when
   // none is chosen the school's default provisioning groups apply. Ohne
-  // Standort nur globale Zielgruppen ohne feste Kontoart — eine feste legt die
-  // OU über den Standort fest, und den gibt es dann nicht.
+  // Standort die globalen Zielgruppen — sie tragen die Ziel-OU für genau
+  // diesen Fall (Pflicht ohne Standort, auch bei fester Kontoart).
   const selectedSchoolId = form.school_id ? Number(form.school_id) : undefined;
   const templatesQ = useGroupTemplates(selectedSchoolId);
   const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
   const templates = (templatesQ.data ?? []).filter(
-    (tpl) =>
-      selectedSchoolId !== undefined ||
-      (tpl.school_ids.length === 0 && !(ouKeys as string[]).includes(tpl.kind ?? "")),
+    (tpl) => selectedSchoolId !== undefined || tpl.school_ids.length === 0,
   );
 
   // Company provisions a single "company" category into the org unit's company

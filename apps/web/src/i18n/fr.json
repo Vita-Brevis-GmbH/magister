@@ -680,7 +680,7 @@
       "can_change_password": "L'utilisateur peut changer le mot de passe",
       "group_template": "Groupe cible",
       "group_template_default": "Sans groupe cible (groupes par défaut du site)",
-      "group_template_hint": "Définit le type de compte, les groupes, le type de mot de passe et les paramètres. Les paramètres ci-dessous peuvent être modifiés au cas par cas.",
+      "group_template_hint": "Définit le type de compte, les groupes, la robustesse du mot de passe et les paramètres. Les paramètres ci-dessous peuvent être modifiés au cas par cas.",
       "err_template_not_found": "Groupe cible introuvable.",
       "err_template_not_for_school": "Le groupe cible n’est pas disponible sur ce site.",
       "err_ou_outside_school": "L'OU cible ne se trouve pas dans le {{unit}} (aucune OU avec son code dans le chemin). La synchronisation AD n'attribuerait le compte à aucun {{unit}}.",
@@ -694,7 +694,7 @@
       "target_ou_optional": "OU cible (facultatif)",
       "target_ou_hint_unit": "Vide = l'OU du {{unit}} pour le type de compte choisi. Si indiquée, elle doit se trouver dans le {{unit}} (une OU avec son code dans le chemin).",
       "target_ou_hint_no_unit": "Obligatoire sans {{unit}} : le compte est créé ici dans l'AD.",
-      "ou_hint_own_ou": "Ici, le type de compte ne définit que le type de mot de passe et le genre de compte dans Magister – le compte est créé dans l'OU cible ci-dessus."
+      "ou_hint_own_ou": "Ici, le type de compte ne définit que la robustesse du mot de passe et le genre de compte dans Magister – le compte est créé dans l'OU cible ci-dessus."
     },
     "user_settings": {
       "title": "Configuration utilisateur",
@@ -1333,9 +1333,9 @@
   },
   "group_templates": {
     "title": "Groupes cibles",
-    "intro": "Un groupe cible définit comment un compte est créé : type de compte, groupes AD, type de mot de passe et paramètres du compte. Sélectionnable à la création d’utilisateurs, filtré par {{unit_plural}}.",
+    "intro": "Un groupe cible définit comment un compte est créé : type de compte, groupes AD, robustesse du mot de passe et paramètres du compte. Sélectionnable à la création d’utilisateurs, filtré par {{unit_plural}}.",
     "new_title": "Nouveau groupe cible",
-    "new_desc": "Définir le nom, le type de compte, le type de mot de passe, les groupes AD et la portée.",
+    "new_desc": "Définir le nom, le type de compte, la robustesse du mot de passe, les groupes AD et la portée.",
     "name": "Nom",
     "name_placeholder": "p. ex. Aide de classe",
     "description": "Description",
@@ -1361,7 +1361,7 @@
     "ou_invalid": "Veuillez indiquer un chemin complet, p. ex. OU=Autres,OU=CODE,DC=ecole,DC=local.",
     "ou_outside": "Hors de : {{names}}. La création de comptes avec ce groupe cible y est refusée.",
     "ou_badge": "OU {{ou}}",
-    "profile_label": "Type de mot de passe",
+    "profile_label": "Robustesse du mot de passe",
     "profile_readable": "Simple – deux mots et un nombre (p. ex. Tiger-Wolke-47)",
     "profile_teacher": "Enseignant·e – 12 caractères, symboles du clavier suisse",
     "profile_complex": "Complexe – 14 caractères",
@@ -1382,7 +1382,10 @@
     "defaults_done": "Ajoutés : {{names}}",
     "defaults_none": "Tous les groupes cibles standard existent.",
     "defaults_failed": "L’ajout a échoué.",
-    "schools_label_optional": "{{unit_plural}} (facultatif)"
+    "schools_label_optional": "{{unit_plural}} (facultatif)",
+    "ou_label_required": "OU cible",
+    "ou_hint_required": "Obligatoire sans {{unit}} : les comptes de ce groupe cible créés sans {{unit}} sont placés ici. Dans un {{unit}}, un type de compte fixe utilise l'OU de ce {{unit}}.",
+    "ou_required": "Sans {{unit}}, l'OU cible est obligatoire."
   },
   "managed": {
     "how": "Si vous avez besoin d'une modification, adressez-vous à votre interlocuteur chez Vita Brevis. Ce qui s'applique ici est visible dans le journal d'audit sous « platform_settings_reconciled ».",
@@ -1435,7 +1438,7 @@
   },
   "zielgruppe_assign": {
     "section_title": "Groupe cible",
-    "section_desc": "Attribue le compte à un groupe cible. Les groupes de l’ancien groupe cible sont retirés, ceux du nouveau ajoutés. Le type de mot de passe s’applique aux réinitialisations futures.",
+    "section_desc": "Attribue le compte à un groupe cible. Les groupes de l’ancien groupe cible sont retirés, ceux du nouveau ajoutés. La robustesse du mot de passe s’applique aux réinitialisations futures.",
     "label": "Groupe cible",
     "none": "– Choisir un groupe cible –",
     "apply_settings": "Reprendre les paramètres du groupe cible",

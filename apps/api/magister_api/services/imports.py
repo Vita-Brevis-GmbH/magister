@@ -448,7 +448,9 @@ def _own_ou(tpl: GroupTemplate | None, school: School) -> str | None:
     """Ziel-OU einer Zielgruppe mit freier Kontoart, sonst ``None`` (= OU des
     Standorts). Liegt sie nicht im Standort, ``ValueError``: der nächste
     AD-Abgleich ordnete das Konto sonst keinem Standort zu."""
-    if tpl is None or not tpl.ad_ou:
+    if tpl is None or not tpl.ad_ou or tpl.kind in _FIXED_KINDS:
+        # Feste Kontoart: im Import gibt es immer einen Standort, und dessen
+        # OU gilt (die Ziel-OU ist dort die für Anlagen ohne Standort).
         return None
     if not ou_within_school(tpl.ad_ou, school.scope_short):
         raise ValueError(
