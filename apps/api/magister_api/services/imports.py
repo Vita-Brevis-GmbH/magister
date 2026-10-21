@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import delete as sqla_delete
 from sqlalchemy import func, select
 from sqlalchemy import update as sqla_update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
 from magister_api.ad.client import AdClient
@@ -420,6 +421,34 @@ def _parse_bool_flag(s: str, *, column: str) -> bool:
     raise ValueError(f"{column} must be true/false, got {s!r}")
 
 
+def _row_error(exc: Exception) -> str:
+    """Fehlertext einer Zeile für die Oberfläche.
+
+    Bei Datenbankfehlern nur die erste Zeile der Meldung: ``str()`` eines
+    SQLAlchemy-Fehlers enthält SQL und Parameter — beim Passwort-Import
+    wäre das das Passwort im Klartext.
+    """
+    if isinstance(exc, DBAPIError):
+        first = (str(exc.orig).strip().splitlines() or ["database error"])[0]
+        return f"database rejected the row: {first}"[:512]
+    return str(exc)[:512]
+
+
+def _validity(row: Mapping[str, str | None]) -> tuple[datetime, datetime | None]:
+    """``(valid_from, valid_to)`` einer Zuteilungszeile; leeres valid_from = jetzt.
+
+    ``ValueError``, wenn das Ende vor dem Beginn liegt — die Datenbank lehnte
+    die Zeile sonst erst beim Übernehmen ab.
+    """
+    start = _parse_date(row.get("valid_from") or "")
+    end = _parse_date(row.get("valid_to") or "")
+    effective = start or utcnow()
+    if end is not None and end < effective:
+        since = "today (valid_from is empty)" if start is None else "valid_from"
+        raise ValueError(f"valid_to {end.date().isoformat()} is before {since}")
+    return effective, end
+
+
 def _parse_grade(s: str) -> int | None:
     """Optionale Jahrgangsstufe: -1/0 = Kindergarten, 1..13 = Klassen."""
     v = (s or "").strip()
@@ -792,8 +821,7 @@ class ImportService:
         if not class_name:
             errors.append("class_name is required")
         try:
-            _parse_date(row.get("valid_from", ""))
-            _parse_date(row.get("valid_to", ""))
+            _validity(row)
         except ValueError as exc:
             errors.append(str(exc))
         try:
@@ -848,8 +876,7 @@ class ImportService:
         if role not in ALLOWED_KL_ROLES:
             errors.append(f"role must be one of {sorted(ALLOWED_KL_ROLES)}")
         try:
-            _parse_date(row.get("valid_from", ""))
-            _parse_date(row.get("valid_to", ""))
+            _validity(row)
         except ValueError as exc:
             errors.append(str(exc))
         if errors:
@@ -1410,7 +1437,7 @@ class ImportService:
                             "savepoint rollback failed for row %s: %s", staged.id, rb_exc
                         )
                 staged.applied_at = now
-                staged.applied_error = str(exc)[:512]
+                staged.applied_error = _row_error(exc)
                 applied_counts["failed"] += 1
 
         job.status = IMPORT_STATUS_APPLIED
@@ -1490,8 +1517,7 @@ class ImportService:
         row = staged.raw_data
         upn = row["student_upn"].strip().lower()
         class_name = row["class_name"].strip()
-        valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
-        valid_to = _parse_date(row.get("valid_to", ""))
+        valid_from, valid_to = _validity(row)
 
         user = await self._lookup_user(upn, kind="student")
         cls = await self._lookup_class(school_id, class_name)
@@ -1554,7 +1580,9 @@ class ImportService:
             .all()
         )
         for r in prev:
-            r.valid_to = clamp_at
+            # Beginnt die alte Zuteilung erst nach der neuen, endet sie mit
+            # ihrem Beginn (nie vor ihm — das verbietet die Datenbank).
+            r.valid_to = max(clamp_at, r.valid_from)
 
         self.session.add(
             ClassMembership(
@@ -1571,8 +1599,7 @@ class ImportService:
         upn = row["teacher_upn"].strip().lower()
         class_name = row["class_name"].strip()
         role = row["role"].strip().lower()
-        valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
-        valid_to = _parse_date(row.get("valid_to", ""))
+        valid_from, valid_to = _validity(row)
 
         user = await self._lookup_user(upn, kind="teacher")
         cls = await self._lookup_class(school_id, class_name)
