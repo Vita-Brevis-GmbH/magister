@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -24,6 +24,7 @@ from magister_api.schemas.ad_users import (
     AdUserListResponse,
     AdUserOut,
     UserDeletionImpactOut,
+    ZielgruppeOption,
 )
 from magister_api.schemas.user_attrs import (
     UserAttributesUpdate,
@@ -107,6 +108,21 @@ async def list_users(
         bool | None,
         Query(description="Filter by 'deleted in AD' marker (ad_missing_since set)."),
     ] = None,
+    jahrgangsstufe: Annotated[
+        int | None, Query(ge=-1, le=13, description="Jahrgang (-1 = KG1, 0 = KG2).")
+    ] = None,
+    group_template_id: Annotated[
+        int | None, Query(ge=0, description="Zielgruppe; 0 = keine Zielgruppe.")
+    ] = None,
+    policy: Annotated[
+        Literal["cannot_change", "never_expires", "stored"] | None,
+        Query(description="Nur Konten mit dieser Richtlinie."),
+    ] = None,
+    sort: Annotated[
+        Literal["name", "kind", "status", "jahrgangsstufe", "zielgruppe", "policy"],
+        Query(description="Spalte, nach der sortiert wird."),
+    ] = "name",
+    direction: Annotated[Literal["asc", "desc"], Query(alias="dir")] = "asc",
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AdUserListResponse:
@@ -117,11 +133,23 @@ async def list_users(
         search=search,
         class_id=class_id,
         missing=missing,
+        jahrgangsstufe=jahrgangsstufe,
+        group_template_id=group_template_id,
+        policy=policy,
+        sort=sort,
+        direction=direction,
         offset=offset,
         limit=limit,
     )
+    names = dict(listing.zielgruppen)
     return AdUserListResponse(
-        items=[AdUserOut.model_validate(r) for r in listing.rows],
+        items=[
+            AdUserOut.model_validate(r).model_copy(
+                update={"group_template_name": names.get(r.group_template_id or 0)}
+            )
+            for r in listing.rows
+        ],
+        zielgruppen=[ZielgruppeOption(id=i, name=n) for i, n in listing.zielgruppen],
         total=listing.total,
         offset=offset,
         limit=limit,

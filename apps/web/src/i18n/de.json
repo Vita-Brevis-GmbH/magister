@@ -408,7 +408,20 @@
       "error_still_in_ad": "Der User existiert noch im AD und kann nicht gelöscht werden.",
       "error_not_deletable": "Dieser Benutzer kann nicht gelöscht werden (nur Schüler/Lehrer)."
     },
-    "kind_user": "Benutzer"
+    "kind_user": "Benutzer",
+    "col_grade": "Jahrgang",
+    "col_zielgruppe": "Zielgruppe",
+    "filter_status": "Status filtern",
+    "filter_status_all": "Alle Status",
+    "filter_grade": "Jahrgang filtern",
+    "filter_grade_all": "Alle Jahrgänge",
+    "filter_zielgruppe": "Zielgruppe filtern",
+    "filter_zielgruppe_all": "Alle Zielgruppen",
+    "filter_zielgruppe_none": "Ohne Zielgruppe",
+    "filter_policy": "Richtlinie filtern",
+    "filter_policy_all": "Alle Richtlinien",
+    "policy_stored": "Passwort in Magister gespeichert",
+    "policy_stored_short": "gespeichert"
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",

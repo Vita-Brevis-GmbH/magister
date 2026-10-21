@@ -558,6 +558,8 @@ export interface AdUserOut {
   store_password: boolean;
   // Zielgruppe, nach der das Konto angelegt oder der es zugeordnet wurde.
   group_template_id?: number | null;
+  /** Ihr Name — nur in der Liste gefüllt (Spalte "Zielgruppe"). */
+  group_template_name?: string | null;
   /** Synced AD group memberships (memberOf DNs). */
   ad_groups: string[];
   /** Secondary SMTP addresses (aliases) mirrored from proxyAddresses. */
@@ -715,6 +717,8 @@ export interface DocumentTemplatePreviewOut {
 
 export interface AdUserListResponse {
   items: AdUserOut[];
+  /** Zielgruppen der Konten im Sichtbereich — die Auswahl des Filters. */
+  zielgruppen?: { id: number; name: string }[];
   total: number;
   offset: number;
   limit: number;

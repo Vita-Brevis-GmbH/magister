@@ -408,7 +408,20 @@
       "error_still_in_ad": "The user still exists in AD and cannot be deleted.",
       "error_not_deletable": "This user cannot be deleted (students/teachers only)."
     },
-    "kind_user": "User"
+    "kind_user": "User",
+    "col_grade": "Grade",
+    "col_zielgruppe": "Target group",
+    "filter_status": "Filter status",
+    "filter_status_all": "All statuses",
+    "filter_grade": "Filter grade",
+    "filter_grade_all": "All grades",
+    "filter_zielgruppe": "Filter target group",
+    "filter_zielgruppe_all": "All target groups",
+    "filter_zielgruppe_none": "No target group",
+    "filter_policy": "Filter policy",
+    "filter_policy_all": "All policies",
+    "policy_stored": "Password stored in Magister",
+    "policy_stored_short": "stored"
   },
   "password_reset": {
     "button": "Reset password",

@@ -411,7 +411,20 @@
       "error_still_in_ad": "L'utilisateur existe encore dans AD et ne peut pas être supprimé.",
       "error_not_deletable": "Cet utilisateur ne peut pas être supprimé (élèves/enseignants uniquement)."
     },
-    "kind_user": "Utilisateur"
+    "kind_user": "Utilisateur",
+    "col_grade": "Degré",
+    "col_zielgruppe": "Groupe cible",
+    "filter_status": "Filtrer le statut",
+    "filter_status_all": "Tous les statuts",
+    "filter_grade": "Filtrer le degré",
+    "filter_grade_all": "Tous les degrés",
+    "filter_zielgruppe": "Filtrer le groupe cible",
+    "filter_zielgruppe_all": "Tous les groupes cibles",
+    "filter_zielgruppe_none": "Sans groupe cible",
+    "filter_policy": "Filtrer la règle",
+    "filter_policy_all": "Toutes les règles",
+    "policy_stored": "Mot de passe enregistré dans Magister",
+    "policy_stored_short": "enregistré"
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",

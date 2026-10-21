@@ -411,7 +411,20 @@
       "error_still_in_ad": "L'utente esiste ancora in AD e non può essere eliminato.",
       "error_not_deletable": "Questo utente non può essere eliminato (solo studenti/docenti)."
     },
-    "kind_user": "Utente"
+    "kind_user": "Utente",
+    "col_grade": "Anno",
+    "col_zielgruppe": "Gruppo",
+    "filter_status": "Filtra stato",
+    "filter_status_all": "Tutti gli stati",
+    "filter_grade": "Filtra anno",
+    "filter_grade_all": "Tutti gli anni",
+    "filter_zielgruppe": "Filtra gruppo",
+    "filter_zielgruppe_all": "Tutti i gruppi",
+    "filter_zielgruppe_none": "Senza gruppo",
+    "filter_policy": "Filtra regola",
+    "filter_policy_all": "Tutte le regole",
+    "policy_stored": "Password salvata in Magister",
+    "policy_stored_short": "salvata"
   },
   "password_reset": {
     "button": "Reimposta password",

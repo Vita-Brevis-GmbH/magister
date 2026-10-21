@@ -879,9 +879,19 @@ export interface UseUsersParams {
   search?: string;
   class_id?: number;
   missing?: boolean;
+  /** Jahrgang (-1 = KG1, 0 = KG2). */
+  jahrgangsstufe?: number;
+  /** Zielgruppe; 0 = keine Zielgruppe. */
+  group_template_id?: number;
+  policy?: "cannot_change" | "never_expires" | "stored";
+  /** Spalte, nach der der Server sortiert (die Liste ist seitenweise). */
+  sort?: UserSortKey;
+  dir?: "asc" | "desc";
   offset?: number;
   limit?: number;
 }
+
+export type UserSortKey = "name" | "kind" | "status" | "jahrgangsstufe" | "zielgruppe" | "policy";
 
 export function useUsers(params: UseUsersParams = {}, opts: { keepPrevious?: boolean } = {}) {
   const qs = new URLSearchParams();
