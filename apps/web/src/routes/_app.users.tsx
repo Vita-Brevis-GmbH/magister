@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -79,6 +79,10 @@ export function UsersPage(): JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [attrsOpen, setAttrsOpen] = useState(false);
   const [zielgruppeOpen, setZielgruppeOpen] = useState(false);
+  // Die Konten, für die "Zielgruppe zuordnen" geöffnet wurde — fest, damit das
+  // Ergebnis stehen bleibt, auch wenn die Auswahl danach geleert wird.
+  const [zielgruppeGuids, setZielgruppeGuids] = useState<string[]>([]);
+  const [zielgruppeSchool, setZielgruppeSchool] = useState<number | undefined>(undefined);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ ok: number; failed: number } | null>(null);
   const me = useCurrentUser();
@@ -155,9 +159,22 @@ export function UsersPage(): JSX.Element {
   const items = q.data?.items ?? [];
   const selectableGuids = items.map((u) => u.ad_object_guid);
   const allSelected = selectableGuids.length > 0 && selectableGuids.every((g) => selected.has(g));
-  // Permanent delete is step 2 — only offered when every selected account is
-  // already deactivated.
+  // Ausgewählt zählt nur, was angezeigt wird: eine Sammelaktion darf nie ein
+  // Konto treffen, das ein Filter oder eine Änderung aus der Ansicht genommen
+  // hat. Permanent delete is step 2 — only offered when every selected
+  // account is already deactivated.
   const selectedUsers = items.filter((u) => selected.has(u.ad_object_guid));
+  const visibleSelected = selectedUsers.map((u) => u.ad_object_guid);
+
+  // Verschwindet eine Zeile aus der Ansicht (Filter, neu geladene Liste nach
+  // einer Aktion), verschwindet sie auch aus der Auswahl.
+  useEffect(() => {
+    const shown = new Set((q.data?.items ?? []).map((u) => u.ad_object_guid));
+    setSelected((prev) => {
+      const kept = [...prev].filter((g) => shown.has(g));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [q.data]);
   const allSelectedDisabled = selectedUsers.length > 0 && selectedUsers.every((u) => !u.enabled);
 
   function toggle(guid: string): void {
@@ -183,19 +200,37 @@ export function UsersPage(): JSX.Element {
   }
 
   function runBulk(action: BulkUserAction): void {
-    const guids = [...selected];
+    const guids = visibleSelected;
     if (guids.length === 0) return;
     bulk.mutate(
       { guids, action },
       {
         onSuccess: (res) => {
           setBulkResult({ ok: res.ok.length, failed: res.failed.length });
-          setSelected(new Set(res.failed.map((f) => f.guid)));
+          // Nach der Aktion ist die Auswahl leer; was scheiterte, sagt die
+          // Meldung darunter.
+          setSelected(new Set());
+          setZielgruppeOpen(false);
           setConfirmBulkDelete(false);
           setAttrsOpen(false);
         },
       },
     );
+  }
+
+  function openZielgruppe(): void {
+    if (zielgruppeOpen) {
+      setZielgruppeOpen(false);
+      return;
+    }
+    setZielgruppeGuids(visibleSelected);
+    setZielgruppeSchool(
+      new Set(selectedUsers.map((u) => u.school_id)).size === 1
+        ? (selectedUsers[0]?.school_id ?? undefined)
+        : undefined,
+    );
+    setZielgruppeOpen(true);
+    setBulkResult(null);
   }
 
   if (childMatches.length > 0) return <Outlet />;
@@ -310,9 +345,11 @@ export function UsersPage(): JSX.Element {
         </select>
       </div>
 
-      {canEditUsers && selected.size > 0 ? (
+      {canEditUsers && visibleSelected.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-md border bg-accent/40 px-3 py-2 text-sm">
-          <span className="font-medium">{t("users.bulk.selected", { count: selected.size })}</span>
+          <span className="font-medium">
+            {t("users.bulk.selected", { count: visibleSelected.length })}
+          </span>
           <Button
             type="button"
             size="sm"
@@ -346,7 +383,7 @@ export function UsersPage(): JSX.Element {
               size="sm"
               variant="outline"
               disabled={bulk.isPending}
-              onClick={() => setZielgruppeOpen((v) => !v)}
+              onClick={openZielgruppe}
             >
               {t("zielgruppe_assign.bulk_button")}
             </Button>
@@ -394,17 +431,18 @@ export function UsersPage(): JSX.Element {
         </div>
       ) : null}
 
-      {isAdmin && zielgruppeOpen && selected.size > 0 ? (
-        <div className="rounded-md border bg-card p-3">
+      {isAdmin && zielgruppeOpen && zielgruppeGuids.length > 0 ? (
+        <div className="space-y-2 rounded-md border bg-card p-3">
           <ZielgruppeAssign
-            guids={[...selected]}
+            guids={zielgruppeGuids}
             // Nur wenn alle gewählten am selben Standort sind, nach ihm filtern.
-            schoolId={
-              new Set(selectedUsers.map((u) => u.school_id)).size === 1
-                ? selectedUsers[0]?.school_id
-                : undefined
-            }
+            schoolId={zielgruppeSchool}
+            // Nach dem Zuordnen ist die Auswahl leer; das Ergebnis bleibt hier stehen.
+            onDone={() => setSelected(new Set())}
           />
+          <Button type="button" size="sm" variant="ghost" onClick={() => setZielgruppeOpen(false)}>
+            {t("common.close")}
+          </Button>
         </div>
       ) : null}
 
@@ -622,7 +660,7 @@ export function UsersPage(): JSX.Element {
       <UserStatusModal user={statusTarget} onClose={() => setStatusTarget(null)} />
       <BulkAttrsModal
         open={attrsOpen}
-        count={selected.size}
+        count={visibleSelected.length}
         busy={bulk.isPending}
         onClose={() => setAttrsOpen(false)}
         onApply={(payload) => runBulk({ type: "attrs", payload })}

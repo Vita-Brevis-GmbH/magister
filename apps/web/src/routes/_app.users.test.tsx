@@ -4,7 +4,7 @@
  */
 /* @vitest-environment jsdom */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -20,6 +20,9 @@ vi.mock("@tanstack/react-router", async (orig) => ({
 const { UsersPage } = await import("./_app.users");
 
 const fetchMock = vi.fn();
+// Ob das Konto in der Liste erscheint — eine Aktion kann es aus der Ansicht
+// nehmen (es passt danach nicht mehr zum Filter).
+let showUser = true;
 
 const USER = {
   ad_object_guid: "g1",
@@ -57,13 +60,19 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  showUser = true;
   fetchMock.mockReset();
   fetchMock.mockImplementation((url: string) => {
     const u = String(url);
+    if (u.startsWith("/api/users/") && u !== "/api/users/mail-domains")
+      return Promise.resolve(json(USER));
     if (u.startsWith("/api/users"))
       return Promise.resolve(
         json({
-          items: [USER],
+          items:
+            !showUser || new URL(u, "http://x").searchParams.get("jahrgangsstufe") === "1"
+              ? []
+              : [USER],
           zielgruppen: [{ id: 7, name: "Schüler:in Zyklus 1" }],
           total: 1,
           offset: 0,
@@ -74,6 +83,44 @@ beforeEach(() => {
     if (u.endsWith("/api/me/preferences"))
       return Promise.resolve(
         json({ language: "de", region: "CH", date_format: "DD.MM.YYYY", time_format: "24h" }),
+      );
+    if (u.includes("/api/admin/group-templates/7/assign")) {
+      showUser = false; // passt nach dem Zuordnen nicht mehr zum Filter
+      return Promise.resolve(
+        json([
+          {
+            ad_object_guid: "g1",
+            ok: true,
+            error: null,
+            added: [],
+            removed: [],
+            failed: [],
+            ou_unchanged: false,
+          },
+        ]),
+      );
+    }
+    if (u.includes("/api/admin/group-templates"))
+      return Promise.resolve(
+        json([
+          {
+            id: 7,
+            name: "Schüler:in Zyklus 1",
+            description: null,
+            kind: "student_zyklus1",
+            ad_groups: [],
+            school_ids: [1],
+            status: "active",
+            password_profile: "readable",
+            force_change: false,
+            cannot_change_password: true,
+            password_never_expires: true,
+            store_password: true,
+            ad_ou: null,
+            created_at: "2026-10-21T00:00:00Z",
+            updated_at: "2026-10-21T00:00:00Z",
+          },
+        ]),
       );
     if (u.endsWith("/api/me/modules"))
       return Promise.resolve(json({ profile: "school", modules: [] }));
@@ -133,5 +180,54 @@ describe("Benutzerliste", () => {
       expect(p.get("policy")).toBe("stored");
       expect(p.get("enabled")).toBe("false");
     });
+  });
+});
+
+describe("Benutzerliste — Mehrfachauswahl", () => {
+  it("vergisst Zeilen, die ein Filter ausblendet", async () => {
+    renderPage();
+    await screen.findByRole("cell", { name: "3" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Auswählen" }));
+    expect(screen.getByText("1 ausgewählt")).toBeInTheDocument();
+    // Filter blendet die Zeile aus → keine Auswahl mehr, keine Sammelaktion.
+    await user.selectOptions(screen.getByLabelText("Jahrgang filtern"), "1");
+    await waitFor(() => expect(screen.queryByText("1 ausgewählt")).not.toBeInTheDocument());
+    // Zurück: die Zeile ist wieder da, aber nicht mehr ausgewählt.
+    await user.selectOptions(screen.getByLabelText("Jahrgang filtern"), "");
+    await screen.findByRole("cell", { name: "3" });
+    expect(screen.getByRole("checkbox", { name: "Auswählen" })).not.toBeChecked();
+  });
+
+  it("ist nach einer Sammelaktion leer", async () => {
+    renderPage();
+    await screen.findByRole("cell", { name: "3" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Auswählen" }));
+    const bar = screen.getByText("1 ausgewählt").parentElement!;
+    await user.click(within(bar).getByRole("button", { name: "Deaktivieren" }));
+    expect(await screen.findByText(/erfolgreich/)).toBeInTheDocument();
+    expect(screen.queryByText("1 ausgewählt")).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Auswählen" })).not.toBeChecked();
+  });
+});
+
+describe("Benutzerliste — Auswahl nach dem Zuordnen", () => {
+  it("hält keine Zeile fest, die nach der Aktion nicht mehr angezeigt wird", async () => {
+    renderPage();
+    await screen.findByRole("cell", { name: "3" });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("checkbox", { name: "Auswählen" }));
+    await user.click(screen.getByRole("button", { name: "Zielgruppe zuweisen" }));
+    const select = await screen.findByLabelText("Zielgruppe");
+    await waitFor(() =>
+      expect(within(select).getByText("Schüler:in Zyklus 1")).toBeInTheDocument(),
+    );
+    await user.selectOptions(select, "7");
+    await user.click(screen.getByRole("button", { name: "Zuordnen" }));
+    // Das Konto ist aus der Ansicht verschwunden — und damit aus der Auswahl:
+    // keine Leiste mit "1 ausgewählt", die eine nächste Aktion darauf erlaubte.
+    await waitFor(() => expect(screen.queryByRole("cell", { name: "3" })).not.toBeInTheDocument());
+    expect(screen.queryByText("1 ausgewählt")).not.toBeInTheDocument();
   });
 });
