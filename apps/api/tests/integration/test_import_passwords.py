@@ -273,3 +273,74 @@ async def test_password_that_expires_is_set_but_not_stored(
     assert lia.password_never_expires is False
     assert lia.store_password is False
     assert await PasswordVaultService(db_session, app_settings).get(LIA) is None
+
+
+@pytest.mark.asyncio
+async def test_pdf_class_list_is_the_exception_beside_the_csv(
+    as_admin: AsyncClient,
+    app: FastAPI,
+    db_session: AsyncSession,
+    app_settings: Settings,
+    school_a: int,
+    mock_ad: AdClient,
+    _setup: None,
+) -> None:
+    """Klassenliste als PDF: Zeilen über UPN oder — veraltet — PC-Anmeldenamen."""
+    from tests.unit.test_import_pdf import klassenliste
+
+    lia = await db_session.get(AdUserCache, LIA)
+    assert lia is not None
+    lia.sam_account_name = "li.a"
+    await db_session.commit()
+    pdf = klassenliste(
+        [
+            # Lia: UPN in der Liste veraltet, gefunden über den PC-Namen.
+            ("Lia", "lia.alt@sus-seftigen.ch", "li.a", "Loewe-Sofa-82", "nein"),
+            ("Tim", "tim@schule.ch", "tim", "Tiger-Berg-17", "ja"),
+            ("Niemand", "nie@schule.ch", "nie", "Nie-Mand-13", "nein"),
+        ]
+    )
+    r = await as_admin.post(
+        f"/imports?kind=passwords&school_id={school_a}",
+        files={"file": ("klasse4.pdf", pdf, "application/pdf")},
+    )
+    assert r.status_code == 201, r.text
+    job = (await as_admin.get(f"/imports/{r.json()['id']}")).json()
+    assert job["filename"] == "klasse4.pdf"
+    by_row = {row["row_num"]: row for row in job["rows"]}
+    assert by_row[1]["action"] == "update"
+    assert by_row[1]["raw_data"]["upn"] == "lia@schule.ch"
+    assert "matched by sam_account_name" in by_row[1]["errors"][0]
+    assert by_row[2]["action"] == "update"
+    assert by_row[3]["action"] == "error"
+    for secret in ("Loewe-Sofa-82", "Tiger-Berg-17", "Nie-Mand-13"):
+        assert secret not in str(job)
+
+    body = await _apply(as_admin, app, mock_ad, job["id"])
+    assert body["summary"]["applied"]["updated"] == 2
+    vault = PasswordVaultService(db_session, app_settings)
+    # Lia: "Wechsel nein" + festes Konto → im Tresor, mit Bindestrichen.
+    assert await vault.get(LIA) == "Loewe-Sofa-82"
+    # Tim: "Wechsel ja" → nur im AD.
+    assert await vault.get(TIM) is None
+
+
+@pytest.mark.asyncio
+async def test_pdf_only_for_passwords_and_unreadable_pdf(
+    as_admin: AsyncClient, school_a: int, _setup: None
+) -> None:
+    from tests.unit.test_import_pdf import klassenliste
+
+    pdf = klassenliste([("Lia", "lia@schule.ch", "lia", "Loewe-Sofa-82", "nein")])
+    r = await as_admin.post(
+        f"/imports?kind=students&school_id={school_a}",
+        files={"file": ("k.pdf", pdf, "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "pdf_only_for_passwords"
+    r = await as_admin.post(
+        f"/imports?kind=passwords&school_id={school_a}",
+        files={"file": ("k.pdf", b"%PDF-1.7\nkaputt", "application/pdf")},
+    )
+    assert r.status_code == 400
+    assert r.json()["detail"] == "pdf_unreadable"

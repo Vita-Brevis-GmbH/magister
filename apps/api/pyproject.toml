@@ -30,6 +30,7 @@ dependencies = [
     "segno>=1.6",
     "slowapi>=0.1.9",
     "weasyprint>=62.3",
+    "pdfplumber>=0.11",
 ]
 
 [project.optional-dependencies]

@@ -14,6 +14,7 @@ import csv
 import io
 import logging
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -434,6 +435,23 @@ def _flag(row: dict[str, str], column: str, default: bool) -> bool:
     return _parse_bool_flag(row[column], column=column)
 
 
+def _csv_reader(kind: str, csv_text: str) -> csv.DictReader[str]:
+    """CSV reader after checking the header against the template of ``kind``."""
+    template_header = TEMPLATES[kind][0]
+    optional = OPTIONAL_HEADERS.get(kind, [])
+    required = [h for h in template_header if h not in optional]
+    reader = csv.DictReader(io.StringIO(csv_text))
+    got = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
+    # Accept the required columns, optionally followed by the optional
+    # columns in order (so both the old and the new template validate).
+    accepted = [[h.lower() for h in required + optional[:k]] for k in range(len(optional) + 1)]
+    if got not in accepted:
+        raise InvalidCsvError(
+            f"csv header must be {required} (optional: {optional}), got {reader.fieldnames!r}"
+        )
+    return reader
+
+
 #: Welche Kontoarten einer Zielgruppe in welchem Import erlaubt sind (eine
 #: Zielgruppe ohne feste Kontoart — "custom" oder leer — passt überall).
 _ZIELGRUPPE_KINDS: dict[str, tuple[str, ...]] = {
@@ -567,28 +585,29 @@ class ImportService:
         *,
         school_id: int,
         kind: str,
-        csv_text: str,
+        csv_text: str | None = None,
+        rows: list[dict[str, str]] | None = None,
         filename: str | None,
         ip: str | None,
         request_id: str,
     ) -> StageSummary:
+        """Stage a CSV — or, for passwords only, rows already read from a PDF.
+
+        PDF rows are numbered from 1 (the first account); CSV rows from 2,
+        because the header is row 1.
+        """
         if kind not in TEMPLATES:
             raise InvalidCsvError(f"unknown import kind: {kind}")
         self._seen_upns = set()
         self._seen_sams = set()
         self._seen_names = set()
-        template_header = TEMPLATES[kind][0]
-        optional = OPTIONAL_HEADERS.get(kind, [])
-        required = [h for h in template_header if h not in optional]
-        reader = csv.DictReader(io.StringIO(csv_text))
-        got = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
-        # Accept the required columns, optionally followed by the optional
-        # columns in order (so both the old and the new template validate).
-        accepted = [[h.lower() for h in required + optional[:k]] for k in range(len(optional) + 1)]
-        if got not in accepted:
-            raise InvalidCsvError(
-                f"csv header must be {required} (optional: {optional}), got {reader.fieldnames!r}"
-            )
+        numbered: Iterable[tuple[int, Mapping[str, str | None]]]
+        if rows is not None:
+            if kind != IMPORT_KIND_PASSWORDS:
+                raise InvalidCsvError("pdf_only_for_passwords")
+            numbered = enumerate(rows, start=1)
+        else:
+            numbered = enumerate(_csv_reader(kind, csv_text or ""), start=2)
 
         job = ImportJob(
             school_id=school_id,
@@ -608,7 +627,7 @@ class ImportService:
             IMPORT_ACTION_ERROR: 0,
         }
 
-        for i, raw in enumerate(reader, start=2):  # start=2 → header is row 1
+        for i, raw in numbered:
             # Normalize whitespace.
             row = {k: (v or "").strip() for k, v in raw.items() if k}
             secret_enc: object | None = None
@@ -1143,10 +1162,24 @@ class ImportService:
 
         return IMPORT_ACTION_CREATE, []
 
-    async def _password_target(self, school_id: int, upn: str) -> AdUserCache | None:
-        """Das Konto einer Passwort-Zeile — nur am Standort des Imports."""
+    async def _password_target(self, school_id: int, upn: str, sam: str = "") -> AdUserCache | None:
+        """Das Konto einer Passwort-Zeile — nur am Standort des Imports.
+
+        Zuerst über den UPN, sonst über den PC-Anmeldenamen (PDF-Listen
+        alter Anlagen führen manchmal einen veralteten UPN).
+        """
+        if upn:
+            stmt = select(AdUserCache).where(
+                AdUserCache.upn == upn,
+                AdUserCache.school_id == school_id,
+            )
+            user = (await self.session.execute(stmt)).scalar_one_or_none()
+            if user is not None or not sam:
+                return user
+        if not sam:
+            return None
         stmt = select(AdUserCache).where(
-            AdUserCache.upn == upn,
+            func.lower(AdUserCache.sam_account_name) == sam.lower(),
             AdUserCache.school_id == school_id,
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
@@ -1181,20 +1214,28 @@ class ImportService:
         Unterstufe oft eine eigene, lockere Richtlinie (Fine-Grained Policy).
         """
         upn = (row.get("upn") or "").strip().lower()
-        if not upn:
+        sam = (row.get("sam_account_name") or "").strip()
+        if not upn and not sam:
             return IMPORT_ACTION_ERROR, ["upn is required"]
-        if upn in self._seen_upns:
-            return IMPORT_ACTION_ERROR, [f"upn {upn!r} appears more than once in this file"]
-        self._seen_upns.add(upn)
         if not password:
             return IMPORT_ACTION_ERROR, ["password is required"]
         if len(password) > _MAX_PASSWORD_LEN or any(ord(c) < 32 for c in password):
             return IMPORT_ACTION_ERROR, [
                 f"password is too long (max {_MAX_PASSWORD_LEN}) or contains control characters"
             ]
-        user = await self._password_target(school_id, upn)
+        user = await self._password_target(school_id, upn, sam)
         if user is None:
-            return IMPORT_ACTION_ERROR, [f"account {upn!r} not found at this school"]
+            return IMPORT_ACTION_ERROR, [f"account {upn or sam!r} not found at this school"]
+        notes: list[str] = []
+        if user.upn.lower() != upn:
+            # Gefunden über den PC-Anmeldenamen: die Zeile gilt diesem Konto.
+            if upn:
+                notes.append(f"matched by sam_account_name {sam!r}: upn {upn!r} is outdated")
+            upn = user.upn.lower()
+            row["upn"] = upn
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"account {upn!r} appears more than once in this file"]
+        self._seen_upns.add(upn)
         if not user.enabled:
             return IMPORT_ACTION_ERROR, [f"account {upn!r} is disabled"]
         try:
@@ -1210,7 +1251,6 @@ class ImportService:
             return IMPORT_ACTION_ERROR, ["secrets key not configured"]
         # Hinweise (keine Fehler): die Zeile setzt das Passwort im AD, legt es
         # aber nicht im Tresor ab — vor dem Übernehmen sichtbar.
-        notes: list[str] = []
         if not (await self._app_settings_row()).password_store_enabled:
             notes.append("password vault is turned off: password is set in AD only")
         elif not password_stays(
@@ -1867,7 +1907,7 @@ class ImportService:
         ).scalar_one_or_none()
         if not password:
             raise ValueError("password missing — upload the file again")
-        user = await self._password_target(school_id, upn)
+        user = await self._password_target(school_id, upn, row.get("sam_account_name") or "")
         if user is None or not user.enabled:
             raise ValueError(f"account {upn!r} not found at this school")
         force_change, cannot_change, never_expires = await self._password_flags(row, user)

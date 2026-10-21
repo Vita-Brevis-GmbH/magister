@@ -287,6 +287,7 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-17** Tresor nur bei festem Passwort: in der Zielgruppe und beim Konto lässt sich „Passwort in Magister speichern" nur mit „Änderung erzwingen" aus, „Benutzer kann Passwort ändern" aus und „läuft nie ab" an setzen; „läuft nie ab" wieder ausschalten → gespeichertes Passwort weg. Reset mit erzwungener Änderung → kein Passwort im Tresor.
 - [ ] **F-18** Anlage ohne Standort: globale Zielgruppe ohne feste Kontoart mit Ziel-OU `OU=Sonstige,…` → Konto ohne Standort in dieser OU; ohne Ziel-OU → verständliche Meldung, nichts im AD.
 - [ ] **F-16** Passwort-Import (Art „Passwörter bestehender Konten"): Vorschau zeigt kein Passwort; nach Übernehmen Anmeldung mit dem importierten Passwort im AD möglich, Klassen-Passwortliste zeigt es; `import_staged_rows.secret_enc` ist danach leer; Konto anderer Schule → Zeilenfehler; Schulleitung → 403.
+- [ ] **F-19** Passwort-Import aus PDF-Klassenliste (Ausnahme, Standard bleibt CSV): Klassen-PDF der alten Anlage hochladen → Vorschau mit allen Kindern, kein Passwort sichtbar; umgebrochene Passwörter („Loewe-/Sofa-82") nach dem Übernehmen mit Bindestrich gültig; Zeile mit veraltetem UPN wird über „Benutzername PC" gefunden (Hinweis in der Zeile); „Wechsel ja" → Passwort nur im AD; PDF bei anderer Importart → Meldung „nur beim Passwort-Import".
 
 ### 7.2 Firma (Kunde B)
 

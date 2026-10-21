@@ -45,7 +45,7 @@ const SCHOOL_KINDS: ImportKind[] = [
 ];
 const COMPANY_KINDS: ImportKind[] = ["company_users", "passwords"];
 
-function ImportsPage(): JSX.Element {
+export function ImportsPage(): JSX.Element {
   const { t } = useTranslation();
   const fmt = useFormatters();
   const jobs = useImportJobs();
@@ -201,6 +201,9 @@ function NewImportWizard({
 
         <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm">
           <p className="text-muted-foreground">{t(`imports.kind_${kind}_desc`)}</p>
+          {kind === "passwords" && (
+            <p className="mt-2 text-muted-foreground">{tt("imports.passwords_pdf_hint")}</p>
+          )}
           <p className="mt-2">
             <a
               href={`/api/imports/templates/${kind}.csv`}
@@ -236,12 +239,13 @@ function NewImportWizard({
 
         <div className="space-y-1">
           <label htmlFor="import-file" className="text-sm font-medium">
-            {t("imports.file_label")}
+            {kind === "passwords" ? tt("imports.file_label_passwords") : t("imports.file_label")}
           </label>
           <input
             id="import-file"
             type="file"
-            accept=".csv,text/csv"
+            // Standard ist die CSV; nur Passwörter auch als PDF-Klassenliste.
+            accept={kind === "passwords" ? ".csv,text/csv,.pdf,application/pdf" : ".csv,text/csv"}
             onChange={handleFile}
             className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-primary-foreground hover:file:bg-primary/90"
           />
@@ -454,6 +458,7 @@ function stageErrorMessage(err: ApiError, t: (k: string) => string): string {
   if (err.status === 400) {
     if (err.code?.includes("csv header")) return t("imports.error_invalid_header");
     if (err.code === "csv_not_utf8") return t("imports.error_not_utf8");
+    if (err.code?.startsWith("pdf_")) return t(`imports.error_${err.code}`);
     if (err.code === "unknown_kind") return t("imports.error_unknown_kind");
     if (err.code === "school_id_required_for_admin") return t("imports.error_school_required");
     return err.code || t("errors.generic");
