@@ -42,11 +42,27 @@ SORT_KEYS: tuple[str, ...] = ("name", "kind", "status", "jahrgangsstufe", "zielg
 POLICY_FILTERS: tuple[str, ...] = ("cannot_change", "never_expires", "stored")
 
 
+def _shown_name() -> Any:
+    """Der Name, den die Liste anzeigt (``displayLabel`` im Web): Anzeigename,
+    sonst "Vorname Nachname", sonst die UPN — klein, damit Gross/Klein nicht
+    über die Reihenfolge entscheidet. Danach sortieren, nicht nach Nachname:
+    sonst stimmt die Sortierung nicht mit dem überein, was man liest."""
+    return func.lower(
+        func.coalesce(
+            func.nullif(func.trim(AdUserCache.display_name), ""),
+            func.nullif(
+                func.trim(func.concat_ws(" ", AdUserCache.given_name, AdUserCache.surname)), ""
+            ),
+            AdUserCache.upn,
+        )
+    )
+
+
 def _order(sort: str, direction: str) -> list[Any]:
     """ORDER BY für eine Spalte der Benutzerliste; leere Werte immer zuletzt.
 
-    Name und UPN hängen immer an: gleiche Werte bleiben so in fester
-    Reihenfolge, und das Blättern springt nicht.
+    Angezeigter Name und UPN hängen immer an: gleiche Werte bleiben so in
+    fester Reihenfolge, und das Blättern springt nicht.
     """
     desc = direction == "desc"
     status = case(
@@ -55,7 +71,7 @@ def _order(sort: str, direction: str) -> list[Any]:
         else_=0,
     )
     primary: list[Any] = {
-        "name": [AdUserCache.surname, AdUserCache.given_name],
+        "name": [_shown_name()],
         "kind": [AdUserCache.kind],
         "status": [status],
         "jahrgangsstufe": [AdUserCache.jahrgangsstufe],
@@ -65,7 +81,7 @@ def _order(sort: str, direction: str) -> list[Any]:
             AdUserCache.password_never_expires.desc(),
             AdUserCache.store_password.desc(),
         ],
-    }.get(sort, [AdUserCache.surname, AdUserCache.given_name])
+    }.get(sort, [_shown_name()])
     ordered: list[Any] = []
     for col in primary:
         if sort == "policy":
@@ -73,7 +89,7 @@ def _order(sort: str, direction: str) -> list[Any]:
             ordered.append(col if not desc else col.element.asc())
         else:
             ordered.append((col.desc() if desc else col.asc()).nulls_last())
-    return [*ordered, AdUserCache.surname, AdUserCache.given_name, AdUserCache.upn]
+    return [*ordered, _shown_name(), AdUserCache.upn]
 
 
 class AdUserListingRepository(BaseRepository):

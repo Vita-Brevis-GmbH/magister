@@ -129,3 +129,38 @@ async def test_filters(as_schulleitung_a: AsyncClient, seeded: dict[str, int]) -
     assert r.json()["total"] == 2
     bad = await c.get("/users", params={"sort": "passwort"})
     assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_name_sort_follows_the_shown_name(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    """Sortiert wird nach dem, was die Liste zeigt — Anzeigename vor Nachname."""
+    for i, (given, surname, display) in enumerate(
+        [
+            ("Anna", "Zürcher", None),  # zeigt "Anna Zürcher"
+            ("Beat", "Arnold", "Zeno Arnold"),  # zeigt "Zeno Arnold"
+            ("Carla", "Meier", "carla meier"),  # klein geschrieben
+        ],
+        start=50,
+    ):
+        db_session.add(
+            AdUserCache(
+                ad_object_guid=_guid(i),
+                school_id=school_a,
+                upn=f"{given.lower()}@schule.ch",
+                given_name=given,
+                surname=surname,
+                display_name=display,
+                kind="student",
+                enabled=True,
+            )
+        )
+    await db_session.commit()
+    r = await as_schulleitung_a.get("/users", params={"limit": 200, "sort": "name"})
+    shown = [
+        u["display_name"] or f"{u['given_name']} {u['surname']}"
+        for u in r.json()["items"]
+        if u["upn"].endswith("@schule.ch")
+    ]
+    assert shown == ["Anna Zürcher", "carla meier", "Zeno Arnold"]
