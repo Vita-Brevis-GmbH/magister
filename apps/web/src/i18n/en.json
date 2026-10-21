@@ -782,7 +782,7 @@
     "kind_class_memberships": "Class memberships (students)",
     "kind_class_teachers": "Class teachers",
     "kind_classes_desc": "Create or update classes. Columns: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (optional, for multi-grade/Basisstufe; empty = single grade). Kindergarten: -1 = 1st KG, 0 = 2nd KG.",
-    "kind_class_memberships_desc": "Assign students to a class. UPN must exist in AD. Columns: student_upn, class_name, valid_from, valid_to.",
+    "kind_class_memberships_desc": "Assign students to a class. UPN must exist in AD. Columns: student_upn, class_name, valid_from, valid_to, jahrgangsstufe. The grade (-1/0 = kindergarten, 1–13) overwrites the student's current one; blank keeps the current one, or the class's grade if there is none. If the cycle changes, the cycle groups follow in AD. Students already in the class only get the new grade.",
     "kind_class_teachers_desc": "Assign class teachers (haupt/co/stellvertretung). Columns: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "New students (create AD accounts)",
     "kind_students_desc": "Creates new AD accounts and assigns them to a class. Passwords are generated. Columns: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Optional: zielgruppe (target group name; blank = the default target group of the account type or cycle). Blank setting columns take the target group's defaults.",
@@ -876,7 +876,19 @@
     "col_manager": "Person",
     "role_lead": "Lead",
     "role_deputy": "Deputy",
-    "col_departments": "Departments"
+    "col_departments": "Departments",
+    "accounts_title": "Accounts by type",
+    "accounts_total": "Total: {{count}} accounts",
+    "col_kind": "Account type",
+    "col_enabled": "Active",
+    "col_disabled": "Disabled",
+    "col_stored": "Password stored",
+    "col_without_zielgruppe": "Without target group",
+    "col_missing_in_ad": "Missing in AD",
+    "zielgruppen_title": "Accounts by target group",
+    "zielgruppen_intro": "How many accounts are assigned to each target group, counted at the account's location.",
+    "col_zielgruppe": "Target group",
+    "without_zielgruppe": "Without target group"
   },
   "system": {
     "title": "System",
@@ -1299,7 +1311,13 @@
     "groups_label": "AD groups",
     "groups_hint": "Applied to members in AD when assigned.",
     "groups_count": "{{count}} groups",
-    "global_option": "— no {{unit}} (global) —"
+    "global_option": "— no {{unit}} (global) —",
+    "details": "Details",
+    "overview": "Overview",
+    "global_label": "all locations",
+    "details_text": "Description",
+    "created_at": "Created on",
+    "since": "since {{date}}"
   },
   "rename": {
     "button": "Name change",

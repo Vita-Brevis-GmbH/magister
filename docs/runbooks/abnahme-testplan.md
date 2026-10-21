@@ -288,6 +288,9 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-18** Anlage ohne Standort: globale Zielgruppe ohne feste Kontoart mit Ziel-OU `OU=Sonstige,…` → Konto ohne Standort in dieser OU; ohne Ziel-OU → verständliche Meldung, nichts im AD.
 - [ ] **F-16** Passwort-Import (Art „Passwörter bestehender Konten"): Vorschau zeigt kein Passwort; nach Übernehmen Anmeldung mit dem importierten Passwort im AD möglich, Klassen-Passwortliste zeigt es; `import_staged_rows.secret_enc` ist danach leer; Konto anderer Schule → Zeilenfehler; Schulleitung → 403.
 - [ ] **F-19** Passwort-Import aus PDF-Klassenliste (Ausnahme, Standard bleibt CSV): Klassen-PDF der alten Anlage hochladen → Vorschau mit allen Kindern, kein Passwort sichtbar; umgebrochene Passwörter („Loewe-/Sofa-82") nach dem Übernehmen mit Bindestrich gültig; Zeile mit veraltetem UPN wird über „Benutzername PC" gefunden (Hinweis in der Zeile); „Wechsel ja" → Passwort nur im AD; PDF bei anderer Importart → Meldung „nur beim Passwort-Import".
+- [ ] **F-20** Import Klassen-Zuteilungen mit Spalte `jahrgangsstufe`: Jahrgang überschreibt den bisherigen (Benutzerliste, Spalte Jahrgang); leer → bisheriger bleibt, ohne einen der der Klasse; schon in der Klasse → Zeile „Aktualisieren", nur der Jahrgang ändert sich; Zykluswechsel → Zyklus-Gruppen im AD folgen; alte CSV ohne die Spalte geht weiter.
+- [ ] **F-21** Abteilungen: Klick auf Name oder „Details" öffnet die Detailseite (nicht mehr die Liste); Übersicht zeigt Standort, Mitglieder, Leitung/Stellvertretung, AD-Gruppen, Beschreibung; Mitglieder mit „seit"-Datum.
+- [ ] **F-22** Reports: „Konten nach Kontoart" und „Konten nach Zielgruppe" (aktiv/deaktiviert, Passwort gespeichert, ohne Zielgruppe, fehlt im AD) stimmen mit der Benutzerliste überein; Schulleitung sieht nur ihren Standort; an einer Schule mit Modul Abteilungen erscheinen auch die Abteilungs-Reports.
 
 ### 7.2 Firma (Kunde B)
 

@@ -4,6 +4,8 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  AccountsByKindReport,
+  AccountsByZielgruppeReport,
   AdConnectionTestOut,
   AdSyncResultOut,
   AdUserCreateRequest,
@@ -1742,6 +1744,20 @@ export function useActivityReport(days: number = 30) {
 // Company edition (M6 #8): department-centric reports. `enabled` lets the page
 // fetch these only in the company profile (and the school reports only in the
 // school profile), so a school instance never issues the department queries.
+export function useAccountsByZielgruppe() {
+  return useQuery<AccountsByZielgruppeReport>({
+    queryKey: ["reports", "accounts-by-zielgruppe"],
+    queryFn: () => apiFetch<AccountsByZielgruppeReport>("/reports/accounts-by-zielgruppe"),
+  });
+}
+
+export function useAccountsByKind() {
+  return useQuery<AccountsByKindReport>({
+    queryKey: ["reports", "accounts-by-kind"],
+    queryFn: () => apiFetch<AccountsByKindReport>("/reports/accounts-by-kind"),
+  });
+}
+
 export function useMembersByDepartment(enabled = true) {
   return useQuery<MembersByDepartmentReport>({
     queryKey: ["reports", "members-by-department"],

@@ -72,6 +72,7 @@ from magister_api.models.school_class import (
 )
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.group_templates import GroupTemplateRepository
+from magister_api.services.group_reassign import GradeChange, reassign_cycle_groups
 from magister_api.services.password_vault import PasswordVaultService, password_stays
 from magister_api.tenancy.keys import keys_for
 
@@ -100,11 +101,13 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
         ],
     ),
     IMPORT_KIND_CLASS_MEMBERSHIPS: (
-        ["student_upn", "class_name", "valid_from", "valid_to"],
+        # jahrgangsstufe (optional): überschreibt den Jahrgang der Schülerin /
+        # des Schülers. Leer: bisheriger Jahrgang, ohne einen der der Klasse.
+        ["student_upn", "class_name", "valid_from", "valid_to", "jahrgangsstufe"],
         [
-            ["anna.beispiel@schule.ch", "3a", "2026-08-12", ""],
-            ["ben.muster@schule.ch", "3a", "2026-08-12", ""],
-            ["clara.frey@schule.ch", "3b", "2026-08-12", "2027-07-04"],
+            ["anna.beispiel@schule.ch", "3a", "2026-08-12", "", "3"],
+            ["ben.muster@schule.ch", "3a", "2026-08-12", "", "4"],
+            ["clara.frey@schule.ch", "3b", "2026-08-12", "2027-07-04", "3"],
         ],
     ),
     IMPORT_KIND_CLASS_TEACHERS: (
@@ -261,6 +264,7 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
 # Old files without them still validate; the template ships them included.
 OPTIONAL_HEADERS: dict[str, list[str]] = {
     IMPORT_KIND_CLASSES: ["jahrgangsstufe_bis"],
+    IMPORT_KIND_CLASS_MEMBERSHIPS: ["jahrgangsstufe"],
     IMPORT_KIND_STUDENTS: [
         "jahrgangsstufe",
         "cannot_change_password",
@@ -414,6 +418,35 @@ def _parse_bool_flag(s: str, *, column: str) -> bool:
     if v in _FORCE_CHANGE_FALSE:
         return False
     raise ValueError(f"{column} must be true/false, got {s!r}")
+
+
+def _parse_grade(s: str) -> int | None:
+    """Optionale Jahrgangsstufe: -1/0 = Kindergarten, 1..13 = Klassen."""
+    v = (s or "").strip()
+    if not v:
+        return None
+    try:
+        grade = int(v)
+    except ValueError as exc:
+        raise ValueError("jahrgangsstufe must be an integer") from exc
+    if not -1 <= grade <= 13:
+        raise ValueError("jahrgangsstufe must be -1..13")
+    return grade
+
+
+def _membership_grade(explicit: int | None, current: int | None, class_grade: int) -> int:
+    """Jahrgang nach einer Klassenzuweisung.
+
+    Angegeben: überschreibt den bisherigen. Leer: der bisherige bleibt; ohne
+    bisherigen gilt die (untere) Stufe der Klasse.
+    """
+    if explicit is not None:
+        return explicit
+    return current if current is not None else class_grade
+
+
+def _grade_text(grade: int | None) -> str:
+    return "–" if grade is None else str(grade)
 
 
 def _derive_sam(upn: str, explicit: str) -> str:
@@ -763,6 +796,11 @@ class ImportService:
             _parse_date(row.get("valid_to", ""))
         except ValueError as exc:
             errors.append(str(exc))
+        try:
+            grade = _parse_grade(row.get("jahrgangsstufe", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+            grade = None
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
@@ -786,9 +824,14 @@ class ImportService:
                 )
             )
         ).scalar_one_or_none()
+        new_grade = _membership_grade(grade, user.jahrgangsstufe, cls.jahrgangsstufe)
+        notes: list[str] = []
+        if new_grade != user.jahrgangsstufe:
+            notes.append(f"jahrgangsstufe {_grade_text(user.jahrgangsstufe)} → {new_grade}")
         if active_here is not None:
-            return IMPORT_ACTION_SKIP, []
-        return IMPORT_ACTION_CREATE, []
+            # Schon in der Klasse: nur der Jahrgang ändert sich (oder nichts).
+            return (IMPORT_ACTION_UPDATE, notes) if notes else (IMPORT_ACTION_SKIP, [])
+        return IMPORT_ACTION_CREATE, notes
 
     async def _classify_teacher_role(
         self, school_id: int, row: dict[str, str]
@@ -1329,7 +1372,7 @@ class ImportService:
                 if job.kind == IMPORT_KIND_CLASSES:
                     await self._apply_class(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_CLASS_MEMBERSHIPS:
-                    await self._apply_membership(job.school_id, staged)
+                    await self._apply_membership(job.school_id, staged, ip, request_id)
                 elif job.kind == IMPORT_KIND_CLASS_TEACHERS:
                     await self._apply_teacher_role(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_STUDENTS:
@@ -1441,7 +1484,9 @@ class ImportService:
             existing.jahrgangsstufe = jahrgangsstufe
             existing.jahrgangsstufe_bis = jahrgangsstufe_bis
 
-    async def _apply_membership(self, school_id: int, staged: ImportStagedRow) -> None:
+    async def _apply_membership(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> None:
         row = staged.raw_data
         upn = row["student_upn"].strip().lower()
         class_name = row["class_name"].strip()
@@ -1452,6 +1497,42 @@ class ImportService:
         cls = await self._lookup_class(school_id, class_name)
         if user is None or cls is None:
             raise ValueError("user or class missing")
+
+        old_grade = user.jahrgangsstufe
+        new_grade = _membership_grade(
+            _parse_grade(row.get("jahrgangsstufe", "")), old_grade, cls.jahrgangsstufe
+        )
+        if new_grade != old_grade:
+            user.jahrgangsstufe = new_grade
+            await self.session.flush()
+            await self.audit.emit(
+                action="student_grade_imported",
+                target_kind="ad_user",
+                target_id=user.ad_object_guid,
+                actor_upn=self.scope.upn,
+                actor_object_guid=self.scope.ad_object_guid,
+                school_id=school_id,
+                ip=ip,
+                request_id=request_id,
+                payload={"class_id": cls.id, "old_grade": old_grade, "new_grade": new_grade},
+            )
+            # Wechselt der Zyklus, folgen die Zyklus-Gruppen im AD (wie bei
+            # der Promotion; ein AD-Fehler hält die Zuweisung nicht auf).
+            try:
+                await reassign_cycle_groups(
+                    self.session,
+                    self.settings,
+                    self.ad,
+                    [GradeChange(user.ad_object_guid, old_grade, new_grade)],
+                    actor_upn=self.scope.upn,
+                    actor_object_guid=self.scope.ad_object_guid,
+                    ip=ip,
+                    request_id=request_id,
+                )
+            except AdUnavailableError as exc:
+                logger.warning("zyklus groups not reassigned for %s: %s", user.ad_object_guid, exc)
+        if staged.action == IMPORT_ACTION_UPDATE:
+            return  # schon in der Klasse — nur der Jahrgang war neu
 
         # Close active memberships in OTHER classes (same mid-year semantics
         # as POST /classes/{id}/students).

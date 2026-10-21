@@ -1113,6 +1113,35 @@ export interface ActivityReport {
   rows: ActivityRow[];
 }
 
+// Konten je Zielgruppe / Kontoart (beide Profile).
+export interface AccountsByZielgruppeRow {
+  // null = Konten ohne Zielgruppe.
+  group_template_id: number | null;
+  name: string | null;
+  kind: string | null;
+  total: number;
+  enabled: number;
+  disabled: number;
+  stored_password: number;
+}
+export interface AccountsByZielgruppeReport {
+  rows: AccountsByZielgruppeRow[];
+  total: number;
+}
+export interface AccountsByKindRow {
+  kind: string;
+  total: number;
+  enabled: number;
+  disabled: number;
+  stored_password: number;
+  without_zielgruppe: number;
+  missing_in_ad: number;
+}
+export interface AccountsByKindReport {
+  rows: AccountsByKindRow[];
+  total: number;
+}
+
 // Company edition (M6 #8): department-centric reports.
 export interface MembersByDepartmentRow {
   department_id: number;

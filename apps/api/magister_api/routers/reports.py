@@ -19,6 +19,8 @@ from magister_api.db import get_session
 from magister_api.models.base import utcnow
 from magister_api.repositories.reports import ReportsRepository
 from magister_api.schemas.reports import (
+    AccountsByKindReport,
+    AccountsByZielgruppeReport,
     ActivityReport,
     ManagerWorkloadReport,
     MembersByDepartmentReport,
@@ -87,6 +89,26 @@ async def manager_workload(
     """Company edition (M6 #8): active Kader (manager) roles per person, scoped."""
     rows = await ReportsRepository(session, user.to_scope()).manager_workload()
     return ManagerWorkloadReport(rows=rows)
+
+
+@router.get("/accounts-by-zielgruppe", response_model=AccountsByZielgruppeReport)
+async def accounts_by_zielgruppe(
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    session: AsyncSession = Depends(get_session),
+) -> AccountsByZielgruppeReport:
+    """Konten je Zielgruppe: aktiv/deaktiviert, Passwort im Tresor."""
+    rows = await ReportsRepository(session, user.to_scope()).accounts_by_zielgruppe()
+    return AccountsByZielgruppeReport(rows=rows, total=sum(r.total for r in rows))
+
+
+@router.get("/accounts-by-kind", response_model=AccountsByKindReport)
+async def accounts_by_kind(
+    user: AuthenticatedUser = Depends(require_schulleitung),
+    session: AsyncSession = Depends(get_session),
+) -> AccountsByKindReport:
+    """Konten je Kontoart: aktiv/deaktiviert, Tresor, ohne Zielgruppe, fehlt im AD."""
+    rows = await ReportsRepository(session, user.to_scope()).accounts_by_kind()
+    return AccountsByKindReport(rows=rows, total=sum(r.total for r in rows))
 
 
 @router.get("/activity", response_model=ActivityReport)

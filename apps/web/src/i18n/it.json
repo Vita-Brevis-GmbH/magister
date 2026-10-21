@@ -785,7 +785,7 @@
     "kind_class_memberships": "Assegnazioni di classe (alunni/e)",
     "kind_class_teachers": "Insegnanti di classe",
     "kind_classes_desc": "Crea o aggiorna classi. Colonne: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (facoltativo, per pluriclasse/Basisstufe; vuoto = classe singola). Scuola dell'infanzia: -1 = 1º, 0 = 2º.",
-    "kind_class_memberships_desc": "Assegna alunni/e a una classe. L'UPN deve esistere in AD. Colonne: student_upn, class_name, valid_from, valid_to.",
+    "kind_class_memberships_desc": "Assegna alunni/e a una classe. L'UPN deve esistere in AD. Colonne: student_upn, class_name, valid_from, valid_to, jahrgangsstufe. L'anno scolastico (-1/0 = scuola dell'infanzia, 1–13) sostituisce quello dell'alunno/a; se vuoto resta quello attuale, altrimenti vale quello della classe. Se cambia il ciclo, i gruppi di ciclo seguono nell'AD. Chi è già nella classe riceve solo il nuovo anno.",
     "kind_class_teachers_desc": "Assegna insegnanti di classe (titolare/co/supplente). Colonne: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Nuovi studenti (crea account AD)",
     "kind_students_desc": "Crea nuovi account AD e li assegna a una classe. Le password vengono generate. Colonne: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Facoltativo: zielgruppe (nome del gruppo; vuoto = gruppo standard del tipo di account o del ciclo). Le colonne di impostazione vuote prendono i valori del gruppo.",
@@ -879,7 +879,19 @@
     "col_manager": "Persona",
     "role_lead": "Responsabile",
     "role_deputy": "Supplente",
-    "col_departments": "Reparti"
+    "col_departments": "Reparti",
+    "accounts_title": "Account per tipo",
+    "accounts_total": "Totale: {{count}} account",
+    "col_kind": "Tipo di account",
+    "col_enabled": "Attivi",
+    "col_disabled": "Disattivati",
+    "col_stored": "Password salvata",
+    "col_without_zielgruppe": "Senza gruppo target",
+    "col_missing_in_ad": "Mancante nell'AD",
+    "zielgruppen_title": "Account per gruppo target",
+    "zielgruppen_intro": "Quanti account sono assegnati a ciascun gruppo target, contati nella sede dell'account.",
+    "col_zielgruppe": "Gruppo target",
+    "without_zielgruppe": "Senza gruppo target"
   },
   "system": {
     "title": "Sistema",
@@ -1302,7 +1314,13 @@
     "groups_label": "Gruppi AD",
     "groups_hint": "Assegnati ai membri in AD all’aggiunta.",
     "groups_count": "{{count}} gruppi",
-    "global_option": "— nessun {{unit}} (globale) —"
+    "global_option": "— nessun {{unit}} (globale) —",
+    "details": "Dettagli",
+    "overview": "Panoramica",
+    "global_label": "tutte le sedi",
+    "details_text": "Descrizione",
+    "created_at": "Registrato il",
+    "since": "dal {{date}}"
   },
   "rename": {
     "button": "Cambio nome",

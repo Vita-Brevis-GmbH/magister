@@ -785,7 +785,7 @@
     "kind_class_memberships": "Affectations de classe (élèves)",
     "kind_class_teachers": "Enseignants de classe",
     "kind_classes_desc": "Créer ou mettre à jour des classes. Colonnes : name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (facultatif, pour multi-degrés/Basisstufe ; vide = classe simple). École enfantine : -1 = 1re, 0 = 2e.",
-    "kind_class_memberships_desc": "Affecter des élèves à une classe. L'UPN doit exister dans l'AD. Colonnes: student_upn, class_name, valid_from, valid_to.",
+    "kind_class_memberships_desc": "Affecter des élèves à une classe. L'UPN doit exister dans l'AD. Colonnes: student_upn, class_name, valid_from, valid_to, jahrgangsstufe. L'année scolaire (-1/0 = école enfantine, 1–13) remplace celle de l'élève ; vide, l'actuelle est conservée, et à défaut celle de la classe s'applique. Si le cycle change, les groupes de cycle suivent dans l'AD. Un·e élève déjà dans la classe ne reçoit que la nouvelle année.",
     "kind_class_teachers_desc": "Affecter des enseignants de classe (titulaire/co/suppléant). Colonnes: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Nouveaux élèves (créer des comptes AD)",
     "kind_students_desc": "Crée de nouveaux comptes AD et les affecte à une classe. Les mots de passe sont générés. Colonnes: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Facultatif : zielgruppe (nom du groupe cible ; vide = groupe cible standard du type de compte ou du cycle). Les colonnes de paramètres vides reprennent les valeurs du groupe cible.",
@@ -879,7 +879,19 @@
     "col_manager": "Personne",
     "role_lead": "Responsable",
     "role_deputy": "Suppléant·e",
-    "col_departments": "Départements"
+    "col_departments": "Départements",
+    "accounts_title": "Comptes par type",
+    "accounts_total": "Total : {{count}} comptes",
+    "col_kind": "Type de compte",
+    "col_enabled": "Actifs",
+    "col_disabled": "Désactivés",
+    "col_stored": "Mot de passe enregistré",
+    "col_without_zielgruppe": "Sans groupe cible",
+    "col_missing_in_ad": "Absent de l'AD",
+    "zielgruppen_title": "Comptes par groupe cible",
+    "zielgruppen_intro": "Nombre de comptes attribués à chaque groupe cible, comptés sur le site du compte.",
+    "col_zielgruppe": "Groupe cible",
+    "without_zielgruppe": "Sans groupe cible"
   },
   "system": {
     "title": "Système",
@@ -1302,7 +1314,13 @@
     "groups_label": "Groupes AD",
     "groups_hint": "Attribués aux membres dans l’AD lors de l’affectation.",
     "groups_count": "{{count}} groupes",
-    "global_option": "— aucun {{unit}} (global) —"
+    "global_option": "— aucun {{unit}} (global) —",
+    "details": "Détails",
+    "overview": "Aperçu",
+    "global_label": "tous les sites",
+    "details_text": "Description",
+    "created_at": "Saisi le",
+    "since": "depuis le {{date}}"
   },
   "rename": {
     "button": "Changement de nom",

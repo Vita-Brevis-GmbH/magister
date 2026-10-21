@@ -782,7 +782,7 @@
     "kind_class_memberships": "Klassen-Zuteilungen (Schüler:innen)",
     "kind_class_teachers": "Klassen-Zuteilungen (Lehrpersonen)",
     "kind_classes_desc": "Klassen anlegen oder aktualisieren. Spalten: name, kuerzel, jahrgangsstufe, jahrgangsstufe_bis (optional, für Mehrjahrgang/Basisstufe; leer = Einzelklasse). Kindergarten: -1 = 1. KG, 0 = 2. KG.",
-    "kind_class_memberships_desc": "Schüler:innen einer Klasse zuweisen. UPN muss im AD existieren. Spalten: student_upn, class_name, valid_from, valid_to.",
+    "kind_class_memberships_desc": "Schüler:innen einer Klasse zuweisen. UPN muss im AD existieren. Spalten: student_upn, class_name, valid_from, valid_to, jahrgangsstufe. Der Jahrgang (-1/0 = Kindergarten, 1–13) überschreibt den bisherigen der Schülerin / des Schülers; leer bleibt der bisherige, ohne einen gilt die Stufe der Klasse. Wechselt der Zyklus, folgen die Zyklus-Gruppen im AD. Wer schon in der Klasse ist, bekommt nur den neuen Jahrgang.",
     "kind_class_teachers_desc": "Klassenlehrpersonen (KL/Co-KL/Stellvertretung) zuweisen. Spalten: teacher_upn, class_name, role, valid_from, valid_to.",
     "kind_students": "Neue Schüler:innen (AD-Accounts anlegen)",
     "kind_students_desc": "Legt neue AD-Accounts an und weist sie einer Klasse zu. Passwörter werden generiert. Spalten: given_name, surname, display_name, upn, sam_account_name, class, valid_from, force_change. Optional: zielgruppe (Name der Zielgruppe; leer = Standard-Zielgruppe der Kontoart bzw. des Zyklus). Leere Einstellungs-Spalten übernehmen die Vorgaben der Zielgruppe.",
@@ -876,7 +876,19 @@
     "col_manager": "Person",
     "role_lead": "Leitung",
     "role_deputy": "Stellvertretung",
-    "col_departments": "Abteilungen"
+    "col_departments": "Abteilungen",
+    "accounts_title": "Konten nach Kontoart",
+    "accounts_total": "Total: {{count}} Konten",
+    "col_kind": "Kontoart",
+    "col_enabled": "Aktiv",
+    "col_disabled": "Deaktiviert",
+    "col_stored": "Passwort gespeichert",
+    "col_without_zielgruppe": "Ohne Zielgruppe",
+    "col_missing_in_ad": "Fehlt im AD",
+    "zielgruppen_title": "Konten nach Zielgruppe",
+    "zielgruppen_intro": "Wie viele Konten jeder Zielgruppe zugeordnet sind, gezählt am Standort des Kontos.",
+    "col_zielgruppe": "Zielgruppe",
+    "without_zielgruppe": "Ohne Zielgruppe"
   },
   "system": {
     "title": "System",
@@ -1299,7 +1311,13 @@
     "groups_label": "AD-Gruppen",
     "groups_hint": "Werden Mitgliedern bei der Zuweisung im AD gesetzt.",
     "groups_count": "{{count}} Gruppen",
-    "global_option": "— kein {{unit}} (global) —"
+    "global_option": "— kein {{unit}} (global) —",
+    "details": "Details",
+    "overview": "Übersicht",
+    "global_label": "standortübergreifend",
+    "details_text": "Beschreibung",
+    "created_at": "Erfasst am",
+    "since": "seit {{date}}"
   },
   "rename": {
     "button": "Namensänderung",
