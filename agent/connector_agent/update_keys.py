@@ -20,6 +20,6 @@ weiter (Prüfsumme wie bisher) und sagt, dass keine Signatur geprüft wurde.
 
 from __future__ import annotations
 
-TRUSTED_KEYS: dict[str, str] = {}
+TRUSTED_KEYS: dict[str, str] = {"52b0d6783021b7c5": "lFEpDxN7TeLGbRqkLWNVUewmojBABoCuc4t/MCesv8U="}
 
 __all__ = ["TRUSTED_KEYS"]
