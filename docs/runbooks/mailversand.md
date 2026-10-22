@@ -46,6 +46,17 @@ STARTTLS (587) oder TLS (465) — unverschlüsselt gibt es nicht. Ohne
 Benutzername wird ohne Anmeldung gesendet (z. B. ein M365-Connector, der
 die IP der Plattform zulässt).
 
+**Keine Verbindung** (`smtp: no connection to host:port (…)`): die Meldung
+nennt jede Adresse des Servers mit ihrem Fehler, IPv4 zuerst.
+
+* `Network is unreachable` nur bei der IPv6-Adresse: der Container hat keine
+  IPv6-Route — unkritisch, solange IPv4 klappt.
+* IPv4 mit `timed out` oder `Connection refused`: ausgehender Port gesperrt.
+  Viele Hoster sperren 25 und 465 ab Werk (Freigabe beim Hoster beantragen),
+  587 meist nicht. Prüfen auf dem Host:
+  `docker compose exec magister-api python -c "import socket; socket.create_connection(('smtp.example.ch', 587), 5)"`
+* Geht beides nicht: Microsoft Graph verwenden — läuft über HTTPS (443).
+
 ## 3 · Prüfen
 
 * Cockpit → Einstellungen → Mailversand → **Testmail** (Empfänger frei
@@ -64,8 +75,11 @@ die IP der Plattform zulässt).
 ## 4 · Voraussetzungen
 
 * AD-Abgleich über den Connector: der Agent muss eine aktuelle Version haben
-  (ältere Agenten liefern das Ablaufdatum nicht; die Übersicht sagt dann
-  „Noch keine Ablaufdaten").
+  (ältere Agenten liefern Passwortalter und Ablaufdatum nicht; die Übersicht
+  sagt dann „Noch keine Passwortdaten", jede Zeile „unbekannt"). Nach dem
+  Update des Agenten holt der nächste Abgleich die Daten aller Konten: liefert
+  der Agent erstmals Passwortdaten, wird der inkrementelle Lauf einmal zu
+  einem vollen. Sofort: Systemeinstellungen → „Jetzt synchronisieren".
 * Gehostet: `MAGISTER_PLATFORM_SECRETS_KEY` in `deploy/compose/.env`
   (legt `plattform-aufbau.sh update` an). Gehört in die Sicherung —
   wechselt er, ist das Plattform-Geheimnis neu zu versiegeln.

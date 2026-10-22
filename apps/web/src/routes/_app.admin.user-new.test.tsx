@@ -18,6 +18,7 @@ vi.mock("@tanstack/react-router", async (orig) => ({
 const { NewUserPage } = await import("./_app.admin.user-new");
 
 const fetchMock = vi.fn();
+let mailDomains: unknown = { domains: [], upn_domains: [] };
 
 const SCHOOLS = [
   { id: 1, name: "Schule A", kuerzel: "A", scope_short: "A" },
@@ -53,12 +54,12 @@ beforeAll(async () => {
 
 beforeEach(() => {
   fetchMock.mockReset();
+  mailDomains = { domains: [], upn_domains: [] };
   fetchMock.mockImplementation((url: string) => {
     const u = String(url);
     if (u.endsWith("/api/schools")) return Promise.resolve(json(SCHOOLS));
     if (u.includes("/api/admin/group-templates")) return Promise.resolve(json(TEMPLATES));
-    if (u.endsWith("/api/users/mail-domains"))
-      return Promise.resolve(json({ domains: [], upn_domains: [] }));
+    if (u.endsWith("/api/users/mail-domains")) return Promise.resolve(json(mailDomains));
     if (u.endsWith("/api/me/modules"))
       return Promise.resolve(json({ profile: "school", modules: [] }));
     return Promise.resolve(json([]));
@@ -119,5 +120,26 @@ describe("Benutzer anlegen — Ziel-OU", () => {
     await waitFor(() => expect(within(zielgruppe).getByText("Lehrperson")).toBeInTheDocument());
     await user.selectOptions(zielgruppe, "7");
     await waitFor(() => expect(screen.queryByLabelText(/^Ziel-OU/)).not.toBeInTheDocument());
+  });
+});
+
+describe("Benutzer anlegen — Domains", () => {
+  it("bietet für die Mailadresse die Mail-Domains, für den UPN auch die aus dem AD", async () => {
+    mailDomains = { domains: ["schule.ch"], upn_domains: ["schule.ch", "schule.local"] };
+    renderPage();
+    const mailDomain = await screen.findByRole("combobox", { name: "Mail-Domain" });
+    expect(
+      within(mailDomain)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["schule.ch"]);
+    const upnDomain = screen.getByRole("combobox", { name: "UPN-Domain" });
+    expect(
+      within(upnDomain)
+        .getAllByRole("option")
+        .map((o) => o.textContent),
+    ).toEqual(["schule.ch", "schule.local"]);
+    // Leer = kein Postfach; kein Pflichtfeld.
+    expect(screen.getByLabelText("E-Mail (optional)")).not.toBeRequired();
   });
 });

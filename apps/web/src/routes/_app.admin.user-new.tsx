@@ -43,6 +43,8 @@ const INITIAL = {
   upn_local: "",
   upn_domain: "",
   mail: "",
+  mail_local: "",
+  mail_domain: "",
   school_id: "",
   ou_key: "teacher" as AdUserOuKey,
   group_template_id: "",
@@ -88,6 +90,10 @@ export function NewUserPage(): JSX.Element {
   const mailDomainsQ = useMailDomains();
   const domains = mailDomainsQ.data?.upn_domains ?? mailDomainsQ.data?.domains ?? [];
   const useDomainPicker = domains.length > 0;
+  // Die Mailadresse nur auf eine Mail-Domain — die UPN-Auswahl kennt mehr
+  // (was das AD hat), zugestellt wird aber nur an eingetragene Domains.
+  const mailDomains = mailDomainsQ.data?.domains ?? [];
+  const useMailPicker = mailDomains.length > 0;
 
   const [form, setForm] = useState(INITIAL);
   const [created, setCreated] = useState<Created | null>(null);
@@ -160,6 +166,10 @@ export function NewUserPage(): JSX.Element {
     if (list.length > 0) {
       setForm((prev) => (prev.upn_domain === "" ? { ...prev, upn_domain: list[0] } : prev));
     }
+    const mailList = mailDomainsQ.data?.domains ?? [];
+    if (mailList.length > 0) {
+      setForm((prev) => (prev.mail_domain === "" ? { ...prev, mail_domain: mailList[0] } : prev));
+    }
   }, [mailDomainsQ.data]);
 
   // The effective UPN: composed from localpart + picked domain, or the raw
@@ -167,6 +177,12 @@ export function NewUserPage(): JSX.Element {
   const composedUpn = useDomainPicker
     ? `${form.upn_local.trim()}@${form.upn_domain}`
     : form.user_principal_name.trim();
+  // Leerer Namensteil = kein Postfach.
+  const composedMail = useMailPicker
+    ? form.mail_local.trim()
+      ? `${form.mail_local.trim()}@${form.mail_domain}`
+      : null
+    : form.mail.trim() || null;
 
   function field(key: keyof typeof form) {
     return {
@@ -191,7 +207,7 @@ export function NewUserPage(): JSX.Element {
         display_name: form.display_name.trim() || null,
         sam_account_name: form.sam_account_name,
         user_principal_name: composedUpn,
-        mail: form.mail || null,
+        mail: composedMail,
         ou_key: ouKey,
         school_id: form.school_id ? Number(form.school_id) : null,
         group_template_id: form.group_template_id ? Number(form.group_template_id) : null,
@@ -375,7 +391,33 @@ export function NewUserPage(): JSX.Element {
             </div>
             <div className="space-y-1">
               <Label htmlFor="mail">{t("admin.user_new.mail")}</Label>
-              <Input id="mail" type="email" autoComplete="off" {...field("mail")} />
+              {useMailPicker ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="mail"
+                    autoComplete="off"
+                    placeholder={form.upn_local.trim() || "vorname.nachname"}
+                    className="min-w-0 flex-1"
+                    {...field("mail_local")}
+                  />
+                  <span className="shrink-0 text-sm text-muted-foreground">@</span>
+                  <select
+                    aria-label={t("admin.user_new.mail_domain")}
+                    className="h-10 max-w-[45%] shrink-0 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={form.mail_domain}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mail_domain: e.target.value }))}
+                  >
+                    {mailDomains.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <Input id="mail" type="email" autoComplete="off" {...field("mail")} />
+              )}
+              <p className="text-xs text-muted-foreground">{t("admin.user_new.mail_hint")}</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="unit">{tt("admin.user_new.unit")}</Label>

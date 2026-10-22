@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import smtplib
+import socket
 import ssl
 from dataclasses import dataclass
 from email.headerregistry import Address
@@ -152,6 +153,60 @@ def _mime(config: MailConfig, message: MailMessage) -> EmailMessage:
     return mime
 
 
+class _ConnectError(OSError):
+    """Keine der Adressen des Servers erreichbar. Die Meldung nennt jede."""
+
+
+def _connect(host: str, port: int, timeout: float) -> socket.socket:
+    """Mit dem SMTP-Server verbinden — IPv4 zuerst, jede Adresse der Reihe nach.
+
+    ``socket.create_connection`` nimmt die Reihenfolge des Resolvers (meist
+    IPv6 zuerst) und meldet, wenn alles scheitert, nur den *ersten* Fehler.
+    Ein Container ohne IPv6-Route zeigt dann "Network is unreachable", auch
+    wenn das eigentliche Problem der gesperrte Port über IPv4 ist. Hier steht
+    am Ende jede Adresse mit ihrem Fehler in der Meldung.
+    """
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise _ConnectError(f"name not resolvable: {host}") from exc
+    infos.sort(key=lambda info: 0 if info[0] == socket.AF_INET else 1)
+    errors: list[str] = []
+    seen: set[str] = set()
+    for family, kind, proto, _canon, addr in infos:
+        ip = str(addr[0])
+        if ip in seen:
+            continue
+        seen.add(ip)
+        sock = socket.socket(family, kind, proto)
+        try:
+            sock.settimeout(timeout)
+            sock.connect(addr)
+        except OSError as exc:
+            sock.close()
+            reason = "timed out" if isinstance(exc, TimeoutError) else exc.strerror or str(exc)
+            errors.append(f"{ip}: {reason}")
+            continue
+        return sock
+    hint = (
+        f" — outbound port {port} blocked (firewall/hoster)? Alternatively Microsoft Graph (HTTPS)"
+        if errors
+        else ""
+    )
+    raise _ConnectError(f"no connection to {host}:{port} ({'; '.join(errors)}){hint}")
+
+
+class _Smtp(smtplib.SMTP):
+    def _get_socket(self, host: str, port: int, timeout: float) -> socket.socket:
+        return _connect(host, port, timeout)
+
+
+class _SmtpSsl(smtplib.SMTP_SSL):
+    def _get_socket(self, host: str, port: int, timeout: float) -> socket.socket:
+        sock = _connect(host, port, timeout)
+        return self.context.wrap_socket(sock, server_hostname=host)
+
+
 def _send_smtp(config: MailConfig, message: MailMessage) -> None:
     assert config.smtp_host is not None
     context = ssl.create_default_context()
@@ -159,11 +214,11 @@ def _send_smtp(config: MailConfig, message: MailMessage) -> None:
     port = config.smtp_port or (465 if implicit else 587)
     try:
         if implicit:
-            client: smtplib.SMTP = smtplib.SMTP_SSL(
+            client: smtplib.SMTP = _SmtpSsl(
                 config.smtp_host, port, timeout=_SMTP_TIMEOUT, context=context
             )
         else:
-            client = smtplib.SMTP(config.smtp_host, port, timeout=_SMTP_TIMEOUT)
+            client = _Smtp(config.smtp_host, port, timeout=_SMTP_TIMEOUT)
         with client:
             if not implicit:
                 client.ehlo()
@@ -179,6 +234,8 @@ def _send_smtp(config: MailConfig, message: MailMessage) -> None:
         raise MailError("smtp: server does not offer STARTTLS") from exc
     except smtplib.SMTPRecipientsRefused as exc:
         raise MailError("smtp: recipient refused") from exc
+    except _ConnectError as exc:
+        raise MailError(f"smtp: {exc}") from exc
     except (smtplib.SMTPException, OSError, ssl.SSLError) as exc:
         raise MailError(f"smtp: {type(exc).__name__}: {_first_line(exc)}") from exc
 

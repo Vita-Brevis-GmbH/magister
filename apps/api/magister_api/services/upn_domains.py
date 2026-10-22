@@ -55,4 +55,18 @@ async def upn_domains(
     return first + sorted(rest - set(first))
 
 
-__all__ = ["domain_of_search_base", "upn_domains"]
+async def mail_domains_in_use(session: AsyncSession) -> list[str]:
+    """Domains der Mailadressen, die abgeglichene Konten schon tragen (alphabetisch).
+
+    Ein Vorschlag für die Mail-Domains — anders als beim UPN nicht von selbst
+    wählbar: eine Adresse im AD heisst noch nicht, dass Magister dorthin
+    Konten anlegen soll.
+    """
+    # scope-bypass: nur der Domain-Teil aller Mailadressen — keine Personendaten.
+    stmt = select(func.distinct(func.lower(func.split_part(AdUserCache.mail, "@", 2)))).where(
+        AdUserCache.mail.is_not(None)
+    )
+    return sorted(str(d) for d in (await session.execute(stmt)).scalars().all() if d)
+
+
+__all__ = ["domain_of_search_base", "mail_domains_in_use", "upn_domains"]

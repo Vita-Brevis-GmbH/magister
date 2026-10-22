@@ -26,6 +26,7 @@ async def test_admin_maintains_mail_and_upn_domains(
             ad_object_guid="00000000-0000-0000-0000-0000000f1001",
             school_id=school_a,
             upn="kind@sus-alt.ch",
+            mail="Kind@Mail-Alt.ch",
             kind="student",
             enabled=True,
         )
@@ -48,6 +49,9 @@ async def test_admin_maintains_mail_and_upn_domains(
     # Aus dem AD: DNS-Name der Domäne und vorhandene Suffixe (alphabetisch;
     # example.ch trägt das Konto der Admin-Fixture).
     assert {"schule.local", "sus-alt.ch"} <= set(body["upn_choices"][3:])
+    # Mail-Domains aus dem AD nur als Vorschlag, nicht von selbst wählbar.
+    assert "mail-alt.ch" in body["mail_suggestions"]
+    assert "mail-alt.ch" not in body["upn_choices"]
     # Das Benutzerformular bekommt dieselbe Auswahl.
     r = await as_admin.get("/users/mail-domains")
     assert r.json()["domains"] == ["schule.ch", "lp.schule.ch"]

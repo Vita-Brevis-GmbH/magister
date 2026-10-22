@@ -229,6 +229,32 @@ class AdSyncService:
             )
             raise
 
+        if (
+            effective_mode == "incremental"
+            and any(r.password_info for r in records)
+            and await self.repo.has_rows_without_password_info()
+        ):
+            # Die Quelle liefert jetzt Passwortdaten (neuer Agent), der Cache
+            # hat Konten ohne: `whenChanged` brächte die unveränderten erst mit
+            # dem nächsten vollen Lauf. Einmal voll lesen statt bis zu einem
+            # Tag "Passwortalter unbekannt".
+            effective_mode = "full"
+            try:
+                records = await self.ad.search_users(changed_since=None)
+            except AdUnavailableError as exc:
+                await self.audit.emit(
+                    action="ad_sync_failed",
+                    target_kind="ad_sync",
+                    target_id="all",
+                    actor_upn=actor_upn,
+                    actor_object_guid=actor_object_guid,
+                    school_id=None,
+                    ip=ip,
+                    request_id=request_id,
+                    payload={"reason": str(exc), "mode": effective_mode},
+                )
+                raise
+
         records = await self._reclassify_by_ou(records)
 
         schools = await self._load_schools()

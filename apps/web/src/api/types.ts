@@ -1364,4 +1364,6 @@ export interface DomainsOut {
   upn_domains: string[];
   // Was die UPN-Auswahl anbietet, inklusive dessen, was das AD kennt.
   upn_choices: string[];
+  // Domains von Mailadressen im AD, die noch keine Mail-Domain sind.
+  mail_suggestions?: string[];
 }

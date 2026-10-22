@@ -43,19 +43,60 @@ export function DomainsCard(): JSX.Element {
   );
 }
 
+/** Domains aus dem AD als Knöpfe: ein Klick übernimmt sie in die Liste. */
+function AdChips({
+  label,
+  domains,
+  onPick,
+}: {
+  label: string;
+  domains: string[];
+  onPick: (domain: string) => void;
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  if (domains.length === 0) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {domains.map((d) => (
+          <li key={d}>
+            <button
+              type="button"
+              onClick={() => onPick(d)}
+              title={t("admin.domains.adopt", { domain: d })}
+              aria-label={t("admin.domains.adopt", { domain: d })}
+              className="rounded-full border border-dashed px-2.5 py-0.5 font-mono text-xs text-muted-foreground hover:border-solid hover:text-foreground"
+            >
+              + {d}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function DomainsForm({ data }: { data: DomainsOut }): JSX.Element {
   const { t } = useTranslation();
   const save = useUpdateDomains();
   const [mail, setMail] = useState(data.mail_domains.join("\n"));
   const [upn, setUpn] = useState(data.upn_domains.join("\n"));
-  const configured = new Set([...data.mail_domains, ...data.upn_domains]);
-  const fromAd = data.upn_choices.filter((d) => !configured.has(d));
+  // Was schon in einem der Felder steht, wird nicht mehr vorgeschlagen.
+  const listed = new Set([...lines(mail), ...lines(upn)]);
+  const upnFromAd = data.upn_choices.filter((d) => !listed.has(d));
+  const mailFromAd = (data.mail_suggestions ?? []).filter((d) => !lines(mail).includes(d));
   const error =
     save.error instanceof ApiError && save.error.status === 422
       ? t("admin.domains.invalid")
       : save.isError
         ? t("errors.generic")
         : null;
+
+  function append(text: string, domain: string): string {
+    const trimmed = text.trimEnd();
+    return trimmed ? `${trimmed}\n${domain}` : domain;
+  }
 
   return (
     <form
@@ -75,42 +116,57 @@ function DomainsForm({ data }: { data: DomainsOut }): JSX.Element {
       }}
     >
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1">
-          <Label htmlFor="domains-mail">{t("admin.domains.mail")}</Label>
-          <textarea
-            id="domains-mail"
-            rows={4}
-            value={mail}
-            onChange={(e) => {
-              setMail(e.target.value);
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label htmlFor="domains-mail">{t("admin.domains.mail")}</Label>
+            <textarea
+              id="domains-mail"
+              rows={4}
+              value={mail}
+              onChange={(e) => {
+                setMail(e.target.value);
+                save.reset();
+              }}
+              placeholder="schule.ch"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">{t("admin.domains.mail_hint")}</p>
+          </div>
+          <AdChips
+            label={t("admin.domains.ad_mail")}
+            domains={mailFromAd}
+            onPick={(d) => {
+              setMail((prev) => append(prev, d));
               save.reset();
             }}
-            placeholder="schule.ch"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
           />
-          <p className="text-xs text-muted-foreground">{t("admin.domains.mail_hint")}</p>
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="domains-upn">{t("admin.domains.upn")}</Label>
-          <textarea
-            id="domains-upn"
-            rows={4}
-            value={upn}
-            onChange={(e) => {
-              setUpn(e.target.value);
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label htmlFor="domains-upn">{t("admin.domains.upn")}</Label>
+            <textarea
+              id="domains-upn"
+              rows={4}
+              value={upn}
+              onChange={(e) => {
+                setUpn(e.target.value);
+                save.reset();
+              }}
+              placeholder="sus-schule.ch"
+              className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
+            />
+            <p className="text-xs text-muted-foreground">{t("admin.domains.upn_hint")}</p>
+          </div>
+          <AdChips
+            label={t("admin.domains.ad_upn")}
+            domains={upnFromAd}
+            onPick={(d) => {
+              setUpn((prev) => append(prev, d));
               save.reset();
             }}
-            placeholder="sus-schule.ch"
-            className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
           />
-          <p className="text-xs text-muted-foreground">{t("admin.domains.upn_hint")}</p>
         </div>
       </div>
-      {fromAd.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          {t("admin.domains.from_ad", { domains: fromAd.join(", ") })}
-        </p>
-      ) : null}
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={save.isPending}>
           {save.isPending ? t("common.loading") : t("admin.domains.save")}

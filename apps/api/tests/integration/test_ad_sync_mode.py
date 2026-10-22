@@ -204,3 +204,76 @@ class TestTheLongReadKeepsItsSession:
             settings.model_copy(update={"ad_sync_transaction_idle_ms": 1_000}).model_validate(
                 settings.model_dump() | {"ad_sync_transaction_idle_ms": 1_000}
             )
+
+
+def _user(guid: str, *, password_info: bool) -> AdUserRecord:
+    return AdUserRecord(
+        ad_object_guid=guid,
+        upn=f"u{guid[-2:]}@schule.ch",
+        sam_account_name=f"u{guid[-2:]}",
+        given_name="U",
+        surname="Ser",
+        display_name=None,
+        mail=None,
+        enabled=True,
+        kind="teacher",
+        password_never_expires=False,
+        ms_ds_consistency_guid=None,
+        distinguished_name=f"CN=u{guid[-2:]},DC=schule,DC=local",
+        street_address=None,
+        locality=None,
+        postal_code=None,
+        country=None,
+        password_info=password_info,
+        password_last_set=WHEN if password_info else None,
+    )
+
+
+class AnsweringAd(RecordingAd):
+    """Liefert inkrementell ein geändertes Konto, voll beide Konten."""
+
+    def __init__(self, settings: Settings, *, password_info: bool) -> None:
+        super().__init__(settings)
+        self.password_info = password_info
+
+    async def search_users(self, **kwargs: object) -> list[AdUserRecord]:  # type: ignore[override]
+        await super().search_users(**kwargs)
+        changed = [_user("00000000-0000-0000-0000-0000000a0001", password_info=self.password_info)]
+        if kwargs.get("changed_since") is not None:
+            return changed
+        return [*changed, _user("00000000-0000-0000-0000-0000000a0002", password_info=True)]
+
+
+class TestPasswordInfoBackfill:
+    """Neuer Agent liefert Passwortdaten: einmal voll lesen, nicht bis zu 24 h warten."""
+
+    async def _prepare(self, session: AsyncSession, settings: Settings) -> None:
+        # Stand vor dem Agenten-Update: beide Konten ohne Passwortdaten.
+        await _run(session, settings, AnsweringAd(settings, password_info=False), mode="full")
+        state = await _state(session)
+        state.last_when_changed = WHEN
+        state.last_full_sync_at = datetime.now(UTC) - timedelta(hours=1)
+        await session.flush()
+
+    @pytest.mark.asyncio
+    async def test_first_record_with_password_info_upgrades_to_full(
+        self, db_session: AsyncSession, settings: Settings
+    ) -> None:
+        await self._prepare(db_session, settings)
+        ad = AnsweringAd(settings, password_info=True)
+        await _run(db_session, settings, ad)
+        assert ad.calls == [WHEN, None]
+        missing = await db_session.execute(
+            text("SELECT count(*) FROM ad_user_cache WHERE password_info_at IS NULL")
+        )
+        assert missing.scalar_one() == 0
+
+    @pytest.mark.asyncio
+    async def test_an_old_agent_stays_incremental(
+        self, db_session: AsyncSession, settings: Settings
+    ) -> None:
+        """Ohne Passwortdaten kein Dauer-Vollabgleich alle paar Minuten."""
+        await self._prepare(db_session, settings)
+        ad = AnsweringAd(settings, password_info=False)
+        await _run(db_session, settings, ad)
+        assert ad.calls == [WHEN]

@@ -18,7 +18,7 @@ from magister_api.db import get_session
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
-from magister_api.services.upn_domains import upn_domains
+from magister_api.services.upn_domains import mail_domains_in_use, upn_domains
 
 router = APIRouter(prefix="/admin/domains", tags=["admin"])
 
@@ -31,6 +31,9 @@ class DomainsOut(BaseModel):
     #: Was die UPN-Auswahl tatsächlich anbietet — inklusive dessen, was das
     #: AD kennt (DNS-Name der Domäne, Suffixe vorhandener Konten).
     upn_choices: list[str]
+    #: Domains der Mailadressen im AD, die noch keine Mail-Domain sind —
+    #: Vorschläge zum Übernehmen.
+    mail_suggestions: list[str] = Field(default_factory=list)
 
 
 class DomainsIn(BaseModel):
@@ -49,6 +52,9 @@ async def _out(session: AsyncSession, settings: Settings) -> DomainsOut:
             users_search_base=eff.ad_users_search_base,
             extra=eff.upn_domains,
         ),
+        mail_suggestions=[
+            d for d in await mail_domains_in_use(session) if d not in eff.mail_domains
+        ],
     )
 
 

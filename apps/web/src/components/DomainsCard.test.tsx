@@ -41,6 +41,7 @@ beforeEach(() => {
           mail_domains: ["schule.ch"],
           upn_domains: [],
           upn_choices: ["schule.ch", "schule.local"],
+          mail_suggestions: ["lp.schule.ch"],
         }),
       );
     return Promise.resolve(json({}));
@@ -53,7 +54,7 @@ afterEach(() => {
 });
 
 describe("DomainsCard", () => {
-  it("zeigt, was das AD kennt, und speichert beide Listen", async () => {
+  it("schlägt vor, was das AD kennt, und speichert beide Listen", async () => {
     const user = userEvent.setup();
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
@@ -61,11 +62,17 @@ describe("DomainsCard", () => {
         <DomainsCard />
       </QueryClientProvider>,
     );
-    expect(await screen.findByText(/Zusätzlich aus dem AD bekannt.*schule\.local/)).toBeTruthy();
+    // Was das AD kennt, steht als Vorschlag da — ein Klick übernimmt es.
+    await user.click(await screen.findByRole("button", { name: "schule.local übernehmen" }));
+    await user.click(screen.getByRole("button", { name: "lp.schule.ch übernehmen" }));
+    expect(screen.queryByRole("button", { name: "schule.local übernehmen" })).toBeNull();
     const upn = screen.getByLabelText("Zusätzliche UPN-Domänen");
-    await user.type(upn, "SUS-Schule.ch");
+    await user.type(upn, "{enter}SUS-Schule.ch");
     await user.click(screen.getByRole("button", { name: "Domänen speichern" }));
     expect((await screen.findByRole("status")).textContent).toBe("Gespeichert.");
-    expect(saved).toEqual({ mail_domains: ["schule.ch"], upn_domains: ["sus-schule.ch"] });
+    expect(saved).toEqual({
+      mail_domains: ["schule.ch", "lp.schule.ch"],
+      upn_domains: ["schule.local", "sus-schule.ch"],
+    });
   });
 });

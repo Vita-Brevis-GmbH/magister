@@ -5,12 +5,14 @@ from __future__ import annotations
 import dataclasses
 import json
 import smtplib
+import socket
 from typing import Any
 
 import httpx
 import pytest
 
 from magister_api.mail import MailConfig, MailError, MailMessage, MailNotConfiguredError, send_mail
+from magister_api.mail import sender as sender_mod
 
 SECRET = "sehr-geheim-123"
 MSG = MailMessage(to="lea@schule.ch", subject="Ihr Passwort", html="<p>Hallo</p>", text="Hallo")
@@ -110,7 +112,7 @@ class _FakeSmtp:
 @pytest.mark.asyncio
 async def test_smtp_always_starttls_then_login_then_send(monkeypatch: pytest.MonkeyPatch) -> None:
     _FakeSmtp.instances.clear()
-    monkeypatch.setattr(smtplib, "SMTP", _FakeSmtp)
+    monkeypatch.setattr(sender_mod, "_Smtp", _FakeSmtp)
     cfg = MailConfig(
         transport="smtp",
         sender="noreply@schule.ch",
@@ -131,3 +133,73 @@ async def test_smtp_always_starttls_then_login_then_send(monkeypatch: pytest.Mon
     with pytest.raises(MailError, match="authentication failed") as exc:
         await send_mail(bad, MSG)
     assert "falsch" not in str(exc.value)
+
+
+class _FakeSocket:
+    #: IP → Fehler beim Verbinden; fehlt die IP, gelingt die Verbindung.
+    failures: dict[str, OSError] = {}
+    tried: list[str] = []
+
+    def __init__(self, family: int, kind: int, proto: int) -> None:
+        self.family = family
+
+    def settimeout(self, timeout: float) -> None:
+        pass
+
+    def connect(self, addr: tuple[Any, ...]) -> None:
+        _FakeSocket.tried.append(addr[0])
+        if addr[0] in _FakeSocket.failures:
+            raise _FakeSocket.failures[addr[0]]
+
+    def close(self) -> None:
+        pass
+
+
+def _fake_resolver(monkeypatch: pytest.MonkeyPatch, failures: dict[str, OSError]) -> None:
+    infos = [
+        (socket.AF_INET6, socket.SOCK_STREAM, 6, "", ("2001:db8::1", 587, 0, 0)),
+        (socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 587)),
+    ]
+    monkeypatch.setattr(sender_mod.socket, "getaddrinfo", lambda *a, **kw: list(infos))
+    monkeypatch.setattr(sender_mod.socket, "socket", _FakeSocket)
+    _FakeSocket.failures = failures
+    _FakeSocket.tried = []
+
+
+def test_smtp_connect_prefers_ipv4(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_resolver(monkeypatch, {"2001:db8::1": OSError(101, "Network is unreachable")})
+    sock = sender_mod._connect("mail.schule.ch", 587, 1.0)  # pyright: ignore[reportPrivateUsage]
+    assert isinstance(sock, _FakeSocket)
+    assert _FakeSocket.tried == ["192.0.2.1"]
+
+
+def test_smtp_connect_failure_names_every_address(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Früher stand nur der erste Fehler (IPv6: unreachable) da — der falsche."""
+    _fake_resolver(
+        monkeypatch,
+        {
+            "2001:db8::1": OSError(101, "Network is unreachable"),
+            "192.0.2.1": TimeoutError("timed out"),
+        },
+    )
+    with pytest.raises(OSError) as exc:
+        sender_mod._connect("mail.schule.ch", 587, 1.0)  # pyright: ignore[reportPrivateUsage]
+    text = str(exc.value)
+    assert "192.0.2.1: timed out" in text
+    assert "2001:db8::1: Network is unreachable" in text
+    assert text.index("192.0.2.1") < text.index("2001:db8::1")
+    assert "port 587" in text
+
+
+@pytest.mark.asyncio
+async def test_smtp_unreachable_is_a_readable_mail_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    _fake_resolver(
+        monkeypatch,
+        {
+            "2001:db8::1": OSError(101, "Network is unreachable"),
+            "192.0.2.1": OSError(111, "Connection refused"),
+        },
+    )
+    cfg = MailConfig(transport="smtp", sender="noreply@schule.ch", smtp_host="mail.schule.ch")
+    with pytest.raises(MailError, match=r"smtp: no connection to mail.schule.ch:587"):
+        await send_mail(cfg, MSG)
