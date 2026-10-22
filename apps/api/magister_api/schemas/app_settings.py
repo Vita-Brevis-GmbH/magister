@@ -29,6 +29,7 @@ class AppSettingsOut(BaseModel):
     oidc_scopes: list[str]
     bootstrap_admins: list[str]
     mail_domains: list[str]
+    upn_domains: list[str] = Field(default_factory=list)
 
     # AD
     ad_dcs: list[str]
@@ -122,6 +123,28 @@ class AppSettingsUpdate(BaseModel):
             "Send an empty list to clear; send null/omit to leave unchanged."
         ),
     )
+    upn_domains: list[str] | None = Field(
+        default=None,
+        description="Zusätzliche UPN-Suffixe für die Auswahl. Leere Liste leert.",
+    )
+
+    @field_validator("mail_domains", "upn_domains")
+    @classmethod
+    def _check_domains(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
+        out: list[str] = []
+        for raw in v:
+            d = raw.strip().lower().lstrip("@")
+            if not d:
+                continue
+            if not _DOMAIN_RE.match(d):
+                raise ValueError(f"not a domain: {raw!r}")
+            if d not in out:
+                out.append(d)
+        if len(out) > 50:
+            raise ValueError("at most 50 domains")
+        return out
 
     ad_dcs: list[str] | None = None
     ad_bind_mode: str | None = None
@@ -294,6 +317,7 @@ class AppSettingsUpdate(BaseModel):
         return self
 
 
+_DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 _MAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 __all__ = ["AppSettingsOut", "AppSettingsUpdate"]

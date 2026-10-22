@@ -766,7 +766,25 @@
       "reminder_enabled": "Ricordare via e-mail prima della scadenza della password",
       "reminder_enabled_hint": "Il testo, con le istruzioni per cambiare la password, si gestisce in Modelli (promemoria scadenza).",
       "reminder_days": "Giorni prima della scadenza",
-      "reminder_days_hint": "Separati da virgola, p. es. 14, 7, 1 — un'e-mail per soglia."
+      "reminder_days_hint": "Separati da virgola, p. es. 14, 7, 1 — un'e-mail per soglia.",
+      "field_mail_transport": "modalità di invio",
+      "field_mail_from": "indirizzo del mittente",
+      "field_smtp_host": "server SMTP",
+      "field_graph_tenant_id": "ID tenant Entra",
+      "field_graph_client_id": "ID applicazione",
+      "field_mail_secret": "segreto (password o segreto client)"
+    },
+    "domains": {
+      "title": "Domini",
+      "desc": "Domini proposti nel modulo utente.",
+      "mail": "Domini e-mail",
+      "mail_hint": "Per indirizzo e-mail e UPN. Uno per riga.",
+      "upn": "Domini UPN aggiuntivi",
+      "upn_hint": "Solo per il nome di accesso (UPN), p. es. un suffisso UPN alternativo senza posta. Uno per riga.",
+      "from_ad": "Noti inoltre dall'AD (proposti automaticamente per l'UPN): {{domains}}",
+      "save": "Salva domini",
+      "saved": "Salvato.",
+      "invalid": "Almeno una voce non è un dominio valido (p. es. scuola.ch)."
     }
   },
   "substitutions": {

@@ -34,14 +34,20 @@ def domain_of_search_base(search_base: str | None) -> str | None:
 
 
 async def upn_domains(
-    session: AsyncSession, *, mail_domains: list[str], users_search_base: str | None
+    session: AsyncSession,
+    *,
+    mail_domains: list[str],
+    users_search_base: str | None,
+    extra: tuple[str, ...] | list[str] = (),
 ) -> list[str]:
-    """Erlaubte UPN-Suffixe, Mail-Domains zuerst, sonst alphabetisch."""
+    """Erlaubte UPN-Suffixe: Mail-Domains, dann die eingetragenen UPN-Domains,
+    dann was das AD kennt (alphabetisch)."""
     # scope-bypass: nur der Domain-Teil aller UPNs — eine Eigenschaft des AD,
     # keine Personendaten; die Liste ist für jeden Standort dieselbe.
     stmt = select(func.distinct(func.lower(func.split_part(AdUserCache.upn, "@", 2))))
     in_use = {str(d) for d in (await session.execute(stmt)).scalars().all() if d}
     first = [d.lower() for d in mail_domains]
+    first += [d.lower() for d in extra if d.lower() not in first]
     rest = set(in_use)
     base = domain_of_search_base(users_search_base)
     if base:

@@ -79,12 +79,6 @@ const ACCESS_FIELDS: Field[] = [
       "Wer sich mit diesem UPN über Entra anmeldet, ist Admin — so kommt die erste " +
       "Person in eine neue Installation. Ein UPN je Zeile.",
   },
-  {
-    key: "mail_domains",
-    label: "Mail-Domänen",
-    kind: "lines",
-    hint: "Stehen im Benutzerformular für UPN und Mail zur Auswahl. Eine je Zeile.",
-  },
 ];
 
 const NINJA_FIELDS: Field[] = [
@@ -102,7 +96,7 @@ const MAIL_FIELDS: Field[] = [
     label: "Versand über",
     kind: "choice",
     options: [
-      ["", "Plattform-Standard"],
+      ["", "— wählen —"],
       ["graph", "Microsoft 365 (Graph)"],
       ["smtp", "SMTP-Server"],
       ["off", "aus"],
@@ -140,6 +134,32 @@ const MAIL_NOTICE_FIELDS: Field[] = [
     hint: "Mit Komma getrennt, z. B. 14, 7, 1.",
   },
 ];
+
+/** Was einer eigenen Anbindung fehlt — dieselbe Regel wie in der Datenebene. */
+function mailMissing(form: Record<string, string>, secretSealed: boolean): string[] {
+  const transport = form.mail_transport ?? "";
+  if (!transport) return ["Versand über"];
+  if (transport === "off") return [];
+  const missing: string[] = [];
+  if (!form.mail_from?.trim()) missing.push("Absenderadresse");
+  if (transport === "smtp") {
+    if (!form.smtp_host?.trim()) missing.push("SMTP-Server");
+    if (form.smtp_username?.trim() && !secretSealed) missing.push("SMTP-Passwort");
+  } else {
+    if (!form.graph_tenant_id?.trim()) missing.push("Entra-Mandanten-Id");
+    if (!form.graph_client_id?.trim()) missing.push("Anwendungs-Id");
+    if (!secretSealed) missing.push("Client-Secret");
+  }
+  return missing;
+}
+
+/** Felder der Anbindung, die zur gewählten Versandart gehören. */
+function mailFieldVisible(key: string, transport: string): boolean {
+  if (key.startsWith("graph_")) return transport === "graph";
+  if (key.startsWith("smtp_")) return transport === "smtp";
+  if (key === "mail_from" || key === "mail_from_name") return transport !== "off";
+  return true;
+}
 
 const ALL_FIELDS = [
   ...ACCESS_FIELDS,
@@ -333,6 +353,12 @@ function SettingsForm({
   );
   const [saved, setSaved] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  // Eigene Mail-Anbindung oder Plattform-Standard — ausdrücklich gewählt.
+  // Vorher genügte ein einziges Feld (etwa „Versand über: SMTP"), und der
+  // Kunde hatte eine eigene, leere Anbindung, ohne dass es hier stand.
+  const [ownMail, setOwnMail] = useState(() =>
+    MAIL_FIELDS.some((f) => overrides[f.key] !== undefined && overrides[f.key] !== null),
+  );
   const redirectUri = hostname ? `https://${hostname}/api/auth/callback` : "";
 
   const saveM = useMutation({
@@ -342,6 +368,16 @@ function SettingsForm({
         const value = fromText(form[f.key] ?? "", f.kind);
         if (value === undefined) delete next[f.key];
         else next[f.key] = value;
+      }
+      if (!ownMail) {
+        // Plattform-Standard: keine Spur einer eigenen Anbindung behalten.
+        for (const f of MAIL_FIELDS) delete next[f.key];
+      } else {
+        // Nur was zur gewählten Versandart gehört.
+        const transport = String(next.mail_transport ?? "");
+        for (const f of MAIL_FIELDS) {
+          if (!mailFieldVisible(f.key, transport)) delete next[f.key];
+        }
       }
       const tid = entraTenant.trim();
       if (tid) {
@@ -553,22 +589,68 @@ function SettingsForm({
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-1 font-semibold">Mailversand</h2>
-        <p className="mb-3 text-xs text-slate-500">
-          Leer = Plattform-Standard (Einstellungen → Mailversand). Sobald hier auch
-          nur ein Feld der Anbindung gesetzt ist, gilt für diesen Kunden seine
-          ganze eigene Anbindung — mit seinem eigenen Geheimnis; das der
-          Plattform geht dann nicht an ihn.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {MAIL_FIELDS.map(renderField)}
+        <div className="mb-3 flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="mail-source"
+              checked={!ownMail}
+              onChange={() => {
+                setOwnMail(false);
+                setSaved(false);
+              }}
+            />
+            Plattform-Standard (Einstellungen → Mailversand)
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="mail-source"
+              checked={ownMail}
+              onChange={() => {
+                setOwnMail(true);
+                setSaved(false);
+              }}
+            />
+            Eigene Anbindung dieses Kunden
+          </label>
         </div>
-        <div className="mt-3">
-          <SecretField
-            tenantId={tenantId}
-            secret={sealed("mail_secret")}
-            label="Client-Secret bzw. SMTP-Passwort (eigene Anbindung)"
-          />
-        </div>
+        {!ownMail ? (
+          <p className="text-xs text-slate-500">
+            Gilt:{" "}
+            {String(defaults.mail_transport ?? "off") === "off"
+              ? "kein Standard eingerichtet (aus)"
+              : `${defaults.mail_transport === "graph" ? "Microsoft 365" : "SMTP"} — ${String(
+                  defaults.mail_from ?? "ohne Absender",
+                )}`}
+            . Das Geheimnis des Standards geht mit.
+          </p>
+        ) : (
+          <>
+            <p className="mb-3 text-xs text-slate-500">
+              Die ganze Anbindung kommt von hier, mit dem eigenen Geheimnis — vom
+              Plattform-Standard wird nichts übernommen.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {MAIL_FIELDS.filter((f) =>
+                mailFieldVisible(f.key, form.mail_transport ?? ""),
+              ).map(renderField)}
+            </div>
+            <div className="mt-3">
+              <SecretField
+                tenantId={tenantId}
+                secret={sealed("mail_secret")}
+                label="Client-Secret bzw. SMTP-Passwort"
+              />
+            </div>
+            {mailMissing(form, sealed("mail_secret")?.sealed ?? false).length > 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                Unvollständig — es fehlt:{" "}
+                {mailMissing(form, sealed("mail_secret")?.sealed ?? false).join(", ")}
+              </p>
+            )}
+          </>
+        )}
         <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-3">
           {MAIL_NOTICE_FIELDS.map(renderField)}
         </div>

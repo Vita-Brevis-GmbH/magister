@@ -28,7 +28,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from pydantic import ValidationError
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
@@ -101,7 +103,8 @@ RECONCILABLE: frozenset[str] = frozenset(
         "oidc_redirect_uri",
         "oidc_scopes",
         "bootstrap_admins",
-        "mail_domains",
+        # mail_domains gehört seit 2026-10 dem Kunden (Systemeinstellungen →
+        # Domänen) — die Konsole setzt es nicht mehr.
         "ad_dcs",
         "ad_bind_mode",
         "ad_bind_dn",
@@ -216,6 +219,26 @@ def settings_diff(current: dict[str, Any], desired: dict[str, Any]) -> dict[str,
     return diff
 
 
+def safe_error(exc: BaseException) -> str:
+    """Ein Fehler als ein Satz für die Konsole — nie SQL, Parameter oder Geheimnisse.
+
+    ``str()`` eines Datenbankfehlers enthält die gebundenen Parameter, und
+    beim Schreiben eines Geheimnisses ist das der Klartext (pgp_sym_encrypt).
+    Dort zählt nur die erste Zeile der Datenbank-Meldung.
+    """
+    if isinstance(exc, DBAPIError):
+        first = (str(exc.orig).strip().splitlines() or [""])[0]
+        return f"{type(exc).__name__}: {first}"[:300]
+    if isinstance(exc, ValidationError):
+        # Feld und Grund, ohne den Eingabewert.
+        parts = [
+            f"{'.'.join(str(p) for p in err['loc'])}: {err['msg']}" for err in exc.errors()[:3]
+        ]
+        return f"ValidationError: {'; '.join(parts)}"[:300]
+    first = (str(exc).strip().splitlines() or [""])[0]
+    return f"{type(exc).__name__}: {first}"[:300] if first else type(exc).__name__
+
+
 def _blank(key: str, value: Any) -> bool:
     return value is None or value == "" or (key in _ZERO_IS_BLANK and value == 0)
 
@@ -325,9 +348,24 @@ class Reconciler:
 
         if desired.maintenance and not dry_run:
             for request in desired.maintenance:
-                await self._run_maintenance(
-                    request, result, tenant_slug=tenant_slug, tenant_ref=tenant_ref
-                )
+                # Jeder Auftrag in seinem eigenen Savepoint: einer, der
+                # scheitert, nimmt weder die Einstellungen dieser Runde noch die
+                # übrigen Aufträge mit — und sein Ergebnis kommt trotzdem an.
+                try:
+                    async with self.session.begin_nested():
+                        await self._run_maintenance(
+                            request, result, tenant_slug=tenant_slug, tenant_ref=tenant_ref
+                        )
+                except Exception as exc:
+                    logger.exception(
+                        "Wartungsauftrag %s (%s) für %s gescheitert",
+                        request.id,
+                        request.action,
+                        tenant_slug,
+                    )
+                    result.maintenance_results.append(
+                        {"id": request.id, "ok": False, "result": {"error": safe_error(exc)}}
+                    )
 
         if result.touched:
             logger.info(

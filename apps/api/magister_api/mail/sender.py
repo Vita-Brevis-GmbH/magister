@@ -27,7 +27,10 @@ logger = logging.getLogger(__name__)
 
 _GRAPH = "https://graph.microsoft.com/v1.0"
 _LOGIN = "https://login.microsoftonline.com"
-_TIMEOUT = httpx.Timeout(30.0, connect=10.0)
+_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
+#: Je Schritt (Verbindung, STARTTLS, Anmeldung, Senden). Kurz, weil der
+#: Versand einer Testmail im Abgleich läuft und dieser sonst stehen bliebe.
+_SMTP_TIMEOUT = 15
 
 
 class MailError(RuntimeError):
@@ -157,10 +160,10 @@ def _send_smtp(config: MailConfig, message: MailMessage) -> None:
     try:
         if implicit:
             client: smtplib.SMTP = smtplib.SMTP_SSL(
-                config.smtp_host, port, timeout=30, context=context
+                config.smtp_host, port, timeout=_SMTP_TIMEOUT, context=context
             )
         else:
-            client = smtplib.SMTP(config.smtp_host, port, timeout=30)
+            client = smtplib.SMTP(config.smtp_host, port, timeout=_SMTP_TIMEOUT)
         with client:
             if not implicit:
                 client.ehlo()

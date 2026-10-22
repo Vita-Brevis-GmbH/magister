@@ -763,7 +763,25 @@
       "reminder_enabled": "Vor dem Passwort-Ablauf per Mail erinnern",
       "reminder_enabled_hint": "Den Text samt Anleitung zum Ändern des Passworts pflegen Sie unter Vorlagen (Erinnerung Passwort-Ablauf).",
       "reminder_days": "Tage vor dem Ablauf",
-      "reminder_days_hint": "Mit Komma getrennt, z. B. 14, 7, 1 — je Schwelle eine Mail."
+      "reminder_days_hint": "Mit Komma getrennt, z. B. 14, 7, 1 — je Schwelle eine Mail.",
+      "field_mail_transport": "Versandart",
+      "field_mail_from": "Absenderadresse",
+      "field_smtp_host": "SMTP-Server",
+      "field_graph_tenant_id": "Entra-Mandanten-ID",
+      "field_graph_client_id": "Anwendungs-ID",
+      "field_mail_secret": "Geheimnis (Passwort bzw. Client-Secret)"
+    },
+    "domains": {
+      "title": "Domänen",
+      "desc": "Welche Domains im Benutzerformular zur Auswahl stehen.",
+      "mail": "Mail-Domänen",
+      "mail_hint": "Für Mailadresse und UPN. Eine je Zeile.",
+      "upn": "Zusätzliche UPN-Domänen",
+      "upn_hint": "Nur für den Anmeldenamen (UPN), z. B. ein alternatives UPN-Suffix ohne Mailzustellung. Eine je Zeile.",
+      "from_ad": "Zusätzlich aus dem AD bekannt (automatisch in der UPN-Auswahl): {{domains}}",
+      "save": "Domänen speichern",
+      "saved": "Gespeichert.",
+      "invalid": "Mindestens ein Eintrag ist keine gültige Domain (z. B. schule.ch)."
     }
   },
   "substitutions": {

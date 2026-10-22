@@ -753,6 +753,7 @@ export interface AppSettingsOut {
   oidc_scopes: string[];
   bootstrap_admins: string[];
   mail_domains: string[];
+  upn_domains: string[];
   ad_dcs: string[];
   ad_bind_mode: string;
   ad_bind_dn: string | null;
@@ -1356,4 +1357,11 @@ export interface PasswordExpiryOverview {
   notice_enabled: boolean;
   mail_ready: boolean;
   info_as_of: string | null;
+}
+
+export interface DomainsOut {
+  mail_domains: string[];
+  upn_domains: string[];
+  // Was die UPN-Auswahl anbietet, inklusive dessen, was das AD kennt.
+  upn_choices: string[];
 }

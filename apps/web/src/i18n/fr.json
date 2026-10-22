@@ -766,7 +766,25 @@
       "reminder_enabled": "Rappeler par e-mail avant l'expiration du mot de passe",
       "reminder_enabled_hint": "Le texte, avec la marche à suivre pour changer le mot de passe, se gère sous Modèles (rappel d'expiration).",
       "reminder_days": "Jours avant l'expiration",
-      "reminder_days_hint": "Séparés par des virgules, p. ex. 14, 7, 1 — un e-mail par seuil."
+      "reminder_days_hint": "Séparés par des virgules, p. ex. 14, 7, 1 — un e-mail par seuil.",
+      "field_mail_transport": "mode d'envoi",
+      "field_mail_from": "adresse d'expéditeur",
+      "field_smtp_host": "serveur SMTP",
+      "field_graph_tenant_id": "ID du locataire Entra",
+      "field_graph_client_id": "ID d'application",
+      "field_mail_secret": "secret (mot de passe ou secret client)"
+    },
+    "domains": {
+      "title": "Domaines",
+      "desc": "Domaines proposés dans le formulaire utilisateur.",
+      "mail": "Domaines de messagerie",
+      "mail_hint": "Pour l'adresse e-mail et l'UPN. Un par ligne.",
+      "upn": "Domaines UPN supplémentaires",
+      "upn_hint": "Uniquement pour le nom d'ouverture de session (UPN), p. ex. un suffixe UPN alternatif sans messagerie. Un par ligne.",
+      "from_ad": "Connus en plus via l'AD (automatiquement proposés pour l'UPN) : {{domains}}",
+      "save": "Enregistrer les domaines",
+      "saved": "Enregistré.",
+      "invalid": "Au moins une entrée n'est pas un domaine valide (p. ex. ecole.ch)."
     }
   },
   "substitutions": {

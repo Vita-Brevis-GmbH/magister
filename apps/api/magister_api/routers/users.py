@@ -181,7 +181,10 @@ async def mail_domains(
         "domains": list(eff.mail_domains),
         # Für den UPN zusätzlich, was das AD kennt (services/upn_domains.py).
         "upn_domains": await upn_domains(
-            session, mail_domains=eff.mail_domains, users_search_base=eff.ad_users_search_base
+            session,
+            mail_domains=eff.mail_domains,
+            users_search_base=eff.ad_users_search_base,
+            extra=eff.upn_domains,
         ),
     }
 
@@ -286,7 +289,10 @@ async def patch_user_attributes(
             payload=payload,
             mail_domains=mail_domains,
             upn_domains=await upn_domains(
-                session, mail_domains=mail_domains, users_search_base=eff.ad_users_search_base
+                session,
+                mail_domains=mail_domains,
+                users_search_base=eff.ad_users_search_base,
+                extra=eff.upn_domains,
             ),
             ip=ip,
             request_id=request_id,
@@ -371,7 +377,10 @@ async def rename_apply(
             req=payload,
             mail_domains=mail_domains,
             upn_domains=await upn_domains(
-                session, mail_domains=mail_domains, users_search_base=eff.ad_users_search_base
+                session,
+                mail_domains=mail_domains,
+                users_search_base=eff.ad_users_search_base,
+                extra=eff.upn_domains,
             ),
             ip=ip,
             request_id=request_id,

@@ -55,7 +55,6 @@ POLICY_KEYS: dict[str, type | tuple[type, ...]] = {
     "oidc_redirect_uri": str,
     "oidc_scopes": list,
     "bootstrap_admins": list,
-    "mail_domains": list,
     # Verzeichnis
     "ad_dcs": list,
     "ad_bind_mode": str,
@@ -146,8 +145,12 @@ def mail_connection(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict
 #: sich die Seite eines Kunden, bei dem einmal ein solcher Wert stand, nicht
 #: mehr speichern. Ausgeliefert werden sie nicht mehr; was im Portal steht,
 #: bleibt dort unberührt (der Abgleich fasst nur an, was die Konsole schickt).
+#:
+#: Seit 2026-10 ebenso `mail_domains`: welche Domains die Konten eines Kunden
+#: tragen, pflegt er selbst (Systemeinstellungen → Domänen), samt den
+#: zusätzlichen UPN-Domains.
 RETIRED_KEYS: frozenset[str] = frozenset(
-    {"ad_ou_students_other", "ad_ou_teachers", "ad_groups_teacher"}
+    {"ad_ou_students_other", "ad_ou_teachers", "ad_groups_teacher", "mail_domains"}
 )
 
 

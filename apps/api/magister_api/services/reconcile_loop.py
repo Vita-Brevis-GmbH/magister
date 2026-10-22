@@ -22,7 +22,7 @@ import logging
 from typing import Any
 
 from magister_api.config import Settings, get_settings
-from magister_api.services.reconciler import Reconciler
+from magister_api.services.reconciler import Reconciler, safe_error
 from magister_api.tenancy.console_report import ReportRejectedError
 from magister_api.tenancy.context import get_engines, get_registry
 from magister_api.tenancy.desired_state import (
@@ -94,7 +94,9 @@ async def reconcile_tenant(settings: Settings, tenant: Tenant) -> bool:
                 await session.rollback()
             errors = [f"{name}: {why}" for name, why in result.rejected_secrets.items()]
     except Exception as exc:
-        await _report(settings, tenant, reconcile_outcome(ok=False, error=type(exc).__name__), None)
+        # Ein Satz statt nur des Typnamens: "ValidationError" allein sagt dem
+        # Betreiber nicht, welches Feld. Ohne SQL und Parameter (safe_error).
+        await _report(settings, tenant, reconcile_outcome(ok=False, error=safe_error(exc)), None)
         raise
     outcome = reconcile_outcome(ok=not errors, touched=touched, error="; ".join(errors) or None)
     await _report(settings, tenant, outcome, maintenance)

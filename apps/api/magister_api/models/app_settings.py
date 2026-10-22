@@ -55,6 +55,12 @@ class AppSettings(Base):
     mail_domains: Mapped[list[str]] = mapped_column(
         JSONB, nullable=False, default=list, server_default="[]"
     )
+    # Zusätzliche UPN-Suffixe für die Auswahl (neben den Mail-Domains, dem
+    # DNS-Namen der Domäne und den Suffixen, die Konten schon tragen) — etwa
+    # ein alternatives UPN-Suffix der Gesamtstruktur ohne Mailzustellung.
+    upn_domains: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
 
     # --- AD ---
     ad_dcs: Mapped[list[str]] = mapped_column(

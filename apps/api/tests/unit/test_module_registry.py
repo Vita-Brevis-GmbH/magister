@@ -95,9 +95,10 @@ def test_router_count() -> None:
     # (ADR-0019) to 34, and splitting the write path of /admin/modules into its
     # own router (ADR-0017 Nachtrag 2026-10-05: not mounted when hosted) to 35.
     # Ablauf-Erinnerung (2026-10-22): /admin/mail (Status + Testmail, auch
-    # gehostet gemountet) and /password-expiry (Übersicht) took it to 37.
+    # gehostet gemountet) and /password-expiry (Übersicht) took it to 37;
+    # /admin/domains (Mail-/UPN-Domains, gehört dem Kunden) to 38.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 37
+    assert total == 38
 
 
 def test_module_ids_unique_and_expected() -> None:

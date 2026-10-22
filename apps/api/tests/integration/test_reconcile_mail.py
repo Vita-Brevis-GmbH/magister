@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from pydantic import SecretStr
+from pydantic import SecretStr, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.config import Settings
@@ -215,3 +215,47 @@ async def test_mail_test_order_sends_with_the_effective_connection(
     assert outcome["ok"] is False
     assert outcome["result"]["error"].startswith("graph: token 401")
     assert "vb-geheim" not in repr(outcome)
+
+
+async def test_a_failing_order_is_reported_and_does_not_sink_the_round(
+    db_session: AsyncSession, app_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from magister_api.services.reconciler import Reconciler, safe_error
+    from magister_api.tenancy.desired_state import DesiredMaintenance
+
+    async def boom(self: Reconciler, request: DesiredMaintenance) -> dict[str, Any]:
+        raise RuntimeError("kaputt")
+
+    monkeypatch.setattr(Reconciler, "_mail_test", boom)
+    desired = DesiredState(
+        settings=GRAPH_STANDARD,
+        maintenance=(
+            DesiredMaintenance(
+                id="44444444-4444-4444-4444-444444444444",
+                action="mail_test",
+                requested_by="ops",
+                reason="Testmail an x@vb.ch",
+                params={"to": "x@vb.ch"},
+            ),
+        ),
+    )
+    result = await _run(db_session, _settings(app_settings), desired)
+    assert result.maintenance_results == [
+        {
+            "id": "44444444-4444-4444-4444-444444444444",
+            "ok": False,
+            "result": {"error": "RuntimeError: kaputt"},
+        }
+    ]
+    # Die Einstellungen derselben Runde sind trotzdem geschrieben.
+    eff = await AppSettingsService(db_session, app_settings).get_effective()
+    assert eff.mail_transport == "graph"
+
+    # Fehlertexte ohne Eingabewerte bzw. Parameter.
+    from magister_api.schemas.app_settings import AppSettingsUpdate
+
+    with pytest.raises(ValidationError) as caught:
+        AppSettingsUpdate(mail_transport="sendmail")
+    text = safe_error(caught.value)
+    assert text.startswith("ValidationError: mail_transport:")
+    assert "sendmail" not in text

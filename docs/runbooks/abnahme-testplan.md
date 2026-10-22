@@ -296,6 +296,8 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-25** Erinnerung: Konto mit Ablauf in 5 Tagen und Mailadresse → genau eine Mail (Schwelle 7), Übersicht „gesendet am …“; zweiter Lauf schickt nichts; neues Passwort gesetzt → Erinnerungen beginnen neu; eigene Vorlage „Erinnerung Passwort-Ablauf“ wird verwendet.
 - [ ] **F-26** Testmail aus dem Cockpit: Einstellungen → Mailversand → Testmail an eine eigene Adresse → innerhalb einer Minute „Gesendet … (über <Kunde>)“, Mail kommt an; falsches Secret → „Nicht gesendet: …“ ohne Secret im Text. Dasselbe unter Kunde → Einstellungen → Mailversand mit dessen Anbindung.
 - [ ] **F-27** Passwortalter: Benutzer → Passwort-Ablauf → Passwortalter listet alle aktiven Konten, älteste zuerst; Klick auf „Alter“ dreht die Reihenfolge; „Änderung verlangt“ für Konten mit pwdLastSet = 0; ab 100 Konten Zurück/Weiter.
+- [ ] **F-28** Domänen: Magister → Einstellungen → Systemeinstellungen → Domänen (auch gehostet): Mail-Domänen und zusätzliche UPN-Domänen speichern → im Benutzerformular stehen sie zur Auswahl (UPN: zusätzlich DNS-Name der Domäne und vorhandene Suffixe); ungültiger Eintrag → Meldung. Im Cockpit gibt es das Feld Mail-Domänen nicht mehr.
+- [ ] **F-29** Cockpit → Kunde → Einstellungen → Mailversand: Auswahl „Plattform-Standard“ vs. „Eigene Anbindung“; bei eigener Anbindung zeigt die Seite, was fehlt. Testmail wartet → darunter „Letzte Meldung von <Kunde> … — Abgleich gelingt / scheitert: <Grund>“.
 
 ### 7.2 Firma (Kunde B)
 

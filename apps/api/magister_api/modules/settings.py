@@ -8,6 +8,7 @@ always-on ``/admin`` configuration base; toggling it off is not offered.
 from __future__ import annotations
 
 from magister_api.modules.manifest import ModuleManifest
+from magister_api.routers.admin_domains import router as admin_domains_router
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
 from magister_api.routers.admin_mail import router as admin_mail_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
@@ -25,6 +26,7 @@ SETTINGS_MODULE = ModuleManifest(
         admin_settings_router,
         admin_local_admin_router,
         admin_mail_router,
+        admin_domains_router,
         group_templates_router,
         admin_roles_router,
         admin_rbac_router,

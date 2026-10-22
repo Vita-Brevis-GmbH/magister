@@ -13,6 +13,7 @@ import {
 } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { DomainsCard } from "@/components/DomainsCard";
 import { MailStatusCard } from "@/components/MailStatusCard";
 import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,7 +31,6 @@ interface FormState {
   oidc_redirect_uri: string;
   oidc_scopes: string;
   bootstrap_admins: string;
-  mail_domains: string;
   ad_dcs: string;
   ad_bind_mode: string;
   ad_bind_dn: string;
@@ -69,7 +69,6 @@ function fromOut(data: AppSettingsOut): FormState {
     oidc_redirect_uri: data.oidc_redirect_uri ?? "",
     oidc_scopes: data.oidc_scopes.join(", "),
     bootstrap_admins: data.bootstrap_admins.join(", "),
-    mail_domains: data.mail_domains.join(", "),
     ad_dcs: data.ad_dcs.join(", "),
     ad_bind_mode: data.ad_bind_mode || "simple",
     ad_bind_dn: data.ad_bind_dn ?? "",
@@ -129,10 +128,6 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   const admins = splitCsv(form.bootstrap_admins);
   if (JSON.stringify(admins) !== JSON.stringify(current.bootstrap_admins)) {
     payload.bootstrap_admins = admins;
-  }
-  const mail_domains = splitCsv(form.mail_domains).map((d) => d.toLowerCase());
-  if (JSON.stringify(mail_domains) !== JSON.stringify(current.mail_domains)) {
-    payload.mail_domains = mail_domains;
   }
   const dcs = splitCsv(form.ad_dcs);
   if (JSON.stringify(dcs) !== JSON.stringify(current.ad_dcs)) {
@@ -295,6 +290,7 @@ function AppSettingsPage(): JSX.Element {
         // Konfiguration nur mitverschwunden, weil er im selben Formular stand.
         <>
           <ManagedByPlatform area="settings" />
+          <DomainsCard />
           <MailStatusCard />
           <Card>
             <CardHeader>
@@ -313,6 +309,7 @@ function AppSettingsPage(): JSX.Element {
       ) : settings.data ? (
         <>
           <SettingsForm data={settings.data} profile={profile} />
+          <DomainsCard />
           <MailStatusCard />
         </>
       ) : null}
@@ -858,20 +855,6 @@ function SettingsForm({
           <p className="text-xs text-muted-foreground">
             {t("admin.settings.provisioning_perschool_hint", unitVars)}
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("admin.settings.mail_section")}</CardTitle>
-          <CardDescription>{t("admin.settings.mail_section_desc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="mail-domains">{t("admin.settings.field.mail_domains")}</Label>
-            <Input id="mail-domains" {...field("mail_domains")} />
-            <p className="text-xs text-muted-foreground">{t("admin.settings.csv_hint")}</p>
-          </div>
         </CardContent>
       </Card>
 

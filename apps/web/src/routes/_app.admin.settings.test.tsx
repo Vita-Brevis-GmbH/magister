@@ -41,6 +41,7 @@ function makeData(overrides: Partial<AppSettingsOut> = {}): AppSettingsOut {
     oidc_scopes: ["openid", "profile", "email"],
     bootstrap_admins: ["admin@example.ch"],
     mail_domains: [],
+    upn_domains: [],
     ad_dcs: ["dc1.example.local"],
     ad_bind_mode: "simple",
     ad_bind_dn: "cn=svc,dc=example,dc=local",

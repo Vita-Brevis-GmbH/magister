@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  getTenantStatus,
   listMaintenance,
   orderPlatformMailTest,
   orderTenantMailTest,
@@ -49,6 +50,16 @@ export function MailTestBox({ tenantId }: { tenantId?: string }) {
       return Date.now() - startedAt < WAIT_MS ? 3000 : false;
     },
   });
+  // Solange gewartet wird: was die Installation zuletzt gemeldet hat. Steht
+  // dort ein gescheiterter Abgleich, kommt der Auftrag nie an — und genau das
+  // soll hier sichtbar sein statt eines endlosen „wartet …".
+  const waitingForResult = order !== null && (!resultQ.data || resultQ.data.state === "requested");
+  const statusQ = useQuery({
+    queryKey: ["tenant-status", order?.tenant_id],
+    queryFn: () => getTenantStatus(order!.tenant_id),
+    enabled: waitingForResult,
+    refetchInterval: waitingForResult ? 5000 : false,
+  });
   const row = resultQ.data;
   const waiting = order !== null && (!row || row.state === "requested");
   // Gemessen am Zeitpunkt der letzten Antwort, nicht an `Date.now()` beim
@@ -87,6 +98,9 @@ export function MailTestBox({ tenantId }: { tenantId?: string }) {
         </button>
       </div>
       {orderM.isError && <ErrorBox error={orderM.error} />}
+      {order && waiting && statusQ.data && (
+        <TenantPulse status={statusQ.data} slug={order.tenant_slug} since={startedAt} />
+      )}
       {order && (
         <p
           role="status"
@@ -110,5 +124,36 @@ export function MailTestBox({ tenantId }: { tenantId?: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Letzte Meldung der Installation: wann, und ob ihr Abgleich gelingt. */
+function TenantPulse({
+  status,
+  slug,
+  since,
+}: {
+  status: Awaited<ReturnType<typeof getTenantStatus>>;
+  slug: string;
+  since: number;
+}) {
+  const reported = status.reported_at ? new Date(status.reported_at) : null;
+  const reconcile = status.report?.reconcile;
+  const fresh = reported !== null && reported.getTime() >= since;
+  return (
+    <p className="text-xs text-slate-500">
+      Letzte Meldung von {slug}:{" "}
+      {reported ? reported.toLocaleTimeString("de-CH") : "noch nie"}
+      {fresh ? " (nach dem Auftrag)" : " (vor dem Auftrag)"}
+      {reconcile &&
+        (reconcile.ok ? (
+          " — Abgleich gelingt."
+        ) : (
+          <span className="text-red-700">
+            {" "}
+            — Abgleich scheitert: {reconcile.error ?? "ohne Angabe"}
+          </span>
+        ))}
+    </p>
   );
 }

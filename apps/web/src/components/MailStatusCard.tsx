@@ -46,7 +46,11 @@ export function MailStatusCard(): JSX.Element {
               <dd className={s.ready ? "text-emerald-700" : "text-amber-700"}>
                 {s.ready
                   ? t("admin.mail.ready")
-                  : t("admin.mail.missing", { fields: s.missing.join(", ") })}
+                  : t("admin.mail.missing", {
+                      fields: s.missing
+                        .map((f) => t(`admin.mail.field_${f}`, { defaultValue: f }))
+                        .join(", "),
+                    })}
               </dd>
             </div>
             <div>

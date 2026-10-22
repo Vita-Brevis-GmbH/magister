@@ -763,7 +763,25 @@
       "reminder_enabled": "Remind by e-mail before the password expires",
       "reminder_enabled_hint": "Maintain the text, including how to change the password, under Templates (password expiry reminder).",
       "reminder_days": "Days before expiry",
-      "reminder_days_hint": "Comma-separated, e.g. 14, 7, 1 — one e-mail per threshold."
+      "reminder_days_hint": "Comma-separated, e.g. 14, 7, 1 — one e-mail per threshold.",
+      "field_mail_transport": "sending method",
+      "field_mail_from": "sender address",
+      "field_smtp_host": "SMTP server",
+      "field_graph_tenant_id": "Entra tenant ID",
+      "field_graph_client_id": "application ID",
+      "field_mail_secret": "secret (password or client secret)"
+    },
+    "domains": {
+      "title": "Domains",
+      "desc": "Which domains the user form offers.",
+      "mail": "Mail domains",
+      "mail_hint": "For e-mail address and UPN. One per line.",
+      "upn": "Additional UPN domains",
+      "upn_hint": "Only for the sign-in name (UPN), e.g. an alternative UPN suffix without mail delivery. One per line.",
+      "from_ad": "Also known from AD (offered for the UPN automatically): {{domains}}",
+      "save": "Save domains",
+      "saved": "Saved.",
+      "invalid": "At least one entry is not a valid domain (e.g. school.ch)."
     }
   },
   "substitutions": {

@@ -4,6 +4,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  DomainsOut,
   MailStatusOut,
   PasswordExpiryOverview,
   PasswordExpiryView,
@@ -1828,5 +1829,23 @@ export function useMailStatus(enabled = true) {
 export function useSendTestMail() {
   return useMutation<TestMailOut, ApiError, string>({
     mutationFn: (to) => apiFetch<TestMailOut>("/admin/mail/test", { method: "POST", body: { to } }),
+  });
+}
+
+export function useDomains() {
+  return useQuery<DomainsOut>({
+    queryKey: ["admin", "domains"],
+    queryFn: () => apiFetch<DomainsOut>("/admin/domains"),
+  });
+}
+
+export function useUpdateDomains() {
+  const qc = useQueryClient();
+  return useMutation<DomainsOut, ApiError, { mail_domains: string[]; upn_domains: string[] }>({
+    mutationFn: (body) => apiFetch<DomainsOut>("/admin/domains", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(["admin", "domains"], data);
+      void qc.invalidateQueries({ queryKey: queryKeys.mailDomains });
+    },
   });
 }

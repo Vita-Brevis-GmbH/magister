@@ -88,13 +88,13 @@ class TestOnlyTheDifferenceIsWritten:
     ) -> None:
         svc = Reconciler(db_session, app_settings)
         await svc.reconcile(
-            DesiredState(settings={"mail_domains": ["a.ch", "b.ch"]}), tenant_slug="alpha"
+            DesiredState(settings={"bootstrap_admins": ["a@a.ch", "b@b.ch"]}), tenant_slug="alpha"
         )
         await db_session.commit()
         version = await _version(db_session)
 
         result = await svc.reconcile(
-            DesiredState(settings={"mail_domains": ["b.ch", "a.ch"]}), tenant_slug="alpha"
+            DesiredState(settings={"bootstrap_admins": ["b@b.ch", "a@a.ch"]}), tenant_slug="alpha"
         )
         await db_session.commit()
 

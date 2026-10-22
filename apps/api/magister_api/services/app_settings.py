@@ -109,6 +109,7 @@ class EffectiveAppSettings:
     mail_secret: str | None = None
     expiry_notice_enabled: bool = False
     expiry_notice_days: tuple[int, ...] = (14, 7, 1)
+    upn_domains: tuple[str, ...] = ()
 
 
 #: Mail-Felder, die wie gewöhnliche Spalten gelesen und geschrieben werden.
@@ -217,6 +218,7 @@ class AppSettingsService:
             ),
             *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
             func.pgp_sym_decrypt(AppSettings.mail_secret_enc, self._key).label("mail_secret"),
+            AppSettings.upn_domains,
         ).where(AppSettings.id == 1)
         result = await self.session.execute(stmt)
         row = result.one_or_none()
@@ -256,6 +258,7 @@ class AppSettingsService:
             mail_secret=row.mail_secret,
             expiry_notice_enabled=bool(row.expiry_notice_enabled),
             expiry_notice_days=tuple(int(d) for d in (row.expiry_notice_days or [])),
+            upn_domains=tuple(row.upn_domains or ()),
         )
 
     async def get_redacted_for_api(self) -> AppSettingsOut:
@@ -296,6 +299,7 @@ class AppSettingsService:
             (AppSettings.ninja_client_secret_enc.is_not(None)).label("ninja_client_secret_set"),
             *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
             (AppSettings.mail_secret_enc.is_not(None)).label("mail_secret_set"),
+            AppSettings.upn_domains,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -337,6 +341,7 @@ class AppSettingsService:
             ninja_client_secret_set=bool(row.ninja_client_secret_set),
             **{f: getattr(row, f) for f in MAIL_PLAIN_FIELDS},
             mail_secret_set=bool(row.mail_secret_set),
+            upn_domains=list(row.upn_domains or []),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -369,6 +374,7 @@ class AppSettingsService:
             "oidc_scopes": payload.oidc_scopes,
             "bootstrap_admins": payload.bootstrap_admins,
             "mail_domains": payload.mail_domains,
+            "upn_domains": payload.upn_domains,
             "ad_dcs": payload.ad_dcs,
             "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
