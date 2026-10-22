@@ -238,14 +238,27 @@ async def put_connector_settings(
 @console.get("/agents", response_model=list[AgentOut])
 async def list_agents(
     tenant_id: UUID, session: AsyncSession = Depends(get_session)
-) -> list[ConnectorAgent]:
+) -> list[AgentOut]:
+    """Die Agenten des Kunden — ``stale``, wer sich seit ``STALE_AFTER`` nicht meldet.
+
+    Gespeichert bleibt ``online``; das setzt erst die nächste Anfrage des
+    Agenten zurück. Angezeigt wurde bisher der gespeicherte Wert: ein Dienst,
+    der nach einem Update gestoppt blieb, stand eine Stunde lang als „online“
+    da, während jeder Abgleich auf ihn wartete und scheiterte.
+    """
     await _tenant(session, tenant_id)
     stmt = (
         select(ConnectorAgent)
         .where(ConnectorAgent.tenant_id == tenant_id)
         .order_by(ConnectorAgent.created_at)
     )
-    return list((await session.execute(stmt)).scalars())
+    out: list[AgentOut] = []
+    for agent in (await session.execute(stmt)).scalars():
+        row = AgentOut.model_validate(agent)
+        if agent.status is AgentStatus.online and svc.agent_is_stale(agent):
+            row = row.model_copy(update={"status": AgentStatus.stale})
+        out.append(row)
+    return out
 
 
 @console.post("/agents/{agent_id}/revoke", response_model=AgentOut)

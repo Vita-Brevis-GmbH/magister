@@ -1113,6 +1113,21 @@ class TestConnectorSettings:
         db_client.put(url, json={"allowed_ous": ["OU=A,DC=a,DC=local"]})
         assert db_client.get(url).json()["auto_update"] is False
 
+    def test_a_silent_agent_is_listed_as_stale(
+        self, db_client: TestClient, agent_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ein gestoppter Dienst steht nicht weiter als „online“ da."""
+        from datetime import timedelta
+
+        tenant_id = _tenant(db_client, "cset_stale")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        db_client.get("/connector/config", headers=_auth(agent, agent_headers))
+        url = f"/api/tenants/{tenant_id}/agents"
+        assert [a["status"] for a in db_client.get(url).json()] == ["online"]
+        monkeypatch.setattr(svc, "STALE_AFTER", timedelta(seconds=-1))
+        assert [a["status"] for a in db_client.get(url).json()] == ["stale"]
+
     def test_the_agent_reports_its_update_outcome(
         self, db_client: TestClient, agent_headers: dict[str, str]
     ) -> None:
