@@ -21,9 +21,11 @@ Drei Dinge, die diese Fläche NICHT tut:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes
@@ -120,12 +122,39 @@ def newest_update() -> AgentUpdateOut | None:
     msi = newest_msi(_verzeichnis())
     if msi is None:
         return None
+    key_id, signature = _signatur(msi.path)
     return AgentUpdateOut(
         filename=msi.path.name,
         version=msi.version_text,
         sha256=msi.sha256(),
         size_bytes=msi.path.stat().st_size,
+        key_id=key_id,
+        signature=signature,
     )
+
+
+def _signatur(msi: Path) -> tuple[str | None, str | None]:
+    """``<msi>.sig`` lesen (``agent/packaging/signieren.py``): (Schlüssel-ID, Signatur).
+
+    Geprüft wird hier nichts — das tut der Agent mit dem Schlüssel, den er
+    eingebaut hat. Die Konsole reicht nur durch; eine kaputte Datei heisst
+    für ihn schlicht „nicht signiert“.
+    """
+    sig = msi.with_name(msi.name + ".sig")
+    try:
+        raw: object = json.loads(sig.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None, None
+    except (OSError, ValueError):
+        logger.warning("%s ist unlesbar; das Paket gilt als nicht signiert.", sig.name)
+        return None, None
+    if not isinstance(raw, dict):
+        return None, None
+    data = cast(dict[str, Any], raw)
+    key_id, signature = data.get("key_id"), data.get("signature")
+    if not isinstance(key_id, str) or not isinstance(signature, str):
+        return None, None
+    return key_id[:64], signature[:200]
 
 
 # Vor `/{filename}`: sonst finge jene Route diesen Pfad ab.

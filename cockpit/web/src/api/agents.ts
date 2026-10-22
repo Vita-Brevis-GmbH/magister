@@ -15,6 +15,9 @@ export interface Agent {
   previous_spki_sha256: string | null;
   spki_rotated_at: string | null;
   agent_version: string | null;
+  /** Letzte Meldung des Agenten zu einem Update (Selbstupdate oder von Hand). */
+  update_status?: string | null;
+  update_status_at?: string | null;
   last_seen_at: string | null;
   revoked_at: string | null;
   revoked_reason: string | null;
@@ -56,11 +59,20 @@ export function listAgents(tenantId: string): Promise<Agent[]> {
   return get(`/api/tenants/${tenantId}/agents`);
 }
 
-export function createEnrollment(tenantId: string, agentName: string): Promise<Enrollment> {
-  return post(`/api/tenants/${tenantId}/enrollments`, { agent_name: agentName });
+export function createEnrollment(
+  tenantId: string,
+  agentName: string,
+): Promise<Enrollment> {
+  return post(`/api/tenants/${tenantId}/enrollments`, {
+    agent_name: agentName,
+  });
 }
 
-export function revokeAgent(tenantId: string, agentId: string, reason: string): Promise<Agent> {
+export function revokeAgent(
+  tenantId: string,
+  agentId: string,
+  reason: string,
+): Promise<Agent> {
   return post(`/api/tenants/${tenantId}/agents/${agentId}/revoke`, { reason });
 }
 
@@ -81,7 +93,10 @@ export function daysUntilExpiry(agent: Agent, now: Date = new Date()): number {
  * vorgesehene Zustand und kein Alarm. Ein Befund ist es erst, wenn weniger als
  * eine Woche bleibt: dann haben mehrere Erneuerungsversuche gescheitert.
  */
-export function certificateIsWorrying(agent: Agent, now: Date = new Date()): boolean {
+export function certificateIsWorrying(
+  agent: Agent,
+  now: Date = new Date(),
+): boolean {
   return agent.status !== "revoked" && daysUntilExpiry(agent, now) < 7;
 }
 
@@ -106,7 +121,10 @@ export function startConnectionTest(tenantId: string): Promise<ConnectorJob> {
   });
 }
 
-export function getConnectorJob(tenantId: string, jobId: string): Promise<ConnectorJobDetail> {
+export function getConnectorJob(
+  tenantId: string,
+  jobId: string,
+): Promise<ConnectorJobDetail> {
   return get(`/api/tenants/${tenantId}/jobs/${jobId}`);
 }
 
@@ -117,19 +135,30 @@ export function getConnectorJob(tenantId: string, jobId: string): Promise<Connec
 export interface ConnectorSettings {
   allowed_ous: string[];
   protected_groups: string[];
+  /** Selbstupdate des Agenten (nur signierte Pakete), Vorgabe an. */
+  auto_update?: boolean;
+  /** Wartungsfenster, Ortszeit des DC: `HH:MM-HH:MM`. */
+  update_window?: string;
   updated_at: string | null;
   updated_by: string | null;
   /** `https://<connector>:46200`; leer, wenn die Konsole ihren Connector-Namen nicht kennt. */
   endpoint?: string;
 }
 
-export function getConnectorSettings(tenantId: string): Promise<ConnectorSettings> {
+export function getConnectorSettings(
+  tenantId: string,
+): Promise<ConnectorSettings> {
   return get(`/api/tenants/${tenantId}/connector-settings`);
 }
 
 export function putConnectorSettings(
   tenantId: string,
-  body: { allowed_ous: string[]; protected_groups: string[] },
+  body: {
+    allowed_ous: string[];
+    protected_groups: string[];
+    auto_update?: boolean;
+    update_window?: string;
+  },
 ): Promise<ConnectorSettings> {
   return put(`/api/tenants/${tenantId}/connector-settings`, body);
 }

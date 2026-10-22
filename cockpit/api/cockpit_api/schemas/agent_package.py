@@ -34,3 +34,7 @@ class AgentUpdateOut(BaseModel):
     version: str
     sha256: str
     size_bytes: int
+    #: Aus ``<msi>.sig`` (``agent/packaging/signieren.py``). Ohne beides
+    #: installiert der Agent das Paket nicht von selbst.
+    key_id: str | None = None
+    signature: str | None = None

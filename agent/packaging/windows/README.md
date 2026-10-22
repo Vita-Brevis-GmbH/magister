@@ -161,7 +161,34 @@ schlägt also **immer** fehl und der Dienst startete nie — und sie stumm zu
 überspringen hiesse, den Agenten laufen zu lassen und die Zusage über seinen
 privaten Schlüssel unbelegt zu lassen.
 
-## Signieren
+## Signatur für das Selbstupdate
+
+Jede Fassung, die sich auf den DCs selbst einspielen soll, braucht eine
+`.sig` daneben (ADR-0014, Nachtrag 2026-10-22). Signiert wird **offline**, auf
+dem Rechner mit dem privaten Schlüssel:
+
+```bash
+cd agent
+# einmal: Schlüsselpaar — Passphrase ≥ 12 Zeichen, Datei offline sichern
+uv run python packaging/signieren.py schluessel ~/vb-agent-update.key
+#   → Schlüssel-ID und öffentlichen Schlüssel in connector_agent/update_keys.py
+#     eintragen, committen; erst Agenten ab dieser Fassung prüfen danach.
+
+# je Fassung: MSI aus der CI (Artefakt "msi") signieren und gegenprüfen
+uv run python packaging/signieren.py signieren --schluessel ~/vb-agent-update.key \
+    magister-connector-0.2.<N>-x64-<commit>.msi
+uv run python packaging/signieren.py pruefen magister-connector-0.2.<N>-x64-<commit>.msi
+```
+
+MSI **und** `.msi.sig` gemeinsam ins Paketverzeichnis der Konsole
+(`COCKPIT_AGENT_PACKAGE_DIR`). Ohne `.sig` bietet das Cockpit das Update an,
+die Agenten spielen es aber nicht selbst ein (Cockpit: „nicht signiert“).
+
+Der allererste Agent mit eingebautem Schlüssel kommt noch von Hand auf den
+DC (`magister-connector update --ohne-signatur` oder MSI direkt); ab dann
+läuft es im Wartungsfenster.
+
+## Authenticode
 
 Das MSI ist **unsigniert**. Windows zeigt beim Ausführen eine
 SmartScreen-Warnung, und in Umgebungen mit AppLocker oder WDAC lässt es sich

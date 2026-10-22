@@ -21,8 +21,10 @@ immer gesperrt (siehe :mod:`connector_agent.guardrails`).
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
+import re
 import socket
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,6 +45,32 @@ CACHE_FILE = "remote-config.json"
 #: Änderung im Cockpit soll ohne Neustart greifen, aber nicht jeder Long-Poll
 #: braucht einen zweiten Aufruf.
 REFRESH_SECONDS = 300.0
+
+
+#: Wartungsfenster, wenn das Cockpit keines oder ein unlesbares schickt.
+DEFAULT_UPDATE_WINDOW = "02:00-04:00"
+
+_WINDOW = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-3]):([0-5]\d)$")
+
+
+def parse_window(text: str) -> tuple[dt.time, dt.time] | None:
+    """``02:00-04:00`` → (02:00, 04:00); unlesbar oder leer (Anfang = Ende) → ``None``."""
+    match = _WINDOW.match(text.strip())
+    if match is None:
+        return None
+    start = dt.time(int(match.group(1)), int(match.group(2)))
+    end = dt.time(int(match.group(3)), int(match.group(4)))
+    return None if start == end else (start, end)
+
+
+def in_window(window: str, moment: dt.time) -> bool:
+    """Liegt ``moment`` im Fenster? Ein Fenster über Mitternacht (22:00-02:00) geht."""
+    parsed = parse_window(window) or parse_window(DEFAULT_UPDATE_WINDOW)
+    assert parsed is not None
+    start, end = parsed
+    if start < end:
+        return start <= moment < end
+    return moment >= start or moment < end
 
 
 class RemoteConfigError(RuntimeError):
@@ -69,6 +97,10 @@ class RemoteConfig:
     ad: RemoteAd = field(default_factory=RemoteAd)
     poll_seconds: int = 25
     revision: str = ""
+    #: Selbstupdate (ADR-0014 Nachtrag 2026-10): nur signierte Pakete, nur im
+    #: Wartungsfenster (Ortszeit des DC). Im Cockpit je Kunde abschaltbar.
+    auto_update: bool = True
+    update_window: str = DEFAULT_UPDATE_WINDOW
     #: Freigaben, die der Agent verworfen hat, mit Grund — für Protokoll und
     #: ``check``. Steht etwas darin, stimmt das Cockpit nicht mit dem Agenten
     #: überein, und das soll man sehen.
@@ -120,6 +152,12 @@ def parse(raw: dict[str, Any]) -> RemoteConfig:
         poll_seconds=min(max(poll, 5), 60),
         revision=str(raw.get("revision") or ""),
         refused_ous=tuple(refused),
+        auto_update=raw.get("auto_update") is not False,
+        update_window=(
+            str(raw.get("update_window"))
+            if parse_window(str(raw.get("update_window") or ""))
+            else DEFAULT_UPDATE_WINDOW
+        ),
     )
 
 
@@ -222,12 +260,14 @@ def describe(remote: RemoteConfig) -> str:
     dcs = ", ".join(remote.ad.dcs) or f"{local_dc_fqdn()} (dieser DC)"
     return (
         f"Konfiguration {remote.revision or '-'}: {len(remote.allowed_ous)} OU(s) freigegeben, "
-        f"{len(remote.protected_groups)} geschützte Gruppe(n), DC {dcs}"
+        f"{len(remote.protected_groups)} geschützte Gruppe(n), DC {dcs}, "
+        f"Selbstupdate {remote.update_window if remote.auto_update else 'aus'}"
     )
 
 
 __all__ = [
     "CACHE_FILE",
+    "DEFAULT_UPDATE_WINDOW",
     "REFRESH_SECONDS",
     "RemoteAd",
     "RemoteConfig",
@@ -237,8 +277,10 @@ __all__ = [
     "describe",
     "fetch",
     "fetch_sync",
+    "in_window",
     "load_cache",
     "local_dc_fqdn",
     "parse",
+    "parse_window",
     "save_cache",
 ]

@@ -19,6 +19,7 @@ ausliefert:
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -228,3 +229,21 @@ class TestNeuesteFassung:
         assert antwort.status_code == 200, antwort.text
         assert antwort.json()["version"] == "0.2.250"
         assert antwort.json()["filename"] == "magister-connector-0.2.250-x64-def5678.msi"
+
+    def test_die_signatur_reist_mit(
+        self, authed_client: TestClient, paketverzeichnis: Path
+    ) -> None:
+        name = "magister-connector-0.2.250-x64-def5678.msi"
+        (paketverzeichnis / name).write_bytes(INHALT)
+        assert authed_client.get("/api/agent-packages/latest").json()["signature"] is None
+        (paketverzeichnis / f"{name}.sig").write_text(
+            json.dumps({"key_id": "abcd", "signature": "c2ln"}), encoding="utf-8"
+        )
+        antwort = authed_client.get("/api/agent-packages/latest").json()
+        assert (antwort["key_id"], antwort["signature"]) == ("abcd", "c2ln")
+        # Eine kaputte Signaturdatei heisst schlicht: nicht signiert.
+        (paketverzeichnis / f"{name}.sig").write_text("kein json", encoding="utf-8")
+        assert authed_client.get("/api/agent-packages/latest").json()["signature"] is None
+        # Die .sig selbst wird nicht als Paket angeboten.
+        namen = [p["filename"] for p in authed_client.get("/api/agent-packages").json()]
+        assert f"{name}.sig" not in namen

@@ -24,7 +24,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func, true
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -96,6 +96,10 @@ class ConnectorAgent(Base):
     #: Angreifer die Möglichkeit, Ergebnisse zu fälschen, aber keinen Kanal.
     result_hmac_key: Mapped[str] = mapped_column(String(128))
     agent_version: Mapped[str | None] = mapped_column(String(64), default=None)
+    #: Was der Agent zuletzt über ein Update gemeldet hat (Selbstupdate oder
+    #: von Hand): gestartet, Signatur abgelehnt, eingespielt, Rückfall.
+    update_status: Mapped[str | None] = mapped_column(String(500), default=None)
+    update_status_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     revoked_reason: Mapped[str | None] = mapped_column(String(500), default=None)
@@ -209,6 +213,14 @@ class TenantConnectorSettings(Base):
     allowed_ous: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     #: Zusätzliche geschützte Gruppen; die eingebaute Liste im Agenten bleibt.
     protected_groups: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    #: Selbstupdate des Agenten (nur signierte Pakete), Vorgabe an. Das
+    #: Fenster ist Ortszeit des DC, ``HH:MM-HH:MM``.
+    auto_update: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=true()
+    )
+    update_window: Mapped[str] = mapped_column(
+        String(11), nullable=False, default="02:00-04:00", server_default="02:00-04:00"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

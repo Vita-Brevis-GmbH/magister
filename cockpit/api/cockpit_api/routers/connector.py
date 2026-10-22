@@ -48,6 +48,7 @@ from cockpit_api.models import (
 from cockpit_api.routers.agent_packages import newest_update
 from cockpit_api.schemas.agent_package import AgentUpdateOut
 from cockpit_api.schemas.connector import (
+    DEFAULT_UPDATE_WINDOW,
     AgentAdSettings,
     AgentEnrollRequest,
     AgentEnrollResponse,
@@ -56,6 +57,7 @@ from cockpit_api.schemas.connector import (
     AgentRenewRequest,
     AgentRenewResponse,
     AgentRevoke,
+    AgentUpdateResultIn,
     ConnectorSettingsIn,
     ConnectorSettingsOut,
     EnrollmentCreate,
@@ -156,6 +158,8 @@ def _settings_out(row: TenantConnectorSettings | None) -> ConnectorSettingsOut:
     return ConnectorSettingsOut(
         allowed_ous=list(row.allowed_ous),
         protected_groups=list(row.protected_groups),
+        auto_update=row.auto_update,
+        update_window=row.update_window,
         updated_at=row.updated_at,
         updated_by=row.updated_by,
         endpoint=_connector_endpoint(),
@@ -165,7 +169,13 @@ def _settings_out(row: TenantConnectorSettings | None) -> ConnectorSettingsOut:
 async def _connector_settings(session: AsyncSession, tenant_id: UUID) -> TenantConnectorSettings:
     row = await session.get(TenantConnectorSettings, tenant_id)
     if row is None:
-        row = TenantConnectorSettings(tenant_id=tenant_id, allowed_ous=[], protected_groups=[])
+        row = TenantConnectorSettings(
+            tenant_id=tenant_id,
+            allowed_ous=[],
+            protected_groups=[],
+            auto_update=True,
+            update_window=DEFAULT_UPDATE_WINDOW,
+        )
     return row
 
 
@@ -202,6 +212,15 @@ async def put_connector_settings(
         session.add(row)
     row.allowed_ous = ous
     row.protected_groups = groups
+    if payload.auto_update is not None:
+        row.auto_update = payload.auto_update
+    if payload.update_window is not None:
+        start, end = payload.update_window.split("-")
+        if start == end:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, "Das Wartungsfenster ist leer."
+            )
+        row.update_window = payload.update_window
     row.updated_at = datetime.now(UTC)
     row.updated_by = caller.actor
     await session.commit()
@@ -542,6 +561,8 @@ async def agent_config(
         "protected_groups": protected_groups,
         "ad": ad.model_dump(),
         "poll_seconds": settings.connector_poll_seconds,
+        "auto_update": scope.auto_update,
+        "update_window": scope.update_window,
     }
     revision = hashlib.sha256(
         json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
@@ -552,6 +573,8 @@ async def agent_config(
         protected_groups=protected_groups,
         ad=ad,
         poll_seconds=settings.connector_poll_seconds,
+        auto_update=scope.auto_update,
+        update_window=scope.update_window,
         revision=revision,
     )
 
@@ -563,8 +586,9 @@ async def agent_update_info(
     """Welche Fassung bereitliegt — für ``magister-connector update`` auf dem DC.
 
     Dieselbe Datei, die das Cockpit unter „Agent herunterladen“ anbietet, über
-    den beglaubigten Kanal. Ob aktualisiert wird, entscheidet ein Mensch auf
-    dem DC: der Agent installiert nie von sich aus (Tier 0).
+    den beglaubigten Kanal, mit der Signatur aus ``<msi>.sig``. Von selbst
+    installiert der Agent nur, was mit einem in ihm eingebauten Schlüssel
+    signiert ist — die Plattform kann kein Paket fälschen (Tier 0).
     """
     _agent, _tenant = identity
     latest = newest_update()
@@ -590,6 +614,20 @@ async def agent_update_package(
         filename=latest.filename,
         media_type="application/octet-stream",
     )
+
+
+@agent_api.post("/update/result", status_code=status.HTTP_204_NO_CONTENT)
+async def agent_update_result(
+    payload: AgentUpdateResultIn,
+    identity: tuple[ConnectorAgent, Tenant] = Depends(current_agent),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    """Der Agent meldet, was aus einem Update wurde — das Cockpit zeigt es beim Connector."""
+    agent, tenant = identity
+    agent.update_status = payload.outcome.strip()[:500]
+    agent.update_status_at = datetime.now(UTC)
+    await session.commit()
+    logger.info("Agent %s (%s) meldet Update: %s", agent.name, tenant.slug, agent.update_status)
 
 
 @agent_api.post("/decommission", status_code=status.HTTP_204_NO_CONTENT)

@@ -730,3 +730,50 @@ class TestOtherSyncReads:
             await runner.run_once(client)
             await runner.drain()
         assert platform.results[0]["error"] == "AdUnavailableError: ldap_search_failed:noSuchObject"
+
+
+class _Updater:
+    """Ein Selbstupdate, das nur mitschreibt — oder scheitert."""
+
+    def __init__(self, fail: bool = False) -> None:
+        self.ticks = 0
+        self.fail = fail
+
+    def due(self, moment: float) -> bool:
+        return True
+
+    def tick(self, remote: object) -> str | None:
+        self.ticks += 1
+        if self.fail:
+            raise RuntimeError("Plattform weg")
+        return "0.2.250"
+
+
+class TestAutoUpdateInTheLoop:
+    @pytest.mark.asyncio
+    async def test_not_during_a_bulk_sync_and_failures_do_not_stop_the_agent(
+        self, tmp_path: Path
+    ) -> None:
+        from connector_agent import remote as remote_cfg
+
+        runner = _runner(tmp_path, FakePlatform([]), FakeAd())
+        runner.remote = remote_cfg.RemoteConfig(
+            allowed_ous=frozenset({SCHULE}), protected_groups=frozenset()
+        )
+        updater = _Updater()
+        runner.updater = updater  # type: ignore[assignment]
+        assert await runner.maybe_auto_update(now=1.0) == "0.2.250"
+
+        blocker = asyncio.Event()
+
+        async def _bulk() -> None:
+            await blocker.wait()
+
+        runner.bulk_task = asyncio.create_task(_bulk())
+        assert await runner.maybe_auto_update(now=2.0) is None
+        assert updater.ticks == 1
+        blocker.set()
+        await runner.drain()
+
+        runner.updater = _Updater(fail=True)  # type: ignore[assignment]
+        assert await runner.maybe_auto_update(now=3.0) is None

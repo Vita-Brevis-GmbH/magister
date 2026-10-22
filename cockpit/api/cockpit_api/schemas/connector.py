@@ -113,6 +113,8 @@ class AgentOut(BaseModel):
     previous_spki_sha256: str | None = None
     spki_rotated_at: datetime | None = None
     agent_version: str | None
+    update_status: str | None = None
+    update_status_at: datetime | None = None
     last_seen_at: datetime | None
     revoked_at: datetime | None
     revoked_reason: str | None
@@ -189,6 +191,17 @@ class JobDetailOut(BaseModel):
     finished_at: datetime | None
 
 
+#: Wartungsfenster des Selbstupdates, Ortszeit des DC.
+DEFAULT_UPDATE_WINDOW = "02:00-04:00"
+UPDATE_WINDOW_PATTERN = r"^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$"
+
+
+class AgentUpdateResultIn(BaseModel):
+    """Was der Agent über ein Update meldet — ein Satz, für die Anzeige."""
+
+    outcome: str = Field(min_length=1, max_length=500)
+
+
 class ConnectorSettingsIn(BaseModel):
     """OU-Freigabe und zusätzliche geschützte Gruppen des Agenten."""
 
@@ -196,11 +209,16 @@ class ConnectorSettingsIn(BaseModel):
 
     allowed_ous: list[str] = Field(default_factory=list[str], max_length=50)
     protected_groups: list[str] = Field(default_factory=list[str], max_length=100)
+    #: ``None``: unverändert lassen.
+    auto_update: bool | None = None
+    update_window: str | None = Field(default=None, pattern=UPDATE_WINDOW_PATTERN)
 
 
 class ConnectorSettingsOut(BaseModel):
     allowed_ous: list[str]
     protected_groups: list[str]
+    auto_update: bool = True
+    update_window: str = DEFAULT_UPDATE_WINDOW
     updated_at: datetime | None
     updated_by: str | None
     #: ``https://<connector>:46200`` für ``enroll --endpoint``; leer, wenn die
@@ -227,5 +245,7 @@ class AgentRemoteConfig(BaseModel):
     protected_groups: list[str]
     ad: AgentAdSettings
     poll_seconds: int = 25
+    auto_update: bool = True
+    update_window: str = DEFAULT_UPDATE_WINDOW
     #: Prüfsumme über alles oben — der Agent loggt nur, wenn sie sich ändert.
     revision: str

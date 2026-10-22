@@ -27,9 +27,12 @@ export function listAgentPackages(): Promise<AgentPackage[]> {
  * — sie endete in einem 401, das wie ein fehlendes Paket aussieht.
  */
 export async function downloadAgentPackage(filename: string): Promise<void> {
-  const response = await fetch(`/api/agent-packages/${encodeURIComponent(filename)}`, {
-    headers: authHeaders(),
-  });
+  const response = await fetch(
+    `/api/agent-packages/${encodeURIComponent(filename)}`,
+    {
+      headers: authHeaders(),
+    },
+  );
   if (!response.ok) {
     throw new ApiError(response.status, (await response.text()).slice(0, 500));
   }
@@ -107,7 +110,11 @@ export function nachPlattform(pakete: AgentPackage[]): PlattformGruppe[] {
   return aus.sort((a, b) => {
     const ra = PLATTFORM_ORDNUNG.indexOf(a.plattform);
     const rb = PLATTFORM_ORDNUNG.indexOf(b.plattform);
-    if (ra !== rb) return (ra < 0 ? PLATTFORM_ORDNUNG.length : ra) - (rb < 0 ? PLATTFORM_ORDNUNG.length : rb);
+    if (ra !== rb)
+      return (
+        (ra < 0 ? PLATTFORM_ORDNUNG.length : ra) -
+        (rb < 0 ? PLATTFORM_ORDNUNG.length : rb)
+      );
     return a.plattform.localeCompare(b.plattform);
   });
 }
@@ -127,7 +134,9 @@ export function getPlatformCa(): Promise<PlatformCa> {
 
 /** Herunterladen wie ein Paket: der Endpunkt braucht den Authorization-Header. */
 export async function downloadPlatformCa(): Promise<void> {
-  const response = await fetch("/api/agent-packages/platform-ca", { headers: authHeaders() });
+  const response = await fetch("/api/agent-packages/platform-ca", {
+    headers: authHeaders(),
+  });
   if (!response.ok) {
     throw new ApiError(response.status, (await response.text()).slice(0, 500));
   }
@@ -148,6 +157,9 @@ export interface LatestAgent {
   version: string;
   sha256: string;
   size_bytes: number;
+  /** Aus `<msi>.sig`; ohne Signatur installiert der Agent nicht von selbst. */
+  key_id?: string | null;
+  signature?: string | null;
 }
 
 export function getLatestAgent(): Promise<LatestAgent> {
@@ -161,7 +173,10 @@ export function parseVersion(text: string | null | undefined): number[] | null {
 }
 
 /** Ist `available` neuer als `running`? Unbekannte laufende Fassung zählt als alt. */
-export function isNewer(available: string, running: string | null | undefined): boolean {
+export function isNewer(
+  available: string,
+  running: string | null | undefined,
+): boolean {
   const neu = parseVersion(available);
   const alt = parseVersion(running);
   if (!neu) return false;

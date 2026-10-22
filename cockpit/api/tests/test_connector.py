@@ -1087,6 +1087,55 @@ class TestConnectorSettings:
     ) -> None:
         assert db_client.get("/connector/config", headers=agent_headers).status_code == 401
 
+    def test_self_update_is_on_by_default_and_can_be_switched(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "cset_upd")
+        _activate(db_client, tenant_id)
+        url = f"/api/tenants/{tenant_id}/connector-settings"
+        assert db_client.get(url).json()["auto_update"] is True
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        before = db_client.get("/connector/config", headers=_auth(agent, agent_headers)).json()
+        assert (before["auto_update"], before["update_window"]) == (True, "02:00-04:00")
+
+        bad = db_client.put(url, json={"allowed_ous": [], "update_window": "25:00-03:00"})
+        assert bad.status_code == 422
+        empty = db_client.put(url, json={"allowed_ous": [], "update_window": "03:00-03:00"})
+        assert empty.status_code == 422
+        ok = db_client.put(
+            url, json={"allowed_ous": [], "auto_update": False, "update_window": "22:00-01:00"}
+        )
+        assert ok.status_code == 200, ok.text
+        after = db_client.get("/connector/config", headers=_auth(agent, agent_headers)).json()
+        assert (after["auto_update"], after["update_window"]) == (False, "22:00-01:00")
+        assert after["revision"] != before["revision"]
+        # Ohne die Felder bleibt die Einstellung, wie sie ist.
+        db_client.put(url, json={"allowed_ous": ["OU=A,DC=a,DC=local"]})
+        assert db_client.get(url).json()["auto_update"] is False
+
+    def test_the_agent_reports_its_update_outcome(
+        self, db_client: TestClient, agent_headers: dict[str, str]
+    ) -> None:
+        tenant_id = _tenant(db_client, "cset_res")
+        _activate(db_client, tenant_id)
+        agent = _enroll(db_client, tenant_id, agent_headers)
+        resp = db_client.post(
+            "/connector/update/result",
+            headers=_auth(agent, agent_headers),
+            json={"outcome": "0.2.250: Signatur gültig, Installation gestartet"},
+        )
+        assert resp.status_code == 204, resp.text
+        listed = db_client.get(f"/api/tenants/{tenant_id}/agents").json()
+        mine = next(a for a in listed if a["id"] == agent["agent_id"])
+        assert mine["update_status"].startswith("0.2.250: Signatur gültig")
+        assert mine["update_status_at"]
+        assert (
+            db_client.post(
+                "/connector/update/result", headers=agent_headers, json={"outcome": "x"}
+            ).status_code
+            == 401
+        )
+
 
 @pytest.mark.usefixtures("connector_ca")
 class TestInteractiveBeforeBulk:

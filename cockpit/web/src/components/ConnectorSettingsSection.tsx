@@ -8,6 +8,8 @@ import {
 } from "../api/agents";
 import { ErrorBox } from "./ErrorBox";
 
+const WINDOW = /^([01]\d|2[0-3]):[0-5]\d-([01]\d|2[0-3]):[0-5]\d$/;
+
 function lines(text: string): string[] {
   return text
     .split("\n")
@@ -66,12 +68,20 @@ function SettingsForm({
   const qc = useQueryClient();
   const [ous, setOus] = useState(initial.allowed_ous.join("\n"));
   const [groups, setGroups] = useState(initial.protected_groups.join("\n"));
+  const [autoUpdate, setAutoUpdate] = useState(initial.auto_update ?? true);
+  const [windowText, setWindowText] = useState(
+    initial.update_window ?? "02:00-04:00",
+  );
+  const windowOk =
+    WINDOW.test(windowText) && windowText.slice(0, 5) !== windowText.slice(6);
 
   const m = useMutation({
     mutationFn: () =>
       putConnectorSettings(tenantId, {
         allowed_ous: lines(ous),
         protected_groups: lines(groups),
+        auto_update: autoUpdate,
+        update_window: windowText,
       }),
     onSuccess: (data) => {
       qc.setQueryData(["connector-settings", tenantId], data);
@@ -119,10 +129,45 @@ function SettingsForm({
           nicht. Konten mit adminCount=1 fasst der Agent nie an.
         </span>
       </label>
+      <fieldset className="grid gap-2 rounded border p-3">
+        <legend className="px-1 font-medium">Selbstupdate des Agenten</legend>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={autoUpdate}
+            onChange={(e) => setAutoUpdate(e.target.checked)}
+          />
+          Neue Fassungen im Wartungsfenster selbst einspielen
+        </label>
+        <label className="flex items-center gap-2">
+          <span>Wartungsfenster (Ortszeit des DC)</span>
+          <input
+            className="w-32 rounded border px-2 py-1 font-mono text-xs"
+            value={windowText}
+            onChange={(e) => setWindowText(e.target.value.trim())}
+            disabled={!autoUpdate}
+            placeholder="02:00-04:00"
+            aria-invalid={!windowOk}
+          />
+        </label>
+        {!windowOk && (
+          <span className="text-xs text-red-700">
+            Format HH:MM-HH:MM, Anfang und Ende verschieden (über Mitternacht
+            geht).
+          </span>
+        )}
+        <span className="text-xs text-slate-500">
+          Der Agent installiert nur Pakete mit gültiger Signatur von Vita Brevis
+          (Schlüssel im Agenten eingebaut, nicht auf der Plattform). Startet die
+          neue Fassung nicht, fällt er auf die bisherige zurück. Aus: Updates
+          nur von Hand auf dem DC (
+          <span className="font-mono">magister-connector update</span>).
+        </span>
+      </fieldset>
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={m.isPending}
+          disabled={m.isPending || !windowOk}
           className="rounded bg-slate-900 px-3 py-1 text-white disabled:opacity-50"
         >
           Speichern

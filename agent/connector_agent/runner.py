@@ -30,6 +30,7 @@ from typing import Any, cast
 import httpx
 
 from connector_agent import remote as remote_cfg
+from connector_agent.autoupdate import AutoUpdater
 from connector_agent.config import AgentConfig, AgentSecrets
 from connector_agent.diagnose import explain_transport_error
 from connector_agent.guardrails import (
@@ -230,6 +231,9 @@ class Runner:
     executor_factory: Callable[[remote_cfg.RemoteConfig], AdExecutor | None] | None = None
     #: Monotone Zeit des letzten Abrufs der Konfiguration.
     last_refresh: float | None = None
+    #: Selbstupdate im Wartungsfenster; ``None`` heisst: keines (Tests, ``run``
+    #: ausserhalb des Dienstes).
+    updater: AutoUpdater | None = None
     #: Der laufende Abgleich, falls einer läuft (siehe :data:`BULK_METHODS`).
     bulk_task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
 
@@ -477,6 +481,24 @@ class Runner:
         self.secrets = replace(self.secrets, spki_sha256=result.spki_sha256)
         return True
 
+    async def maybe_auto_update(self, *, now: float | None = None) -> str | None:
+        """Selbstupdate, wenn fällig (siehe :mod:`connector_agent.autoupdate`).
+
+        Nie während eines Abgleichs: das Installationsskript hält den Dienst
+        an, und der Abgleich verfiele. Fehler gehen ins Protokoll — ein
+        gescheitertes Update ist kein Grund, keine Aufträge mehr zu holen.
+        """
+        if self.updater is None or self.remote is None or self.bulk_running:
+            return None
+        moment = asyncio.get_running_loop().time() if now is None else now
+        if not self.updater.due(moment):
+            return None
+        try:
+            return await asyncio.to_thread(self.updater.tick, self.remote)
+        except Exception as exc:
+            logger.warning("Selbstupdate: %s", exc)
+            return None
+
     async def serve_forever(self, stop: asyncio.Event | None = None) -> None:
         stop = stop or asyncio.Event()
         while not stop.is_set():
@@ -494,6 +516,7 @@ class Runner:
                             logger.info("Verbindung wird mit dem neuen Zertifikat neu aufgebaut.")
                             break
                         await self.maybe_refresh_config(client)
+                        await self.maybe_auto_update()
                         await self.run_once(client)
                     except PermissionError as exc:
                         logger.error("%s", exc)

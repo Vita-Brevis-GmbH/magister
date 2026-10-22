@@ -204,6 +204,8 @@ def build_runner(config: AgentConfig, secrets: AgentSecrets) -> Runner:
             "Im Cockpit ist keine OU freigegeben. Verzeichnisaufträge werden abgelehnt, "
             "bis eine steht — das ist Absicht, nicht ein Fehler."
         )
+    from connector_agent.autoupdate import AutoUpdater
+
     return Runner(
         config=config,
         secrets=secrets,
@@ -212,6 +214,7 @@ def build_runner(config: AgentConfig, secrets: AgentSecrets) -> Runner:
         agent_version=VERSION,
         remote=remote,
         executor_factory=factory,
+        updater=AutoUpdater(config=config, secrets=secrets, agent_version=VERSION),
     )
 
 
@@ -495,6 +498,23 @@ def cmd_update(args: argparse.Namespace) -> int:
     if not up.is_newer(info.version, VERSION):
         sys.stdout.write("Der Agent ist aktuell.\n")
         return 0
+    from connector_agent.update_keys import TRUSTED_KEYS
+
+    if not TRUSTED_KEYS:
+        sys.stdout.write("Signatur:     nicht geprüft — im Agenten ist kein Schlüssel eingebaut.\n")
+    else:
+        try:
+            up.verify_signature(info, TRUSTED_KEYS)
+            sys.stdout.write(f"Signatur:     gültig (Schlüssel {info.key_id})\n")
+        except up.UpdateError as exc:
+            if not args.ohne_signatur:
+                sys.stderr.write(
+                    f"{exc} Nichts verändert. Bewusst trotzdem einspielen: --ohne-signatur\n"
+                )
+                return 1
+            sys.stdout.write(
+                f"Signatur:     {exc} — eingespielt wird trotzdem (--ohne-signatur).\n"
+            )
     if args.nur_pruefen:
         sys.stdout.write("Update verfügbar: 'magister-connector update' ohne --nur-pruefen.\n")
         return 0
@@ -512,7 +532,7 @@ def cmd_update(args: argparse.Namespace) -> int:
     try:
         msi = up.download(config, secrets, info, agent_version=VERSION)
         sys.stdout.write(f"Geladen:      {msi} (Prüfsumme stimmt)\n")
-        log = up.launch_install(msi)
+        log = up.launch_install(msi, up.msi_for_version(config, VERSION))
     except httpx.HTTPError as exc:
         sys.stderr.write(f"Update nicht geladen: {explain_transport_error(exc, config)}\n")
         return 1
@@ -654,6 +674,11 @@ def main(argv: list[str] | None = None) -> int:
         "update", help="Neueste Fassung von der Plattform holen und einspielen"
     )
     update_cmd.add_argument("--ja", action="store_true", help="ohne Rückfrage")
+    update_cmd.add_argument(
+        "--ohne-signatur",
+        action="store_true",
+        help="auch ein unsigniertes oder falsch signiertes Paket einspielen (nur von Hand)",
+    )
     update_cmd.add_argument(
         "--nur-pruefen", action="store_true", help="nur sagen, ob ein Update bereitliegt"
     )

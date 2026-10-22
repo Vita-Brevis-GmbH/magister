@@ -65,8 +65,9 @@ function EnrollmentCard({
         {enrollment.token}
       </code>
       <p className="mb-1 text-sm text-blue-900">
-        Auf dem Domänencontroller, in einer Eingabeaufforderung als Administrator (Schritt 7
-        der Anleitung unten; Schritte 1–6 vorher erledigen):
+        Auf dem Domänencontroller, in einer Eingabeaufforderung als
+        Administrator (Schritt 7 der Anleitung unten; Schritte 1–6 vorher
+        erledigen):
       </p>
       <code className="mb-3 block select-all break-all rounded border border-blue-200 bg-white px-2 py-1 font-mono text-sm">
         magister-connector enroll --endpoint {endpoint}
@@ -74,33 +75,40 @@ function EnrollmentCard({
       </code>
       <ul className="mb-3 list-disc pl-5 text-sm text-blue-900">
         <li>
-          Gültig bis {new Date(enrollment.expires_at).toLocaleString()} — danach ein neues
-          bestellen.
+          Gültig bis {new Date(enrollment.expires_at).toLocaleString()} — danach
+          ein neues bestellen.
         </li>
         <li>Gilt genau einmal. Wer sich damit anmeldet, ist der Agent.</li>
         <li>
-          Nicht per E-Mail und nicht ins Ticket: über Telefon, Signal oder persönlich. Der
-          Agent nimmt es über <span className="font-mono">stdin</span> — dann steht es
-          auch nicht in der Prozessliste.
+          Nicht per E-Mail und nicht ins Ticket: über Telefon, Signal oder
+          persönlich. Der Agent nimmt es über{" "}
+          <span className="font-mono">stdin</span> — dann steht es auch nicht in
+          der Prozessliste.
         </li>
         <li>
-          Nach der Anmeldung nennt der Agent seinen SPKI-Fingerprint. Er muss mit der
-          Anzeige unten übereinstimmen; weicht er ab, hat sich jemand anders angemeldet.
+          Nach der Anmeldung nennt der Agent seinen SPKI-Fingerprint. Er muss
+          mit der Anzeige unten übereinstimmen; weicht er ab, hat sich jemand
+          anders angemeldet.
         </li>
         <li>
-          Danach holt der Agent seine Einstellungen von hier und startet den Dienst. Hat
-          die Plattform eine eigene CA, gehört{" "}
-          <span className="font-mono">--ca C:\Temp\root.pem</span> dazu — das Zertifikat
-          liegt unter „Agent herunterladen“.
+          Danach holt der Agent seine Einstellungen von hier und startet den
+          Dienst. Hat die Plattform eine eigene CA, gehört{" "}
+          <span className="font-mono">--ca C:\Temp\root.pem</span> dazu — das
+          Zertifikat liegt unter „Agent herunterladen“.
         </li>
       </ul>
       <details open className="mb-3">
         <summary className="mb-2 cursor-pointer text-sm font-medium text-blue-900">
-          Vollständige Installationsanleitung für den Domänencontroller / Full install guide
+          Vollständige Installationsanleitung für den Domänencontroller / Full
+          install guide
         </summary>
         <ConnectorInstallHelp {...install} />
       </details>
-      <button type="button" onClick={onDone} className="rounded border border-blue-400 px-3 py-1 text-sm">
+      <button
+        type="button"
+        onClick={onDone}
+        className="rounded border border-blue-400 px-3 py-1 text-sm"
+      >
         Ausblenden
       </button>
     </div>
@@ -131,7 +139,8 @@ function PaketZeile({
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border bg-slate-50 px-3 py-2">
       <span className="font-mono text-xs">{paket.filename}</span>
       <span className="text-xs text-slate-400">
-        {new Date(paket.modified_at).toLocaleString()} · {readableSize(paket.size_bytes)}
+        {new Date(paket.modified_at).toLocaleString()} ·{" "}
+        {readableSize(paket.size_bytes)}
       </span>
       <code className="w-full select-all break-all font-mono text-[11px] text-slate-500">
         {paket.sha256}
@@ -157,19 +166,25 @@ function PaketZeile({
  * Plattform ein öffentlich vertrautes Zertifikat und der DC braucht nichts.
  */
 function PlatformCaRow() {
-  const caQ = useQuery({ queryKey: ["platform-ca"], queryFn: getPlatformCa, retry: false });
+  const caQ = useQuery({
+    queryKey: ["platform-ca"],
+    queryFn: getPlatformCa,
+    retry: false,
+  });
   const ladenM = useMutation({ mutationFn: downloadPlatformCa });
   if (caQ.error instanceof ApiError && caQ.error.status === 404) {
     return (
       <p className="mt-4 text-xs text-slate-500">
-        Kein eigenes Stammzertifikat: die Plattform hat ein öffentlich vertrautes
-        Zertifikat, auf dem DC ist dafür nichts nötig.
+        Kein eigenes Stammzertifikat: die Plattform hat ein öffentlich
+        vertrautes Zertifikat, auf dem DC ist dafür nichts nötig.
       </p>
     );
   }
   return (
     <div className="mt-4 border-t pt-3">
-      <h3 className="mb-1 text-sm font-medium text-slate-700">Stammzertifikat der Plattform</h3>
+      <h3 className="mb-1 text-sm font-medium text-slate-700">
+        Stammzertifikat der Plattform
+      </h3>
       {caQ.isError && <ErrorBox error={caQ.error} />}
       {ladenM.isError && <ErrorBox error={ladenM.error} />}
       {caQ.data && (
@@ -183,15 +198,16 @@ function PlatformCaRow() {
             root.pem herunterladen
           </button>
           <span className="text-xs text-slate-600">
-            {caQ.data.subject} · gültig bis {new Date(caQ.data.not_after).toLocaleDateString()}
+            {caQ.data.subject} · gültig bis{" "}
+            {new Date(caQ.data.not_after).toLocaleDateString()}
           </span>
           <span className="w-full font-mono text-xs break-all text-slate-500">
             SHA-256 {caQ.data.sha256}
           </span>
           <span className="w-full text-xs text-slate-500">
             Auf den DC kopieren und bei der Anmeldung angeben:{" "}
-            <span className="font-mono">--ca C:\Temp\root.pem</span>. Damit prüft der Agent,
-            dass er wirklich mit dieser Plattform spricht.
+            <span className="font-mono">--ca C:\Temp\root.pem</span>. Damit
+            prüft der Agent, dass er wirklich mit dieser Plattform spricht.
           </span>
         </div>
       )}
@@ -206,18 +222,24 @@ function AgentPackages() {
     retry: false,
     staleTime: 5 * 60_000,
   });
-  const ladenM = useMutation({ mutationFn: (filename: string) => downloadAgentPackage(filename) });
-  const nichtEingerichtet = paketeQ.error instanceof ApiError && paketeQ.error.status === 503;
+  const ladenM = useMutation({
+    mutationFn: (filename: string) => downloadAgentPackage(filename),
+  });
+  const nichtEingerichtet =
+    paketeQ.error instanceof ApiError && paketeQ.error.status === 503;
 
   return (
     <section className="rounded border bg-white p-4">
       <h2 className="mb-3 font-semibold">Agent herunterladen</h2>
       {nichtEingerichtet ? (
         <p className="text-sm text-slate-600">
-          <span className="font-medium">Kein Paketverzeichnis eingerichtet.</span> Auf dem
-          Plattform-Server gehören die gebauten Pakete nach{" "}
-          <span className="font-mono">COCKPIT_AGENT_PACKAGE_DIR</span>; das Aufbau-Skript
-          legt dafür <span className="font-mono">AGENT_PAKETE_DIR</span> an. Bis dahin holt
+          <span className="font-medium">
+            Kein Paketverzeichnis eingerichtet.
+          </span>{" "}
+          Auf dem Plattform-Server gehören die gebauten Pakete nach{" "}
+          <span className="font-mono">COCKPIT_AGENT_PACKAGE_DIR</span>; das
+          Aufbau-Skript legt dafür{" "}
+          <span className="font-mono">AGENT_PAKETE_DIR</span> an. Bis dahin holt
           man den Agenten aus dem Release-Archiv.
         </p>
       ) : (
@@ -233,7 +255,9 @@ function AgentPackages() {
           <div className="space-y-4">
             {nachPlattform(paketeQ.data).map((gruppe) => (
               <div key={gruppe.plattform}>
-                <h3 className="mb-1 text-sm font-medium text-slate-700">{gruppe.plattform}</h3>
+                <h3 className="mb-1 text-sm font-medium text-slate-700">
+                  {gruppe.plattform}
+                </h3>
                 <PaketZeile
                   paket={gruppe.aktuell}
                   laden={(name) => ladenM.mutate(name)}
@@ -263,11 +287,12 @@ function AgentPackages() {
         ))}
       <PlatformCaRow />
       <p className="mt-3 text-xs text-slate-500">
-        Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher sie kommt.
-        Dafür ist die Paketsignatur da: <span className="font-mono">msiexec</span> zeigt sie
-        im Dialog. Prüfen lässt sich die Summe mit{" "}
-        <span className="font-mono">Get-FileHash</span>. Installiert wird auf dem
-        Domänencontroller selbst — der Agent bindet sich als dessen Maschinenkonto ans AD.
+        Die Prüfsumme sagt, dass die Datei heil angekommen ist — nicht, woher
+        sie kommt. Dafür ist die Paketsignatur da:{" "}
+        <span className="font-mono">msiexec</span> zeigt sie im Dialog. Prüfen
+        lässt sich die Summe mit <span className="font-mono">Get-FileHash</span>
+        . Installiert wird auf dem Domänencontroller selbst — der Agent bindet
+        sich als dessen Maschinenkonto ans AD.
       </p>
     </section>
   );
@@ -277,6 +302,8 @@ function AgentRow({
   agent,
   asOf,
   latestVersion,
+  latestSigned,
+  autoUpdate,
   onRevoke,
 }: {
   agent: Agent;
@@ -284,6 +311,10 @@ function AgentRow({
   asOf: number;
   /** Neueste Fassung im Paketverzeichnis, falls bekannt. */
   latestVersion: string | null;
+  /** Trägt das neueste Paket eine Signatur (`.sig`)? */
+  latestSigned: boolean;
+  /** Selbstupdate an, mit Fenster — oder `null`: aus. */
+  autoUpdate: string | null;
   onRevoke: (agent: Agent) => void;
 }) {
   const reference = new Date(asOf);
@@ -294,26 +325,53 @@ function AgentRow({
       <td className="p-2">
         <span className="font-medium">{agent.name}</span>
         <br />
-        <span className="font-mono text-xs text-slate-400">{agent.agent_version ?? "—"}</span>
+        <span className="font-mono text-xs text-slate-400">
+          {agent.agent_version ?? "—"}
+        </span>
         {agent.status !== "revoked" &&
           latestVersion &&
           isNewer(latestVersion, agent.agent_version) && (
             <span className="mt-1 block text-xs text-amber-700">
-              Update auf {latestVersion} bereit — auf dem DC als Administrator:{" "}
-              <span className="font-mono">magister-connector update</span>
+              Update auf {latestVersion} bereit —{" "}
+              {autoUpdate && latestSigned ? (
+                <>spielt sich im Wartungsfenster {autoUpdate} selbst ein</>
+              ) : (
+                <>
+                  {autoUpdate &&
+                    !latestSigned &&
+                    "nicht signiert, also kein Selbstupdate; "}
+                  auf dem DC als Administrator:{" "}
+                  <span className="font-mono">magister-connector update</span>
+                </>
+              )}
             </span>
           )}
+        {agent.update_status && (
+          <span
+            className="mt-1 block max-w-md text-xs text-slate-500"
+            title={agent.update_status_at ?? undefined}
+          >
+            Letztes Update: {agent.update_status}
+            {agent.update_status_at &&
+              ` (${new Date(agent.update_status_at).toLocaleString()})`}
+          </span>
+        )}
       </td>
       <td className="p-2">
         <StatusBadge status={agent.status} />
         {agent.revoked_reason && (
-          <span className="ml-2 text-xs text-slate-500">{agent.revoked_reason}</span>
+          <span className="ml-2 text-xs text-slate-500">
+            {agent.revoked_reason}
+          </span>
         )}
       </td>
       <td className="p-2 font-mono text-xs" title={agent.spki_sha256}>
         {agent.spki_sha256.slice(0, 16)}…
         {agent.previous_spki_sha256 && (
-          <span className="ml-2" title="Erneuerungsfenster: beide Fingerprints gelten">
+          <span
+            className="ml-2"
+            title="Erneuerungsfenster: beide Fingerprints gelten"
+          >
             <Badge tone="busy">erneuert</Badge>
           </span>
         )}
@@ -321,13 +379,19 @@ function AgentRow({
       <td className="p-2 text-xs">
         {new Date(agent.certificate_not_after).toLocaleDateString()}
         <br />
-        <span className={worrying ? "text-red-700" : days <= 30 ? "text-slate-500" : ""}>
+        <span
+          className={
+            worrying ? "text-red-700" : days <= 30 ? "text-slate-500" : ""
+          }
+        >
           {days < 0 ? "abgelaufen" : `${days} Tage`}
           {!worrying && days <= 30 && " (erneuert sich selbst)"}
         </span>
       </td>
       <td className="p-2 text-xs">
-        {agent.last_seen_at ? new Date(agent.last_seen_at).toLocaleString() : "nie"}
+        {agent.last_seen_at
+          ? new Date(agent.last_seen_at).toLocaleString()
+          : "nie"}
       </td>
       <td className="p-2">
         {agent.status !== "revoked" && (
@@ -345,12 +409,15 @@ function AgentRow({
 }
 
 const AD_REASON: Record<string, string> = {
-  ad_ok: "AD antwortet, Kerberos-Anmeldung als Maschinenkonto des DC über LDAPS gelungen.",
-  ad_config: "AD-Zugang beim Agenten unvollständig (kein Domänencontroller bekannt).",
+  ad_ok:
+    "AD antwortet, Kerberos-Anmeldung als Maschinenkonto des DC über LDAPS gelungen.",
+  ad_config:
+    "AD-Zugang beim Agenten unvollständig (kein Domänencontroller bekannt).",
   ad_unreachable: "Der Agent erreicht keinen Domänencontroller auf Port 636.",
   ad_tls: "LDAPS zum Domänencontroller gescheitert (Zertifikat des DC).",
   ad_timeout: "Der Domänencontroller antwortet nicht rechtzeitig.",
-  ad_auth: "Kerberos-Anmeldung abgewiesen. DC-Namen als volle DNS-Namen eintragen, keine IPs.",
+  ad_auth:
+    "Kerberos-Anmeldung abgewiesen. DC-Namen als volle DNS-Namen eintragen, keine IPs.",
 };
 
 /**
@@ -373,14 +440,19 @@ function ConnectionTest({ tenantId }: { tenantId: string }) {
     enabled: jobId !== null,
     refetchInterval: (query) => {
       const state = query.state.data?.state;
-      return state === "queued" || state === "claimed" || state === undefined ? 2000 : false;
+      return state === "queued" || state === "claimed" || state === undefined
+        ? 2000
+        : false;
     },
   });
   const job = jobQ.data;
   let verdict: { tone: string; text: string } | null = null;
   if (job) {
     if (job.state === "queued") {
-      verdict = { tone: "text-slate-600", text: "Wartet darauf, dass der Agent den Auftrag abholt …" };
+      verdict = {
+        tone: "text-slate-600",
+        text: "Wartet darauf, dass der Agent den Auftrag abholt …",
+      };
     } else if (job.state === "claimed") {
       verdict = { tone: "text-slate-600", text: "Der Agent arbeitet daran …" };
     } else if (job.state === "expired") {
@@ -389,11 +461,15 @@ function ConnectionTest({ tenantId }: { tenantId: string }) {
         text: "Der Agent hat den Auftrag nicht abgeholt. Läuft der Dienst beim Kunden, und ist TCP 46200 ausgehend offen?",
       };
     } else if (job.state === "failed") {
-      verdict = { tone: "text-red-700", text: `Fehlgeschlagen: ${job.error ?? "?"}` };
+      verdict = {
+        tone: "text-red-700",
+        text: `Fehlgeschlagen: ${job.error ?? "?"}`,
+      };
     } else {
       const result = Array.isArray(job.result) ? (job.result as unknown[]) : [];
       const ok = result[0] === true;
-      const reason = typeof result[1] === "string" ? result[1] : ok ? "ad_ok" : "?";
+      const reason =
+        typeof result[1] === "string" ? result[1] : ok ? "ad_ok" : "?";
       verdict = {
         tone: ok ? "text-emerald-700" : "text-red-700",
         text: AD_REASON[reason] ?? `AD meldet: ${reason}`,
@@ -404,8 +480,8 @@ function ConnectionTest({ tenantId }: { tenantId: string }) {
     <section className="rounded border bg-white p-4">
       <h2 className="mb-2 font-semibold">Verbindungstest</h2>
       <p className="mb-3 text-xs text-slate-500">
-        Schickt einen Prüfauftrag über den Agenten ins AD des Kunden: Anmeldung als
-        Maschinenkonto des DC, keine Benutzerdaten.
+        Schickt einen Prüfauftrag über den Agenten ins AD des Kunden: Anmeldung
+        als Maschinenkonto des DC, keine Benutzerdaten.
       </p>
       <button
         type="button"
@@ -413,13 +489,19 @@ function ConnectionTest({ tenantId }: { tenantId: string }) {
           setJobId(null);
           startM.mutate();
         }}
-        disabled={startM.isPending || job?.state === "queued" || job?.state === "claimed"}
+        disabled={
+          startM.isPending ||
+          job?.state === "queued" ||
+          job?.state === "claimed"
+        }
         className="rounded border px-3 py-1 text-sm disabled:opacity-50"
       >
         Verbindung testen
       </button>
       {startM.isError && <ErrorBox error={startM.error} />}
-      {verdict && <p className={`mt-2 text-sm ${verdict.tone}`}>{verdict.text}</p>}
+      {verdict && (
+        <p className={`mt-2 text-sm ${verdict.tone}`}>{verdict.text}</p>
+      )}
     </section>
   );
 }
@@ -433,11 +515,14 @@ function AdSyncState({ tenantId }: { tenantId: string }) {
   });
   return (
     <section className="rounded border bg-white p-4">
-      <h2 className="mb-2 font-semibold">AD-Abgleich (gemeldet von der Installation)</h2>
+      <h2 className="mb-2 font-semibold">
+        AD-Abgleich (gemeldet von der Installation)
+      </h2>
       {q.isError && <ErrorBox error={q.error} />}
       {q.data && !q.data.report && (
         <p className="text-sm text-amber-700">
-          Die Installation hat sich noch nie gemeldet (siehe Übersicht → Zustand).
+          Die Installation hat sich noch nie gemeldet (siehe Übersicht →
+          Zustand).
         </p>
       )}
       {q.data?.report && <AdSyncSummary ad={q.data.report.ad} />}
@@ -449,7 +534,10 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
   const qc = useQueryClient();
   const [agentName, setAgentName] = useState("");
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
-  const [revoking, setRevoking] = useState<{ agent: Agent; reason: string } | null>(null);
+  const [revoking, setRevoking] = useState<{
+    agent: Agent;
+    reason: string;
+  } | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const agentsQ = useQuery({
@@ -466,7 +554,11 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
     staleTime: 5 * 60_000,
   });
   // Derselbe Schlüssel wie in PlatformCaRow — eine Anfrage für beide.
-  const caQ = useQuery({ queryKey: ["platform-ca"], queryFn: getPlatformCa, retry: false });
+  const caQ = useQuery({
+    queryKey: ["platform-ca"],
+    queryFn: getPlatformCa,
+    retry: false,
+  });
   // Derselbe Schlüssel wie in ConnectorSettingsSection. Liefert den Endpunkt,
   // bevor es ein Token gibt — sonst stünde in der Anleitung ein Platzhalter.
   const settingsQ = useQuery({
@@ -528,7 +620,10 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
       <section className="rounded border bg-white p-4">
         <h2 className="mb-3 flex items-center gap-3 font-semibold">
           Agenten
-          <ConnectorHelpButton open={helpOpen} onToggle={() => setHelpOpen((o) => !o)} />
+          <ConnectorHelpButton
+            open={helpOpen}
+            onToggle={() => setHelpOpen((o) => !o)}
+          />
         </h2>
         {helpOpen && <ConnectorInstallHelp {...install} />}
         {agentsQ.isError && <ErrorBox error={agentsQ.error} />}
@@ -551,6 +646,12 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
                   agent={a}
                   asOf={agentsQ.dataUpdatedAt}
                   latestVersion={latestQ.data?.version ?? null}
+                  latestSigned={Boolean(latestQ.data?.signature)}
+                  autoUpdate={
+                    (settingsQ.data?.auto_update ?? true)
+                      ? (settingsQ.data?.update_window ?? "02:00-04:00")
+                      : null
+                  }
                   onRevoke={(agent) => setRevoking({ agent, reason: "" })}
                 />
               ))}
@@ -574,17 +675,22 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
             }}
           >
             <p className="mb-2 text-sm text-red-900">
-              „{revoking.agent.name}“ widerrufen. Der Widerruf gilt sofort: die nächste
-              Anfrage dieses Agenten wird abgewiesen, und er kann sich auch nicht mehr
-              erneuern. Zurück geht es nur über eine neue Anmeldung mit Einmal-Token.
+              „{revoking.agent.name}“ widerrufen. Der Widerruf gilt sofort: die
+              nächste Anfrage dieses Agenten wird abgewiesen, und er kann sich
+              auch nicht mehr erneuern. Zurück geht es nur über eine neue
+              Anmeldung mit Einmal-Token.
             </p>
             <label className="mb-2 block text-sm">
-              <span className="mb-1 block text-red-800">Begründung (Pflicht)</span>
+              <span className="mb-1 block text-red-800">
+                Begründung (Pflicht)
+              </span>
               <input
                 required
                 minLength={3}
                 value={revoking.reason}
-                onChange={(e) => setRevoking({ ...revoking, reason: e.target.value })}
+                onChange={(e) =>
+                  setRevoking({ ...revoking, reason: e.target.value })
+                }
                 className="w-full rounded border px-2 py-1"
               />
             </label>
@@ -633,13 +739,20 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
             Einmal-Token erzeugen
           </button>
         </form>
-        {enrollM.isError && <div className="mt-3"><ErrorBox error={enrollM.error} /></div>}
+        {enrollM.isError && (
+          <div className="mt-3">
+            <ErrorBox error={enrollM.error} />
+          </div>
+        )}
         <p className="mt-3 text-xs text-slate-500">
-          <span className="font-medium">Offene Einmal-Token stehen hier nicht.</span> Die
-          API bietet keine Liste dafür — bewusst nicht den Token-Wert, aber auch nicht die
-          blosse Tatsache, dass eines aussteht. Wer eines erzeugt und weglegt, sieht es
-          nirgends mehr; es verfällt nach 24 Stunden von selbst. Ein Endpunkt, der
-          ausstehende Anmeldungen ohne ihren Wert nennt, wäre die Abhilfe und fehlt.
+          <span className="font-medium">
+            Offene Einmal-Token stehen hier nicht.
+          </span>{" "}
+          Die API bietet keine Liste dafür — bewusst nicht den Token-Wert, aber
+          auch nicht die blosse Tatsache, dass eines aussteht. Wer eines erzeugt
+          und weglegt, sieht es nirgends mehr; es verfällt nach 24 Stunden von
+          selbst. Ein Endpunkt, der ausstehende Anmeldungen ohne ihren Wert
+          nennt, wäre die Abhilfe und fehlt.
         </p>
       </section>
 
@@ -647,8 +760,9 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
         <h2 className="mb-3 font-semibold">Aufträge</h2>
         <p className="mb-3 text-xs text-slate-500">
           Nur Methode und Zustand — die Nutzlast steht hier nicht. Sie wird nach
-          Ausführung gelöscht (<span className="font-mono">payload_purged_at</span>), denn
-          darin steht, wessen Passwort gesetzt wurde.
+          Ausführung gelöscht (
+          <span className="font-mono">payload_purged_at</span>), denn darin
+          steht, wessen Passwort gesetzt wurde.
         </p>
         {jobsQ.data && jobsQ.data.length > 0 ? (
           <table className="w-full border-collapse text-sm">
@@ -665,7 +779,9 @@ export function TenantConnector({ tenantId }: { tenantId: string }) {
             <tbody>
               {jobsQ.data.slice(0, 50).map((j) => (
                 <tr key={j.id} className="border-b">
-                  <td className="p-2 text-xs">{new Date(j.created_at).toLocaleString()}</td>
+                  <td className="p-2 text-xs">
+                    {new Date(j.created_at).toLocaleString()}
+                  </td>
                   <td className="p-2 font-mono text-xs">{j.method}</td>
                   <td className="p-2">
                     <StatusBadge status={j.state} />

@@ -457,7 +457,8 @@ liegende Basen lehnt er weiter ab. Eine solche Ablehnung erscheint im Portal
 als eigene Meldung (`ad_connector_scope`), Fehlercodes der AD-Schicht
 (`ldap_search_failed:noSuchObject`) kommen in fester Form durch.
 
-**E7 · Aktualisieren mit einem Befehl, nie von selbst.** `magister-connector
+**E7 · Aktualisieren mit einem Befehl, nie von selbst** (seit 2026-10-22
+abgelöst durch den Nachtrag „Selbstupdate mit eigener Signatur“). `magister-connector
 update` fragt über den beglaubigten Kanal (`GET /connector/update`), welche
 Fassung im Paketverzeichnis der Konsole liegt — die Fassung steht im
 Dateinamen (`magister-connector-0.2.<N>-x64[-<commit>].msi`), Pakete ohne sie
@@ -472,4 +473,48 @@ Plattform beliebigen Code auf Tier 0 und höbe jede Grenze aus E3 auf. Solange
 das MSI unsigniert ist (L-04), bleibt der Auslöser ein Mensch auf dem DC. Mit
 signiertem MSI und einer im Agenten festgelegten Herausgeber-Prüfung lässt
 sich ein automatisches Update als Option pro Kunde neu entscheiden.
+
+## Nachtrag · Selbstupdate mit eigener Signatur (2026-10-22)
+
+E7 hat das Selbstupdate verworfen, „solange das MSI unsigniert ist“, und die
+Neuentscheidung an eine im Agenten festgelegte Herausgeber-Prüfung geknüpft.
+Die gibt es jetzt; entschieden ist: **Selbstupdate standardmässig an, mit
+eigenem Schlüssel, ohne Code-Signing-Zertifikat.**
+
+**S1 · Signatur.** Ed25519 über `magister-connector-update/v1`, Dateiname,
+Fassung und SHA-256 des MSI (`connector_agent.update.signed_message`). Die
+Prüfsumme bindet die Datei, die Fassung verhindert, dass ein altes signiertes
+Paket als neues durchgeht. Die Signatur liegt als `<msi>.sig` neben dem MSI im
+Paketverzeichnis der Konsole; die Konsole reicht sie mit `GET /connector/update`
+durch und prüft selbst nichts.
+
+**S2 · Schlüssel.** Der öffentliche Schlüssel steht im Quelltext des Agenten
+(`connector_agent/update_keys.py`, zwei Einträge für einen Wechsel). Der
+private liegt offline bei Vita Brevis, passphrasegeschützt — nicht auf der
+Plattform, nicht in der CI. Signiert wird mit `agent/packaging/signieren.py`.
+Ohne eingebauten Schlüssel gibt es kein Selbstupdate. Eine übernommene
+Plattform kann damit Pakete zurückhalten, aber keines unterschieben — dieselbe
+Grenze wie vor diesem Nachtrag.
+
+Bewusst kein Authenticode-Zertifikat: es löste SmartScreen/AppLocker
+(L-04 bleibt offen), änderte aber an der Vertrauensfrage nichts — der Agent
+prüft einen festen Schlüssel, nicht eine CA-Kette.
+
+**S3 · Ablauf.** Der Dienst sieht alle 15 Minuten nach, nur im Wartungsfenster
+(Ortszeit des DC, Vorgabe 02:00–04:00, im Cockpit je Kunde) und nie während
+eines Abgleichs. Je Paket (Fassung + Prüfsumme) ein Versuch. Das
+Installationsskript wartet, bis der Dienst steht, schreibt alle Dateien neu
+(`REINSTALLMODE=amus`), repariert eine fehlende Python-DLL und prüft nach
+90 Sekunden, ob Dienst und `magister-connector --version` antworten. Sonst
+entfernt es die neue Fassung und spielt das MSI der bisherigen wieder ein,
+sofern es noch im Update-Verzeichnis liegt (ab dem zweiten Selbstupdate immer).
+
+**S4 · Sichtbarkeit.** Der Agent meldet jedes Ergebnis
+(`POST /connector/update/result`: gestartet, abgelehnt mit Grund,
+eingespielt/gesund, Rückfall); das Cockpit zeigt es beim Agenten. Im Cockpit
+lässt sich das Selbstupdate je Kunde abschalten — dann gilt wieder E7.
+
+Von Hand prüft `magister-connector update` dieselbe Signatur; ein
+unsigniertes Paket erzwingt nur ein Administrator auf dem DC mit
+`--ohne-signatur`.
 
