@@ -1,18 +1,42 @@
-"""GroupTemplateService: CRUD + audit for AD group templates (Zielrollen)."""
+"""GroupTemplateService: CRUD + audit for Zielgruppen (``group_templates``)."""
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.app_settings import AppSettings
 from magister_api.models.group_template import GroupTemplate
+from magister_api.models.school import School
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.group_templates import GroupTemplateRepository
+from magister_api.services.zielgruppen import ensure_defaults
 
 
 class GroupTemplateNotFoundError(LookupError):
     pass
+
+
+class SchoolForDefaultsNotFoundError(LookupError):
+    pass
+
+
+class OuRequiredWithoutSchoolError(ValueError):
+    """Eine Zielgruppe ohne Standort braucht eine Ziel-OU.
+
+    Ohne Standort gibt es keine Standort-OU; die Konten dieser Zielgruppe
+    (angelegt ohne Standort) landen in ihrer Ziel-OU.
+    """
+
+
+def _resulting_ou(options: dict[str, object] | None, current: str | None) -> str | None:
+    """Ziel-OU nach dem Speichern: neu angegeben ("" = entfernen) oder die bisherige."""
+    value = (options or {}).get("ad_ou")
+    if value is None:
+        return current
+    return str(value) or None
 
 
 class GroupTemplateService:
@@ -50,15 +74,19 @@ class GroupTemplateService:
         kind: str | None,
         ad_groups: list[str],
         school_ids: list[int],
+        options: dict[str, object] | None = None,
         ip: str | None,
         request_id: str,
     ) -> tuple[GroupTemplate, list[int]]:
+        if not school_ids and not _resulting_ou(options, None):
+            raise OuRequiredWithoutSchoolError("ad_ou")
         row = await self.repo.create(
             name=name,
             description=description,
             kind=kind,
             ad_groups=ad_groups,
             school_ids=school_ids,
+            options=options,
         )
         await self.audit.emit(
             action="group_template_created",
@@ -73,6 +101,7 @@ class GroupTemplateService:
                 "name": row.name,
                 "group_count": len(row.ad_groups),
                 "school_ids": list(school_ids),
+                "profile": row.password_profile,
             },
         )
         return row, list(dict.fromkeys(school_ids))
@@ -86,10 +115,14 @@ class GroupTemplateService:
         kind: str | None,
         ad_groups: list[str] | None,
         school_ids: list[int] | None,
+        options: dict[str, object] | None = None,
         ip: str | None,
         request_id: str,
     ) -> tuple[GroupTemplate, list[int]]:
-        row, _ = await self.get(template_id)
+        row, current_links = await self.get(template_id)
+        links_after = current_links if school_ids is None else school_ids
+        if not links_after and not _resulting_ou(options, row.ad_ou):
+            raise OuRequiredWithoutSchoolError("ad_ou")
         row = await self.repo.update(
             row,
             name=name,
@@ -97,6 +130,7 @@ class GroupTemplateService:
             kind=kind,
             ad_groups=ad_groups,
             school_ids=school_ids,
+            options=options,
         )
         links = await self.repo.school_ids_for([row.id])
         await self.audit.emit(
@@ -108,9 +142,41 @@ class GroupTemplateService:
             school_id=None,
             ip=ip,
             request_id=request_id,
-            payload={"name": row.name, "group_count": len(row.ad_groups)},
+            payload={
+                "name": row.name,
+                "group_count": len(row.ad_groups),
+                "profile": row.password_profile,
+                "changed_options": sorted(k for k, v in (options or {}).items() if v is not None),
+            },
         )
         return row, links.get(row.id, [])
+
+    async def ensure_defaults(
+        self, *, school_id: int, ip: str | None, request_id: str
+    ) -> list[GroupTemplate]:
+        """Fehlende Standard-Zielgruppen für einen Standort ergänzen (auditiert)."""
+        school = await self.session.get(School, school_id)
+        if school is None:
+            raise SchoolForDefaultsNotFoundError(str(school_id))
+        profile = (
+            await self.session.execute(
+                select(AppSettings.instance_profile).where(AppSettings.id == 1)
+            )
+        ).scalar_one_or_none() or "school"
+        created = await ensure_defaults(self.session, school=school, instance_profile=profile)
+        if created:
+            await self.audit.emit(
+                action="group_template_defaults_created",
+                target_kind="school",
+                target_id=str(school.id),
+                actor_upn=self.scope.upn,
+                actor_object_guid=self.scope.ad_object_guid,
+                school_id=school.id,
+                ip=ip,
+                request_id=request_id,
+                payload={"kinds": [t.kind for t in created]},
+            )
+        return created
 
     async def archive(self, *, template_id: int, ip: str | None, request_id: str) -> None:
         row, _ = await self.get(template_id)
@@ -128,4 +194,8 @@ class GroupTemplateService:
         )
 
 
-__all__ = ["GroupTemplateNotFoundError", "GroupTemplateService"]
+__all__ = [
+    "GroupTemplateNotFoundError",
+    "GroupTemplateService",
+    "SchoolForDefaultsNotFoundError",
+]

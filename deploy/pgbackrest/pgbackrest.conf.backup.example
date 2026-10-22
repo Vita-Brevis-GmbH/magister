@@ -1,0 +1,80 @@
+# pgBackRest — Konfiguration des BACKUP-HOSTS
+#
+# Nach /etc/pgbackrest.conf kopieren, Besitzer `pgbackrest` (das Dienstkonto,
+# dem das Repository gehört), Rechte 0600. **Nicht 0644** — hier steht die
+# Passphrase des Repositories.
+#
+# Dieselbe Maschine, auf der der private age-Schlüssel liegt und die
+# wöchentliche Prüf-Wiederherstellung der Kunden-Dumps läuft (ADR-0016 D2).
+# Das ist Absicht: ein Ort, der lesen darf, und einer, der schreibt.
+#
+# Referenz: ADR-0016 D1 (Ebene 1), Entscheid E17.
+
+[global]
+# --- Das Repository --------------------------------------------------------
+repo1-path=/var/lib/pgbackrest/repo
+
+# Verschlüsselt, mit einer Passphrase, die nur hier existiert:
+#   openssl rand -base64 48
+# In den Passwortspeicher, und in denselben Umschlag-/Tresor-Ablauf wie der
+# private age-Schlüssel (Runbook platform-ca.md §3). Ohne sie ist das
+# Repository unbenutzbar — sie zu verlieren heisst, alle Basebackups und alle
+# WAL-Dateien zu verlieren.
+repo1-cipher-type=aes-256-cbc
+repo1-cipher-pass=ERSETZEN
+
+# --- Aufbewahrung ----------------------------------------------------------
+# Zwei Vollsicherungen: die aktuelle und die vorige. Wer nur eine behält, hat
+# im Moment, in dem die aktuelle sich als beschädigt erweist, keine.
+repo1-retention-full=2
+repo1-retention-full-type=count
+# WAL wird für so viele Vollsicherungen aufbewahrt, wie oben genannt — sonst
+# wäre die ältere Vollsicherung da, aber ohne Weg auf einen Zeitpunkt danach.
+repo1-retention-archive=2
+repo1-retention-archive-type=full
+
+# --- Eigener TLS-Server: hierhin schreibt der Anwendungsserver sein WAL ----
+# TLS und nicht SSH (siehe README.md): der Anwendungsserver bekommt damit
+# keinen Shell-Zugang auf diese Maschine, sondern kann ausschliesslich das
+# pgBackRest-Protokoll sprechen.
+tls-server-address=0.0.0.0
+tls-server-port=8432
+tls-server-cert-file=/etc/pgbackrest/cert/backup.crt
+tls-server-key-file=/etc/pgbackrest/cert/backup.key
+tls-server-ca-file=/etc/pgbackrest/cert/backup-channel-ca.crt
+# Der Anwendungsserver darf genau diese eine Stanza ansprechen. Kommt eine
+# zweite Installation dazu, bekommt sie eine eigene Zeile und ein eigenes
+# Zertifikat — nicht `*`.
+tls-server-auth=app.magister.intern=magister
+
+# --- Lokale Pfade ----------------------------------------------------------
+# Explizit, nicht per Vorgabe: die Vorgabe ist /tmp/pgbackrest, und ein
+# gemeinsames /tmp ist der falsche Ort für eine Sperre.
+lock-path=/var/lib/pgbackrest/lock
+log-path=/var/log/pgbackrest
+log-level-console=warn
+log-level-file=detail
+# Erzwingt einen sofortigen Checkpoint statt auf den nächsten zu warten. Ohne
+# dies dauert eine Sicherung bis zu `checkpoint_timeout` länger, ohne dass
+# jemand versteht, warum sie „hängt".
+start-fast=y
+
+# --- Der Anwendungsserver, den dieser Host sichert -------------------------
+# Pull: dieser Host stösst die Sicherung an. Die Richtung ist der Entscheid —
+# die Seite, die das Repository besitzt, ist die Seite, die entscheidet, wann
+# gesichert und was verworfen wird.
+#
+# Der Name MUSS im Zertifikat des Anwendungsservers stehen (CN oder SAN).
+# pgBackRest prüft das und bricht sonst ab mit
+#   "unable to find hostname '...' in certificate common name or
+#    subject alternative names"
+[magister]
+pg1-host=app.magister.intern
+pg1-host-type=tls
+pg1-host-port=8433
+pg1-host-cert-file=/etc/pgbackrest/cert/backup.crt
+pg1-host-key-file=/etc/pgbackrest/cert/backup.key
+pg1-host-ca-file=/etc/pgbackrest/cert/backup-channel-ca.crt
+pg1-path=/var/lib/postgresql/16/main
+pg1-port=5432
+pg1-user=postgres

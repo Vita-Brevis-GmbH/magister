@@ -11,12 +11,46 @@ from __future__ import annotations
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.password import password_stays
 from magister_api.models.group_template import (
+    FIXED_KINDS,
     GROUP_TEMPLATE_STATUS_ACTIVE,
     GROUP_TEMPLATE_STATUS_ARCHIVED,
     GroupTemplate,
     GroupTemplateSchool,
 )
+
+#: Anlage-Vorgaben einer Zielgruppe, die Create/Update durchreichen.
+OPTION_FIELDS: frozenset[str] = frozenset(
+    {
+        "password_profile",
+        "force_change",
+        "cannot_change_password",
+        "password_never_expires",
+        "store_password",
+        "ad_ou",
+    }
+)
+
+
+def _normalize(row: GroupTemplate, *, has_links: bool) -> None:
+    """Was sich widerspricht, wird beim Speichern gerade gezogen.
+
+    * Ziel-OU bei freier Kontoart oder ohne Standort (dort ist sie die OU für
+      Konten, die ohne Standort angelegt werden); bei fester Kontoart mit
+      Standorten legt deren OU fest. "" heisst entfernen.
+    * "Im Tresor ablegen" nur, wenn das Passwort so bleibt (keine erzwungene
+      Änderung, kann nicht ändern, läuft nie ab) — sonst gäbe die Klassen-
+      Passwortliste bald ein falsches Passwort aus.
+    """
+    if not row.ad_ou or (row.kind in FIXED_KINDS and has_links):
+        row.ad_ou = None
+    if row.store_password and not password_stays(
+        force_change=row.force_change,
+        cannot_change_password=row.cannot_change_password,
+        password_never_expires=row.password_never_expires,
+    ):
+        row.store_password = False
 
 
 class GroupTemplateRepository:
@@ -77,6 +111,7 @@ class GroupTemplateRepository:
         kind: str | None,
         ad_groups: list[str],
         school_ids: list[int],
+        options: dict[str, object] | None = None,
     ) -> GroupTemplate:
         row = GroupTemplate(
             name=name,
@@ -84,7 +119,9 @@ class GroupTemplateRepository:
             kind=kind,
             ad_groups=list(ad_groups),
             status=GROUP_TEMPLATE_STATUS_ACTIVE,
+            **(options or {}),
         )
+        _normalize(row, has_links=bool(school_ids))
         self.session.add(row)
         await self.session.flush()
         await self._set_links(row.id, school_ids)
@@ -99,7 +136,11 @@ class GroupTemplateRepository:
         kind: str | None = None,
         ad_groups: list[str] | None = None,
         school_ids: list[int] | None = None,
+        options: dict[str, object] | None = None,
     ) -> GroupTemplate:
+        for key, value in (options or {}).items():
+            if key in OPTION_FIELDS and value is not None:
+                setattr(row, key, value)
         if name is not None:
             row.name = name
         if description is not None:
@@ -108,6 +149,11 @@ class GroupTemplateRepository:
             row.kind = kind
         if ad_groups is not None:
             row.ad_groups = list(ad_groups)
+        if school_ids is None:
+            has_links = bool((await self.school_ids_for([row.id])).get(row.id))
+        else:
+            has_links = bool(school_ids)
+        _normalize(row, has_links=has_links)
         await self.session.flush()
         if school_ids is not None:
             await self._set_links(row.id, school_ids)

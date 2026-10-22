@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,8 @@ class AdUserListing:
     rows: list[AdUserCache]
     total: int
     last_sync_at: datetime | None
+    #: Zielgruppen der Konten im Sichtbereich: (id, name) — für Spalte und Filter.
+    zielgruppen: list[tuple[int, str]] = field(default_factory=list)
 
 
 class AdUsersService:
@@ -37,6 +39,11 @@ class AdUsersService:
         offset: int,
         limit: int,
         missing: bool | None = None,
+        jahrgangsstufe: int | None = None,
+        group_template_id: int | None = None,
+        policy: str | None = None,
+        sort: str = "name",
+        direction: str = "asc",
     ) -> AdUserListing:
         rows, total = await self.repo.list_filtered(
             kind=kind,
@@ -44,8 +51,16 @@ class AdUsersService:
             search=search,
             class_id=class_id,
             missing=missing,
+            jahrgangsstufe=jahrgangsstufe,
+            group_template_id=group_template_id,
+            policy=policy,
+            sort=sort,
+            direction=direction,
             offset=offset,
             limit=limit,
         )
         last_sync = await self.repo.latest_sync_for_scope()
-        return AdUserListing(rows=rows, total=total, last_sync_at=last_sync)
+        zielgruppen = await self.repo.zielgruppen_in_scope()
+        return AdUserListing(
+            rows=rows, total=total, last_sync_at=last_sync, zielgruppen=zielgruppen
+        )

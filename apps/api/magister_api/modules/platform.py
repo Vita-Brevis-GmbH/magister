@@ -14,6 +14,7 @@ from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.audit import router as audit_router
 from magister_api.routers.auth import router as auth_router
 from magister_api.routers.me import router as me_router
+from magister_api.routers.operator_access import router as operator_access_router
 from magister_api.routers.privacy import router as privacy_router
 from magister_api.routers.schools import router as schools_router
 
@@ -25,5 +26,12 @@ PLATFORM_MODULE = ModuleManifest(
         me_router,
         audit_router,
         privacy_router,
+        operator_access_router,
     ),
 )
+
+#: Nur gemountet, wenn ein öffentlicher Schlüssel hinterlegt ist (ADR-0019 D3).
+#: Ohne ihn gibt es die Einlöseroute **nicht** — nicht 403, gar nicht da,
+#: dieselbe Linie wie ADR-0017 D1. Eine Einzelinstallation hat keinen Betreiber
+#: ausser dem Kunden selbst und braucht die Fläche nicht.
+OPERATOR_ROUTERS = (operator_access_router,)

@@ -1,0 +1,38 @@
+# Postgres 16 mit pgBackRest im Bild.
+#
+# Warum das nötig ist: `archive_command` läuft IM Postgres-Prozess, also im
+# Container. Ein pgBackRest auf dem Host kann es nicht bedienen — der Container
+# sieht es nicht, und der Host sieht das Datenverzeichnis nur als Volume.
+# Ein Sidecar hilft auch nicht: Postgres ruft das Kommando selbst auf.
+#
+# Also gehört pgBackRest neben Postgres ins Bild. Aus Debian und nicht per
+# curl aus einem Release: dann ist es Teil der Paketverwaltung und bekommt
+# Sicherheitsaktualisierungen wie alles andere (dieselbe Begründung wie bei
+# der pg-backup-Sidecar).
+#
+# ACHTUNG bei einer Hauptversion: die pgBackRest-Version im Bild und die auf
+# dem Backup-Host müssen zueinander passen. pgBackRest verweigert die Arbeit
+# bei unterschiedlichen Protokollversionen — und zwar mitten in der Nacht,
+# nachdem `apt upgrade` auf einer der zwei Maschinen gelaufen ist. Beide
+# gleichzeitig aktualisieren, oder gar nicht.
+#
+# Referenz: ADR-0016 D1 (Ebene 1), Entscheid E17.
+
+FROM postgres:16
+
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends pgbackrest \
+ && rm -rf /var/lib/apt/lists/* \
+ && pgbackrest version
+
+# Die Verzeichnisse, die pgBackRest auf dieser Seite braucht. Besitzer
+# `postgres`, denn unter diesem Konto läuft das archive_command.
+RUN install -d -m 700 -o postgres -g postgres \
+        /var/lib/pgbackrest/lock \
+        /var/log/pgbackrest \
+        /var/spool/pgbackrest
+
+# Konfiguration und Zertifikate kommen als Bind-Mounts aus dem Compose-Stack,
+# nicht ins Bild: /etc/pgbackrest.conf enthält Pfade dieser Installation, und
+# die Schlüsseldatei gehört nicht in eine Bildschicht, die in einer Registry
+# landet.

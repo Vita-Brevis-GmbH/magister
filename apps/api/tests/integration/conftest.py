@@ -131,9 +131,16 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             "TRUNCATE import_staged_rows, import_jobs, class_memberships, "
             "class_teacher_roles, subject_teacher_roles, classes, "
             "department_memberships, manager_roles, departments, document_templates, "
+            "platform_document_templates, operator_accesses, "
             "audit_events, sessions, role_assignments, role_capabilities, roles, "
-            "ad_user_cache, schools, "
-            "local_admins, app_settings, user_preferences RESTART IDENTITY CASCADE"
+            # `ad_sync_state` gehört dazu, seit der wiederkehrende Lauf
+            # inkrementell ist (ADR-0022 D3): ein liegengebliebener Cursor
+            # lässt den nächsten Test nur die Änderungen holen — also nichts —
+            # und der sieht aus, als synchronisiere er nicht mehr. Vorher lief
+            # jeder Lauf voll, deshalb fiel die Lücke nie auf.
+            "ad_user_cache, ad_sync_state, schools, group_templates, "
+            "local_admins, app_settings, user_preferences, password_expiry_notices "
+            "RESTART IDENTITY CASCADE"
         )
         # The migration inserts the singleton; recreate it after each
         # truncate so reads keep returning a row.

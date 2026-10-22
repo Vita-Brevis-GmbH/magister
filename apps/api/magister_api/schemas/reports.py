@@ -98,7 +98,42 @@ class ManagerWorkloadReport(BaseModel):
     rows: list[ManagerWorkloadRow]
 
 
+class AccountsByZielgruppeRow(BaseModel):
+    # ``None`` = Konten ohne Zielgruppe.
+    group_template_id: int | None
+    name: str | None
+    kind: str | None
+    total: int
+    enabled: int
+    disabled: int
+    stored_password: int
+
+
+class AccountsByZielgruppeReport(BaseModel):
+    rows: list[AccountsByZielgruppeRow]
+    total: int
+
+
+class AccountsByKindRow(BaseModel):
+    kind: str
+    total: int
+    enabled: int
+    disabled: int
+    stored_password: int
+    without_zielgruppe: int
+    missing_in_ad: int
+
+
+class AccountsByKindReport(BaseModel):
+    rows: list[AccountsByKindRow]
+    total: int
+
+
 __all__ = [
+    "AccountsByKindReport",
+    "AccountsByKindRow",
+    "AccountsByZielgruppeReport",
+    "AccountsByZielgruppeRow",
     "ActivityReport",
     "ActivityRow",
     "ManagerWorkloadReport",

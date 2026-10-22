@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.allowlist import validate_audit_payload
 from magister_api.config import Settings
 from magister_api.models.audit import AuditEvent
+from magister_api.tenancy.keys import TenantKeys, keys_for
 
 
 @dataclass(frozen=True)
@@ -43,11 +44,22 @@ class AuditService:
         self._settings = settings
 
     @property
+    def _keys(self) -> TenantKeys:
+        """Kundenschlüssel dieses Mandanten (ADR-0016 D8).
+
+        Aus der Sitzung, nicht aus den Einstellungen: ``Settings`` ist
+        prozessweit gecacht und kennt den Mandanten nicht. Mit einem
+        gemeinsamen Schlüssel wären zwei Zusagen unwahr — Crypto-Shredding
+        beim Offboarding und die zweite Verschlüsselungsschicht im Backup.
+        """
+        keys = keys_for(self.session, self._settings)
+        if not keys.audit_key:
+            raise RuntimeError("Kein Kundenschlüssel gesetzt — Audit-Ereignis abgelehnt")
+        return keys
+
+    @property
     def _key(self) -> str:
-        key = self._settings.audit_key.get_secret_value()
-        if not key:
-            raise RuntimeError("MAGISTER_AUDIT_KEY is empty — audit emit refused")
-        return key
+        return self._keys.audit_key
 
     async def emit(
         self,
@@ -81,7 +93,7 @@ class AuditService:
                 ip=ip,
                 request_id=request_id,
                 payload=func.pgp_sym_encrypt(plaintext, self._key),
-                key_id=self._settings.audit_key_id,
+                key_id=self._keys.audit_key_id,
             )
             .returning(AuditEvent.id)
         )

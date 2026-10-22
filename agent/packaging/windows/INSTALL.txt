@@ -1,0 +1,264 @@
+Magister Connector-Agent — Einrichten auf dem Domänencontroller
+===============================================================
+
+Was dieser Agent tut
+--------------------
+Er holt Aufträge von der Magister-Plattform ab (Passwort zurücksetzen, Gruppe
+setzen, Benutzer suchen) und führt sie gegen Ihr Active Directory aus.
+
+Er wird **auf dem Domänencontroller** installiert und läuft dort als Dienst
+(LocalSystem). Am AD meldet er sich per Kerberos als **Maschinenkonto des DC**
+an — es gibt kein Dienstkonto und kein Passwort, das irgendwo hinterlegt wird.
+Damit verlässt der Zugriff auf Ihr AD die Tier-0-Ebene nicht: kein
+Mitgliedsserver und kein Dienstkonto bekommen Rechte im AD.
+
+Er baut **ausschliesslich ausgehende** Verbindungen auf (TCP 46200 zum
+Connector-Endpunkt) und nimmt keine an.
+
+Eingestellt wird er **im Cockpit**, nicht auf dem DC: freigegebene OUs,
+weitere geschützte Gruppen, Domänencontroller und Suchbasen pflegt Vita Brevis
+beim Kunden unter „AD-Connector" bzw. „Einstellungen → Active Directory". Der
+Agent holt sie dort ab (spätestens alle fünf Minuten) und merkt sich die
+letzte Fassung.
+
+Was er unabhängig vom Cockpit **nie** tut — fest im Agenten, nicht abschaltbar:
+
+  * in der ganzen Domäne, in Domain Controllers, Builtin, System,
+    Configuration, Program Data, Managed Service Accounts arbeiten
+  * Domänen-Admins, Administratoren, Organisations-Admins, Schema-Admins,
+    Konten-/Sicherungs-/Server-/Druck-Operatoren und Verwandte verändern
+  * Konten mit adminCount=1 (AdminSDHolder) oder Systemkonten anfassen
+  * Attribute setzen, mit denen sich ein Konto privilegieren liesse
+    (userAccountControl, servicePrincipalName, sIDHistory, …)
+
+
+Schritt 1 — Rechte delegieren
+-----------------------------
+Das Maschinenkonto des DC darf von sich aus keine Passwörter setzen. Geben Sie
+ihm genau die Rechte, die der Agent braucht, und nur auf den OUs, die Sie im
+Cockpit freigeben:
+
+  1. Gruppe anlegen, z. B. "Magister-Connector" (global, Sicherheit), und das
+     Computerkonto des DC (DC01$) als Mitglied aufnehmen.
+  2. In "Active Directory-Benutzer und -Computer" auf jeder freizugebenden OU:
+     Rechtsklick → "Objektverwaltung zuweisen…" → die Gruppe →
+       - "Setzt Benutzerkennwörter zurück und erzwingt Kennwortänderung bei
+         der nächsten Anmeldung"
+       - "Erstellt, entfernt und verwaltet Benutzerkonten"
+       - "Ändert die Mitgliedschaft einer Gruppe"
+  3. Damit das Maschinenkonto die neue Gruppe im Kerberos-Ticket trägt: den DC
+     neu starten oder in einer Eingabeaufforderung als Administrator
+         klist -li 0x3e7 purge
+
+Privilegierte Konten schützt AdminSDHolder ohnehin vor delegierten Rechten;
+der Agent prüft es zusätzlich selbst.
+
+
+Schritt 2 — Installieren
+------------------------
+magister-connector-x64.msi auf dem DC ausführen. Der Dienst
+"Magister Connector-Agent" wird eingerichtet, aber noch nicht gestartet.
+
+
+Schritt 3 — Anmelden
+--------------------
+Im Cockpit beim Kunden unter "AD-Connector" ein Einmal-Token ausstellen. Die
+Konsole zeigt dazu die Befehlszeile. Auf dem DC eine Eingabeaufforderung
+**als Administrator** öffnen (oder Startmenü → "Magister Connector" →
+"Connector-Agent - Eingabeaufforderung", Rechtsklick "Als Administrator
+ausführen") und:
+
+    magister-connector enroll --endpoint https://connect.magister.ch:46200
+
+Hat die Plattform eine eigene CA, zusätzlich deren Stammzertifikat angeben.
+Es liegt im Cockpit unter "AD-Connector → Agent herunterladen" (root.pem,
+mit Fingerprint zum Vergleich):
+
+    magister-connector enroll --endpoint https://… --ca C:\Temp\root.pem
+
+Das Einmal-Token wird abgefragt. Geben Sie es dort ein und nicht als Argument
+— sonst steht es in der Befehlsgeschichte und in der Prozessliste.
+
+Der Agent
+
+  * legt die lokale Konfiguration an (nur der Endpunkt),
+  * erzeugt sein Schlüsselpaar **lokal** — der private Schlüssel verlässt
+    den DC nie,
+  * meldet sich an und zeigt einen SPKI-Fingerprint,
+  * holt seine Einstellungen aus dem Cockpit,
+  * startet den Dienst.
+
+**Vergleichen Sie den Fingerprint mit der Anzeige in der Konsole.** Weichen
+sie ab, hat sich jemand anders mit Ihrem Token angemeldet. Dann: Agent in der
+Konsole widerrufen und neu anmelden.
+
+Der Endpunkt muss genau der Name sein, auf den das Zertifikat der Plattform
+ausgestellt ist — keine IP-Adresse. Löst der Name nicht auf, gehört er in den
+DNS (oder in C:\Windows\System32\drivers\etc\hosts), nicht die IP in den
+Befehl.
+
+
+Schritt 4 — Prüfen
+------------------
+    magister-connector check
+
+Der Befehl verändert nichts und sagt, was noch fehlt:
+
+  Endpunkt      warnt, wenn dort eine IP-Adresse statt des Namens steht
+  Rechte        des Zustandsverzeichnisses
+  Anmeldung     und Restlaufzeit des Zertifikats
+  Kanal         Name, Port 46200 und Zertifikat der Plattform
+  Cockpit       ob die Einstellungen abgeholt werden konnten
+  OU-Freigabe   leer heisst: keine Verzeichnisaufträge (im Cockpit eintragen);
+                verworfene Einträge werden mit Grund genannt
+  DC / AD       LDAPS mit Kerberos-Anmeldung zum DC
+
+Von Hand aufgerufen meldet sich "check" mit Ihrem Administratorkonto am AD an,
+der Dienst mit dem Maschinenkonto. Ob die delegierten Rechte (Schritt 1)
+reichen, zeigt der Verbindungstest und der erste Auftrag im Cockpit.
+
+
+Aktualisieren
+-------------
+Ein Befehl, in einer Eingabeaufforderung als Administrator (oder Startmenü →
+"Magister Connector" → "Connector-Agent aktualisieren", Rechtsklick "Als
+Administrator ausführen"):
+
+    magister-connector update
+
+Der Agent fragt die Plattform, welche Fassung bereitliegt, lädt sie nur, wenn
+sie neuer ist, prüft die Prüfsumme, spielt das MSI still ein und startet den
+Dienst wieder. Anmeldung, Schlüssel und Einstellungen bleiben erhalten. Nach
+etwa einer Minute:
+
+    magister-connector --version
+
+Nur nachsehen, ob es ein Update gibt:
+
+    magister-connector update --nur-pruefen
+
+Das Cockpit zeigt beim Agenten "Update auf … bereit", sobald eine neuere
+Fassung im Paketverzeichnis liegt.
+
+Der Agent aktualisiert sich nie von selbst. Er läuft auf dem DC als
+LocalSystem; ein Update, das die Plattform auslösen könnte, gäbe einer
+übernommenen Plattform Code auf Tier 0. Ausgelöst wird es von Ihnen.
+
+Von Hand geht es weiterhin: neues MSI über das alte installieren, danach
+"sc start MagisterConnector".
+
+Hinweis für Pakete, die "0.2.0" heissen (vor der Nummerierung): einmal über
+"Apps & Features" entfernen (Anmeldung und Schlüssel bleiben liegen), das neue
+MSI installieren, Dienst starten. Danach gilt der Weg oben.
+
+
+Das Zertifikat erneuert sich selbst
+-----------------------------------
+Das Zertifikat des Agenten gilt 90 Tage. Der Dienst erneuert es selbständig, 30
+Tage vor Ablauf, über denselben Kanal. Sie müssen dafür nichts tun und es
+kommt niemand vorbei.
+
+  * `magister-connector check` nennt die Restlaufzeit. Innerhalb der letzten 30
+    Tage ist das kein Fehler, sondern der vorgesehene Zustand — der Dienst
+    versucht die Erneuerung dann stündlich, bis sie klappt.
+  * Scheitert sie, bleibt ein Monat Zeit. Im Protokoll steht der Grund; der
+    häufigste ist eine geschlossene Firewall.
+  * Bei jeder Erneuerung entsteht ein neues Schlüsselpaar. Das alte bleibt als
+    agent.pem.prev / agent-key.pem.prev daneben liegen — falls der Server
+    mitten im Wechsel neu startet, stellt der Dienst es beim nächsten Start
+    wieder her.
+
+Wurde der Agent in der Konsole **widerrufen**, kann er sich nicht erneuern. Das
+ist Absicht: sonst wäre die Erneuerung der Weg um einen Widerruf herum. Nach
+einem Serveraustausch also widerrufen und neu anmelden.
+
+
+Wo etwas steht, wenn etwas nicht geht
+-------------------------------------
+Protokoll:              C:\ProgramData\Magister Connector\agent.log
+Ereignisprotokoll:      Anwendung, Quelle "MagisterConnector"
+
+Startet der Dienst nicht, steht der Grund in beidem — im Klartext und mit dem
+Befehl, der es behebt.
+
+Häufigster Fall: "Der Agent ist nicht angemeldet." Dann fehlt Schritt 3.
+
+"Konfiguration aus dem Cockpit nicht geholt … keine frühere Fassung": der
+Dienst braucht beim allerersten Start die Plattform. Kanal prüfen (check).
+
+"… lokal abgelehnt: … ausserhalb der erlaubten OUs": die OU ist im Cockpit
+nicht freigegeben. "… geschütztes AD-Konto (adminCount)": gewollt.
+
+"insufficientAccessRights" im Protokoll: die Delegation aus Schritt 1 fehlt,
+oder das Ticket des Maschinenkontos kennt die Gruppe noch nicht (klist purge).
+
+Zweithäufigster: eine Meldung über die Rechte des Zustandsverzeichnisses. Dort
+liegt der private Schlüssel, und der Agent läuft nicht, wenn andere ihn lesen
+könnten. Die Meldung enthält die icacls-Zeile, die es richtet.
+
+Die Meldungen zur Verbindung nennen die Ursache, nicht nur das Symptom:
+
+  "Das Zertifikat der Plattform gilt nicht für ..."
+        Im 'endpoint' steht eine IP oder ein anderer Name (Schritt 3).
+        Der Port ist offen; an der Firewall liegt es nicht.
+  "... stammt von einer Stelle, der dieser Server nicht vertraut"
+        enroll mit --ca wiederholen — oder ein Proxy bricht TLS auf.
+  "Verbindung zu ... abgewiesen" / "Keine Antwort von ..."
+        Netz: Firewall, Port, Weiterleitung.
+  "Der Name ... lässt sich nicht auflösen"
+        DNS oder hosts-Datei.
+
+
+Was in diesem Verzeichnis liegt — und was Sie sichern sollten
+-------------------------------------------------------------
+    config.json      der Endpunkt (von enroll angelegt)
+    remote-config.json  die zuletzt aus dem Cockpit geholten Einstellungen
+    platform-ca.pem  CA der Plattform (falls bei enroll angegeben)
+    agent.pem        Zertifikat des Agenten
+    agent-key.pem    sein privater Schlüssel  — verlässt den Server nie
+    agent.pem.prev   das vorherige Paar, aus der letzten Erneuerung
+    agent-key.pem.prev
+    secrets.json     API-Key und HMAC-Schlüssel
+    agent.log        Protokoll
+
+Eine Sicherung dieses Verzeichnisses ist **nicht nötig**: geht der Server
+verloren, wird der Agent in der Konsole widerrufen und auf dem neuen Server
+neu angemeldet. Das ist der vorgesehene Weg und dauert zwei Minuten.
+
+Umgekehrt gilt: eine **Kopie** dieses Verzeichnisses ist ein vollwertiger
+Zugang zur Plattform als dieser Agent. Es gehört nicht in eine Dateiablage und
+nicht in ein Ticket.
+
+
+Deinstallieren
+--------------
+Startmenü → "Magister Connector" → "Connector-Agent deinstallieren", per
+Rechtsklick "Als Administrator ausführen". Oder in einer Eingabeaufforderung
+als Administrator:
+
+    magister-connector uninstall
+
+Der Befehl macht vier Dinge, in dieser Reihenfolge:
+
+  1. Dienst anhalten.
+  2. Den Agenten bei der Plattform abmelden. In der Konsole steht er danach
+     als widerrufen ("Vom Agenten selbst abgemeldet").
+  3. Schlüssel, Zertifikat und API-Key löschen.
+  4. Das Programm entfernen (das Installationsprogramm öffnet sich).
+
+Konfiguration und Protokoll bleiben stehen — für eine Neuinstallation auf
+demselben Server und für die Frage, warum deinstalliert wurde. Ganz weg:
+
+    magister-connector uninstall --alles
+
+Ist die Plattform nicht erreichbar, löscht der Befehl den Schlüssel trotzdem
+und sagt, dass der Agent in der Konsole noch von Hand zu widerrufen ist.
+Benutzen kann die Anmeldung dann ohnehin niemand mehr.
+
+Über "Apps & Features" geht es weiterhin, aber dann bleiben Anmeldung und
+Schlüssel zurück: danach in der Konsole widerrufen und
+
+    rmdir /s "C:\ProgramData\Magister Connector"
+
+
+Vita Brevis GmbH — Schola Levis

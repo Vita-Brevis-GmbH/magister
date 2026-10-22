@@ -33,6 +33,14 @@ class DocumentTemplate(Base):
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
+    #: Welche Fassung der Plattformvorlage der Kunde zur Kenntnis genommen hat
+    #: (ADR-0018 D4). `None` heisst „noch keine" — dann erscheint der Hinweis
+    #: „neue globale Fassung verfügbar", sobald es eine gibt.
+    #:
+    #: Die Quittung ist ausdrücklich und kein Nebeneffekt des Speicherns: wer
+    #: seinen eigenen Text bearbeitet, hat damit nicht gesagt, dass er den
+    #: neuen gelesen hat.
+    platform_version_ack: Mapped[int | None] = mapped_column(Integer, nullable=True)
     updated_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utcnow

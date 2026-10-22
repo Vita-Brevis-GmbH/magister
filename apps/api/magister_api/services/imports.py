@@ -14,20 +14,29 @@ import csv
 import io
 import logging
 import re
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import delete as sqla_delete
 from sqlalchemy import func, select
+from sqlalchemy import update as sqla_update
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, AsyncSessionTransaction
 
 from magister_api.ad.client import AdClient
+from magister_api.ad.errors import AdUnavailableError, is_password_rejected
 from magister_api.ad.ou import (
+    ou_within_school,
     select_provision_groups,
     select_student_ou,
     zyklus_for_jahrgangsstufe,
 )
-from magister_api.ad.password import generate_readable_password, generate_teacher_password
+from magister_api.ad.password import (
+    generate_for_profile,
+    generate_readable_password,
+    generate_teacher_password,
+)
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
@@ -38,6 +47,7 @@ from magister_api.models.class_teacher_role import (
     ALLOWED_KL_ROLES,
     ClassTeacherRole,
 )
+from magister_api.models.group_template import GroupTemplate
 from magister_api.models.import_job import (
     IMPORT_ACTION_CREATE,
     IMPORT_ACTION_ERROR,
@@ -47,6 +57,7 @@ from magister_api.models.import_job import (
     IMPORT_KIND_CLASS_TEACHERS,
     IMPORT_KIND_CLASSES,
     IMPORT_KIND_COMPANY_USERS,
+    IMPORT_KIND_PASSWORDS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
     IMPORT_STATUS_APPLIED,
@@ -61,6 +72,10 @@ from magister_api.models.school_class import (
     SchoolClass,
 )
 from magister_api.repositories.base import ScopeContext
+from magister_api.repositories.group_templates import GroupTemplateRepository
+from magister_api.services.group_reassign import GradeChange, reassign_cycle_groups
+from magister_api.services.password_vault import PasswordVaultService, password_stays
+from magister_api.tenancy.keys import keys_for
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +102,13 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
         ],
     ),
     IMPORT_KIND_CLASS_MEMBERSHIPS: (
-        ["student_upn", "class_name", "valid_from", "valid_to"],
+        # jahrgangsstufe (optional): überschreibt den Jahrgang der Schülerin /
+        # des Schülers. Leer: bisheriger Jahrgang, ohne einen der der Klasse.
+        ["student_upn", "class_name", "valid_from", "valid_to", "jahrgangsstufe"],
         [
-            ["anna.beispiel@schule.ch", "3a", "2026-08-12", ""],
-            ["ben.muster@schule.ch", "3a", "2026-08-12", ""],
-            ["clara.frey@schule.ch", "3b", "2026-08-12", "2027-07-04"],
+            ["anna.beispiel@schule.ch", "3a", "2026-08-12", "", "3"],
+            ["ben.muster@schule.ch", "3a", "2026-08-12", "", "4"],
+            ["clara.frey@schule.ch", "3b", "2026-08-12", "2027-07-04", "3"],
         ],
     ),
     IMPORT_KIND_CLASS_TEACHERS: (
@@ -119,6 +136,7 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "jahrgangsstufe",
             "cannot_change_password",
             "password_never_expires",
+            "zielgruppe",
         ],
         [
             [
@@ -163,9 +181,10 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "force_change",
             "cannot_change_password",
             "password_never_expires",
+            "zielgruppe",
         ],
         [
-            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", ""],
+            ["Erika", "Lehrer", "", "erika.lehrer@schule.ch", "", "true", "", "", ""],
             [
                 "Max",
                 "Kollege",
@@ -198,6 +217,7 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             "mail_aliases",
             "cannot_change_password",
             "password_never_expires",
+            "zielgruppe",
         ],
         [
             [
@@ -226,6 +246,18 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
             ],  # noqa: E501
         ],
     ),
+    IMPORT_KIND_PASSWORDS: (
+        # Bestehende Konten (Übernahme einer alten Anlage): das Passwort wird
+        # im AD gesetzt und im Tresor abgelegt (Klassen-Passwortlisten). Leere
+        # Schalter: force_change = nein, cannot_change_password und
+        # password_never_expires = wie die Zielgruppe des Kontos, sonst wie
+        # bisher im AD.
+        ["upn", "password", "force_change", "cannot_change_password", "password_never_expires"],
+        [
+            ["anna.muster@schule.ch", "Sonne-Wald-42", "", "true", "true"],
+            ["ben.beispiel@schule.ch", "Tiger-Berg-17", "", "", ""],
+        ],
+    ),
 }
 
 
@@ -233,19 +265,26 @@ TEMPLATES: dict[str, tuple[list[str], list[list[str]]]] = {
 # Old files without them still validate; the template ships them included.
 OPTIONAL_HEADERS: dict[str, list[str]] = {
     IMPORT_KIND_CLASSES: ["jahrgangsstufe_bis"],
+    IMPORT_KIND_CLASS_MEMBERSHIPS: ["jahrgangsstufe"],
     IMPORT_KIND_STUDENTS: [
         "jahrgangsstufe",
         "cannot_change_password",
         "password_never_expires",
+        "zielgruppe",
     ],
-    IMPORT_KIND_TEACHERS: ["cannot_change_password", "password_never_expires"],
+    IMPORT_KIND_TEACHERS: ["cannot_change_password", "password_never_expires", "zielgruppe"],
     IMPORT_KIND_COMPANY_USERS: [
         "mail",
         "mail_aliases",
         "cannot_change_password",
         "password_never_expires",
+        "zielgruppe",
     ],
+    IMPORT_KIND_PASSWORDS: ["force_change", "cannot_change_password", "password_never_expires"],
 }
+
+# Längstes Passwort, das der Passwort-Import annimmt (AD: 256 Zeichen).
+_MAX_PASSWORD_LEN = 128
 
 # Local-part of an email address (mirrors schemas.user_attrs.UPN_LOCAL_RE) —
 # used to validate ``mail_aliases`` cells on the company import.
@@ -382,6 +421,63 @@ def _parse_bool_flag(s: str, *, column: str) -> bool:
     raise ValueError(f"{column} must be true/false, got {s!r}")
 
 
+def _row_error(exc: Exception) -> str:
+    """Fehlertext einer Zeile für die Oberfläche.
+
+    Bei Datenbankfehlern nur die erste Zeile der Meldung: ``str()`` eines
+    SQLAlchemy-Fehlers enthält SQL und Parameter — beim Passwort-Import
+    wäre das das Passwort im Klartext.
+    """
+    if isinstance(exc, DBAPIError):
+        first = (str(exc.orig).strip().splitlines() or ["database error"])[0]
+        return f"database rejected the row: {first}"[:512]
+    return str(exc)[:512]
+
+
+def _validity(row: Mapping[str, str | None]) -> tuple[datetime, datetime | None]:
+    """``(valid_from, valid_to)`` einer Zuteilungszeile; leeres valid_from = jetzt.
+
+    ``ValueError``, wenn das Ende vor dem Beginn liegt — die Datenbank lehnte
+    die Zeile sonst erst beim Übernehmen ab.
+    """
+    start = _parse_date(row.get("valid_from") or "")
+    end = _parse_date(row.get("valid_to") or "")
+    effective = start or utcnow()
+    if end is not None and end < effective:
+        since = "today (valid_from is empty)" if start is None else "valid_from"
+        raise ValueError(f"valid_to {end.date().isoformat()} is before {since}")
+    return effective, end
+
+
+def _parse_grade(s: str) -> int | None:
+    """Optionale Jahrgangsstufe: -1/0 = Kindergarten, 1..13 = Klassen."""
+    v = (s or "").strip()
+    if not v:
+        return None
+    try:
+        grade = int(v)
+    except ValueError as exc:
+        raise ValueError("jahrgangsstufe must be an integer") from exc
+    if not -1 <= grade <= 13:
+        raise ValueError("jahrgangsstufe must be -1..13")
+    return grade
+
+
+def _membership_grade(explicit: int | None, current: int | None, class_grade: int) -> int:
+    """Jahrgang nach einer Klassenzuweisung.
+
+    Angegeben: überschreibt den bisherigen. Leer: der bisherige bleibt; ohne
+    bisherigen gilt die (untere) Stufe der Klasse.
+    """
+    if explicit is not None:
+        return explicit
+    return current if current is not None else class_grade
+
+
+def _grade_text(grade: int | None) -> str:
+    return "–" if grade is None else str(grade)
+
+
 def _derive_sam(upn: str, explicit: str) -> str:
     """sAMAccountName: explicit value if given, else the UPN local part."""
     return (explicit or "").strip() or upn.split("@", 1)[0]
@@ -390,6 +486,57 @@ def _derive_sam(upn: str, explicit: str) -> str:
 def _norm_name(name: str) -> str:
     """Normalise a display name for duplicate detection (case + whitespace)."""
     return " ".join(name.split()).casefold()
+
+
+def _flag(row: dict[str, str], column: str, default: bool) -> bool:
+    """Boolesche Spalte; leer = ``default`` (aus der Zielgruppe oder bisher)."""
+    if not (row.get(column) or "").strip():
+        return default
+    if column == "force_change":
+        return _parse_force_change(row[column])
+    return _parse_bool_flag(row[column], column=column)
+
+
+def _csv_reader(kind: str, csv_text: str) -> csv.DictReader[str]:
+    """CSV reader after checking the header against the template of ``kind``."""
+    template_header = TEMPLATES[kind][0]
+    optional = OPTIONAL_HEADERS.get(kind, [])
+    required = [h for h in template_header if h not in optional]
+    reader = csv.DictReader(io.StringIO(csv_text))
+    got = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
+    # Accept the required columns, optionally followed by the optional
+    # columns in order (so both the old and the new template validate).
+    accepted = [[h.lower() for h in required + optional[:k]] for k in range(len(optional) + 1)]
+    if got not in accepted:
+        raise InvalidCsvError(
+            f"csv header must be {required} (optional: {optional}), got {reader.fieldnames!r}"
+        )
+    return reader
+
+
+#: Welche Kontoarten einer Zielgruppe in welchem Import erlaubt sind (eine
+#: Zielgruppe ohne feste Kontoart — "custom" oder leer — passt überall).
+_ZIELGRUPPE_KINDS: dict[str, tuple[str, ...]] = {
+    IMPORT_KIND_STUDENTS: ("student_zyklus1", "student_zyklus2", "student_zyklus3"),
+    IMPORT_KIND_TEACHERS: ("teacher",),
+    IMPORT_KIND_COMPANY_USERS: ("company",),
+}
+_FIXED_KINDS = frozenset(k for ks in _ZIELGRUPPE_KINDS.values() for k in ks)
+
+
+def _own_ou(tpl: GroupTemplate | None, school: School) -> str | None:
+    """Ziel-OU einer Zielgruppe mit freier Kontoart, sonst ``None`` (= OU des
+    Standorts). Liegt sie nicht im Standort, ``ValueError``: der nächste
+    AD-Abgleich ordnete das Konto sonst keinem Standort zu."""
+    if tpl is None or not tpl.ad_ou or tpl.kind in _FIXED_KINDS:
+        # Feste Kontoart: im Import gibt es immer einen Standort, und dessen
+        # OU gilt (die Ziel-OU ist dort die für Anlagen ohne Standort).
+        return None
+    if not ou_within_school(tpl.ad_ou, school.scope_short):
+        raise ValueError(
+            f"zielgruppe OU {tpl.ad_ou!r} is outside this school (no OU={school.scope_short})"
+        )
+    return tpl.ad_ou
 
 
 class ImportService:
@@ -422,6 +569,8 @@ class ImportService:
         self._seen_names: set[str] = set()
         # Per-school AD config cache (OUs + group templates), keyed by school_id.
         self._schools: dict[int, School] = {}
+        # Zielgruppen je Standort, einmal je Lauf geladen.
+        self._zielgruppen_cache: dict[int, list[GroupTemplate]] = {}
 
     async def _app_settings_row(self) -> AppSettings:
         if self._app_settings is None:
@@ -442,21 +591,51 @@ class ImportService:
             cached = row
         return cached
 
+    async def _zielgruppe(
+        self, school_id: int, row: dict[str, str], *, import_kind: str, auto_kind: str | None
+    ) -> GroupTemplate | None:
+        """Die Zielgruppe einer Zeile: benannt in der Spalte, sonst die Standard-
+        Zielgruppe ``auto_kind`` des Standorts, sonst keine (bisheriges Verhalten).
+
+        Eine benannte, die es am Standort nicht gibt oder deren Kontoart nicht
+        zum Import passt, ist ein Fehler (``ValueError``) — die Zeile soll nicht
+        still mit anderen Gruppen und Passwörtern angelegt werden.
+        """
+        offered = self._zielgruppen_cache.get(school_id)
+        if offered is None:
+            offered = await GroupTemplateRepository(self.session).list_for_school(school_id)
+            offered.sort(key=lambda t: t.id)
+            self._zielgruppen_cache[school_id] = offered
+        name = (row.get("zielgruppe") or "").strip()
+        if name:
+            wanted = name.casefold()
+            match = next((t for t in offered if t.name.casefold() == wanted), None)
+            if match is None:
+                raise ValueError(f"zielgruppe {name!r} not found at this school")
+            if match.kind in _FIXED_KINDS and match.kind not in _ZIELGRUPPE_KINDS[import_kind]:
+                raise ValueError(f"zielgruppe {name!r} is for another account type")
+            return match
+        if auto_kind is None:
+            return None
+        return next((t for t in offered if t.kind == auto_kind), None)
+
     def _vault_columns(
-        self, cannot_change_password: bool, password: str, settings_row: AppSettings
+        self, password_stays_valid: bool, password: str, settings_row: AppSettings
     ) -> tuple[bool, object | None]:
         """Return ``(store_password, password_enc)`` for a provisioned account.
 
-        Only accounts that **cannot change their password** are vaulted: their
-        password stays valid, so a stored copy stays correct. For accounts that
-        can change it, a stored copy would silently go stale, so it is never
-        saved. Storage is additionally gated by the global
-        ``password_store_enabled`` switch; when off, nothing is stored. The
-        password is encrypted with pgcrypto (same key as the audit/secret
-        columns) only when it is actually being stored.
+        Only accounts whose password **stays** are vaulted (``password_stays``:
+        no forced change, cannot change, never expires): a stored copy stays
+        correct. Otherwise it would silently go stale, so it is never saved.
+        Storage is additionally gated by the global ``password_store_enabled``
+        switch; when off, nothing is stored. The password is encrypted with
+        pgcrypto (same key as the audit/secret columns) only when it is
+        actually being stored.
         """
-        store_pw = bool(settings_row.password_store_enabled) and cannot_change_password
-        key = self.settings.app_secrets_key()
+        store_pw = bool(settings_row.password_store_enabled) and password_stays_valid
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self.settings).secrets_key
         if store_pw and key:
             return True, func.pgp_sym_encrypt(password, key)
         return store_pw, None
@@ -468,28 +647,29 @@ class ImportService:
         *,
         school_id: int,
         kind: str,
-        csv_text: str,
+        csv_text: str | None = None,
+        rows: list[dict[str, str]] | None = None,
         filename: str | None,
         ip: str | None,
         request_id: str,
     ) -> StageSummary:
+        """Stage a CSV — or, for passwords only, rows already read from a PDF.
+
+        PDF rows are numbered from 1 (the first account); CSV rows from 2,
+        because the header is row 1.
+        """
         if kind not in TEMPLATES:
             raise InvalidCsvError(f"unknown import kind: {kind}")
         self._seen_upns = set()
         self._seen_sams = set()
         self._seen_names = set()
-        template_header = TEMPLATES[kind][0]
-        optional = OPTIONAL_HEADERS.get(kind, [])
-        required = [h for h in template_header if h not in optional]
-        reader = csv.DictReader(io.StringIO(csv_text))
-        got = [(h or "").strip().lower() for h in (reader.fieldnames or [])]
-        # Accept the required columns, optionally followed by the optional
-        # columns in order (so both the old and the new template validate).
-        accepted = [[h.lower() for h in required + optional[:k]] for k in range(len(optional) + 1)]
-        if got not in accepted:
-            raise InvalidCsvError(
-                f"csv header must be {required} (optional: {optional}), got {reader.fieldnames!r}"
-            )
+        numbered: Iterable[tuple[int, Mapping[str, str | None]]]
+        if rows is not None:
+            if kind != IMPORT_KIND_PASSWORDS:
+                raise InvalidCsvError("pdf_only_for_passwords")
+            numbered = enumerate(rows, start=1)
+        else:
+            numbered = enumerate(_csv_reader(kind, csv_text or ""), start=2)
 
         job = ImportJob(
             school_id=school_id,
@@ -509,10 +689,21 @@ class ImportService:
             IMPORT_ACTION_ERROR: 0,
         }
 
-        for i, raw in enumerate(reader, start=2):  # start=2 → header is row 1
+        for i, raw in numbered:
             # Normalize whitespace.
             row = {k: (v or "").strip() for k, v in raw.items() if k}
-            action, errors = await self._classify(school_id, kind, row)
+            secret_enc: object | None = None
+            if kind == IMPORT_KIND_PASSWORDS:
+                # Das Passwort kommt nie in raw_data (das zeigt die Oberfläche
+                # an), sondern verschlüsselt in secret_enc bis zum Übernehmen.
+                password = row.pop("password", "")
+                action, errors = await self._classify_password(school_id, row, password)
+                if action != IMPORT_ACTION_ERROR:
+                    secret_enc = func.pgp_sym_encrypt(
+                        password, keys_for(self.session, self.settings).secrets_key
+                    )
+            else:
+                action, errors = await self._classify(school_id, kind, row)
             counts[action] += 1
             staged = ImportStagedRow(
                 job_id=job.id,
@@ -521,6 +712,8 @@ class ImportService:
                 action=action,
                 errors=errors,
             )
+            if secret_enc is not None:
+                staged.secret_enc = secret_enc  # pyright: ignore[reportAttributeAccessIssue]
             self.session.add(staged)
 
         job.summary = dict(counts)
@@ -628,10 +821,14 @@ class ImportService:
         if not class_name:
             errors.append("class_name is required")
         try:
-            _parse_date(row.get("valid_from", ""))
-            _parse_date(row.get("valid_to", ""))
+            _validity(row)
         except ValueError as exc:
             errors.append(str(exc))
+        try:
+            grade = _parse_grade(row.get("jahrgangsstufe", ""))
+        except ValueError as exc:
+            errors.append(str(exc))
+            grade = None
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
@@ -655,9 +852,14 @@ class ImportService:
                 )
             )
         ).scalar_one_or_none()
+        new_grade = _membership_grade(grade, user.jahrgangsstufe, cls.jahrgangsstufe)
+        notes: list[str] = []
+        if new_grade != user.jahrgangsstufe:
+            notes.append(f"jahrgangsstufe {_grade_text(user.jahrgangsstufe)} → {new_grade}")
         if active_here is not None:
-            return IMPORT_ACTION_SKIP, []
-        return IMPORT_ACTION_CREATE, []
+            # Schon in der Klasse: nur der Jahrgang ändert sich (oder nichts).
+            return (IMPORT_ACTION_UPDATE, notes) if notes else (IMPORT_ACTION_SKIP, [])
+        return IMPORT_ACTION_CREATE, notes
 
     async def _classify_teacher_role(
         self, school_id: int, row: dict[str, str]
@@ -674,8 +876,7 @@ class ImportService:
         if role not in ALLOWED_KL_ROLES:
             errors.append(f"role must be one of {sorted(ALLOWED_KL_ROLES)}")
         try:
-            _parse_date(row.get("valid_from", ""))
-            _parse_date(row.get("valid_to", ""))
+            _validity(row)
         except ValueError as exc:
             errors.append(str(exc))
         if errors:
@@ -747,6 +948,13 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
+        try:
+            named = await self._zielgruppe(
+                school_id, row, import_kind=IMPORT_KIND_STUDENTS, auto_kind=None
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
@@ -770,7 +978,11 @@ class ImportService:
             return IMPORT_ACTION_ERROR, [f"class {class_name!r} not found in school"]
 
         school = await self._school_row(school_id)
-        ou = select_student_ou(
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        ou = own_ou or select_student_ou(
             jahrgangsstufe=cls.jahrgangsstufe,
             ou_zyklus3=school.ad_ou_students_zyklus3,
             ou_other=school.ad_ou_students_other,
@@ -842,6 +1054,13 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
+        try:
+            named = await self._zielgruppe(
+                school_id, row, import_kind=IMPORT_KIND_TEACHERS, auto_kind=None
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
@@ -870,7 +1089,11 @@ class ImportService:
         if settings_row.mail_domains and domain not in settings_row.mail_domains:
             return IMPORT_ACTION_ERROR, [f"upn domain {domain!r} not in allowed mail domains"]
         school = await self._school_row(school_id)
-        if not school.ad_ou_teachers:
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if not (own_ou or school.ad_ou_teachers):
             return IMPORT_ACTION_ERROR, ["teacher OU not configured for this school"]
 
         # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
@@ -938,6 +1161,13 @@ class ImportService:
                 errors.append(
                     f"sam_account_name {sam!r} exceeds {_SAM_MAX_LEN} chars — set an explicit one"
                 )
+        named: GroupTemplate | None = None
+        try:
+            named = await self._zielgruppe(
+                school_id, row, import_kind=IMPORT_KIND_COMPANY_USERS, auto_kind=None
+            )
+        except ValueError as exc:
+            errors.append(str(exc))
         if errors:
             return IMPORT_ACTION_ERROR, errors
 
@@ -978,7 +1208,11 @@ class ImportService:
             return IMPORT_ACTION_ERROR, alias_errors
 
         school = await self._school_row(school_id)
-        if not school.ad_ou_company_users:
+        try:
+            own_ou = _own_ou(named, school)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if not (own_ou or school.ad_ou_company_users):
             return IMPORT_ACTION_ERROR, ["company-users OU not configured for this Standort"]
 
         # scope-bypass: UPN + sAMAccountName are AD-global; uniqueness must be
@@ -997,6 +1231,109 @@ class ImportService:
             return IMPORT_ACTION_ERROR, [f"sam_account_name {sam!r} already exists"]
 
         return IMPORT_ACTION_CREATE, []
+
+    async def _password_target(self, school_id: int, upn: str, sam: str = "") -> AdUserCache | None:
+        """Das Konto einer Passwort-Zeile — nur am Standort des Imports.
+
+        Zuerst über den UPN, sonst über den PC-Anmeldenamen (PDF-Listen
+        alter Anlagen führen manchmal einen veralteten UPN).
+        """
+        if upn:
+            stmt = select(AdUserCache).where(
+                AdUserCache.upn == upn,
+                AdUserCache.school_id == school_id,
+            )
+            user = (await self.session.execute(stmt)).scalar_one_or_none()
+            if user is not None or not sam:
+                return user
+        if not sam:
+            return None
+        stmt = select(AdUserCache).where(
+            func.lower(AdUserCache.sam_account_name) == sam.lower(),
+            AdUserCache.school_id == school_id,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def _password_flags(
+        self, row: dict[str, str], user: AdUserCache
+    ) -> tuple[bool, bool, bool]:
+        """``(force_change, cannot_change, never_expires)`` einer Passwort-Zeile.
+
+        Leere Spalte: force_change = nein; die beiden anderen wie die
+        Zielgruppe des Kontos, sonst wie bisher. ``ValueError`` bei Unsinn.
+        """
+        tpl = (
+            await self.session.get(GroupTemplate, user.group_template_id)
+            if user.group_template_id is not None
+            else None
+        )
+        cannot = tpl.cannot_change_password if tpl else user.cannot_change_password
+        never = tpl.password_never_expires if tpl else user.password_never_expires
+        return (
+            _flag(row, "force_change", False),
+            _flag(row, "cannot_change_password", cannot),
+            _flag(row, "password_never_expires", never),
+        )
+
+    async def _classify_password(
+        self, school_id: int, row: dict[str, str], password: str
+    ) -> tuple[str, list[str]]:
+        """Passwort-Zeile prüfen. Fehlertexte nennen das Passwort nie.
+
+        Die Stärke prüft erst das AD beim Übernehmen: alte Anlagen haben für die
+        Unterstufe oft eine eigene, lockere Richtlinie (Fine-Grained Policy).
+        """
+        upn = (row.get("upn") or "").strip().lower()
+        sam = (row.get("sam_account_name") or "").strip()
+        if not upn and not sam:
+            return IMPORT_ACTION_ERROR, ["upn is required"]
+        if not password:
+            return IMPORT_ACTION_ERROR, ["password is required"]
+        if len(password) > _MAX_PASSWORD_LEN or any(ord(c) < 32 for c in password):
+            return IMPORT_ACTION_ERROR, [
+                f"password is too long (max {_MAX_PASSWORD_LEN}) or contains control characters"
+            ]
+        user = await self._password_target(school_id, upn, sam)
+        if user is None:
+            return IMPORT_ACTION_ERROR, [f"account {upn or sam!r} not found at this school"]
+        notes: list[str] = []
+        if user.upn.lower() != upn:
+            # Gefunden über den PC-Anmeldenamen: die Zeile gilt diesem Konto.
+            if upn:
+                notes.append(f"matched by sam_account_name {sam!r}: upn {upn!r} is outdated")
+            upn = user.upn.lower()
+            row["upn"] = upn
+        if upn in self._seen_upns:
+            return IMPORT_ACTION_ERROR, [f"account {upn!r} appears more than once in this file"]
+        self._seen_upns.add(upn)
+        if not user.enabled:
+            return IMPORT_ACTION_ERROR, [f"account {upn!r} is disabled"]
+        try:
+            force_change, cannot_change, never_expires = await self._password_flags(row, user)
+        except ValueError as exc:
+            return IMPORT_ACTION_ERROR, [str(exc)]
+        if force_change and cannot_change:
+            # Das AD verlangte ein neues Passwort, verböte aber das Ändern.
+            return IMPORT_ACTION_ERROR, [
+                "force_change and cannot_change_password cannot both be true"
+            ]
+        if not keys_for(self.session, self.settings).secrets_key:
+            return IMPORT_ACTION_ERROR, ["secrets key not configured"]
+        # Hinweise (keine Fehler): die Zeile setzt das Passwort im AD, legt es
+        # aber nicht im Tresor ab — vor dem Übernehmen sichtbar.
+        if not (await self._app_settings_row()).password_store_enabled:
+            notes.append("password vault is turned off: password is set in AD only")
+        elif not password_stays(
+            force_change=force_change,
+            cannot_change_password=cannot_change,
+            password_never_expires=never_expires,
+        ):
+            notes.append(
+                "not stored in the vault: only with force_change=false, "
+                "cannot_change_password=true and password_never_expires=true "
+                "(set the columns or assign a Zielgruppe)"
+            )
+        return IMPORT_ACTION_UPDATE, notes
 
     async def _lookup_user(self, upn: str, *, kind: str) -> AdUserCache | None:
         stmt = select(AdUserCache).where(
@@ -1062,7 +1399,7 @@ class ImportService:
                 if job.kind == IMPORT_KIND_CLASSES:
                     await self._apply_class(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_CLASS_MEMBERSHIPS:
-                    await self._apply_membership(job.school_id, staged)
+                    await self._apply_membership(job.school_id, staged, ip, request_id)
                 elif job.kind == IMPORT_KIND_CLASS_TEACHERS:
                     await self._apply_teacher_role(job.school_id, staged)
                 elif job.kind == IMPORT_KIND_STUDENTS:
@@ -1073,6 +1410,8 @@ class ImportService:
                     )
                 elif job.kind == IMPORT_KIND_COMPANY_USERS:
                     cred = await self._apply_company_user(job.school_id, staged, ip, request_id)
+                elif job.kind == IMPORT_KIND_PASSWORDS:
+                    await self._apply_password(job.school_id, staged, ip, request_id)
                 else:
                     raise ValueError(f"unsupported kind {job.kind}")
                 await sp.commit()
@@ -1098,12 +1437,13 @@ class ImportService:
                             "savepoint rollback failed for row %s: %s", staged.id, rb_exc
                         )
                 staged.applied_at = now
-                staged.applied_error = str(exc)[:512]
+                staged.applied_error = _row_error(exc)
                 applied_counts["failed"] += 1
 
         job.status = IMPORT_STATUS_APPLIED
         job.applied_at = now
         job.summary = {**job.summary, "applied": applied_counts}
+        await self._drop_secrets(job.id)
         await self.session.flush()
 
         # The actual mutations (teacher_provisioned / student_provisioned, or
@@ -1171,17 +1511,54 @@ class ImportService:
             existing.jahrgangsstufe = jahrgangsstufe
             existing.jahrgangsstufe_bis = jahrgangsstufe_bis
 
-    async def _apply_membership(self, school_id: int, staged: ImportStagedRow) -> None:
+    async def _apply_membership(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> None:
         row = staged.raw_data
         upn = row["student_upn"].strip().lower()
         class_name = row["class_name"].strip()
-        valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
-        valid_to = _parse_date(row.get("valid_to", ""))
+        valid_from, valid_to = _validity(row)
 
         user = await self._lookup_user(upn, kind="student")
         cls = await self._lookup_class(school_id, class_name)
         if user is None or cls is None:
             raise ValueError("user or class missing")
+
+        old_grade = user.jahrgangsstufe
+        new_grade = _membership_grade(
+            _parse_grade(row.get("jahrgangsstufe", "")), old_grade, cls.jahrgangsstufe
+        )
+        if new_grade != old_grade:
+            user.jahrgangsstufe = new_grade
+            await self.session.flush()
+            await self.audit.emit(
+                action="student_grade_imported",
+                target_kind="ad_user",
+                target_id=user.ad_object_guid,
+                actor_upn=self.scope.upn,
+                actor_object_guid=self.scope.ad_object_guid,
+                school_id=school_id,
+                ip=ip,
+                request_id=request_id,
+                payload={"class_id": cls.id, "old_grade": old_grade, "new_grade": new_grade},
+            )
+            # Wechselt der Zyklus, folgen die Zyklus-Gruppen im AD (wie bei
+            # der Promotion; ein AD-Fehler hält die Zuweisung nicht auf).
+            try:
+                await reassign_cycle_groups(
+                    self.session,
+                    self.settings,
+                    self.ad,
+                    [GradeChange(user.ad_object_guid, old_grade, new_grade)],
+                    actor_upn=self.scope.upn,
+                    actor_object_guid=self.scope.ad_object_guid,
+                    ip=ip,
+                    request_id=request_id,
+                )
+            except AdUnavailableError as exc:
+                logger.warning("zyklus groups not reassigned for %s: %s", user.ad_object_guid, exc)
+        if staged.action == IMPORT_ACTION_UPDATE:
+            return  # schon in der Klasse — nur der Jahrgang war neu
 
         # Close active memberships in OTHER classes (same mid-year semantics
         # as POST /classes/{id}/students).
@@ -1203,7 +1580,9 @@ class ImportService:
             .all()
         )
         for r in prev:
-            r.valid_to = clamp_at
+            # Beginnt die alte Zuteilung erst nach der neuen, endet sie mit
+            # ihrem Beginn (nie vor ihm — das verbietet die Datenbank).
+            r.valid_to = max(clamp_at, r.valid_from)
 
         self.session.add(
             ClassMembership(
@@ -1220,8 +1599,7 @@ class ImportService:
         upn = row["teacher_upn"].strip().lower()
         class_name = row["class_name"].strip()
         role = row["role"].strip().lower()
-        valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
-        valid_to = _parse_date(row.get("valid_to", ""))
+        valid_from, valid_to = _validity(row)
 
         user = await self._lookup_user(upn, kind="teacher")
         cls = await self._lookup_class(school_id, class_name)
@@ -1251,13 +1629,6 @@ class ImportService:
         class_name = row["class"].strip()
         display = (row.get("display_name") or "").strip() or f"{given} {surname}"
         sam = _derive_sam(upn, row.get("sam_account_name", ""))
-        force_change = _parse_force_change(row.get("force_change", ""))
-        cannot_change_password = _parse_bool_flag(
-            row.get("cannot_change_password", ""), column="cannot_change_password"
-        )
-        password_never_expires = _parse_bool_flag(
-            row.get("password_never_expires", ""), column="password_never_expires"
-        )
         valid_from = _parse_date(row.get("valid_from", "")) or utcnow()
 
         grade_raw = (row.get("jahrgangsstufe") or "").strip()
@@ -1276,24 +1647,41 @@ class ImportService:
             zyklus1_max=settings_row.zyklus1_max_grade,
             zyklus2_max=settings_row.zyklus2_max_grade,
         )
-        if not ou:
-            raise ValueError("target_ou_not_configured")
 
         zyklus = zyklus_for_jahrgangsstufe(
             jahrgangsstufe,
             zyklus1_max=settings_row.zyklus1_max_grade,
             zyklus2_max=settings_row.zyklus2_max_grade,
         )
-        group_dns = select_provision_groups(
-            kind="student",
-            zyklus=zyklus,
-            groups_teacher=school.ad_groups_teacher,
-            groups_student_zyklus1=school.ad_groups_student_zyklus1,
-            groups_student_zyklus2=school.ad_groups_student_zyklus2,
-            groups_student_zyklus3=school.ad_groups_student_zyklus3,
+        # Zielgruppe: benannt, sonst die Standard-Zielgruppe des Zyklus. Ohne
+        # Zielgruppe das bisherige Verhalten (Standort-Gruppen, lesbares PW).
+        tpl = await self._zielgruppe(
+            school_id, row, import_kind=IMPORT_KIND_STUDENTS, auto_kind=f"student_zyklus{zyklus}"
         )
-
-        password = generate_readable_password()
+        ou = _own_ou(tpl, school) or ou
+        if not ou:
+            raise ValueError("target_ou_not_configured")
+        if tpl is not None:
+            group_dns = list(tpl.ad_groups or [])
+            password = generate_for_profile(tpl.password_profile)
+        else:
+            group_dns = select_provision_groups(
+                kind="student",
+                zyklus=zyklus,
+                groups_teacher=school.ad_groups_teacher,
+                groups_student_zyklus1=school.ad_groups_student_zyklus1,
+                groups_student_zyklus2=school.ad_groups_student_zyklus2,
+                groups_student_zyklus3=school.ad_groups_student_zyklus3,
+            )
+            password = generate_readable_password()
+        # Leere Spalte = Vorgabe der Zielgruppe; ausdrücklicher Wert gewinnt.
+        force_change = _flag(row, "force_change", tpl.force_change if tpl else True)
+        cannot_change_password = _flag(
+            row, "cannot_change_password", tpl.cannot_change_password if tpl else False
+        )
+        password_never_expires = _flag(
+            row, "password_never_expires", tpl.password_never_expires if tpl else False
+        )
         guid = await self.ad.create_user(
             ou_dn=ou,
             common_name=display,
@@ -1310,7 +1698,16 @@ class ImportService:
             group_dns=group_dns,
         )
 
-        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
+        store_pw, password_enc = self._vault_columns(
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
+        )
         self.session.add(
             AdUserCache(
                 ad_object_guid=guid,
@@ -1329,6 +1726,7 @@ class ImportService:
                 cannot_change_password=cannot_change_password,
                 store_password=store_pw,
                 password_enc=password_enc,
+                group_template_id=tpl.id if tpl else None,
             )
         )
         self.session.add(
@@ -1372,33 +1770,37 @@ class ImportService:
         upn = row["upn"].strip().lower()
         display = (row.get("display_name") or "").strip() or f"{given} {surname}"
         sam = _derive_sam(upn, row.get("sam_account_name", ""))
-        force_change = _parse_force_change(row.get("force_change", ""))
-        cannot_change_password = _parse_bool_flag(
-            row.get("cannot_change_password", ""), column="cannot_change_password"
-        )
-        password_never_expires = _parse_bool_flag(
-            row.get("password_never_expires", ""), column="password_never_expires"
-        )
 
         settings_row = await self._app_settings_row()
         school = await self._school_row(school_id)
-        ou = school.ad_ou_teachers
+        tpl = await self._zielgruppe(
+            school_id, row, import_kind=IMPORT_KIND_TEACHERS, auto_kind="teacher"
+        )
+        ou = _own_ou(tpl, school) or school.ad_ou_teachers
         if not ou:
             raise ValueError("teacher_ou_not_configured")
-
-        group_dns = select_provision_groups(
-            kind="teacher",
-            zyklus=None,
-            groups_teacher=school.ad_groups_teacher,
-            groups_student_zyklus1=school.ad_groups_student_zyklus1,
-            groups_student_zyklus2=school.ad_groups_student_zyklus2,
-            groups_student_zyklus3=school.ad_groups_student_zyklus3,
+        if tpl is not None:
+            group_dns = list(tpl.ad_groups or [])
+            password = generate_for_profile(tpl.password_profile)
+        else:
+            group_dns = select_provision_groups(
+                kind="teacher",
+                zyklus=None,
+                groups_teacher=school.ad_groups_teacher,
+                groups_student_zyklus1=school.ad_groups_student_zyklus1,
+                groups_student_zyklus2=school.ad_groups_student_zyklus2,
+                groups_student_zyklus3=school.ad_groups_student_zyklus3,
+            )
+            # Teachers get a 12-char password with all four charset classes,
+            # using only keyboard-friendly special chars (.,!$-_+*:;).
+            password = generate_teacher_password()
+        force_change = _flag(row, "force_change", tpl.force_change if tpl else True)
+        cannot_change_password = _flag(
+            row, "cannot_change_password", tpl.cannot_change_password if tpl else False
         )
-
-        # Teachers get a 12-char password with all four charset classes, using
-        # only keyboard-friendly special chars (.,!$-_+*:;) — not the kid-
-        # friendly word password students receive.
-        password = generate_teacher_password()
+        password_never_expires = _flag(
+            row, "password_never_expires", tpl.password_never_expires if tpl else False
+        )
         guid = await self.ad.create_user(
             ou_dn=ou,
             common_name=display,
@@ -1415,7 +1817,16 @@ class ImportService:
             group_dns=group_dns,
         )
 
-        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
+        store_pw, password_enc = self._vault_columns(
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
+        )
         self.session.add(
             AdUserCache(
                 ad_object_guid=guid,
@@ -1433,6 +1844,7 @@ class ImportService:
                 cannot_change_password=cannot_change_password,
                 store_password=store_pw,
                 password_enc=password_enc,
+                group_template_id=tpl.id if tpl else None,
             )
         )
         await self.audit.emit(
@@ -1473,26 +1885,36 @@ class ImportService:
         display = (row.get("display_name") or "").strip() or f"{given} {surname}"
         sam = _derive_sam(upn, row.get("sam_account_name", ""))
         mail = (row.get("mail") or "").strip().lower() or upn
-        force_change = _parse_force_change(row.get("force_change", ""))
-        cannot_change_password = _parse_bool_flag(
-            row.get("cannot_change_password", ""), column="cannot_change_password"
-        )
-        password_never_expires = _parse_bool_flag(
-            row.get("password_never_expires", ""), column="password_never_expires"
-        )
 
         settings_row = await self._app_settings_row()
         school = await self._school_row(school_id)
-        ou = school.ad_ou_company_users
-        if not ou:
-            raise ValueError("company_ou_not_configured")
         aliases, _ = _parse_aliases_cell(
             row.get("mail_aliases", ""),
             primary=mail,
             allowed_domains=list(settings_row.mail_domains or []),
         )
 
-        password = generate_teacher_password()
+        tpl = await self._zielgruppe(
+            school_id, row, import_kind=IMPORT_KIND_COMPANY_USERS, auto_kind="company"
+        )
+        ou = _own_ou(tpl, school) or school.ad_ou_company_users
+        if not ou:
+            raise ValueError("company_ou_not_configured")
+        group_dns = (
+            list(tpl.ad_groups or []) if tpl is not None else list(school.ad_groups_company or [])
+        )
+        password = (
+            generate_for_profile(tpl.password_profile)
+            if tpl is not None
+            else generate_teacher_password()
+        )
+        force_change = _flag(row, "force_change", tpl.force_change if tpl else True)
+        cannot_change_password = _flag(
+            row, "cannot_change_password", tpl.cannot_change_password if tpl else False
+        )
+        password_never_expires = _flag(
+            row, "password_never_expires", tpl.password_never_expires if tpl else False
+        )
         guid = await self.ad.create_user(
             ou_dn=ou,
             common_name=display,
@@ -1506,7 +1928,7 @@ class ImportService:
             force_change=force_change,
             password_never_expires=password_never_expires,
             cannot_change_password=cannot_change_password,
-            group_dns=list(school.ad_groups_company or []),
+            group_dns=group_dns,
         )
 
         # Extra mail addresses → proxyAddresses (best-effort second write, like
@@ -1522,7 +1944,16 @@ class ImportService:
             except Exception:  # noqa: BLE001 — never orphan over an alias write
                 logger.exception("company import: failed to set proxyAddresses for %s", upn)
 
-        store_pw, password_enc = self._vault_columns(cannot_change_password, password, settings_row)
+        store_pw, password_enc = self._vault_columns(
+            password_stays(
+                force_change=force_change,
+                cannot_change_password=cannot_change_password,
+                password_never_expires=password_never_expires,
+            )
+            and (tpl is None or tpl.store_password),
+            password,
+            settings_row,
+        )
         self.session.add(
             AdUserCache(
                 ad_object_guid=guid,
@@ -1541,6 +1972,7 @@ class ImportService:
                 cannot_change_password=cannot_change_password,
                 store_password=store_pw,
                 password_enc=password_enc,
+                group_template_id=tpl.id if tpl else None,
             )
         )
         await self.audit.emit(
@@ -1563,6 +1995,88 @@ class ImportService:
             force_change=force_change,
         )
 
+    async def _apply_password(
+        self, school_id: int, staged: ImportStagedRow, ip: str | None, request_id: str
+    ) -> None:
+        if self.ad is None:
+            raise ValueError("ad_client_unavailable")
+        row = staged.raw_data
+        upn = row["upn"].strip().lower()
+        key = keys_for(self.session, self.settings).secrets_key
+        if not key:
+            raise ValueError("secrets key not configured")
+        password = (
+            await self.session.execute(
+                select(func.pgp_sym_decrypt(ImportStagedRow.secret_enc, key)).where(
+                    ImportStagedRow.id == staged.id,
+                    ImportStagedRow.secret_enc.is_not(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if not password:
+            raise ValueError("password missing — upload the file again")
+        user = await self._password_target(school_id, upn, row.get("sam_account_name") or "")
+        if user is None or not user.enabled:
+            raise ValueError(f"account {upn!r} not found at this school")
+        force_change, cannot_change, never_expires = await self._password_flags(row, user)
+        user_dn = await self.ad.find_user_dn(user.ad_object_guid)
+        if not user_dn:
+            raise ValueError("account not found in AD")
+        try:
+            await self.ad.modify_password(
+                user_dn=user_dn, new_password=str(password), force_change=force_change
+            )
+        except AdUnavailableError as exc:
+            if is_password_rejected(exc):
+                raise ValueError("password rejected by AD policy") from exc
+            raise
+        if user.cannot_change_password != cannot_change:
+            await self.ad.set_cannot_change_password(user_dn=user_dn, value=cannot_change)
+            user.cannot_change_password = cannot_change
+        if user.password_never_expires != never_expires:
+            await self.ad.set_password_never_expires(user_dn=user_dn, value=never_expires)
+            user.password_never_expires = never_expires
+
+        # Tresor nur, wenn das Passwort so bleibt (gleiche Regel wie überall).
+        settings_row = await self._app_settings_row()
+        store = bool(settings_row.password_store_enabled) and password_stays(
+            force_change=force_change,
+            cannot_change_password=cannot_change,
+            password_never_expires=never_expires,
+        )
+        vault = PasswordVaultService(self.session, self.settings)
+        if store:
+            await vault.store(user.ad_object_guid, str(password))
+        elif user.store_password:
+            await vault.clear(user.ad_object_guid)
+        user.store_password = store
+        await self.session.flush()
+        await self.audit.emit(
+            action="password_imported",
+            target_kind="ad_user",
+            target_id=user.ad_object_guid,
+            actor_upn=self.scope.upn,
+            actor_object_guid=self.scope.ad_object_guid,
+            school_id=school_id,
+            ip=ip,
+            request_id=request_id,
+            payload={
+                "upn": upn,
+                "force_change": force_change,
+                "cannot_change": cannot_change,
+                "never_expires": never_expires,
+                "stored": store,
+            },
+        )
+
+    async def _drop_secrets(self, job_id: int) -> None:
+        """Verschlüsselte Passwörter des Imports löschen (nach Übernehmen/Abbrechen)."""
+        await self.session.execute(
+            sqla_update(ImportStagedRow)
+            .where(ImportStagedRow.job_id == job_id, ImportStagedRow.secret_enc.is_not(None))
+            .values(secret_enc=None)
+        )
+
     # ----- Cancel -------------------------------------------------------
 
     async def cancel(self, *, job_id: int, ip: str | None, request_id: str) -> ImportJob:
@@ -1572,6 +2086,7 @@ class ImportService:
         if job.status != IMPORT_STATUS_STAGED:
             raise ImportJobBadStateError("import_job_not_staged")
         job.status = IMPORT_STATUS_CANCELLED
+        await self._drop_secrets(job.id)
         await self.session.flush()
         await self.audit.emit(
             action="import_cancelled",

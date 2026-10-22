@@ -18,7 +18,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -32,6 +32,9 @@ IMPORT_KIND_TEACHERS = "teachers"
 # Company edition (#7): provision company users into the Standort's company OU,
 # with target OU + optional mail + additional mail addresses (proxyAddresses).
 IMPORT_KIND_COMPANY_USERS = "company_users"
+# Bestehende Konten: bekannte Passwörter ins AD schreiben und im Tresor ablegen
+# (Übernahme einer alten Anlage, Migration 0048).
+IMPORT_KIND_PASSWORDS = "passwords"
 ALLOWED_IMPORT_KINDS: frozenset[str] = frozenset(
     {
         IMPORT_KIND_CLASSES,
@@ -40,6 +43,7 @@ ALLOWED_IMPORT_KINDS: frozenset[str] = frozenset(
         IMPORT_KIND_STUDENTS,
         IMPORT_KIND_TEACHERS,
         IMPORT_KIND_COMPANY_USERS,
+        IMPORT_KIND_PASSWORDS,
     }
 )
 
@@ -79,7 +83,7 @@ class ImportJob(Base):
     __table_args__ = (
         CheckConstraint(
             "kind IN ('classes', 'class_memberships', 'class_teachers', "
-            "'students', 'teachers', 'company_users')",
+            "'students', 'teachers', 'company_users', 'passwords')",
             name="ck_import_jobs_kind",
         ),
         CheckConstraint(
@@ -103,6 +107,10 @@ class ImportStagedRow(Base):
     # Set by the apply step:
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     applied_error: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Nur beim Passwort-Import: das Passwort, mit dem Kundenschlüssel
+    # verschlüsselt (pgcrypto), bis es übernommen oder verworfen ist — danach
+    # NULL. Nie in ``raw_data``: das geht an die Oberfläche.
+    secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -123,6 +131,8 @@ __all__ = [
     "IMPORT_KIND_CLASSES",
     "IMPORT_KIND_CLASS_MEMBERSHIPS",
     "IMPORT_KIND_CLASS_TEACHERS",
+    "IMPORT_KIND_COMPANY_USERS",
+    "IMPORT_KIND_PASSWORDS",
     "IMPORT_KIND_STUDENTS",
     "IMPORT_KIND_TEACHERS",
     "IMPORT_STATUS_APPLIED",

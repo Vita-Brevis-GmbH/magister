@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import Response
@@ -24,6 +24,7 @@ from magister_api.schemas.ad_users import (
     AdUserListResponse,
     AdUserOut,
     UserDeletionImpactOut,
+    ZielgruppeOption,
 )
 from magister_api.schemas.user_attrs import (
     UserAttributesUpdate,
@@ -52,10 +53,12 @@ from magister_api.services.credential_pdf import (
 from magister_api.services.credential_pdf import (
     UserNotInAdError as CredentialUserNotInAdError,
 )
+from magister_api.services.upn_domains import upn_domains
 from magister_api.services.user_attrs import (
     AdminOnlyFieldError,
     DomainAllowlistEmptyError,
     DomainNotAllowedError,
+    StorePasswordNotAllowedError,
     UpnConflictError,
     UserAttributesService,
     UserNotInAdError,
@@ -105,6 +108,21 @@ async def list_users(
         bool | None,
         Query(description="Filter by 'deleted in AD' marker (ad_missing_since set)."),
     ] = None,
+    jahrgangsstufe: Annotated[
+        int | None, Query(ge=-1, le=13, description="Jahrgang (-1 = KG1, 0 = KG2).")
+    ] = None,
+    group_template_id: Annotated[
+        int | None, Query(ge=0, description="Zielgruppe; 0 = keine Zielgruppe.")
+    ] = None,
+    policy: Annotated[
+        Literal["cannot_change", "never_expires", "stored"] | None,
+        Query(description="Nur Konten mit dieser Richtlinie."),
+    ] = None,
+    sort: Annotated[
+        Literal["name", "kind", "status", "jahrgangsstufe", "zielgruppe", "policy"],
+        Query(description="Spalte, nach der sortiert wird."),
+    ] = "name",
+    direction: Annotated[Literal["asc", "desc"], Query(alias="dir")] = "asc",
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AdUserListResponse:
@@ -115,11 +133,23 @@ async def list_users(
         search=search,
         class_id=class_id,
         missing=missing,
+        jahrgangsstufe=jahrgangsstufe,
+        group_template_id=group_template_id,
+        policy=policy,
+        sort=sort,
+        direction=direction,
         offset=offset,
         limit=limit,
     )
+    names = dict(listing.zielgruppen)
     return AdUserListResponse(
-        items=[AdUserOut.model_validate(r) for r in listing.rows],
+        items=[
+            AdUserOut.model_validate(r).model_copy(
+                update={"group_template_name": names.get(r.group_template_id or 0)}
+            )
+            for r in listing.rows
+        ],
+        zielgruppen=[ZielgruppeOption(id=i, name=n) for i, n in listing.zielgruppen],
         total=listing.total,
         offset=offset,
         limit=limit,
@@ -147,7 +177,16 @@ async def mail_domains(
     admin-settings surface.
     """
     eff = await AppSettingsService(session, settings).get_effective()
-    return {"domains": list(eff.mail_domains)}
+    return {
+        "domains": list(eff.mail_domains),
+        # Für den UPN zusätzlich, was das AD kennt (services/upn_domains.py).
+        "upn_domains": await upn_domains(
+            session,
+            mail_domains=eff.mail_domains,
+            users_search_base=eff.ad_users_search_base,
+            extra=eff.upn_domains,
+        ),
+    }
 
 
 @router.get("/{ad_object_guid}", response_model=AdUserOut)
@@ -239,7 +278,8 @@ async def patch_user_attributes(
     user, target = user_and_target
 
     settings_svc = AppSettingsService(session, settings)
-    mail_domains = (await settings_svc.get_effective()).mail_domains
+    eff = await settings_svc.get_effective()
+    mail_domains = eff.mail_domains
 
     svc = UserAttributesService(session, settings, user.to_scope(), ad)
     ip, request_id = _ip_request_id(request)
@@ -248,6 +288,12 @@ async def patch_user_attributes(
             target=target,
             payload=payload,
             mail_domains=mail_domains,
+            upn_domains=await upn_domains(
+                session,
+                mail_domains=mail_domains,
+                users_search_base=eff.ad_users_search_base,
+                extra=eff.upn_domains,
+            ),
             ip=ip,
             request_id=request_id,
         )
@@ -255,6 +301,11 @@ async def patch_user_attributes(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"admin_only_field:{exc}",
+        ) from exc
+    except StorePasswordNotAllowedError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="store_password_requires_fixed_password",
         ) from exc
     except DomainAllowlistEmptyError as exc:
         raise HTTPException(
@@ -316,7 +367,8 @@ async def rename_apply(
     """
     user, target = user_and_target
     settings_svc = AppSettingsService(session, settings)
-    mail_domains = (await settings_svc.get_effective()).mail_domains
+    eff = await settings_svc.get_effective()
+    mail_domains = eff.mail_domains
     svc = UserRenameService(UserAttributesService(session, settings, user.to_scope(), ad))
     ip, request_id = _ip_request_id(request)
     try:
@@ -324,6 +376,12 @@ async def rename_apply(
             target=target,
             req=payload,
             mail_domains=mail_domains,
+            upn_domains=await upn_domains(
+                session,
+                mail_domains=mail_domains,
+                users_search_base=eff.ad_users_search_base,
+                extra=eff.upn_domains,
+            ),
             ip=ip,
             request_id=request_id,
         )
@@ -331,6 +389,10 @@ async def rename_apply(
         raise HTTPException(status_code=422, detail=f"rename_invalid:{exc}") from exc
     except AdminOnlyFieldError as exc:
         raise HTTPException(status_code=403, detail=f"admin_only_field:{exc}") from exc
+    except StorePasswordNotAllowedError as exc:
+        raise HTTPException(
+            status_code=422, detail="store_password_requires_fixed_password"
+        ) from exc
     except DomainAllowlistEmptyError as exc:
         raise HTTPException(status_code=422, detail=f"mail_domains_not_configured:{exc}") from exc
     except DomainNotAllowedError as exc:

@@ -30,6 +30,7 @@ import {
 } from "@/api/hooks";
 import type { AdUserOut, DeviceOut, UserAttributesUpdate, UserDashboardOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
+import { ZielgruppeAssign } from "@/components/ZielgruppeAssign";
 import { Skeleton } from "@/components/Skeleton";
 import { StatusPill } from "@/components/StatusPill";
 import { SubjectAccessModal } from "@/components/SubjectAccessModal";
@@ -137,6 +138,8 @@ function UserDetailPage(): JSX.Element {
 
   const canChangeLogin = me.data?.is_admin ?? false;
   const domains = mailDomainsQ.data?.domains ?? [];
+  // Der UPN darf zusätzlich jedes Suffix tragen, das das AD kennt.
+  const upnDomains = mailDomainsQ.data?.upn_domains ?? domains;
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -263,6 +266,19 @@ function UserDetailPage(): JSX.Element {
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]): void {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setSavedFlash(false);
+    update.reset();
+  }
+
+  // Tresor nur bei festem Passwort (kann nicht ändern + läuft nie ab, wie im
+  // Backend). Fällt eine Bedingung weg, geht der Tresor-Schalter mit aus.
+  function setPolicy(patch: Partial<FormState>): void {
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      return next.cannot_change_password && next.password_never_expires
+        ? next
+        : { ...next, store_password: false };
+    });
     setSavedFlash(false);
     update.reset();
   }
@@ -601,7 +617,7 @@ function UserDetailPage(): JSX.Element {
                 domainValue={form.upn_domain}
                 onLocal={(v) => setField("upn_local", v)}
                 onDomain={(v) => setField("upn_domain", v)}
-                domains={domains}
+                domains={upnDomains}
                 disabled={!canChangeLogin}
                 label={t("users.field.upn")}
                 disabledHint={t("users.field.login_admin_only")}
@@ -799,7 +815,7 @@ function UserDetailPage(): JSX.Element {
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 rounded border-input"
                   checked={!form.cannot_change_password}
-                  onChange={(e) => setField("cannot_change_password", !e.target.checked)}
+                  onChange={(e) => setPolicy({ cannot_change_password: !e.target.checked })}
                 />
                 <span>
                   {t("users.field.can_change_password")}
@@ -813,7 +829,7 @@ function UserDetailPage(): JSX.Element {
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 rounded border-input"
                   checked={form.password_never_expires}
-                  onChange={(e) => setField("password_never_expires", e.target.checked)}
+                  onChange={(e) => setPolicy({ password_never_expires: e.target.checked })}
                 />
                 <span>
                   {t("users.field.password_never_expires")}
@@ -827,6 +843,7 @@ function UserDetailPage(): JSX.Element {
                   type="checkbox"
                   className="mt-0.5 h-4 w-4 rounded border-input"
                   checked={form.store_password}
+                  disabled={!(form.cannot_change_password && form.password_never_expires)}
                   onChange={(e) => setField("store_password", e.target.checked)}
                 />
                 <span>
@@ -852,6 +869,22 @@ function UserDetailPage(): JSX.Element {
                   value={form.jahrgangsstufe}
                   onChange={(v) => setField("jahrgangsstufe", v)}
                   hint={t("users.field.jahrgangsstufe_hint")}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {me.data?.is_admin ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">{t("zielgruppe_assign.section_title")}</CardTitle>
+                <CardDescription>{t("zielgruppe_assign.section_desc")}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ZielgruppeAssign
+                  guids={[user.ad_object_guid]}
+                  schoolId={user.school_id}
+                  currentTemplateId={user.group_template_id}
                 />
               </CardContent>
             </Card>
@@ -1636,6 +1669,8 @@ function renderPatchError(err: ApiError, t: (k: string) => string): string {
     return t("users.detail.error_mail_domains_missing");
   if (err.status === 422 && err.code.startsWith("domain_not_allowed"))
     return t("users.detail.error_domain_not_allowed");
+  if (err.status === 422 && err.code === "store_password_requires_fixed_password")
+    return t("users.detail.error_store_requires_fixed");
   if (err.status === 422) return t("users.detail.error_validation");
   if (err.status === 503) return t("errors.ad_unavailable");
   return t("errors.generic");

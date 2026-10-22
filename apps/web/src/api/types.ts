@@ -1,6 +1,15 @@
 /** Typed views of the backend's Pydantic response schemas. */
 
+/** Der laufende Operator-Zugriff — fuer den Hinweisbalken (ADR-0019 D6). */
+export interface OperatorBanner {
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  until: string;
+}
+
 export interface CurrentUserOut {
+  /** Leer bei einer Operator-Sitzung: sie gehoert zu keinem AD-Objekt. */
   ad_object_guid: string;
   upn: string;
   given_name: string | null;
@@ -12,17 +21,27 @@ export interface CurrentUserOut {
   school_scope: number[];
   roles: string[];
   expires_at: string;
+  /** Diese Sitzung ist selbst ein Operator-Zugriff. */
+  is_operator: boolean;
+  /** Gesetzt, solange ein Zugriff laeuft — fuer alle Benutzer. */
+  operator_active: OperatorBanner | null;
+}
+
+/** Ein Zugriff in der Liste, die der Kunde sieht (ADR-0019 D6). */
+export interface OperatorAccessOut {
+  jti: string;
+  operator: string;
+  reason: string;
+  ticket: string | null;
+  started_at: string;
+  expires_at: string;
+  /** `null` heisst: laeuft noch oder ist abgelaufen. */
+  ended_at: string | null;
 }
 
 export interface AuthCapabilities {
   oidc_enabled: boolean;
   local_login_enabled: boolean;
-  ad_login_enabled: boolean;
-}
-
-export interface AdLoginRequest {
-  login: string;
-  password: string;
 }
 
 // Built-in role keys still used for i18n label lookup; custom roles carry their
@@ -78,6 +97,35 @@ export interface RoleCreateRequest {
 export interface LocalLoginRequest {
   username: string;
   password: string;
+}
+
+/** Step 1 of the local login: the password checked out, this says what's next. */
+export interface LocalLoginStageOut {
+  /** "totp" — ask for a code. "enroll" — set up the second factor first. */
+  stage: "totp" | "enroll";
+  challenge: string;
+  /** Enrolment stage only. */
+  provisioning_uri: string | null;
+  qr_data_uri: string | null;
+  secret: string | null;
+}
+
+export interface LocalTotpRequest {
+  challenge: string;
+  code: string;
+}
+
+/** Returned once, at the end of enrolment. Cannot be shown again. */
+export interface LocalRecoveryCodesOut {
+  recovery_codes: string[];
+}
+
+export interface LocalAdminMfaOut {
+  enrolled: boolean;
+  recovery_codes_left: number;
+  reset_at: string | null;
+  reset_by: string | null;
+  suspended_until: string | null;
 }
 
 export interface LocalAdminOut {
@@ -251,6 +299,13 @@ export interface ModuleOut {
 export interface ModulesOut {
   profile: string;
   modules: ModuleOut[];
+  /**
+   * Ob diese Installation von einer Konsole verwaltet wird (ADR-0017 D1).
+   *
+   * Optional, weil eine ältere API das Feld nicht schickt — dann gilt
+   * `false`, und alles bleibt wie bisher.
+   */
+  platform_managed?: boolean;
 }
 
 /** M6 Phase 1: admin view + update of the module configuration. */
@@ -267,6 +322,8 @@ export interface AdminModulesOut {
   known_profiles: string[];
   modules: AdminModuleOut[];
   module_overrides: Record<string, boolean>;
+  /** Profil und Module kommen aus der Konsole; die Seite ist dann nur lesbar. */
+  managed_by_platform?: boolean;
 }
 
 export interface ModuleSettingsUpdate {
@@ -308,7 +365,21 @@ export interface DepartmentUpdate {
 
 /** AD group template ("Zielrolle"): a reusable bundle of AD group DNs,
  *  assignable to one or more Standorte and chosen at user-create. */
-export interface GroupTemplateOut {
+/** Passwortstärke einer Zielgruppe — gilt beim Anlegen und bei jedem Reset. */
+export type PasswordProfile = "readable" | "teacher" | "complex";
+
+/** Anlage-Vorgaben einer Zielgruppe. */
+export interface ZielgruppenOptions {
+  password_profile: PasswordProfile;
+  force_change: boolean;
+  cannot_change_password: boolean;
+  password_never_expires: boolean;
+  store_password: boolean;
+}
+
+// Zielgruppe (Tabelle group_templates): Kontoart, AD-Gruppen, Passwortstärke und
+// Konto-Einstellungen für neu angelegte Konten.
+export interface GroupTemplateOut extends ZielgruppenOptions {
   id: number;
   name: string;
   description: string | null;
@@ -316,24 +387,41 @@ export interface GroupTemplateOut {
   ad_groups: string[];
   school_ids: number[];
   status: string;
+  // Ziel-OU neuer Konten — nur bei freier Kontoart; null = OU des Standorts.
+  ad_ou: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface GroupTemplateCreate {
+export interface GroupTemplateCreate extends Partial<ZielgruppenOptions> {
   name: string;
   description?: string | null;
   kind?: string | null;
   ad_groups?: string[];
   school_ids?: number[];
+  ad_ou?: string | null;
 }
 
-export interface GroupTemplateUpdate {
+/** Ergebnis je Konto beim Zuordnen einer Zielgruppe. */
+export interface ZielgruppeAssignResult {
+  ad_object_guid: string;
+  ok: boolean;
+  error: string | null;
+  added: string[];
+  removed: string[];
+  failed: string[];
+  // Kontoart der Zielgruppe passt nicht zum Konto — die OU bleibt.
+  ou_unchanged: boolean;
+}
+
+export interface GroupTemplateUpdate extends Partial<ZielgruppenOptions> {
   name?: string | null;
   description?: string | null;
   kind?: string | null;
   ad_groups?: string[] | null;
   school_ids?: number[] | null;
+  // "" entfernt die Ziel-OU.
+  ad_ou?: string | null;
 }
 
 export interface DepartmentMembershipOut {
@@ -389,6 +477,10 @@ export interface ClassMembershipOut {
   surname: string | null;
   upn: string | null;
   jahrgangsstufe: number | null;
+  // Passwort-Ablauf (null: läuft nie ab oder unbekannt) und ob die
+  // Erinnerung das Kind per Mail erreicht.
+  password_expires_at?: string | null;
+  has_mail?: boolean | null;
 }
 
 export interface ClassDeviceOut {
@@ -468,6 +560,10 @@ export interface AdUserOut {
   cannot_change_password: boolean;
   /** Vault: keep the last set password encrypted in Magister. */
   store_password: boolean;
+  // Zielgruppe, nach der das Konto angelegt oder der es zugeordnet wurde.
+  group_template_id?: number | null;
+  /** Ihr Name — nur in der Liste gefüllt (Spalte "Zielgruppe"). */
+  group_template_name?: string | null;
   /** Synced AD group memberships (memberOf DNs). */
   ad_groups: string[];
   /** Secondary SMTP addresses (aliases) mirrored from proxyAddresses. */
@@ -549,7 +645,10 @@ export interface RenameApplyRequest {
 }
 
 export interface MailDomainsOut {
+  /** Mail-Domains aus den Einstellungen — für Mail-Adressen. */
   domains: string[];
+  /** Für den UPN: Mail-Domains plus was das AD kennt (Domäne, Suffixe der Konten). */
+  upn_domains?: string[];
 }
 
 // --- Document templates (M6 Feature B) ---
@@ -564,6 +663,26 @@ export interface DocumentTemplateOut {
   is_active: boolean;
   updated_by: string | null;
   updated_at: string;
+  /** Die Fassung des Betreibers, die zur Kenntnis genommen wurde (ADR-0018 D4). */
+  platform_version_ack: number | null;
+  /** Es gibt eine neuere gelieferte Fassung als die quittierte. */
+  platform_update_available: boolean;
+  /**
+   * Diese eigene Fassung gilt derzeit nicht, weil die Fassung des Betreibers
+   * gesperrt ist. Sie bleibt liegen und wird nicht geloescht (ADR-0018 D3).
+   */
+  superseded_by_platform: boolean;
+}
+
+/** Eine vom Betreiber gelieferte Vorlage, wie der Kunde sie sieht (ADR-0018). */
+export interface PlatformTemplateOut {
+  key: string;
+  language: string;
+  subject: string | null;
+  body_html: string;
+  may_override: boolean;
+  version: number;
+  delivered_at: string;
 }
 
 export interface DocumentTemplateMetaOut {
@@ -577,6 +696,8 @@ export interface DocumentTemplateMetaOut {
 export interface DocumentTemplateListOut {
   templates: DocumentTemplateOut[];
   meta: DocumentTemplateMetaOut;
+  /** Leer auf einer Einzelinstallation: dort gibt es keinen Betreiber ausser dem Kunden. */
+  platform_templates: PlatformTemplateOut[];
 }
 
 export interface DocumentTemplateSave {
@@ -600,6 +721,8 @@ export interface DocumentTemplatePreviewOut {
 
 export interface AdUserListResponse {
   items: AdUserOut[];
+  /** Zielgruppen der Konten im Sichtbereich — die Auswahl des Filters. */
+  zielgruppen?: { id: number; name: string }[];
   total: number;
   offset: number;
   limit: number;
@@ -630,14 +753,13 @@ export interface AppSettingsOut {
   oidc_scopes: string[];
   bootstrap_admins: string[];
   mail_domains: string[];
+  upn_domains: string[];
   ad_dcs: string[];
   ad_bind_mode: string;
   ad_bind_dn: string | null;
   ad_bind_password_set: boolean;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string | null;
-  ad_login_enabled: boolean;
-  ad_login_group: string | null;
   ad_users_search_base: string | null;
   ad_computers_search_base: string | null;
   ad_sync_interval_minutes: number;
@@ -657,6 +779,19 @@ export interface AppSettingsOut {
   ninja_region: string | null;
   ninja_client_id: string | null;
   ninja_client_secret_set: boolean;
+  // Mailversand + Ablauf-Erinnerung (Geheimnis nie zurück, nur ob gesetzt).
+  mail_transport: MailTransport;
+  mail_from: string | null;
+  mail_from_name: string | null;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_security: "starttls" | "tls";
+  smtp_username: string | null;
+  graph_tenant_id: string | null;
+  graph_client_id: string | null;
+  mail_secret_set: boolean;
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: number[];
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -687,9 +822,11 @@ export interface AdUserCreateRequest {
   user_principal_name: string;
   mail?: string | null;
   ou_key: AdUserOuKey;
-  school_id: number;
-  // Optional "Zielrolle" (group template) — its AD groups replace the school's
-  // per-Zyklus/company default groups. Must be offered at school_id.
+  school_id: number | null;
+  // Ziel-OU (nur ohne feste Kontoart); ohne Standort Pflicht.
+  ad_ou?: string | null;
+  // Optionale Zielgruppe — legt Kontoart/OU, Gruppen, Passwortstärke und
+  // Konto-Einstellungen fest (übersteuert ou_key). Muss an school_id angeboten sein.
   group_template_id?: number | null;
   display_name?: string | null;
   force_change?: boolean;
@@ -994,6 +1131,35 @@ export interface ActivityReport {
   rows: ActivityRow[];
 }
 
+// Konten je Zielgruppe / Kontoart (beide Profile).
+export interface AccountsByZielgruppeRow {
+  // null = Konten ohne Zielgruppe.
+  group_template_id: number | null;
+  name: string | null;
+  kind: string | null;
+  total: number;
+  enabled: number;
+  disabled: number;
+  stored_password: number;
+}
+export interface AccountsByZielgruppeReport {
+  rows: AccountsByZielgruppeRow[];
+  total: number;
+}
+export interface AccountsByKindRow {
+  kind: string;
+  total: number;
+  enabled: number;
+  disabled: number;
+  stored_password: number;
+  without_zielgruppe: number;
+  missing_in_ad: number;
+}
+export interface AccountsByKindReport {
+  rows: AccountsByKindRow[];
+  total: number;
+}
+
 // Company edition (M6 #8): department-centric reports.
 export interface MembersByDepartmentRow {
   department_id: number;
@@ -1039,7 +1205,8 @@ export type ImportKind =
   | "class_teachers"
   | "students"
   | "teachers"
-  | "company_users";
+  | "company_users"
+  | "passwords";
 export type ImportStatus = "staged" | "applied" | "cancelled";
 export type ImportAction = "create" | "update" | "skip" | "error";
 
@@ -1097,8 +1264,6 @@ export interface AppSettingsUpdate {
   ad_bind_password?: string | null;
   ad_tls_verify?: boolean | null;
   ad_tls_ca_pem?: string | null;
-  ad_login_enabled?: boolean | null;
-  ad_login_group?: string | null;
   ad_users_search_base?: string | null;
   ad_computers_search_base?: string | null;
   ad_sync_interval_minutes?: number | null;
@@ -1121,4 +1286,84 @@ export interface AppSettingsUpdate {
   ninja_region?: string | null;
   ninja_client_id?: string | null;
   ninja_client_secret?: string | null;
+  mail_transport?: MailTransport | null;
+  mail_from?: string | null;
+  mail_from_name?: string | null;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_security?: "starttls" | "tls" | null;
+  smtp_username?: string | null;
+  graph_tenant_id?: string | null;
+  graph_client_id?: string | null;
+  mail_secret?: string | null;
+  clear_mail_secret?: boolean | null;
+  expiry_notice_enabled?: boolean | null;
+  expiry_notice_days?: number[] | null;
+}
+
+// --- Mailversand + Passwort-Ablauf -------------------------------------------
+
+export type MailTransport = "off" | "smtp" | "graph";
+
+export interface MailStatusOut {
+  transport: MailTransport;
+  sender: string | null;
+  sender_name: string | null;
+  ready: boolean;
+  missing: string[];
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: number[];
+  platform_managed: boolean;
+}
+
+export interface TestMailOut {
+  ok: boolean;
+  error: string | null;
+}
+
+export type PasswordExpiryView = "expiring" | "no_mail" | "age";
+
+export interface PasswordExpiryRow {
+  ad_object_guid: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string;
+  kind: string;
+  school_id: number | null;
+  jahrgangsstufe: number | null;
+  group_template_name: string | null;
+  mail: string | null;
+  password_expires_at: string | null;
+  // Negativ: seit so vielen Tagen abgelaufen.
+  days_left: number | null;
+  notice_status: "sent" | "failed" | "no_mail" | null;
+  notice_at: string | null;
+  notice_threshold_days: number | null;
+  // Zuletzt gesetzt und Alter in Tagen; null = Änderung verlangt oder unbekannt.
+  password_last_set: string | null;
+  age_days: number | null;
+  password_never_expires: boolean;
+  password_known: boolean;
+}
+
+export interface PasswordExpiryOverview {
+  view: PasswordExpiryView;
+  within_days: number;
+  rows: PasswordExpiryRow[];
+  total: number;
+  offset: number;
+  limit: number;
+  notice_enabled: boolean;
+  mail_ready: boolean;
+  info_as_of: string | null;
+}
+
+export interface DomainsOut {
+  mail_domains: string[];
+  upn_domains: string[];
+  // Was die UPN-Auswahl anbietet, inklusive dessen, was das AD kennt.
+  upn_choices: string[];
+  // Domains von Mailadressen im AD, die noch keine Mail-Domain sind.
+  mail_suggestions?: string[];
 }

@@ -1,4 +1,4 @@
-"""``/admin/group-templates`` — AD group templates (Zielrollen) CRUD.
+"""``/admin/group-templates`` — Zielgruppen CRUD (vormals Zielrollen).
 
 A group template is a named, reusable bundle of AD group DNs, assignable to one
 or more Standorte, chosen at "neuen Benutzer anlegen" (filtered by Standort).
@@ -13,13 +13,19 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.ad.client import AdClient
 from magister_api.auth.current_user import AuthenticatedUser
-from magister_api.auth.rbac import require_manage
+from magister_api.auth.effective_settings import get_effective_settings
+from magister_api.auth.rbac import require_admin, require_manage
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.group_template import GroupTemplate
 from magister_api.routers._helpers import _ip_request_id
+from magister_api.routers.admin_sync import get_ad_client
 from magister_api.schemas.group_templates import (
+    AssignRequest,
+    AssignResultOut,
+    DefaultsRequest,
     GroupTemplateCreate,
     GroupTemplateOut,
     GroupTemplateUpdate,
@@ -27,9 +33,29 @@ from magister_api.schemas.group_templates import (
 from magister_api.services.group_templates import (
     GroupTemplateNotFoundError,
     GroupTemplateService,
+    OuRequiredWithoutSchoolError,
+    SchoolForDefaultsNotFoundError,
+)
+from magister_api.services.zielgruppen_assign import (
+    ZielgruppenAssignService,
+    ZielgruppeNotFoundError,
 )
 
 router = APIRouter(prefix="/admin/group-templates", tags=["admin"])
+
+
+_OPTIONS = (
+    "password_profile",
+    "force_change",
+    "cannot_change_password",
+    "password_never_expires",
+    "store_password",
+    "ad_ou",
+)
+
+
+def _options(payload: GroupTemplateCreate | GroupTemplateUpdate) -> dict[str, object]:
+    return {k: getattr(payload, k) for k in _OPTIONS}
 
 
 def _out(row: GroupTemplate, school_ids: list[int]) -> GroupTemplateOut:
@@ -61,15 +87,19 @@ async def create_group_template(
 ) -> GroupTemplateOut:
     svc = GroupTemplateService(session, settings, user.to_scope())
     ip, request_id = _ip_request_id(request)
-    row, sids = await svc.create(
-        name=payload.name,
-        description=payload.description,
-        kind=payload.kind,
-        ad_groups=payload.ad_groups,
-        school_ids=payload.school_ids,
-        ip=ip,
-        request_id=request_id,
-    )
+    try:
+        row, sids = await svc.create(
+            name=payload.name,
+            description=payload.description,
+            kind=payload.kind,
+            ad_groups=payload.ad_groups,
+            school_ids=payload.school_ids,
+            options=_options(payload),
+            ip=ip,
+            request_id=request_id,
+        )
+    except OuRequiredWithoutSchoolError as exc:
+        raise HTTPException(status_code=422, detail="ad_ou_required_without_school") from exc
     return _out(row, sids)
 
 
@@ -92,12 +122,70 @@ async def patch_group_template(
             kind=payload.kind,
             ad_groups=payload.ad_groups,
             school_ids=payload.school_ids,
+            options=_options(payload),
             ip=ip,
             request_id=request_id,
         )
     except GroupTemplateNotFoundError as exc:
         raise HTTPException(status_code=404, detail="group_template_not_found") from exc
+    except OuRequiredWithoutSchoolError as exc:
+        raise HTTPException(status_code=422, detail="ad_ou_required_without_school") from exc
     return _out(row, sids)
+
+
+@router.post("/defaults", response_model=list[GroupTemplateOut])
+async def ensure_default_group_templates(
+    payload: DefaultsRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_manage),
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_session),
+) -> list[GroupTemplateOut]:
+    """Fehlende Standard-Zielgruppen (Zyklus 1/2/3, Lehrperson) ergänzen.
+
+    Gibt nur die neu angelegten zurück; eine leere Liste heisst: alles da.
+    """
+    svc = GroupTemplateService(session, settings, user.to_scope())
+    ip, request_id = _ip_request_id(request)
+    try:
+        created = await svc.ensure_defaults(
+            school_id=payload.school_id, ip=ip, request_id=request_id
+        )
+    except SchoolForDefaultsNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="school_not_found") from exc
+    return [_out(r, [payload.school_id]) for r in created]
+
+
+@router.post("/{template_id}/assign", response_model=list[AssignResultOut])
+async def assign_group_template(
+    template_id: int,
+    payload: AssignRequest,
+    request: Request,
+    user: AuthenticatedUser = Depends(require_admin),
+    settings: Settings = Depends(get_effective_settings),
+    session: AsyncSession = Depends(get_session),
+    ad: AdClient = Depends(get_ad_client),
+) -> list[AssignResultOut]:
+    """Bestehende Konten dieser Zielgruppe zuordnen.
+
+    Gruppen der bisherigen Zielgruppe fallen weg, die der neuen kommen dazu;
+    optional werden die Konto-Einstellungen übernommen. Admin-only wie das
+    Anlegen, weil es AD-Gruppen schreibt. Ein Fehler bei einem Konto hält die
+    anderen nicht auf — das Ergebnis nennt ihn je Konto.
+    """
+    svc = ZielgruppenAssignService(session, settings, user.to_scope(), ad)
+    ip, request_id = _ip_request_id(request)
+    try:
+        results = await svc.assign(
+            template_id=template_id,
+            guids=payload.ad_object_guids,
+            apply_settings=payload.apply_settings,
+            ip=ip,
+            request_id=request_id,
+        )
+    except ZielgruppeNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="group_template_not_found") from exc
+    return [AssignResultOut(**vars(r)) for r in results]
 
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -35,6 +35,7 @@ from magister_api.db import get_session
 from magister_api.models.import_job import (
     ALLOWED_IMPORT_KINDS,
     IMPORT_KIND_COMPANY_USERS,
+    IMPORT_KIND_PASSWORDS,
     IMPORT_KIND_STUDENTS,
     IMPORT_KIND_TEACHERS,
 )
@@ -52,6 +53,11 @@ from magister_api.services.handouts import (
     AUDIENCE_TEACHERS,
     HandoutEntry,
     render_handouts_zip,
+)
+from magister_api.services.import_pdf import (
+    PdfImportError,
+    looks_like_pdf,
+    password_rows_from_pdf,
 )
 from magister_api.services.imports import (
     ImportJobBadStateError,
@@ -73,11 +79,18 @@ require_import_access = require_capability(Capability.IMPORT_RUN)  # admin + sch
 
 def _authorize_kind(user: AuthenticatedUser, matrix: RbacMatrix, kind: str) -> None:
     """Enforce the per-kind capability rule. Raises 403 on mismatch."""
-    # Provisioning imports create AD accounts → USER_ADMINISTER (admin + SMI);
-    # structural imports need ORGUNIT_MANAGE (admin + Schulleitung).
+    # Provisioning imports create AD accounts and the password import sets AD
+    # passwords → USER_ADMINISTER (admin + SMI); structural imports need
+    # ORGUNIT_MANAGE (admin + Schulleitung).
     needed = (
         Capability.USER_ADMINISTER
-        if kind in (IMPORT_KIND_STUDENTS, IMPORT_KIND_TEACHERS, IMPORT_KIND_COMPANY_USERS)
+        if kind
+        in (
+            IMPORT_KIND_STUDENTS,
+            IMPORT_KIND_TEACHERS,
+            IMPORT_KIND_COMPANY_USERS,
+            IMPORT_KIND_PASSWORDS,
+        )
         else Capability.ORGUNIT_MANAGE
     )
     if not has_capability(user, matrix, needed):
@@ -157,10 +170,22 @@ async def stage_import(
     raw = await file.read(max_bytes + 1)
     if len(raw) > max_bytes:
         raise HTTPException(status_code=413, detail="csv_too_large")
-    try:
-        csv_text = raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise HTTPException(status_code=400, detail="csv_not_utf8") from exc
+    # Standard ist die CSV. Nur Passwörter dürfen auch als PDF-Klassenliste
+    # kommen (Übernahme alter Anlagen); erkannt am Inhalt, nicht am Namen.
+    csv_text: str | None = None
+    pdf_rows: list[dict[str, str]] | None = None
+    if looks_like_pdf(raw):
+        if kind != IMPORT_KIND_PASSWORDS:
+            raise HTTPException(status_code=400, detail="pdf_only_for_passwords")
+        try:
+            pdf_rows = await run_in_threadpool(password_rows_from_pdf, raw)
+        except PdfImportError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    else:
+        try:
+            csv_text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(status_code=400, detail="csv_not_utf8") from exc
 
     ip, request_id = _ip_request_id(request)
     svc = ImportService(session, settings, user.to_scope())
@@ -169,6 +194,7 @@ async def stage_import(
             school_id=target_school,
             kind=kind,
             csv_text=csv_text,
+            rows=pdf_rows,
             filename=file.filename,
             ip=ip,
             request_id=request_id,

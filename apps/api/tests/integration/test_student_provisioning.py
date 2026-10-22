@@ -68,7 +68,7 @@ STUDENTS_HEADER = (
 async def test_template_students_csv(as_schulleitung_a: AsyncClient) -> None:
     r = await as_schulleitung_a.get("/imports/templates/students.csv")
     assert r.status_code == 200
-    assert r.text.splitlines()[0] == STUDENTS_HEADER
+    assert r.text.splitlines()[0] == f"{STUDENTS_HEADER},zielgruppe"
 
 
 @pytest.mark.asyncio
@@ -189,7 +189,7 @@ async def test_student_import_sets_own_grade(
 async def test_template_teachers_csv(as_smi_a: AsyncClient) -> None:
     r = await as_smi_a.get("/imports/templates/teachers.csv")
     assert r.status_code == 200
-    assert r.text.splitlines()[0] == TEACHERS_HEADER
+    assert r.text.splitlines()[0] == f"{TEACHERS_HEADER},zielgruppe"
 
 
 @pytest.mark.asyncio

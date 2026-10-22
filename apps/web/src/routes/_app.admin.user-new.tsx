@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { ApiError, apiFetch } from "@/api/client";
 import {
+  downloadNewUserPdf,
   useClasses,
   useCreateAdUser,
   useGroupTemplates,
@@ -11,11 +12,12 @@ import {
   useMailDomains,
   useSchools,
 } from "@/api/hooks";
-import type { AdUserOuKey } from "@/api/types";
+import type { AdUserOuKey, GroupTemplateOut, ProvisionedCredential } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cleanOu, ouInUnit, ouValid } from "@/lib/ou";
 import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/user-new")({
@@ -41,9 +43,12 @@ const INITIAL = {
   upn_local: "",
   upn_domain: "",
   mail: "",
+  mail_local: "",
+  mail_domain: "",
   school_id: "",
   ou_key: "teacher" as AdUserOuKey,
   group_template_id: "",
+  ad_ou: "",
   jahrgangsstufe: "",
   class_id: "",
   force_change: true,
@@ -55,44 +60,97 @@ function createErrorKey(err: ApiError): string {
   if (err.code === "group_template_not_found") return "admin.user_new.err_template_not_found";
   if (err.code === "group_template_not_for_school")
     return "admin.user_new.err_template_not_for_school";
+  if (err.code === "ou_outside_school") return "admin.user_new.err_ou_outside_school";
+  if (err.code === "ou_required_without_school") return "admin.user_new.err_ou_required";
   if (err.status === 409) return "admin.user_new.err_ou_not_configured";
   if (err.status === 503) return "admin.user_new.err_ad";
   if (err.status === 422) return "admin.user_new.err_invalid";
   return "errors.generic";
 }
 
-function NewUserPage(): JSX.Element {
-  const { t } = useTranslation();
+// Für das Anmelde-PDF: was nach dem Anlegen bekannt ist. Das Passwort lebt nur
+// in diesem Zustand der Seite und geht ungespeichert an den PDF-Renderer.
+interface Created {
+  credential: ProvisionedCredential;
+  audience: "students" | "teachers";
+  schoolName: string;
+}
+
+export function NewUserPage(): JSX.Element {
+  const { t, i18n } = useTranslation();
   const { tt } = useTerms();
   const navigate = useNavigate();
   const create = useCreateAdUser();
   const classes = useClasses();
   const schools = useSchools();
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
-  // Configured UPN/mail domains (app_settings.mail_domains): when present, the
-  // UPN is composed as localpart + a domain picked from a dropdown; otherwise
-  // the admin types the full UPN (fallback for instances with no domains set).
+  // UPN-Domains (Mail-Domains plus was das AD kennt): when present, the UPN is
+  // composed as localpart + a domain picked from a dropdown; otherwise the
+  // admin types the full UPN (fallback for instances with no domains at all).
   const mailDomainsQ = useMailDomains();
-  const domains = mailDomainsQ.data?.domains ?? [];
+  const domains = mailDomainsQ.data?.upn_domains ?? mailDomainsQ.data?.domains ?? [];
   const useDomainPicker = domains.length > 0;
+  // Die Mailadresse nur auf eine Mail-Domain — die UPN-Auswahl kennt mehr
+  // (was das AD hat), zugestellt wird aber nur an eingetragene Domains.
+  const mailDomains = mailDomainsQ.data?.domains ?? [];
+  const useMailPicker = mailDomains.length > 0;
 
   const [form, setForm] = useState(INITIAL);
-  const [password, setPassword] = useState<string | null>(null);
+  const [created, setCreated] = useState<Created | null>(null);
+  const [pdfState, setPdfState] = useState<"idle" | "busy" | "failed">("idle");
   const [classWarn, setClassWarn] = useState(false);
 
   // Zielrollen (group templates) offered at the picked Standort. Optional: when
-  // none is chosen the school's default provisioning groups apply.
+  // none is chosen the school's default provisioning groups apply. Ohne
+  // Standort die globalen Zielgruppen — sie tragen die Ziel-OU für genau
+  // diesen Fall (Pflicht ohne Standort, auch bei fester Kontoart).
   const selectedSchoolId = form.school_id ? Number(form.school_id) : undefined;
-  const templatesQ = useGroupTemplates(selectedSchoolId, !!selectedSchoolId);
-  const templates = templatesQ.data ?? [];
+  const templatesQ = useGroupTemplates(selectedSchoolId);
+  const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
+  const templates = (templatesQ.data ?? []).filter(
+    (tpl) => selectedSchoolId !== undefined || tpl.school_ids.length === 0,
+  );
 
   // Company provisions a single "company" category into the org unit's company
   // OU; school offers teacher + student Zyklen. Students carry a grade + class.
-  const ouKeys = isCompany ? (["company"] as AdUserOuKey[]) : SCHOOL_OU_KEYS;
-  const ouKey: AdUserOuKey = isCompany ? "company" : form.ou_key;
-  const isStudent = !isCompany && form.ou_key !== "teacher";
+  // Eine Zielgruppe mit fester Kontoart legt die OU fest (das Backend
+  // übersteuert ou_key ebenso); ohne sie wählt man die Kontoart selbst.
+  const selectedTemplate = templates.find((tpl) => String(tpl.id) === form.group_template_id);
+  const templateKind = (ouKeys as string[]).includes(selectedTemplate?.kind ?? "")
+    ? (selectedTemplate?.kind as AdUserOuKey)
+    : null;
+  const ouKey: AdUserOuKey = isCompany ? "company" : (templateKind ?? form.ou_key);
+  const isStudent = !isCompany && ouKey !== "teacher";
+  // Ziel-OU: sichtbar ohne Standort (dann Pflicht) oder wenn keine feste
+  // Kontoart die OU vorgibt (dann optional: leer = OU des Standorts).
+  const showOu = !form.school_id || templateKind === null;
+  const ou = showOu ? cleanOu(form.ad_ou) : "";
+  const ouBad = !ouValid(ou);
+  const selectedSchool = schools.data?.find((s) => String(s.id) === form.school_id);
+  const ouOutside =
+    !!selectedSchool && ou !== "" && !ouBad && !ouInUnit(ou, selectedSchool.scope_short);
+  const placeable = (!!form.school_id || ou !== "") && !ouBad && !ouOutside;
+
+  // Zielgruppe gewählt → ihre Konto-Einstellungen vorbelegen (übersteuerbar).
+  function pickTemplate(id: string): void {
+    const tpl: GroupTemplateOut | undefined = templates.find((x) => String(x.id) === id);
+    setForm((prev) => ({
+      ...prev,
+      group_template_id: id,
+      // Ziel-OU der Zielgruppe vorbelegen (überschreibbar).
+      ad_ou: tpl?.ad_ou ?? "",
+      ...(tpl
+        ? {
+            force_change: tpl.force_change,
+            cannot_change_password: tpl.cannot_change_password,
+            password_never_expires: tpl.password_never_expires,
+          }
+        : {}),
+    }));
+  }
 
   const schoolList = schools.data ?? [];
+  const activeClasses = (classes.data ?? []).filter((c) => c.status === "active");
   // Pre-select the target org unit when there is exactly one to choose from.
   useEffect(() => {
     const list = schools.data ?? [];
@@ -104,9 +162,13 @@ function NewUserPage(): JSX.Element {
   }, [schools.data]);
   // Default the UPN domain to the first configured one.
   useEffect(() => {
-    const list = mailDomainsQ.data?.domains ?? [];
+    const list = mailDomainsQ.data?.upn_domains ?? mailDomainsQ.data?.domains ?? [];
     if (list.length > 0) {
       setForm((prev) => (prev.upn_domain === "" ? { ...prev, upn_domain: list[0] } : prev));
+    }
+    const mailList = mailDomainsQ.data?.domains ?? [];
+    if (mailList.length > 0) {
+      setForm((prev) => (prev.mail_domain === "" ? { ...prev, mail_domain: mailList[0] } : prev));
     }
   }, [mailDomainsQ.data]);
 
@@ -115,6 +177,12 @@ function NewUserPage(): JSX.Element {
   const composedUpn = useDomainPicker
     ? `${form.upn_local.trim()}@${form.upn_domain}`
     : form.user_principal_name.trim();
+  // Leerer Namensteil = kein Postfach.
+  const composedMail = useMailPicker
+    ? form.mail_local.trim()
+      ? `${form.mail_local.trim()}@${form.mail_domain}`
+      : null
+    : form.mail.trim() || null;
 
   function field(key: keyof typeof form) {
     return {
@@ -126,9 +194,10 @@ function NewUserPage(): JSX.Element {
 
   function handleSubmit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
-    if (!form.school_id) return;
+    if (!placeable) return;
     if (useDomainPicker && !form.upn_local.trim()) return;
-    setPassword(null);
+    setCreated(null);
+    setPdfState("idle");
     setClassWarn(false);
     const grade = form.jahrgangsstufe.trim();
     create.mutate(
@@ -138,10 +207,11 @@ function NewUserPage(): JSX.Element {
         display_name: form.display_name.trim() || null,
         sam_account_name: form.sam_account_name,
         user_principal_name: composedUpn,
-        mail: form.mail || null,
+        mail: composedMail,
         ou_key: ouKey,
-        school_id: Number(form.school_id),
+        school_id: form.school_id ? Number(form.school_id) : null,
         group_template_id: form.group_template_id ? Number(form.group_template_id) : null,
+        ad_ou: ou || null,
         force_change: form.force_change,
         cannot_change_password: form.cannot_change_password,
         password_never_expires: form.password_never_expires,
@@ -151,7 +221,7 @@ function NewUserPage(): JSX.Element {
         onSuccess: async (res) => {
           // Optional class membership (students only) — reuse the class-roster
           // endpoint. A membership failure must not hide the created password.
-          if (isStudent && form.class_id) {
+          if (isStudent && form.school_id && form.class_id) {
             try {
               await apiFetch(`/classes/${form.class_id}/students`, {
                 method: "POST",
@@ -161,13 +231,38 @@ function NewUserPage(): JSX.Element {
               setClassWarn(true);
             }
           }
-          setPassword(res.temp_password);
+          const display = form.display_name.trim() || `${form.given_name} ${form.surname}`.trim();
+          const className = isStudent
+            ? (activeClasses.find((c) => String(c.id) === form.class_id)?.name ?? "")
+            : "";
+          setCreated({
+            credential: {
+              upn: composedUpn,
+              sam_account_name: form.sam_account_name,
+              display_name: display,
+              class_name: className,
+              password: res.temp_password,
+              force_change: res.force_change,
+            },
+            audience: isStudent ? "students" : "teachers",
+            schoolName: schoolList.find((s) => String(s.id) === form.school_id)?.name ?? "",
+          });
         },
       },
     );
   }
 
-  if (password) {
+  async function downloadPdf(c: Created): Promise<void> {
+    setPdfState("busy");
+    try {
+      await downloadNewUserPdf(c.credential, c.schoolName, i18n.language, c.audience);
+      setPdfState("idle");
+    } catch {
+      setPdfState("failed");
+    }
+  }
+
+  if (created) {
     return (
       <div className="mx-auto max-w-lg space-y-6">
         <Card>
@@ -179,14 +274,25 @@ function NewUserPage(): JSX.Element {
             <div className="space-y-1">
               <Label>{t("admin.user_new.temp_password")}</Label>
               <div className="rounded-md border bg-muted px-3 py-2 font-mono text-sm">
-                {password}
+                {created.credential.password}
               </div>
               <p className="text-xs text-muted-foreground">{t("admin.user_new.temp_hint")}</p>
             </div>
             {classWarn ? (
               <p className="text-sm text-amber-600">{t("admin.user_new.class_assign_failed")}</p>
             ) : null}
-            <div className="flex gap-2">
+            {pdfState === "failed" ? (
+              <p className="text-sm text-destructive">{t("admin.user_new.pdf_failed")}</p>
+            ) : null}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={pdfState === "busy"}
+                onClick={() => void downloadPdf(created)}
+              >
+                {t("admin.user_new.download_pdf")}
+              </Button>
               <Button type="button" onClick={() => navigate({ to: "/users" })}>
                 {t("admin.user_new.to_users")}
               </Button>
@@ -194,7 +300,8 @@ function NewUserPage(): JSX.Element {
                 type="button"
                 variant="outline"
                 onClick={() => {
-                  setPassword(null);
+                  setCreated(null);
+                  setPdfState("idle");
                   setClassWarn(false);
                   setForm(INITIAL);
                 }}
@@ -207,8 +314,6 @@ function NewUserPage(): JSX.Element {
       </div>
     );
   }
-
-  const activeClasses = (classes.data ?? []).filter((c) => c.status === "active");
 
   return (
     <div className="mx-auto max-w-lg space-y-6">
@@ -286,7 +391,33 @@ function NewUserPage(): JSX.Element {
             </div>
             <div className="space-y-1">
               <Label htmlFor="mail">{t("admin.user_new.mail")}</Label>
-              <Input id="mail" type="email" autoComplete="off" {...field("mail")} />
+              {useMailPicker ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="mail"
+                    autoComplete="off"
+                    placeholder={form.upn_local.trim() || "vorname.nachname"}
+                    className="min-w-0 flex-1"
+                    {...field("mail_local")}
+                  />
+                  <span className="shrink-0 text-sm text-muted-foreground">@</span>
+                  <select
+                    aria-label={t("admin.user_new.mail_domain")}
+                    className="h-10 max-w-[45%] shrink-0 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    value={form.mail_domain}
+                    onChange={(e) => setForm((prev) => ({ ...prev, mail_domain: e.target.value }))}
+                  >
+                    {mailDomains.map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <Input id="mail" type="email" autoComplete="off" {...field("mail")} />
+              )}
+              <p className="text-xs text-muted-foreground">{t("admin.user_new.mail_hint")}</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="unit">{tt("admin.user_new.unit")}</Label>
@@ -302,43 +433,56 @@ function NewUserPage(): JSX.Element {
                   }))
                 }
               >
-                <option value="">{tt("admin.user_new.unit_placeholder")}</option>
+                <option value="">{tt("admin.user_new.unit_none")}</option>
                 {schoolList.map((s) => (
                   <option key={s.id} value={String(s.id)}>
                     {s.name}
                   </option>
                 ))}
               </select>
+              {form.school_id ? null : (
+                <p className="text-xs text-muted-foreground">
+                  {tt("admin.user_new.unit_none_hint")}
+                </p>
+              )}
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="ou">{t("admin.user_new.ou")}</Label>
-              <select
-                id="ou"
-                className={selectClasses}
-                value={ouKey}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, ou_key: e.target.value as AdUserOuKey }))
-                }
-              >
-                {ouKeys.map((k) => (
-                  <option key={k} value={k}>
-                    {tt(`admin.user_new.ou_${k}`)}
-                  </option>
-                ))}
-              </select>
-              <p className="text-xs text-muted-foreground">{t("admin.user_new.ou_hint")}</p>
-            </div>
-
+            {showOu ? (
+              <div className="space-y-1">
+                <Label htmlFor="target-ou">
+                  {form.school_id
+                    ? t("admin.user_new.target_ou_optional")
+                    : t("admin.user_new.target_ou")}
+                </Label>
+                <Input
+                  id="target-ou"
+                  value={form.ad_ou}
+                  onChange={(e) => setForm((prev) => ({ ...prev, ad_ou: e.target.value }))}
+                  placeholder={t("group_templates.ou_placeholder")}
+                  maxLength={512}
+                  required={!form.school_id}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {form.school_id
+                    ? tt("admin.user_new.target_ou_hint_unit")
+                    : tt("admin.user_new.target_ou_hint_no_unit")}
+                </p>
+                {ouBad ? (
+                  <p className="text-xs text-destructive">{t("group_templates.ou_invalid")}</p>
+                ) : null}
+                {ouOutside ? (
+                  <p className="text-xs text-destructive">
+                    {tt("admin.user_new.err_ou_outside_school")}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
             <div className="space-y-1">
               <Label htmlFor="ziel">{t("admin.user_new.group_template")}</Label>
               <select
                 id="ziel"
                 className={selectClasses}
                 value={form.group_template_id}
-                disabled={!form.school_id}
-                onChange={(e) =>
-                  setForm((prev) => ({ ...prev, group_template_id: e.target.value }))
-                }
+                onChange={(e) => pickTemplate(e.target.value)}
               >
                 <option value="">{t("admin.user_new.group_template_default")}</option>
                 {templates.map((tpl) => (
@@ -352,7 +496,33 @@ function NewUserPage(): JSX.Element {
               </p>
             </div>
 
-            {isStudent ? (
+            <div className="space-y-1">
+              <Label htmlFor="ou">{t("admin.user_new.ou")}</Label>
+              <select
+                id="ou"
+                className={selectClasses}
+                value={ouKey}
+                disabled={templateKind !== null}
+                onChange={(e) =>
+                  setForm((prev) => ({ ...prev, ou_key: e.target.value as AdUserOuKey }))
+                }
+              >
+                {ouKeys.map((k) => (
+                  <option key={k} value={k}>
+                    {tt(`admin.user_new.ou_${k}`)}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                {templateKind !== null
+                  ? t("admin.user_new.ou_from_template")
+                  : ou !== "" || !form.school_id
+                    ? t("admin.user_new.ou_hint_own_ou")
+                    : tt("admin.user_new.ou_hint")}
+              </p>
+            </div>
+
+            {isStudent && form.school_id ? (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label htmlFor="grade">{t("admin.user_new.jahrgangsstufe")}</Label>
@@ -414,7 +584,7 @@ function NewUserPage(): JSX.Element {
             <Button
               type="submit"
               disabled={
-                create.isPending || !form.school_id || (useDomainPicker && !form.upn_local.trim())
+                create.isPending || !placeable || (useDomainPicker && !form.upn_local.trim())
               }
             >
               {create.isPending ? t("common.loading") : t("admin.user_new.submit")}

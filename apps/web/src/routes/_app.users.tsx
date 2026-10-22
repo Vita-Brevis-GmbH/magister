@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
@@ -9,13 +9,17 @@ import {
   useUsers,
   type BulkUserAction,
   type UseUsersParams,
+  type UserSortKey,
 } from "@/api/hooks";
 import type { AdUserOut } from "@/api/types";
 import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { SkeletonRow } from "@/components/Skeleton";
+import { SortableHead } from "@/components/SortableHead";
+import { UsersSubNav } from "@/components/UsersSubNav";
 import { StatusPill } from "@/components/StatusPill";
 import { UserAvatar } from "@/components/UserAvatar";
 import { UserStatusModal } from "@/components/UserStatusModal";
+import { ZielgruppeAssign } from "@/components/ZielgruppeAssign";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,7 +37,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { gradeLabel } from "@/lib/grade";
 import { useFormatters } from "@/lib/useFormatters";
+import type { SortState } from "@/lib/useSortable";
 import { cn } from "@/lib/utils";
 import { displayLabel } from "@/lib/userDisplay";
 
@@ -42,8 +48,16 @@ export const Route = createFileRoute("/_app/users")({
 });
 
 type KindFilter = "all" | "teacher" | "student";
+type StatusFilter = "all" | "active" | "disabled" | "missing";
+type PolicyFilter = "" | "cannot_change" | "never_expires" | "stored";
 
-function UsersPage(): JSX.Element {
+// Jahrgänge für den Filter: -1 = KG1, 0 = KG2, dann 1..13.
+const GRADES = Array.from({ length: 15 }, (_, i) => i - 1);
+
+const filterSelect =
+  "h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground";
+
+export function UsersPage(): JSX.Element {
   // /users/$guid is a child route; hand off when one is active.
   const childMatches = useChildMatches();
   const { t } = useTranslation();
@@ -55,11 +69,21 @@ function UsersPage(): JSX.Element {
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(50);
-  const [missingOnly, setMissingOnly] = useState(false);
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [grade, setGrade] = useState("");
+  const [zielgruppe, setZielgruppe] = useState("");
+  const [policy, setPolicy] = useState<PolicyFilter>("");
+  // Sortiert wird im Server: die Liste ist seitenweise.
+  const [sort, setSort] = useState<SortState>({ key: "name", dir: "asc" });
   const [resetTarget, setResetTarget] = useState<ResetTarget | null>(null);
   const [statusTarget, setStatusTarget] = useState<AdUserOut | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [attrsOpen, setAttrsOpen] = useState(false);
+  const [zielgruppeOpen, setZielgruppeOpen] = useState(false);
+  // Die Konten, für die "Zielgruppe zuordnen" geöffnet wurde — fest, damit das
+  // Ergebnis stehen bleibt, auch wenn die Auswahl danach geleert wird.
+  const [zielgruppeGuids, setZielgruppeGuids] = useState<string[]>([]);
+  const [zielgruppeSchool, setZielgruppeSchool] = useState<number | undefined>(undefined);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ ok: number; failed: number } | null>(null);
   const me = useCurrentUser();
@@ -79,7 +103,14 @@ function UsersPage(): JSX.Element {
     offset,
     ...(kind !== "all" && { kind }),
     ...(search && { search }),
-    ...(missingOnly && { missing: true }),
+    ...(status === "active" && { enabled: true, missing: false }),
+    ...(status === "disabled" && { enabled: false }),
+    ...(status === "missing" && { missing: true }),
+    ...(grade !== "" && { jahrgangsstufe: Number(grade) }),
+    ...(zielgruppe !== "" && { group_template_id: Number(zielgruppe) }),
+    ...(policy && { policy }),
+    sort: sort.key as UserSortKey,
+    dir: sort.dir,
   };
   const q = useUsers(params);
 
@@ -97,6 +128,16 @@ function UsersPage(): JSX.Element {
   }
   function changeSearch(v: string): void {
     setSearch(v);
+    resetPaging();
+  }
+  function changeFilter<T>(set: (v: T) => void, v: T): void {
+    set(v);
+    resetPaging();
+  }
+  function toggleSort(key: string): void {
+    setSort((prev) =>
+      prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" },
+    );
     resetPaging();
   }
   function goToOffset(next: number): void {
@@ -119,9 +160,22 @@ function UsersPage(): JSX.Element {
   const items = q.data?.items ?? [];
   const selectableGuids = items.map((u) => u.ad_object_guid);
   const allSelected = selectableGuids.length > 0 && selectableGuids.every((g) => selected.has(g));
-  // Permanent delete is step 2 — only offered when every selected account is
-  // already deactivated.
+  // Ausgewählt zählt nur, was angezeigt wird: eine Sammelaktion darf nie ein
+  // Konto treffen, das ein Filter oder eine Änderung aus der Ansicht genommen
+  // hat. Permanent delete is step 2 — only offered when every selected
+  // account is already deactivated.
   const selectedUsers = items.filter((u) => selected.has(u.ad_object_guid));
+  const visibleSelected = selectedUsers.map((u) => u.ad_object_guid);
+
+  // Verschwindet eine Zeile aus der Ansicht (Filter, neu geladene Liste nach
+  // einer Aktion), verschwindet sie auch aus der Auswahl.
+  useEffect(() => {
+    const shown = new Set((q.data?.items ?? []).map((u) => u.ad_object_guid));
+    setSelected((prev) => {
+      const kept = [...prev].filter((g) => shown.has(g));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [q.data]);
   const allSelectedDisabled = selectedUsers.length > 0 && selectedUsers.every((u) => !u.enabled);
 
   function toggle(guid: string): void {
@@ -141,19 +195,23 @@ function UsersPage(): JSX.Element {
 
   function clearSelection(): void {
     setSelected(new Set());
+    setZielgruppeOpen(false);
     setConfirmBulkDelete(false);
     setBulkResult(null);
   }
 
   function runBulk(action: BulkUserAction): void {
-    const guids = [...selected];
+    const guids = visibleSelected;
     if (guids.length === 0) return;
     bulk.mutate(
       { guids, action },
       {
         onSuccess: (res) => {
           setBulkResult({ ok: res.ok.length, failed: res.failed.length });
-          setSelected(new Set(res.failed.map((f) => f.guid)));
+          // Nach der Aktion ist die Auswahl leer; was scheiterte, sagt die
+          // Meldung darunter.
+          setSelected(new Set());
+          setZielgruppeOpen(false);
           setConfirmBulkDelete(false);
           setAttrsOpen(false);
         },
@@ -161,10 +219,26 @@ function UsersPage(): JSX.Element {
     );
   }
 
+  function openZielgruppe(): void {
+    if (zielgruppeOpen) {
+      setZielgruppeOpen(false);
+      return;
+    }
+    setZielgruppeGuids(visibleSelected);
+    setZielgruppeSchool(
+      new Set(selectedUsers.map((u) => u.school_id)).size === 1
+        ? (selectedUsers[0]?.school_id ?? undefined)
+        : undefined,
+    );
+    setZielgruppeOpen(true);
+    setBulkResult(null);
+  }
+
   if (childMatches.length > 0) return <Outlet />;
 
   return (
     <div className="space-y-6">
+      <UsersSubNav />
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("users.title")}</h1>
@@ -218,27 +292,66 @@ function UsersPage(): JSX.Element {
           onChange={(e) => changeSearch(e.target.value)}
           className="h-9 min-w-[16rem] flex-1 rounded-md border border-input bg-background px-3 text-sm"
         />
-        <button
-          type="button"
-          aria-pressed={missingOnly}
-          onClick={() => {
-            setMissingOnly((v) => !v);
-            resetPaging();
-          }}
-          className={cn(
-            "rounded-md border px-3 py-1.5 text-sm font-medium transition-colors",
-            missingOnly
-              ? "border-rose-300 bg-rose-50 text-rose-700"
-              : "text-muted-foreground hover:text-foreground",
-          )}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label={t("users.filter_status")}
+          className={filterSelect}
+          value={status}
+          onChange={(e) => changeFilter(setStatus, e.target.value as StatusFilter)}
         >
-          {t("users.filter_missing")}
-        </button>
+          <option value="all">{t("users.filter_status_all")}</option>
+          <option value="active">{t("users.status_active")}</option>
+          <option value="disabled">{t("users.status_disabled")}</option>
+          <option value="missing">{t("users.filter_missing")}</option>
+        </select>
+        {!isCompany ? (
+          <select
+            aria-label={t("users.filter_grade")}
+            className={filterSelect}
+            value={grade}
+            onChange={(e) => changeFilter(setGrade, e.target.value)}
+          >
+            <option value="">{t("users.filter_grade_all")}</option>
+            {GRADES.map((g) => (
+              <option key={g} value={String(g)}>
+                {gradeLabel(g)}
+              </option>
+            ))}
+          </select>
+        ) : null}
+        <select
+          aria-label={t("users.filter_zielgruppe")}
+          className={filterSelect}
+          value={zielgruppe}
+          onChange={(e) => changeFilter(setZielgruppe, e.target.value)}
+        >
+          <option value="">{t("users.filter_zielgruppe_all")}</option>
+          <option value="0">{t("users.filter_zielgruppe_none")}</option>
+          {(q.data?.zielgruppen ?? []).map((z) => (
+            <option key={z.id} value={String(z.id)}>
+              {z.name}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={t("users.filter_policy")}
+          className={filterSelect}
+          value={policy}
+          onChange={(e) => changeFilter(setPolicy, e.target.value as PolicyFilter)}
+        >
+          <option value="">{t("users.filter_policy_all")}</option>
+          <option value="cannot_change">{t("users.field.cannot_change_password")}</option>
+          <option value="never_expires">{t("users.field.password_never_expires")}</option>
+          <option value="stored">{t("users.policy_stored")}</option>
+        </select>
       </div>
 
-      {canEditUsers && selected.size > 0 ? (
+      {canEditUsers && visibleSelected.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-md border bg-accent/40 px-3 py-2 text-sm">
-          <span className="font-medium">{t("users.bulk.selected", { count: selected.size })}</span>
+          <span className="font-medium">
+            {t("users.bulk.selected", { count: visibleSelected.length })}
+          </span>
           <Button
             type="button"
             size="sm"
@@ -266,6 +379,17 @@ function UsersPage(): JSX.Element {
           >
             {t("users.bulk.attrs_button")}
           </Button>
+          {isAdmin ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={bulk.isPending}
+              onClick={openZielgruppe}
+            >
+              {t("zielgruppe_assign.bulk_button")}
+            </Button>
+          ) : null}
           {isAdmin && allSelectedDisabled ? (
             confirmBulkDelete ? (
               <span className="flex items-center gap-2">
@@ -309,6 +433,21 @@ function UsersPage(): JSX.Element {
         </div>
       ) : null}
 
+      {isAdmin && zielgruppeOpen && zielgruppeGuids.length > 0 ? (
+        <div className="space-y-2 rounded-md border bg-card p-3">
+          <ZielgruppeAssign
+            guids={zielgruppeGuids}
+            // Nur wenn alle gewählten am selben Standort sind, nach ihm filtern.
+            schoolId={zielgruppeSchool}
+            // Nach dem Zuordnen ist die Auswahl leer; das Ergebnis bleibt hier stehen.
+            onDone={() => setSelected(new Set())}
+          />
+          <Button type="button" size="sm" variant="ghost" onClick={() => setZielgruppeOpen(false)}>
+            {t("common.close")}
+          </Button>
+        </div>
+      ) : null}
+
       {bulkResult ? (
         <p className="rounded-md border bg-card px-3 py-2 text-sm">
           {t("users.bulk.result", { ok: bulkResult.ok, failed: bulkResult.failed })}
@@ -337,17 +476,33 @@ function UsersPage(): JSX.Element {
                     />
                   </TableHead>
                 ) : null}
-                <TableHead>{t("users.name")}</TableHead>
-                <TableHead>{t("users.kind")}</TableHead>
-                <TableHead>{t("users.status")}</TableHead>
-                <TableHead>{t("users.col_policy")}</TableHead>
+                <SortableHead sortKey="name" sort={sort} onSort={toggleSort}>
+                  {t("users.name")}
+                </SortableHead>
+                <SortableHead sortKey="kind" sort={sort} onSort={toggleSort}>
+                  {t("users.kind")}
+                </SortableHead>
+                <SortableHead sortKey="status" sort={sort} onSort={toggleSort}>
+                  {t("users.status")}
+                </SortableHead>
+                {!isCompany ? (
+                  <SortableHead sortKey="jahrgangsstufe" sort={sort} onSort={toggleSort}>
+                    {t("users.col_grade")}
+                  </SortableHead>
+                ) : null}
+                <SortableHead sortKey="zielgruppe" sort={sort} onSort={toggleSort}>
+                  {t("users.col_zielgruppe")}
+                </SortableHead>
+                <SortableHead sortKey="policy" sort={sort} onSort={toggleSort}>
+                  {t("users.col_policy")}
+                </SortableHead>
                 <TableHead className="text-right">{t("users.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.isLoading
                 ? Array.from({ length: 5 }).map((_, i) => (
-                    <SkeletonRow key={i} columns={canEditUsers ? 6 : 5} />
+                    <SkeletonRow key={i} columns={(canEditUsers ? 8 : 7) - (isCompany ? 1 : 0)} />
                   ))
                 : q.data?.items.map((u) => (
                     <TableRow key={u.ad_object_guid}>
@@ -392,6 +547,20 @@ function UsersPage(): JSX.Element {
                           <StatusPill tone="ok">{t("users.status_active")}</StatusPill>
                         ) : (
                           <StatusPill tone="muted">{t("users.status_disabled")}</StatusPill>
+                        )}
+                      </TableCell>
+                      {!isCompany ? (
+                        <TableCell className="text-sm">
+                          {u.kind === "student" && u.jahrgangsstufe != null ? (
+                            gradeLabel(u.jahrgangsstufe)
+                          ) : (
+                            <span className="text-xs text-muted-foreground">–</span>
+                          )}
+                        </TableCell>
+                      ) : null}
+                      <TableCell className="text-sm">
+                        {u.group_template_name ?? (
+                          <span className="text-xs text-muted-foreground">–</span>
                         )}
                       </TableCell>
                       <TableCell>
@@ -493,7 +662,7 @@ function UsersPage(): JSX.Element {
       <UserStatusModal user={statusTarget} onClose={() => setStatusTarget(null)} />
       <BulkAttrsModal
         open={attrsOpen}
-        count={selected.size}
+        count={visibleSelected.length}
         busy={bulk.isPending}
         onClose={() => setAttrsOpen(false)}
         onApply={(payload) => runBulk({ type: "attrs", payload })}
@@ -567,7 +736,19 @@ function BulkAttrsModal({
             value={neverExp}
             onChange={setNeverExp}
           />
-          <TriField label={t("users.field.store_password")} value={store} onChange={setStore} />
+          <TriField
+            label={t("users.field.store_password")}
+            value={store}
+            onChange={(v) => {
+              setStore(v);
+              // Tresor nur bei festem Passwort: beide Schalter mit setzen.
+              if (v === "yes") {
+                setCannot("yes");
+                setNeverExp("yes");
+              }
+            }}
+          />
+          <p className="text-xs text-muted-foreground">{t("users.bulk.store_hint")}</p>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
@@ -619,7 +800,7 @@ function TriField({
 
 function PolicyBadges({ user }: { user: AdUserOut }): JSX.Element {
   const { t } = useTranslation();
-  if (!user.cannot_change_password && !user.password_never_expires) {
+  if (!user.cannot_change_password && !user.password_never_expires && !user.store_password) {
     return <span className="text-xs text-muted-foreground">–</span>;
   }
   const badge = "rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground";
@@ -633,6 +814,11 @@ function PolicyBadges({ user }: { user: AdUserOut }): JSX.Element {
       {user.password_never_expires ? (
         <span className={badge} title={t("users.field.password_never_expires")}>
           {t("users.policy_never_expires_short")}
+        </span>
+      ) : null}
+      {user.store_password ? (
+        <span className={badge} title={t("users.policy_stored")}>
+          {t("users.policy_stored_short")}
         </span>
       ) : null}
     </div>

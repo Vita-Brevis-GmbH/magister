@@ -4,8 +4,14 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  DomainsOut,
+  MailStatusOut,
+  PasswordExpiryOverview,
+  PasswordExpiryView,
+  TestMailOut,
+  AccountsByKindReport,
+  AccountsByZielgruppeReport,
   AdConnectionTestOut,
-  AdLoginRequest,
   AdSyncResultOut,
   AdUserCreateRequest,
   AdUserCreateResponse,
@@ -53,6 +59,7 @@ import type {
   GroupTemplateOut,
   GroupTemplateCreate,
   GroupTemplateUpdate,
+  ZielgruppeAssignResult,
   DepartmentMembershipOut,
   UserDepartmentOut,
   ManagerRoleOut,
@@ -77,6 +84,9 @@ import type {
   LocalAdminOut,
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
+  LocalLoginStageOut,
+  LocalRecoveryCodesOut,
+  LocalTotpRequest,
   RbacConfig,
   RbacRole,
   RoleAssignmentOut,
@@ -91,6 +101,7 @@ import type {
   DocumentTemplatePreviewOut,
   DocumentTemplatePreviewRequest,
   DocumentTemplateSave,
+  OperatorAccessOut,
   RenameApplyRequest,
   RenamePreviewOut,
   RenamePreviewRequest,
@@ -130,6 +141,7 @@ export const queryKeys = {
   myModules: ["me", "modules"] as const,
   adminModules: ["admin-modules"] as const,
   documentTemplates: ["admin-document-templates"] as const,
+  operatorAccesses: ["operator-accesses"] as const,
   departments: ["departments"] as const,
   department: (id: number) => ["departments", id] as const,
   departmentMembers: (id: number) => ["departments", id, "members"] as const,
@@ -164,6 +176,27 @@ export function useEnabledModules() {
     queryFn: () => apiFetch<ModulesOut>("/me/modules"),
     staleTime: 5 * 60_000,
     select: (data) => new Set(data.modules.map((m) => m.id)),
+  });
+}
+
+/**
+ * Ob ein Betreiber diese Installation verwaltet (ADR-0017 D1).
+ *
+ * Dieselbe Abfrage wie `useEnabledModules` — gleicher `queryKey`, also keine
+ * zweite Anfrage. Systemeinstellungen und Rechte-Matrix gehören dann der
+ * Konsole, und die Endpunkte dafür sind in der Kunden-API gar nicht gemountet.
+ *
+ * Vorgabe `false`, solange die Antwort noch nicht da ist: der Menüpunkt
+ * erscheint dann kurz und verschwindet wieder. Umgekehrt — erst verstecken,
+ * dann zeigen — wäre für eine Einzelinstallation ein Flackern bei jedem
+ * Seitenaufbau, und die ist der häufigere Fall.
+ */
+export function usePlatformManaged() {
+  return useQuery<ModulesOut, ApiError, boolean>({
+    queryKey: queryKeys.myModules,
+    queryFn: () => apiFetch<ModulesOut>("/me/modules"),
+    staleTime: 5 * 60_000,
+    select: (data) => data.platform_managed ?? false,
   });
 }
 
@@ -224,6 +257,39 @@ export function useDeleteDocumentTemplate() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
     },
+  });
+}
+
+/**
+ * „Neue globale Fassung gesehen" (ADR-0018 D4).
+ *
+ * Ein eigener Aufruf und kein Nebeneffekt des Speicherns: wer seinen Text
+ * bearbeitet, hat damit nicht gesagt, dass er den neuen gelesen hat.
+ */
+export function useAcknowledgePlatformTemplate() {
+  const qc = useQueryClient();
+  return useMutation<DocumentTemplateOut, ApiError, number>({
+    mutationFn: (id) =>
+      apiFetch<DocumentTemplateOut>(`/templates/${id}/acknowledge`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.documentTemplates });
+    },
+  });
+}
+
+// --- Operator-Zugriff (ADR-0019) ---------------------------------------
+
+/**
+ * Die Zugriffe von Vita Brevis auf diese Installation.
+ *
+ * Jeder angemeldete Benutzer darf sie sehen — nicht nur Admins. Eine
+ * Transparenz, die nur derjenige sieht, der den Zugriff ohnehin bewilligt
+ * haette, ist keine.
+ */
+export function useOperatorAccesses() {
+  return useQuery<OperatorAccessOut[]>({
+    queryKey: queryKeys.operatorAccesses,
+    queryFn: () => apiFetch<OperatorAccessOut[]>("/operator/accesses"),
   });
 }
 
@@ -364,7 +430,7 @@ export function useRemoveUserFromDepartment(guid: string) {
   });
 }
 
-// AD group templates ("Zielrollen"). `schoolId` filters the list to templates
+// Zielgruppen (group_templates). `schoolId` filters the list to templates
 // offered at that Standort (linked or global); omit for the full catalog.
 export function useGroupTemplates(schoolId?: number, enabled = true) {
   return useQuery<GroupTemplateOut[]>({
@@ -392,6 +458,39 @@ export function useUpdateGroupTemplate() {
     mutationFn: ({ id, body }) =>
       apiFetch<GroupTemplateOut>(`/admin/group-templates/${id}`, { method: "PATCH", body }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+/** Fehlende Standard-Zielgruppen (Zyklus 1–3, Lehrperson) eines Standorts ergänzen. */
+export function useEnsureDefaultGroupTemplates() {
+  const qc = useQueryClient();
+  return useMutation<GroupTemplateOut[], ApiError, number>({
+    mutationFn: (schoolId) =>
+      apiFetch<GroupTemplateOut[]>("/admin/group-templates/defaults", {
+        method: "POST",
+        body: { school_id: schoolId },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["group-templates"] }),
+  });
+}
+
+/** Bestehende Konten einer Zielgruppe zuordnen (Gruppen tauschen, Einstellungen). */
+export function useAssignZielgruppe() {
+  const qc = useQueryClient();
+  return useMutation<
+    ZielgruppeAssignResult[],
+    ApiError,
+    { templateId: number; guids: string[]; applySettings: boolean }
+  >({
+    mutationFn: ({ templateId, guids, applySettings }) =>
+      apiFetch<ZielgruppeAssignResult[]>(`/admin/group-templates/${templateId}/assign`, {
+        method: "POST",
+        body: { ad_object_guids: guids, apply_settings: applySettings },
+      }),
+    onSuccess: (_res, vars) => {
+      void qc.invalidateQueries({ queryKey: ["users"] });
+      for (const g of vars.guids) void qc.invalidateQueries({ queryKey: queryKeys.user(g) });
+    },
   });
 }
 
@@ -787,9 +886,19 @@ export interface UseUsersParams {
   search?: string;
   class_id?: number;
   missing?: boolean;
+  /** Jahrgang (-1 = KG1, 0 = KG2). */
+  jahrgangsstufe?: number;
+  /** Zielgruppe; 0 = keine Zielgruppe. */
+  group_template_id?: number;
+  policy?: "cannot_change" | "never_expires" | "stored";
+  /** Spalte, nach der der Server sortiert (die Liste ist seitenweise). */
+  sort?: UserSortKey;
+  dir?: "asc" | "desc";
   offset?: number;
   limit?: number;
 }
+
+export type UserSortKey = "name" | "kind" | "status" | "jahrgangsstufe" | "zielgruppe" | "policy";
 
 export function useUsers(params: UseUsersParams = {}, opts: { keepPrevious?: boolean } = {}) {
   const qs = new URLSearchParams();
@@ -903,20 +1012,38 @@ export function useAuthCapabilities() {
   });
 }
 
+/**
+ * Step 1 of the local login. Since ADR-0015 D2 a correct password does NOT
+ * yield a session: it returns the next stage plus a short-lived challenge.
+ * The one exception is a suspended MFA requirement, where the backend answers
+ * 204 with the cookies — hence the nullable result.
+ */
 export function useLocalLogin() {
-  return useMutation<void, ApiError, LocalLoginRequest>({
+  return useMutation<LocalLoginStageOut | null, ApiError, LocalLoginRequest>({
     mutationFn: (body) =>
-      apiFetch<void>("/auth/login/local", {
+      apiFetch<LocalLoginStageOut | null>("/auth/login/local", {
         method: "POST",
         body,
       }),
   });
 }
 
-export function useAdLogin() {
-  return useMutation<void, ApiError, AdLoginRequest>({
+/** Step 2: the one-time code, or a recovery code. Sets the session cookies. */
+export function useLocalTotp() {
+  return useMutation<void, ApiError, LocalTotpRequest>({
     mutationFn: (body) =>
-      apiFetch<void>("/auth/login/ad", {
+      apiFetch<void>("/auth/login/local/totp", {
+        method: "POST",
+        body,
+      }),
+  });
+}
+
+/** Finish enrolment: confirm the code, receive the recovery codes, sign in. */
+export function useLocalEnroll() {
+  return useMutation<LocalRecoveryCodesOut, ApiError, LocalTotpRequest>({
+    mutationFn: (body) =>
+      apiFetch<LocalRecoveryCodesOut>("/auth/login/local/enroll", {
         method: "POST",
         body,
       }),
@@ -1436,6 +1563,44 @@ export async function downloadHandouts(
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Anmelde-PDF für ein einzeln angelegtes Konto: schickt das einmal angezeigte
+ * Passwort an den zustandslosen Renderer und lädt das PDF herunter. Nichts
+ * davon wird gespeichert.
+ */
+export async function downloadNewUserPdf(
+  credential: ProvisionedCredential,
+  schoolName: string,
+  language = "de",
+  audience: "students" | "teachers" = "students",
+): Promise<void> {
+  const csrf = document.cookie.match(/(?:^|; )magister_csrf=([^;]+)/)?.[1];
+  const res = await fetch(`${API_BASE}/ad/users/handout`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      ...(csrf ? { "X-CSRF-Token": decodeURIComponent(csrf) } : {}),
+    },
+    body: JSON.stringify({
+      credentials: [credential],
+      school_name: schoolName,
+      language,
+      audience,
+    }),
+  });
+  if (!res.ok) throw new ApiError(res.status, "handout_render_failed", await res.text());
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `zugangsdaten-${credential.sam_account_name || "konto"}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function useCancelImport() {
   const qc = useQueryClient();
   return useMutation<void, ApiError, number>({
@@ -1584,6 +1749,20 @@ export function useActivityReport(days: number = 30) {
 // Company edition (M6 #8): department-centric reports. `enabled` lets the page
 // fetch these only in the company profile (and the school reports only in the
 // school profile), so a school instance never issues the department queries.
+export function useAccountsByZielgruppe() {
+  return useQuery<AccountsByZielgruppeReport>({
+    queryKey: ["reports", "accounts-by-zielgruppe"],
+    queryFn: () => apiFetch<AccountsByZielgruppeReport>("/reports/accounts-by-zielgruppe"),
+  });
+}
+
+export function useAccountsByKind() {
+  return useQuery<AccountsByKindReport>({
+    queryKey: ["reports", "accounts-by-kind"],
+    queryFn: () => apiFetch<AccountsByKindReport>("/reports/accounts-by-kind"),
+  });
+}
+
 export function useMembersByDepartment(enabled = true) {
   return useQuery<MembersByDepartmentReport>({
     queryKey: ["reports", "members-by-department"],
@@ -1612,4 +1791,61 @@ export function useSubjectAccess(guid: string | null) {
 
 export function subjectAccessCsvUrl(guid: string): string {
   return `${API_BASE}/privacy/subject-access/${guid}/export.csv`;
+}
+
+// --- Mailversand + Passwort-Ablauf -------------------------------------------
+
+export function usePasswordExpiry(
+  view: PasswordExpiryView,
+  days: number,
+  page: { dir: "asc" | "desc"; offset: number; limit: number } = {
+    dir: "desc",
+    offset: 0,
+    limit: 100,
+  },
+) {
+  const params = new URLSearchParams({ view, days: String(days) });
+  if (view === "age") {
+    params.set("dir", page.dir);
+    params.set("offset", String(page.offset));
+    params.set("limit", String(page.limit));
+  }
+  const qs = params.toString();
+  return useQuery<PasswordExpiryOverview>({
+    queryKey: ["password-expiry", qs],
+    queryFn: () => apiFetch<PasswordExpiryOverview>(`/password-expiry?${qs}`),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMailStatus(enabled = true) {
+  return useQuery<MailStatusOut>({
+    queryKey: ["admin", "mail-status"],
+    queryFn: () => apiFetch<MailStatusOut>("/admin/mail/status"),
+    enabled,
+  });
+}
+
+export function useSendTestMail() {
+  return useMutation<TestMailOut, ApiError, string>({
+    mutationFn: (to) => apiFetch<TestMailOut>("/admin/mail/test", { method: "POST", body: { to } }),
+  });
+}
+
+export function useDomains() {
+  return useQuery<DomainsOut>({
+    queryKey: ["admin", "domains"],
+    queryFn: () => apiFetch<DomainsOut>("/admin/domains"),
+  });
+}
+
+export function useUpdateDomains() {
+  const qc = useQueryClient();
+  return useMutation<DomainsOut, ApiError, { mail_domains: string[]; upn_domains: string[] }>({
+    mutationFn: (body) => apiFetch<DomainsOut>("/admin/domains", { method: "PUT", body }),
+    onSuccess: (data) => {
+      qc.setQueryData(["admin", "domains"], data);
+      void qc.invalidateQueries({ queryKey: queryKeys.mailDomains });
+    },
+  });
 }

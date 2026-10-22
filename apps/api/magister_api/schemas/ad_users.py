@@ -40,12 +40,23 @@ class AdUserOut(BaseModel):
     password_never_expires: bool = False
     cannot_change_password: bool = False
     store_password: bool = False
+    # Zielgruppe, nach der das Konto angelegt oder der es zugeordnet wurde.
+    group_template_id: int | None = None
+    # Ihr Name — nur in der Liste gefüllt (Spalte "Zielgruppe").
+    group_template_name: str | None = None
     ad_groups: list[str] = Field(default_factory=list)
     mail_aliases: list[str] = Field(default_factory=list)
 
 
+class ZielgruppeOption(BaseModel):
+    id: int
+    name: str
+
+
 class AdUserListResponse(BaseModel):
     items: list[AdUserOut]
+    # Zielgruppen der Konten im Sichtbereich — die Auswahl des Filters.
+    zielgruppen: list[ZielgruppeOption] = Field(default_factory=list)
     total: int = Field(..., description="Total rows matching the filter (pagination-independent).")
     offset: int
     limit: int

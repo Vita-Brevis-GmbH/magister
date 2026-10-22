@@ -90,6 +90,7 @@ class UserRenameService:
         target: AdUserCache,
         req: RenameApplyRequest,
         mail_domains: list[str],
+        upn_domains: list[str] | None = None,
         ip: str | None,
         request_id: str,
     ) -> UserAttributesResult:
@@ -114,6 +115,7 @@ class UserRenameService:
             target=target,
             payload=payload,
             mail_domains=mail_domains,
+            upn_domains=upn_domains,
             ip=ip,
             request_id=request_id,
             audit_action="user_renamed",

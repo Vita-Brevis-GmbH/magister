@@ -13,7 +13,7 @@ import dataclasses
 from datetime import datetime
 from typing import Any
 
-from magister_api.ad.client import AdUserRecord
+from magister_api.ad.client import AdGroupRecord, AdUserRecord
 
 # Internal-only mount path. NOT under any module's Caddy-routed prefix (``/ad``),
 # so it is unreachable from outside the docker network; sibling containers call
@@ -25,6 +25,9 @@ SECRET_HEADER = "x-ad-rpc-secret"  # noqa: S105 — header name, not a credentia
 
 # The exact AdClient surface reachable over RPC. The recurring sync/search
 # methods are deliberately absent — they run only in the AD container.
+# ``authenticate`` was removed with the direct AD login (ADR-0015 D3): no
+# endpoint accepts a directory user's password any more, so nothing may bind
+# with one over this boundary either.
 ALLOWED_METHODS: frozenset[str] = frozenset(
     {
         "find_user_dn",
@@ -32,7 +35,6 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
         "probe_service_connection",
         "probe_service_connection_detailed",
         "probe_bind_as_user",
-        "authenticate",
         "modify_password",
         "modify_user_attributes",
         "rename_user",
@@ -47,21 +49,68 @@ ALLOWED_METHODS: frozenset[str] = frozenset(
     }
 )
 
+#: Was **zusätzlich** über den Connector geht (ADR-0022 D1).
+#:
+#: Getrennt von ``ALLOWED_METHODS`` und nicht dort hineingeschrieben: die
+#: beiden Transporte haben denselben Zweck, aber nicht dieselbe Lage. Im
+#: Container-Split (ADR-0011) läuft der Abgleich **im** AD-Container; eine
+#: Suche über RPC wäre ein Aufruf, den es dort nicht geben soll, und ein
+#: geerbter Körper scheitert laut statt still ins Leere zu greifen.
+#:
+#: Beim Connector ist es umgekehrt: der Agent ist der einzige Prozess mit
+#: AD-Zugang (ADR-0014), also muss der Abgleich über ihn laufen oder gar
+#: nicht. Ohne diesen Eintrag holte die Plattform das Verzeichnis eines
+#: gehosteten Kunden direkt per LDAP — die Verbindung, die es nicht geben darf.
+#:
+#: Alle vier Lesewege des Abgleichs: Benutzer, Gruppen (Katalog der
+#: Zielrollen), Computer (Geräte) und die ``managedBy``-Zuordnung. Fehlte einer,
+#: griff die Plattform für ihn per LDAP ins Kundennetz — und der Abgleich
+#: scheiterte mit „AD nicht erreichbar“, obwohl der Agent einwandfrei lief.
+CONNECTOR_EXTRA_METHODS: frozenset[str] = frozenset(
+    {
+        "search_users",
+        "search_groups",
+        "search_computers",
+        "search_managed_computers",
+    }
+)
+
+#: Die Allowlist des Connector-Kanals. Die Konsole führt dieselbe Menge
+#: wörtlich; ein Test hält die beiden zusammen.
+CONNECTOR_METHODS: frozenset[str] = ALLOWED_METHODS | CONNECTOR_EXTRA_METHODS
+
+
+_USER_DATETIME_FIELDS = ("when_changed", "password_last_set", "password_expires_at")
+
 
 def ad_user_record_to_jsonable(rec: AdUserRecord) -> dict[str, Any]:
     """Flatten an :class:`AdUserRecord` to JSON-safe primitives."""
     data = dataclasses.asdict(rec)
-    data["when_changed"] = rec.when_changed.isoformat() if rec.when_changed else None
+    for key in _USER_DATETIME_FIELDS:
+        value = getattr(rec, key)
+        data[key] = value.isoformat() if value else None
     data["groups"] = list(rec.groups)
     data["mail_aliases"] = list(rec.mail_aliases)
     return data
 
 
+def ad_group_record_to_jsonable(rec: AdGroupRecord) -> dict[str, Any]:
+    return dataclasses.asdict(rec)
+
+
+def ad_group_record_from_jsonable(data: dict[str, Any]) -> AdGroupRecord:
+    return AdGroupRecord(**data)
+
+
 def ad_user_record_from_jsonable(data: dict[str, Any]) -> AdUserRecord:
     """Rebuild an :class:`AdUserRecord` from :func:`ad_user_record_to_jsonable`."""
-    fields = dict(data)
-    when = fields.get("when_changed")
-    fields["when_changed"] = datetime.fromisoformat(when) if when else None
+    # Felder, die dieses AdUserRecord nicht kennt (neuerer Agent), fallen weg;
+    # fehlende behalten ihren Vorgabewert (älterer Agent).
+    known = {f.name for f in dataclasses.fields(AdUserRecord)}
+    fields = {k: v for k, v in data.items() if k in known}
+    for key in _USER_DATETIME_FIELDS:
+        raw = fields.get(key)
+        fields[key] = datetime.fromisoformat(raw) if raw else None
     fields["groups"] = tuple(fields.get("groups") or ())
     fields["mail_aliases"] = tuple(fields.get("mail_aliases") or ())
     return AdUserRecord(**fields)

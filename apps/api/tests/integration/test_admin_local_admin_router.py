@@ -61,12 +61,21 @@ class TestPasswordChange:
             },
         )
         assert resp.status_code == 204, resp.text
-        # New password works for login
+        # The new password gets past step 1 — a 200 with the next stage, not a
+        # session: since ADR-0015 D2 the password alone never signs anyone in.
         login = await as_admin.post(
             "/auth/login/local",
             json={"username": "admin", "password": "new-password-678"},
         )
-        assert login.status_code == 204
+        assert login.status_code == 200, login.text
+        assert login.json()["stage"] == "enroll"
+        assert login.cookies.get("magister_session") is None
+        # The old one no longer does.
+        stale = await as_admin.post(
+            "/auth/login/local",
+            json={"username": "admin", "password": "old-password-12"},
+        )
+        assert stale.status_code == 401
 
     async def test_wrong_current_password_returns_400(
         self, as_admin: AsyncClient, db_session: AsyncSession
