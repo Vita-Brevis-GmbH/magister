@@ -131,9 +131,31 @@ class TestCheckAndDownload:
 class TestInstallScript:
     def test_it_installs_quietly_and_starts_the_service(self) -> None:
         script = up.install_script(Path(r"C:\Daten\x.msi"), Path(r"C:\Daten\x.log"))
-        assert 'msiexec /i "C:\\Daten\\x.msi" /qn /norestart /l*v "C:\\Daten\\x.log"' in script
+        assert (
+            'msiexec /i "C:\\Daten\\x.msi" /qn /norestart REINSTALLMODE=amus '
+            '/l*v "C:\\Daten\\x.log"' in script
+        )
         assert script.index("msiexec") < script.index("sc start MagisterConnector")
         assert "\r\n" in script
+
+    def test_it_waits_for_the_service_before_installing(self) -> None:
+        """`sc stop` kehrt sofort zurück; laufende Dateien überlebt das MSI nicht sauber."""
+        script = up.install_script(Path(r"C:\Daten\x.msi"), Path(r"C:\Daten\x.log"))
+        assert script.index('findstr /c:"STOPPED"') < script.index("msiexec /i")
+        assert script.index("taskkill /f /im magister-connector-service.exe") < script.index(
+            "msiexec /i"
+        )
+
+    def test_a_missing_python_dll_is_repaired_and_reported(self) -> None:
+        script = up.install_script(
+            Path(r"C:\Daten\x.msi"),
+            Path(r"C:\Daten\x.log"),
+            target=Path(r"C:\Program Files\Magister Connector"),
+        )
+        dll = r"C:\Program Files\Magister Connector\_internal\python3*.dll"
+        assert f'if exist "{dll}" goto fertig' in script
+        assert script.index("msiexec /i") < script.index('msiexec /fa "C:\\Daten\\x.msi"')
+        assert 'update-ergebnis.txt"' in script
 
     def test_outside_windows_nothing_is_started(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch

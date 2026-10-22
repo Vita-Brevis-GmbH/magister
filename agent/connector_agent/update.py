@@ -22,8 +22,9 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, cast
 
 import httpx
@@ -162,8 +163,38 @@ def download(
     return ziel
 
 
-def install_script(msi: Path, log: Path) -> str:
-    """Das Skript, das nach dem Ende dieses Prozesses installiert und startet."""
+#: Standard-Installationsordner (wie INSTALLDIR in der .wxs).
+DEFAULT_INSTALL_DIR = Path(r"C:\Program Files\Magister Connector")
+
+
+def install_dir() -> Path:
+    """Der Ordner, aus dem dieses Programm läuft — als Paket, sonst der Standard."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return DEFAULT_INSTALL_DIR
+
+
+def install_script(msi: Path, log: Path, *, target: Path = DEFAULT_INSTALL_DIR) -> str:
+    """Das Skript, das nach dem Ende dieses Prozesses installiert und startet.
+
+    Drei Dinge, die ein nacktes ``msiexec`` nach ``sc stop`` nicht leistet —
+    beim ersten Kunden fehlte danach ``_internal\\python312.dll``, und kein
+    Befehl des Agenten startete mehr:
+
+    * **Warten, bis der Dienst wirklich steht.** ``sc stop`` kehrt sofort
+      zurück. Läuft der Dienst noch, sind seine Dateien in Gebrauch, und das
+      MSI verschiebt sie auf den nächsten Neustart. Nach 60 Sekunden wird der
+      Prozess beendet.
+    * **Jede Datei neu schreiben** (``REINSTALLMODE=amus``). Sonst lässt das
+      MSI eine Datei gleicher Version liegen, die das Entfernen der alten
+      Fassung danach löscht — die Python-DLL ändert sich zwischen zwei
+      Agent-Fassungen nie.
+    * **Nachsehen und reparieren.** Fehlt die Python-DLL trotzdem, einmal
+      ``msiexec /fa`` (alle Dateien neu). Das Ergebnis steht in
+      ``update-ergebnis.txt`` neben dem Protokoll.
+    """
+    result = log.with_name("update-ergebnis.txt")
+    dll = PureWindowsPath(target) / "_internal" / "python3*.dll"
     return "\r\n".join(
         [
             "@echo off",
@@ -171,7 +202,26 @@ def install_script(msi: Path, log: Path) -> str:
             "rem Kurz warten, bis die Kommandozeile beendet ist.",
             "ping -n 6 127.0.0.1 >nul",
             f"sc stop {SERVICE} >nul 2>&1",
-            f'msiexec /i "{msi}" /qn /norestart /l*v "{log}"',
+            "set /a n=0",
+            ":warten",
+            f"sc query {SERVICE} >nul 2>&1 || goto steht",
+            f'sc query {SERVICE} | findstr /c:"STOPPED" >nul && goto steht',
+            "set /a n+=1",
+            "if %n% geq 30 goto erzwingen",
+            "ping -n 3 127.0.0.1 >nul",
+            "goto warten",
+            ":erzwingen",
+            "taskkill /f /im magister-connector-service.exe >nul 2>&1",
+            "ping -n 3 127.0.0.1 >nul",
+            ":steht",
+            f'msiexec /i "{msi}" /qn /norestart REINSTALLMODE=amus /l*v "{log}"',
+            "set rc=%errorlevel%",
+            f'if exist "{dll}" goto fertig',
+            f'msiexec /fa "{msi}" /qn /norestart /l*v+ "{log}"',
+            "set rc=%rc% repariert:%errorlevel%",
+            ":fertig",
+            f'if not exist "{dll}" set rc=%rc% python-dll-fehlt',
+            f'echo %date% %time% msiexec:%rc% > "{result}"',
             f"sc start {SERVICE} >nul 2>&1",
             "",
         ]
@@ -184,7 +234,7 @@ def launch_install(msi: Path) -> Path:
         raise UpdateError("Ein MSI lässt sich nur unter Windows einspielen.")
     log = msi.with_suffix(".log")
     script = msi.with_suffix(".cmd")
-    script.write_text(install_script(msi, log), encoding="ascii")
+    script.write_text(install_script(msi, log, target=install_dir()), encoding="ascii")
     system32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
     flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
     subprocess.Popen(  # noqa: S603 - festes Skript im abgedichteten Zustandsverzeichnis
@@ -201,6 +251,7 @@ __all__ = [
     "UpdateInfo",
     "check",
     "download",
+    "install_dir",
     "install_script",
     "is_newer",
     "launch_install",
