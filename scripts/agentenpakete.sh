@@ -6,7 +6,8 @@
 #   ./scripts/agentenpakete.sh bauen          # sagt, wie das MSI entsteht
 #   ./scripts/agentenpakete.sh msi <payload>  # MSI aus einem Windows-Payload
 #   ./scripts/agentenpakete.sh token          # Token hinterlegen und prüfen
-#   ./scripts/agentenpakete.sh zeigen         # was im Verzeichnis liegt
+#   ./scripts/agentenpakete.sh zeigen         # was im Verzeichnis liegt (mit SHA-256)
+#   ./scripts/agentenpakete.sh signatur <x.msi.sig>  # Signatur neben ihr MSI legen
 #
 # Seit dem Nachtrag zu ADR-0014 („Agent auf dem DC") gibt es nur noch das MSI:
 # der Agent läuft auf dem Domänencontroller. Das Debian-Paket ist entfallen.
@@ -463,12 +464,41 @@ cmd_zeigen() {
   ziel="$(ziel_verzeichnis)"
   say "Paketverzeichnis: $ziel"
   local leer=1
+  # Die volle SHA-256: mit Dateiname und ihr wird auf dem Arbeitsplatz mit dem
+  # Signaturschlüssel signiert (agent/packaging/signieren.py --datei --sha256).
   while IFS= read -r datei; do
     leer=0
-    printf '  %-52s %8s  %s\n' "$(basename "$datei")" \
-      "$(du -h "$datei" | cut -f1)" "$(sha256sum "$datei" | cut -c1-16)…"
+    local sig="nicht signiert"
+    [ -f "$datei.sig" ] && sig="signiert"
+    printf '  %s  (%s, %s)\n    sha256 %s\n' "$(basename "$datei")" \
+      "$(du -h "$datei" | cut -f1)" "$sig" "$(sha256sum "$datei" | cut -d' ' -f1)"
   done < <(find "$ziel" -maxdepth 1 -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.zip' \) | sort)
   [ "$leer" -eq 0 ] || warn "Leer — 'holen' oder 'msi <payload>'."
+}
+
+# --- signatur ---------------------------------------------------------------
+# Die .sig vom Signier-Arbeitsplatz neben ihr MSI legen. Geprüft wird nur, ob
+# sie zu einem MSI hier passt (Name, SHA-256) — ob sie echt ist, prüft der
+# Agent mit dem Schlüssel, den er eingebaut hat. Diese Maschine kennt ihn
+# nicht und soll ihn nicht kennen.
+cmd_signatur() {
+  local quelle="${1:-}"
+  [ -n "$quelle" ] && [ -f "$quelle" ] || die "Aufruf: $0 signatur <magister-connector-…msi.sig>"
+  local ziel name msi soll ist
+  ziel="$(ziel_verzeichnis)"
+  name="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["filename"])' "$quelle")" \
+    || die "$quelle ist keine Signaturdatei (JSON mit filename, sha256, signature)."
+  case "$name" in
+    magister-connector-*.msi) ;;
+    *) die "Unerwarteter Dateiname in der Signatur: $name" ;;
+  esac
+  msi="$ziel/$name"
+  [ -f "$msi" ] || die "Zu $name liegt kein MSI in $ziel — zuerst 'holen'."
+  soll="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"].lower())' "$quelle")"
+  ist="$(sha256sum "$msi" | cut -d' ' -f1)"
+  [ "$soll" = "$ist" ] || die "Die Signatur gilt für eine andere Datei (SHA-256 $soll, hier $ist)."
+  install -m 0644 "$quelle" "$msi.sig"
+  say "Signatur abgelegt: $msi.sig — Agenten spielen $name im nächsten Wartungsfenster ein."
 }
 
 BEFEHL="${1:-zeigen}"; shift || true
@@ -478,5 +508,6 @@ case "$BEFEHL" in
   bauen)  cmd_bauen "$@" ;;
   msi)    cmd_msi "$@" ;;
   zeigen) cmd_zeigen "$@" ;;
-  *) die "Unbekannter Befehl: $BEFEHL (token, holen, bauen, msi, zeigen)" ;;
+  signatur) cmd_signatur "$@" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (token, holen, bauen, msi, zeigen, signatur)" ;;
 esac

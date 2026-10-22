@@ -232,12 +232,17 @@ class AdSyncService:
         if (
             effective_mode == "incremental"
             and any(r.password_info for r in records)
-            and await self.repo.has_rows_without_password_info()
+            and not await self.repo.has_password_info()
         ):
-            # Die Quelle liefert jetzt Passwortdaten (neuer Agent), der Cache
-            # hat Konten ohne: `whenChanged` brächte die unveränderten erst mit
-            # dem nächsten vollen Lauf. Einmal voll lesen statt bis zu einem
-            # Tag "Passwortalter unbekannt".
+            # Die Quelle liefert zum ersten Mal Passwortdaten (neuer Agent):
+            # `whenChanged` brächte die unveränderten Konten erst mit dem
+            # nächsten vollen Lauf. Einmal voll lesen statt bis zu einem Tag
+            # "Passwortalter unbekannt".
+            #
+            # Genau einmal — nicht "solange ein Konto ohne Daten im Cache
+            # steht": Konten ausserhalb der freigegebenen OUs bekommen nie
+            # welche, und der inkrementelle Lauf liefert immer mindestens das
+            # zuletzt geänderte Konto erneut. So wurde jeder Lauf ein voller.
             effective_mode = "full"
             try:
                 records = await self.ad.search_users(changed_since=None)

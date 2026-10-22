@@ -227,11 +227,11 @@ class AdUserCacheSyncRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def has_rows_without_password_info(self) -> bool:
-        """Steht ein aktives Konto im Cache, dessen Passwortdaten nie gelesen wurden?"""
+    async def has_password_info(self) -> bool:
+        """Hat der Abgleich je Passwortdaten geliefert (für irgendein Konto)?"""
         stmt = (
             select(AdUserCache.ad_object_guid)
-            .where(AdUserCache.password_info_at.is_(None), AdUserCache.ad_missing_since.is_(None))
+            .where(AdUserCache.password_info_at.is_not(None))
             .limit(1)
         )
         return (await self.session.execute(stmt)).first() is not None

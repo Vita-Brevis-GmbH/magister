@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.ad.client import AdClient, AdUserRecord
 from magister_api.config import Settings
 from magister_api.models.ad_sync_state import AdSyncState
+from magister_api.models.auth import AdUserCache
 from magister_api.services.ad_sync import AdSyncService
 
 pytestmark = pytest.mark.postgres
@@ -241,7 +242,10 @@ class AnsweringAd(RecordingAd):
         changed = [_user("00000000-0000-0000-0000-0000000a0001", password_info=self.password_info)]
         if kwargs.get("changed_since") is not None:
             return changed
-        return [*changed, _user("00000000-0000-0000-0000-0000000a0002", password_info=True)]
+        return [
+            *changed,
+            _user("00000000-0000-0000-0000-0000000a0002", password_info=self.password_info),
+        ]
 
 
 class TestPasswordInfoBackfill:
@@ -277,3 +281,30 @@ class TestPasswordInfoBackfill:
         ad = AnsweringAd(settings, password_info=False)
         await _run(db_session, settings, ad)
         assert ad.calls == [WHEN]
+
+    @pytest.mark.asyncio
+    async def test_the_backfill_happens_once_not_on_every_run(
+        self, db_session: AsyncSession, settings: Settings
+    ) -> None:
+        """Ein Konto, das nie Passwortdaten bekommt, macht nicht jeden Lauf zum vollen.
+
+        So geschehen: Konten ausserhalb der freigegebenen OUs blieben ohne
+        Daten, und jeder inkrementelle Lauf über den Connector wurde voll.
+        """
+        await self._prepare(db_session, settings)
+        await _run(db_session, settings, AnsweringAd(settings, password_info=True))
+        db_session.add(
+            AdUserCache(
+                ad_object_guid="00000000-0000-0000-0000-0000000a0099",
+                upn="aussen@schule.ch",
+                kind="teacher",
+                enabled=True,
+            )
+        )
+        state = await _state(db_session)
+        state.last_full_sync_at = datetime.now(UTC) - timedelta(hours=1)
+        await db_session.flush()
+
+        ad = AnsweringAd(settings, password_info=True)
+        await _run(db_session, settings, ad)
+        assert len(ad.calls) == 1 and ad.calls[0] is not None
