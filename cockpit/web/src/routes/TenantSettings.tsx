@@ -553,7 +553,7 @@ function SettingsForm({
       <section className="rounded border bg-white p-4">
         <h2 className="mb-1 font-semibold">Mailversand</h2>
         <p className="mb-3 text-xs text-slate-500">
-          Leer = Plattform-Standard (Plattform → Mailversand). Sobald hier auch
+          Leer = Plattform-Standard (Einstellungen → Mailversand). Sobald hier auch
           nur ein Feld der Anbindung gesetzt ist, gilt für diesen Kunden seine
           ganze eigene Anbindung — mit seinem eigenen Geheimnis; das der
           Plattform geht dann nicht an ihn.

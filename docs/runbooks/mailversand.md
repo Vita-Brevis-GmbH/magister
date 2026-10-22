@@ -33,7 +33,7 @@ Microsoft schaltet SMTP mit Benutzername und Passwort ab; Graph bleibt.
    (oder RBAC for Applications mit einem Management Scope auf das Postfach).
 4. Zertifikate & Geheimnisse → neues Client-Secret. Ablaufdatum notieren.
 5. Eintragen:
-   * **Plattform-Standard:** Cockpit → Plattform → Mailversand: „Microsoft
+   * **Plattform-Standard:** Cockpit → Einstellungen → Mailversand: „Microsoft
      365 (Graph)", Absenderadresse, Mandanten-Id, Anwendungs-Id speichern,
      dann das Client-Secret **versiegeln**.
    * **Eigene Anbindung eines Kunden:** Cockpit → Kunde → Einstellungen →

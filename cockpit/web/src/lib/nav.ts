@@ -22,6 +22,7 @@ export type Route =
   | { view: "templates" }
   | { view: "fleet" }
   | { view: "platform" }
+  | { view: "settings" }
   | { view: "tenants" }
   | { view: "tenant"; id: string; tab: TenantTab };
 
@@ -60,6 +61,7 @@ export function parseHash(hash: string): Route {
   if (parts[0] === "templates") return { view: "templates" };
   if (parts[0] === "fleet") return { view: "fleet" };
   if (parts[0] === "platform") return { view: "platform" };
+  if (parts[0] === "settings") return { view: "settings" };
   // Vorgabe: die Kundenliste. Die Konsole ist für Kunden da; die Instanzen
   // sind der ältere Zweck und stehen jetzt daneben.
   return { view: "tenants" };
@@ -133,6 +135,8 @@ export function href(route: Route): string {
       return "#/fleet";
     case "platform":
       return "#/platform";
+    case "settings":
+      return "#/settings";
     case "tenants":
       return "#/tenants";
     case "tenant":

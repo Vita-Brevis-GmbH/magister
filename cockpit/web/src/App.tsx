@@ -7,6 +7,7 @@ import { href, useRoute } from "./lib/nav";
 import { Fleet } from "./routes/Fleet";
 import { Instances } from "./routes/Instances";
 import { Platform } from "./routes/Platform";
+import { PlatformSettings } from "./routes/PlatformSettings";
 import { Templates } from "./routes/Templates";
 import { TenantDetail } from "./routes/TenantDetail";
 import { Tenants } from "./routes/Tenants";
@@ -212,6 +213,11 @@ export function App() {
               label="Plattform"
               active={route.view === "platform"}
             />
+            <NavLink
+              to={href({ view: "settings" })}
+              label="Einstellungen"
+              active={route.view === "settings"}
+            />
           </nav>
         </div>
         {signedIn && who ? (
@@ -250,6 +256,7 @@ export function App() {
       {route.view === "templates" && <Templates />}
       {route.view === "fleet" && <Fleet />}
       {route.view === "platform" && <Platform />}
+      {route.view === "settings" && <PlatformSettings />}
       {route.view === "tenant" && <TenantDetail tenantId={route.id} tab={route.tab} />}
     </div>
   );
