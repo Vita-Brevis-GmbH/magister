@@ -204,6 +204,8 @@ class TestCommand:
             return msi.with_suffix(".log")
 
         if check:
+            # Fall "kein Schlüssel eingebaut"; mit Schlüssel: TestCommandSignature.
+            monkeypatch.setattr("connector_agent.update_keys.TRUSTED_KEYS", {})
             monkeypatch.setattr(up, "check", _check)
         monkeypatch.setattr(up, "download", _download)
         monkeypatch.setattr(up, "launch_install", _launch)
