@@ -164,40 +164,36 @@ privaten Schlüssel unbelegt zu lassen.
 ## Signatur für das Selbstupdate
 
 Jede Fassung, die sich auf den DCs selbst einspielen soll, braucht eine
-`.sig` neben dem MSI (ADR-0014, Nachtrag 2026-10-22). Signiert wird auf dem
-**Arbeitsplatz mit dem privaten Schlüssel** — nicht auf der Plattform, nicht
-auf einem DC. Dort braucht es nur zwei Dinge: `uv` (`winget install
-astral-sh.uv`) und die eine Datei `agent/packaging/signieren.py` aus dem
-Repository (kein Checkout nötig). Das MSI selbst braucht es nicht: signiert
-werden Dateiname, Fassung und SHA-256.
+`.sig` neben dem MSI (ADR-0014, Nachtrag 2026-10-22). **Auf den DCs ist dafür
+nichts zu tun** — es gibt einen Schlüssel für alle Kunden, und die CI
+signiert.
+
+**Einmal einrichten** (irgendein Rechner mit `uv`, z. B. `winget install
+astral-sh.uv`; nur die Datei `agent/packaging/signieren.py` nötig):
 
 ```powershell
-# einmal: Schlüsselpaar (Passphrase >= 12 Zeichen); Datei offline sichern
-uv run signieren.py schluessel C:\VB-Signatur\agent-update.key
-#   -> öffentlichen Schlüssel in agent/connector_agent/update_keys.py eintragen
-#      (oder an die Entwicklung geben); erst Agenten ab dieser Fassung prüfen.
-
-# je Fassung: Name und SHA-256 aus dem Cockpit ("Agent herunterladen") oder
-# aus `scripts/agentenpakete.sh zeigen` auf dem Plattform-Server
-uv run signieren.py signieren --schluessel C:\VB-Signatur\agent-update.key `
-    --datei magister-connector-0.2.<N>-x64-<commit>.msi --sha256 <64 Hex-Zeichen>
+uv run signieren.py schluessel --fuer-ci
 ```
 
-Die entstandene `magister-connector-…msi.sig` (ein paar hundert Byte) auf den
-Plattform-Server kopieren und ablegen:
+1. Den ausgegebenen Wert als Repository-Secret `AGENT_SIGNING_KEY` anlegen
+   (GitHub → Settings → Secrets and variables → Actions). Nirgends sonst
+   ablegen.
+2. Die ausgegebene Zeile in `agent/connector_agent/update_keys.py` eintragen
+   und pushen.
+3. Den ersten Agenten mit eingebautem Schlüssel einmal von Hand auf die DCs
+   bringen (`magister-connector update`). Ab dann läuft es im
+   Wartungsfenster.
 
-```bash
-./scripts/agentenpakete.sh signatur magister-connector-0.2.<N>-x64-<commit>.msi.sig
-```
+**Je Fassung:** nichts. agent-ci.yml signiert das MSI (Schritt „MSI
+signieren“) und prüft dabei, dass der Schlüssel zu `update_keys.py` passt;
+`./scripts/agentenpakete.sh holen` auf dem Plattform-Server bringt MSI und
+`.sig` zusammen ins Paketverzeichnis. `./scripts/agentenpakete.sh zeigen`
+sagt, ob signiert.
 
-Das Skript prüft, dass Name und SHA-256 zu einem MSI im Paketverzeichnis
-passen; ob die Signatur echt ist, prüft der Agent. Ohne `.sig` bietet das
-Cockpit das Update an, die Agenten spielen es aber nicht selbst ein (Cockpit:
-„nicht signiert“).
-
-Der allererste Agent mit eingebautem Schlüssel kommt noch von Hand auf den
-DC (`magister-connector update --ohne-signatur` oder MSI direkt); ab dann
-läuft es im Wartungsfenster.
+**Strenger, von Hand:** Schlüssel offline (`signieren.py schluessel
+<datei>`), signieren mit `signieren.py signieren --schluessel <datei> --datei
+<msi-name> --sha256 <hex>`, ablegen mit `agentenpakete.sh signatur
+<x.msi.sig>`.
 
 ## Authenticode
 

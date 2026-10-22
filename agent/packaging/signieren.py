@@ -4,9 +4,18 @@
 # ///
 """Agenten-MSI signieren — für das Selbstupdate (ADR-0014 Nachtrag 2026-10).
 
-Eine Datei, ohne den Rest des Repositorys: auf dem Arbeitsplatz, auf dem der
-private Schlüssel liegt — **nicht** auf der Plattform, nicht auf einem DC,
-nicht in der CI. Wer den Schlüssel hat, bringt Code auf die DCs aller Kunden.
+Der Normalfall ist die CI: der Schlüssel liegt als GitHub-Secret
+``AGENT_SIGNING_KEY``, und agent-ci.yml signiert jedes MSI selbst. Einmal von
+Hand nötig ist nur das Erzeugen:
+
+    uv run signieren.py schluessel --fuer-ci
+
+Das druckt den Wert für das Secret und die Zeile für ``update_keys.py``. Der
+Schlüssel gehört **nicht** auf die Plattform und auf keinen DC: wer ihn hat,
+bringt Code auf die DCs aller Kunden.
+
+Von Hand signieren (ohne CI) geht weiter — eine Datei, ohne den Rest des
+Repositorys:
 
 Das MSI selbst braucht es nicht: signiert werden Dateiname, Fassung und
 SHA-256. Beides zeigt das Cockpit unter „Agent herunterladen“ (oder
@@ -94,6 +103,49 @@ def create_key(path: Path, passphrase: bytes) -> tuple[str, str]:
     return key_id(raw), base64.b64encode(raw).decode()
 
 
+def create_ci_key() -> tuple[str, str, str]:
+    """Schlüsselpaar für die CI: (Secret-Wert, Schlüssel-ID, öffentlicher Schlüssel).
+
+    Der Secret-Wert sind die 32 Byte des privaten Schlüssels, Base64. Ohne
+    Passphrase — GitHub verwahrt ihn verschlüsselt und gibt ihn nur an Läufe
+    des Repositorys heraus.
+    """
+    private = Ed25519PrivateKey.generate()
+    seed = private.private_bytes(
+        serialization.Encoding.Raw,
+        serialization.PrivateFormat.Raw,
+        serialization.NoEncryption(),
+    )
+    raw = _public_raw(private)
+    return base64.b64encode(seed).decode(), key_id(raw), base64.b64encode(raw).decode()
+
+
+def load_key_from_env(name: str) -> Ed25519PrivateKey:
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise SystemExit(f"{name} ist leer.")
+    try:
+        return Ed25519PrivateKey.from_private_bytes(base64.b64decode(value))
+    except ValueError as exc:
+        raise SystemExit(f"{name} ist kein Ed25519-Schlüssel (32 Byte, Base64).") from exc
+
+
+def pinned_keys(update_keys_py: Path) -> dict[str, str]:
+    """``TRUSTED_KEYS`` aus ``update_keys.py`` lesen, ohne die Datei auszuführen."""
+    import ast
+
+    tree = ast.parse(update_keys_py.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        target = node.target if isinstance(node, ast.AnnAssign) else None
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            target = node.targets[0]
+        if isinstance(target, ast.Name) and target.id == "TRUSTED_KEYS":
+            value = getattr(node, "value", None)
+            if value is not None:
+                return {str(k): str(v) for k, v in ast.literal_eval(value).items()}
+    return {}
+
+
 def load_key(path: Path, passphrase: bytes) -> Ed25519PrivateKey:
     private = serialization.load_pem_private_key(path.read_bytes(), password=passphrase)
     if not isinstance(private, Ed25519PrivateKey):
@@ -148,9 +200,18 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Agenten-MSI für das Selbstupdate signieren.")
     sub = parser.add_subparsers(dest="cmd", required=True)
     neu = sub.add_parser("schluessel", help="Schlüsselpaar erzeugen")
-    neu.add_argument("datei", type=Path)
+    neu.add_argument("datei", type=Path, nargs="?", help="Schlüsseldatei (für Signieren von Hand)")
+    neu.add_argument(
+        "--fuer-ci", action="store_true", help="Wert für das GitHub-Secret AGENT_SIGNING_KEY"
+    )
     sig = sub.add_parser("signieren", help="MSI signieren → <msi>.sig")
-    sig.add_argument("--schluessel", type=Path, required=True)
+    sig.add_argument("--schluessel", type=Path, help="Schlüsseldatei mit Passphrase")
+    sig.add_argument("--schluessel-env", help="Umgebungsvariable mit dem Schlüssel (CI)")
+    sig.add_argument(
+        "--pruefe-gegen",
+        type=Path,
+        help="update_keys.py: Abbruch, wenn der Schlüssel dort nicht eingebaut ist",
+    )
     sig.add_argument("--datei", help="Dateiname des MSI (ohne das MSI selbst)")
     sig.add_argument("--sha256", help="SHA-256 des MSI, wie das Cockpit sie zeigt")
     sig.add_argument("msi", type=Path, nargs="*", help="oder: MSI-Dateien hier")
@@ -159,7 +220,20 @@ def main(argv: list[str] | None = None) -> int:
     chk.add_argument("sig", type=Path, nargs="+")
     args = parser.parse_args(argv)
 
+    if args.cmd == "schluessel" and args.fuer_ci:
+        secret, kid, public = create_ci_key()
+        sys.stdout.write(
+            "1) GitHub → Repository → Settings → Secrets and variables → Actions →\n"
+            "   New repository secret, Name AGENT_SIGNING_KEY, Wert:\n\n"
+            f"   {secret}\n\n"
+            "   (Nirgends sonst ablegen; danach dieses Fenster schliessen.)\n\n"
+            "2) In agent/connector_agent/update_keys.py eintragen:\n\n"
+            f'   TRUSTED_KEYS: dict[str, str] = {{"{kid}": "{public}"}}\n'
+        )
+        return 0
     if args.cmd == "schluessel":
+        if args.datei is None:
+            parser.error("Schlüsseldatei angeben — oder --fuer-ci")
         kid, public = create_key(args.datei, _passphrase(confirm=True))
         sys.stdout.write(
             f"Privater Schlüssel: {args.datei}  (offline aufbewahren, mit Sicherung)\n"
@@ -172,7 +246,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "signieren":
         if not args.msi and not (args.datei and args.sha256):
             parser.error("entweder MSI-Dateien oder --datei mit --sha256")
-        private = load_key(args.schluessel, _passphrase(confirm=False))
+        if args.schluessel_env:
+            private = load_key_from_env(args.schluessel_env)
+        elif args.schluessel:
+            private = load_key(args.schluessel, _passphrase(confirm=False))
+        else:
+            parser.error("--schluessel oder --schluessel-env")
+        if args.pruefe_gegen:
+            kid = key_id(_public_raw(private))
+            pinned = pinned_keys(args.pruefe_gegen)
+            if not pinned:
+                sys.stderr.write(
+                    "Hinweis: im Agenten ist noch kein Schlüssel eingebaut — die Signatur "
+                    "entsteht, prüfen kann sie erst ein Agent mit Schlüssel.\n"
+                )
+            elif kid not in pinned:
+                raise SystemExit(
+                    f"Der Schlüssel {kid} steht nicht in {args.pruefe_gegen} — die Agenten "
+                    "würden diese Signatur ablehnen."
+                )
         if args.datei:
             out = write_sig(Path.cwd(), signature_for(args.datei, args.sha256 or "", private))
             sys.stdout.write(f"{out}\n")

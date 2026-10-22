@@ -286,8 +286,8 @@ for r in laeufe:
   sha="$(printf '%s' "$lauf" | cut -f2)"
   wann="$(printf '%s' "$lauf" | cut -f3)"
   say "Lauf $lauf_id (Stand $sha, $wann)"
-  if compgen -G "$ziel/*-$sha.msi" >/dev/null; then
-    say "Das MSI dieses Stands liegt schon in $ziel — nichts zu tun."
+  if compgen -G "$ziel/*-$sha.msi" >/dev/null && compgen -G "$ziel/*-$sha.msi.sig" >/dev/null; then
+    say "Das MSI dieses Stands liegt schon in $ziel (signiert) — nichts zu tun."
     return 0
   fi
 
@@ -335,16 +335,22 @@ for a in json.load(sys.stdin).get("artifacts", []):
     # Mit dem Stand im Namen: auf dem Server liegen sonst zwei Dateien, die
     # gleich heissen und verschieden sind — und niemand weiss, welche der
     # Kunde bekommen hat.
+    #
+    # Neuere Läufe bringen den Stand schon im Namen mit (und eine .sig, die
+    # genau diesen Namen signiert) — dann bleibt der Name, wie er ist.
     local datei
     while IFS= read -r datei; do
       local basis endung neu
       basis="$(basename "$datei")"
       endung="${basis##*.}"
-      neu="${basis%.*}-$sha.$endung"
+      case "$basis" in
+        *-"$sha".msi | *-"$sha".msi.sig) neu="$basis" ;;
+        *) neu="${basis%.*}-$sha.$endung" ;;
+      esac
       install -m 0644 "$datei" "$ziel/$neu"
       printf '    %s (%s)\n' "$neu" "$(du -h "$datei" | cut -f1)"
-      geholt=$((geholt + 1))
-    done < <(find "$tmp/inhalt" -type f \( -name '*.msi' -o -name '*.exe' \))
+      case "$neu" in *.sig) ;; *) geholt=$((geholt + 1)) ;; esac
+    done < <(find "$tmp/inhalt" -type f \( -name '*.msi' -o -name '*.exe' -o -name '*.msi.sig' \))
     rm -rf "$tmp"
   done
 

@@ -490,11 +490,19 @@ durch und prüft selbst nichts.
 
 **S2 · Schlüssel.** Der öffentliche Schlüssel steht im Quelltext des Agenten
 (`connector_agent/update_keys.py`, zwei Einträge für einen Wechsel). Der
-private liegt offline bei Vita Brevis, passphrasegeschützt — nicht auf der
-Plattform, nicht in der CI. Signiert wird mit `agent/packaging/signieren.py`.
-Ohne eingebauten Schlüssel gibt es kein Selbstupdate. Eine übernommene
-Plattform kann damit Pakete zurückhalten, aber keines unterschieben — dieselbe
-Grenze wie vor diesem Nachtrag.
+private liegt als Repository-Secret `AGENT_SIGNING_KEY`; agent-ci.yml signiert
+jedes MSI und legt die `.sig` ins selbe Artefakt, `scripts/agentenpakete.sh
+holen` bringt beides auf die Plattform. Erzeugt wird er einmal mit
+`signieren.py schluessel --fuer-ci`. Ohne eingebauten Schlüssel gibt es kein
+Selbstupdate.
+
+Wer signieren kann, ist damit genau die Gruppe, die den Code des Agenten
+ohnehin ändern kann (Schreibrecht im Repository) — mehr Vertrauen braucht es
+nicht. Die Plattform bleibt draussen: eine übernommene Plattform kann Pakete
+zurückhalten, aber keines unterschieben. Wer strenger sein will, legt den
+Schlüssel offline ab und signiert von Hand (`signieren.py signieren --datei
+… --sha256 …`, `agentenpakete.sh signatur`) — der Agent unterscheidet die
+Wege nicht.
 
 Bewusst kein Authenticode-Zertifikat: es löste SmartScreen/AppLocker
 (L-04 bleibt offen), änderte aber an der Vertrauensfrage nichts — der Agent

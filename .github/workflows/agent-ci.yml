@@ -222,9 +222,16 @@ jobs:
         run: |
           chmod +x payload/*.exe || true
           version="$(python3 agent/packaging/bau_fassung.py --zeigen)"
-          echo "MSI_DATEI=magister-connector-$version-x64.msi" >> "$GITHUB_ENV"
+          # Der Stand im Namen — derselbe, den scripts/agentenpakete.sh beim
+          # Holen anhängte. Er steht jetzt schon hier, weil die Signatur den
+          # Dateinamen einschliesst: umbenannt wäre sie ungültig.
+          stand="$(printf '%s' "$HEAD_SHA" | cut -c1-8)"
+          datei="magister-connector-$version-x64-$stand.msi"
+          echo "MSI_DATEI=$datei" >> "$GITHUB_ENV"
           MAGISTER_AGENT_VERSION="$version" \
-            agent/packaging/windows/build-msi.sh payload "magister-connector-$version-x64.msi"
+            agent/packaging/windows/build-msi.sh payload "$datei"
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: MSI-Inhalt protokollieren
         # Ins Protokoll, damit man nach einem Release nachsehen kann, was
@@ -239,9 +246,33 @@ jobs:
           msiinfo export "$MSI_DATEI" ServiceInstall
           msiinfo export "$MSI_DATEI" Directory
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: MSI signieren (Selbstupdate der Agenten)
+        # ADR-0014 Nachtrag 2026-10-22. Der Schlüssel ist das Repository-Secret
+        # AGENT_SIGNING_KEY (`signieren.py schluessel --fuer-ci`). Fehlt es,
+        # bleibt das MSI unsigniert: das Cockpit bietet es an, die Agenten
+        # spielen es nicht selbst ein. Passt der Schlüssel nicht zu dem im
+        # Agenten eingebauten, bricht der Schritt ab — sonst entstünde eine
+        # Signatur, die jeder Agent ablehnt.
+        env:
+          AGENT_SIGNING_KEY: ${{ secrets.AGENT_SIGNING_KEY }}
+        run: |
+          if [ -z "$AGENT_SIGNING_KEY" ]; then
+            echo "::notice::Kein AGENT_SIGNING_KEY — MSI unsigniert, kein Selbstupdate."
+            exit 0
+          fi
+          uv run agent/packaging/signieren.py signieren --schluessel-env AGENT_SIGNING_KEY \
+            --pruefe-gegen agent/connector_agent/update_keys.py "$MSI_DATEI"
+          cat "$MSI_DATEI.sig"
+
       - name: MSI hochladen
         uses: actions/upload-artifact@v4
         with:
           name: magister-connector-msi
-          path: ${{ env.MSI_DATEI }}
+          # Die .sig nur, wenn signiert wurde; das MSI ist Pflicht.
+          path: |
+            ${{ env.MSI_DATEI }}
+            ${{ env.MSI_DATEI }}.sig
           if-no-files-found: error
