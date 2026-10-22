@@ -30,6 +30,7 @@ from magister_api.routers.auth import limiter as auth_limiter
 from magister_api.services.ad_sync_scheduler import run_ad_sync_loop
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.local_admin import LocalAdminService
+from magister_api.services.password_expiry import run_password_expiry_loop
 from magister_api.services.rbac import RbacService
 from magister_api.services.reconcile_loop import reconcile_loop
 from magister_api.services.stack_health import require_health_token, stack_health
@@ -166,10 +167,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         reconcile_task = asyncio.create_task(
             reconcile_loop(settings, stop=stop_event), name="platform-settings-reconcile"
         )
+    # Die Ablauf-Erinnerung hängt am selben Schalter: genau ein Container
+    # schreibt die Mails, sonst ginge jede doppelt hinaus.
+    expiry_task: asyncio.Task[None] | None = None
     if settings.run_scheduler:
         sync_task = asyncio.create_task(
             run_ad_sync_loop(settings, stop_event=stop_event),
             name="ad-sync-scheduler",
+        )
+        expiry_task = asyncio.create_task(
+            run_password_expiry_loop(settings, stop_event=stop_event),
+            name="password-expiry-notices",
         )
         logger.info("AD-sync scheduler started (this container owns the AD read loop)")
     else:
@@ -194,6 +202,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             sync_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await sync_task
+        if expiry_task is not None:
+            expiry_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await expiry_task
         await dispose_tenancy()
         await dispose_engine()
 

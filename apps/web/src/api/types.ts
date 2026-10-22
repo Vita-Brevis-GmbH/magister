@@ -477,6 +477,10 @@ export interface ClassMembershipOut {
   surname: string | null;
   upn: string | null;
   jahrgangsstufe: number | null;
+  // Passwort-Ablauf (null: läuft nie ab oder unbekannt) und ob die
+  // Erinnerung das Kind per Mail erreicht.
+  password_expires_at?: string | null;
+  has_mail?: boolean | null;
 }
 
 export interface ClassDeviceOut {
@@ -774,6 +778,19 @@ export interface AppSettingsOut {
   ninja_region: string | null;
   ninja_client_id: string | null;
   ninja_client_secret_set: boolean;
+  // Mailversand + Ablauf-Erinnerung (Geheimnis nie zurück, nur ob gesetzt).
+  mail_transport: MailTransport;
+  mail_from: string | null;
+  mail_from_name: string | null;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_security: "starttls" | "tls";
+  smtp_username: string | null;
+  graph_tenant_id: string | null;
+  graph_client_id: string | null;
+  mail_secret_set: boolean;
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: number[];
   updated_at: string;
   updated_by_upn: string | null;
 }
@@ -1268,4 +1285,67 @@ export interface AppSettingsUpdate {
   ninja_region?: string | null;
   ninja_client_id?: string | null;
   ninja_client_secret?: string | null;
+  mail_transport?: MailTransport | null;
+  mail_from?: string | null;
+  mail_from_name?: string | null;
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_security?: "starttls" | "tls" | null;
+  smtp_username?: string | null;
+  graph_tenant_id?: string | null;
+  graph_client_id?: string | null;
+  mail_secret?: string | null;
+  clear_mail_secret?: boolean | null;
+  expiry_notice_enabled?: boolean | null;
+  expiry_notice_days?: number[] | null;
+}
+
+// --- Mailversand + Passwort-Ablauf -------------------------------------------
+
+export type MailTransport = "off" | "smtp" | "graph";
+
+export interface MailStatusOut {
+  transport: MailTransport;
+  sender: string | null;
+  sender_name: string | null;
+  ready: boolean;
+  missing: string[];
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: number[];
+  platform_managed: boolean;
+}
+
+export interface TestMailOut {
+  ok: boolean;
+  error: string | null;
+}
+
+export type PasswordExpiryView = "expiring" | "no_mail";
+
+export interface PasswordExpiryRow {
+  ad_object_guid: string;
+  display_name: string | null;
+  given_name: string | null;
+  surname: string | null;
+  upn: string;
+  kind: string;
+  school_id: number | null;
+  jahrgangsstufe: number | null;
+  group_template_name: string | null;
+  mail: string | null;
+  password_expires_at: string | null;
+  // Negativ: seit so vielen Tagen abgelaufen.
+  days_left: number | null;
+  notice_status: "sent" | "failed" | "no_mail" | null;
+  notice_at: string | null;
+  notice_threshold_days: number | null;
+}
+
+export interface PasswordExpiryOverview {
+  view: PasswordExpiryView;
+  within_days: number;
+  rows: PasswordExpiryRow[];
+  notice_enabled: boolean;
+  mail_ready: boolean;
+  info_as_of: string | null;
 }

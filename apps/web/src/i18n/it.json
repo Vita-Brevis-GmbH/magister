@@ -229,7 +229,8 @@
     "device_assignee": "Assegnato a",
     "assignee_student": "Allievo/a",
     "assignee_teacher": "Docente",
-    "assignee_class": "Classe"
+    "assignee_class": "Classe",
+    "password_col": "Password"
   },
   "users": {
     "title": "Utenti",
@@ -424,7 +425,10 @@
     "filter_policy": "Filtra regola",
     "filter_policy_all": "Tutte le regole",
     "policy_stored": "Password salvata in Magister",
-    "policy_stored_short": "salvata"
+    "policy_stored_short": "salvata",
+    "subnav_label": "Area utenti",
+    "subnav_overview": "Panoramica",
+    "subnav_password_expiry": "Scadenza password"
   },
   "password_reset": {
     "button": "Reimposta password",
@@ -725,6 +729,44 @@
       "group_no_match": "Nessun risultato.",
       "group_not_synced": "(non sincronizzato)",
       "group_selected_count": "{{count}} selezionati"
+    },
+    "mail": {
+      "title": "Invio e-mail",
+      "desc": "Per il promemoria prima della scadenza della password. Con un'e-mail di prova si verifica il collegamento.",
+      "desc_managed": "Il collegamento lo configura Vita Brevis (standard della piattaforma o uno proprio). Qui verificate con un'e-mail di prova che funzioni.",
+      "transport": "Invio tramite",
+      "transport_off": "Disattivato",
+      "transport_smtp": "Server SMTP",
+      "transport_graph": "Microsoft 365 (Graph)",
+      "sender": "Mittente",
+      "state": "Stato",
+      "ready": "pronto",
+      "missing": "incompleto: {{fields}}",
+      "reminder": "Promemoria prima della scadenza",
+      "reminder_on": "attivo — {{days}} giorni prima",
+      "reminder_off": "disattivato",
+      "test_to": "E-mail di prova a",
+      "test_send": "Invia e-mail di prova",
+      "test_sending": "Invio …",
+      "test_ok": "Inviata. Controllare la casella.",
+      "test_failed": "Non inviata: {{error}}",
+      "edit_title": "Invio e-mail e promemoria",
+      "edit_desc": "Tramite Microsoft 365 (consigliato) o un server SMTP. Il promemoria va a tutti gli account attivi con indirizzo e-mail la cui password scade.",
+      "from": "Indirizzo del mittente",
+      "from_name": "Nome del mittente",
+      "graph_tenant_id": "ID tenant Entra",
+      "graph_client_id": "ID applicazione (client)",
+      "graph_hint": "Registrazione app con l'autorizzazione applicativa Mail.Send, limitata alla casella del mittente.",
+      "smtp_host": "Server SMTP",
+      "smtp_port": "Porta",
+      "smtp_security": "Cifratura",
+      "smtp_username": "Nome utente (vuoto = senza autenticazione)",
+      "secret_graph": "Segreto client",
+      "secret_smtp": "Password",
+      "reminder_enabled": "Ricordare via e-mail prima della scadenza della password",
+      "reminder_enabled_hint": "Il testo, con le istruzioni per cambiare la password, si gestisce in Modelli (promemoria scadenza).",
+      "reminder_days": "Giorni prima della scadenza",
+      "reminder_days_hint": "Separati da virgola, p. es. 14, 7, 1 — un'e-mail per soglia."
     }
   },
   "substitutions": {
@@ -1367,7 +1409,8 @@
     "key_enrollment": "Iscrizione",
     "key_class_change": "Cambio classe",
     "key_password_handout": "Consegna password",
-    "load_starter": "Carica modello predefinito"
+    "load_starter": "Carica modello predefinito",
+    "key_password_expiry_notice": "Promemoria scadenza password (e-mail)"
   },
   "group_templates": {
     "title": "Gruppi di destinazione",
@@ -1494,5 +1537,35 @@
     "err_user_not_in_ad": "Account non trovato nell’AD.",
     "err_ad_unavailable": "AD non raggiungibile.",
     "err_unknown": "Errore sconosciuto."
+  },
+  "password_expiry": {
+    "title": "Scadenza password",
+    "intro": "Quali password scadono a breve, chi ha ricevuto un promemoria — e chi il promemoria non raggiunge perché manca l'indirizzo e-mail.",
+    "no_info": "Ancora nessuna data di scadenza: la prossima sincronizzazione AD le legge. Tramite connettore serve una versione recente dell'agente.",
+    "notice_off": "Il promemoria via e-mail è disattivato. Attivazione in Impostazioni → Sistema (in hosting: da Vita Brevis).",
+    "mail_not_ready": "Il promemoria è attivo, ma l'invio di e-mail non è configurato del tutto — non parte nessuna e-mail.",
+    "view_expiring": "Scade a breve",
+    "view_no_mail": "Senza indirizzo e-mail",
+    "within": "Periodo",
+    "days_one": "{{count}} giorno",
+    "days_other": "{{count}} giorni",
+    "count_one": "{{count}} account",
+    "count_other": "{{count}} account",
+    "col_name": "Nome",
+    "col_zielgruppe": "Gruppo target",
+    "col_expires": "Scade il",
+    "col_mail": "Indirizzo e-mail",
+    "col_notice": "Promemoria",
+    "empty_expiring": "Nessuna password scade in questo periodo.",
+    "empty_no_mail": "Tutti gli account attivi hanno un indirizzo e-mail.",
+    "grade": "Anno {{grade}}",
+    "no_mail": "nessuna e-mail",
+    "notice_sent": "inviato il {{date}} ({{days}} giorni prima)",
+    "notice_failed": "non riuscito il {{date}} — verrà ripetuto",
+    "notice_no_mail": "non possibile (nessun indirizzo e-mail)",
+    "never": "non scade mai",
+    "expired": "scaduta",
+    "in_days_one": "tra {{count}} giorno",
+    "in_days_other": "tra {{count}} giorni"
   }
 }

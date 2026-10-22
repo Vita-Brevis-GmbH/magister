@@ -16,7 +16,7 @@ import { ErrorBox } from "../components/ErrorBox";
 import { EntraHelp, EntraHelpButton } from "../components/EntraHelp";
 import { LocalAdminSection } from "../components/LocalAdminSection";
 
-type Kind = "text" | "lines" | "number" | "bool";
+type Kind = "text" | "lines" | "number" | "bool" | "choice" | "tristate" | "intlist";
 
 interface Field {
   key: string;
@@ -24,6 +24,8 @@ interface Field {
   kind: Kind;
   hint?: string;
   placeholder?: string;
+  /** Für `choice`: [Wert, Beschriftung]. Leer ("") heisst „Vorgabe". */
+  options?: [string, string][];
 }
 
 // Nur die Suchbasen. OUs und Gruppen für Schüler:innen, Lehrpersonen oder
@@ -90,7 +92,61 @@ const NINJA_FIELDS: Field[] = [
   { key: "ninja_client_id", label: "Client-Id", kind: "text" },
 ];
 
-const ALL_FIELDS = [...ACCESS_FIELDS, ...AD_FIELDS, ...NINJA_FIELDS];
+// Die Anbindung gilt als Ganzes (cockpit_api.services.settings.MAIL_CONNECTION_KEYS):
+// ist hier auch nur ein Feld gesetzt, kommt die ganze Anbindung von diesem
+// Kunden und der Plattform-Standard samt Geheimnis gilt für ihn nicht.
+const MAIL_FIELDS: Field[] = [
+  {
+    key: "mail_transport",
+    label: "Versand über",
+    kind: "choice",
+    options: [
+      ["", "Plattform-Standard"],
+      ["graph", "Microsoft 365 (Graph)"],
+      ["smtp", "SMTP-Server"],
+      ["off", "aus"],
+    ],
+  },
+  { key: "mail_from", label: "Absenderadresse", kind: "text" },
+  { key: "mail_from_name", label: "Absendername", kind: "text" },
+  { key: "graph_tenant_id", label: "Entra-Mandanten-Id (Graph)", kind: "text" },
+  { key: "graph_client_id", label: "Anwendungs-Id (Graph)", kind: "text" },
+  { key: "smtp_host", label: "SMTP-Server", kind: "text" },
+  { key: "smtp_port", label: "SMTP-Port", kind: "number", placeholder: "587" },
+  {
+    key: "smtp_security",
+    label: "Verschlüsselung",
+    kind: "choice",
+    options: [
+      ["", "—"],
+      ["starttls", "STARTTLS (587)"],
+      ["tls", "TLS (465)"],
+    ],
+  },
+  { key: "smtp_username", label: "SMTP-Benutzername", kind: "text" },
+];
+
+const MAIL_NOTICE_FIELDS: Field[] = [
+  {
+    key: "expiry_notice_enabled",
+    label: "Erinnerung vor dem Passwort-Ablauf",
+    kind: "tristate",
+  },
+  {
+    key: "expiry_notice_days",
+    label: "Tage vorher",
+    kind: "intlist",
+    hint: "Mit Komma getrennt, z. B. 14, 7, 1.",
+  },
+];
+
+const ALL_FIELDS = [
+  ...ACCESS_FIELDS,
+  ...AD_FIELDS,
+  ...NINJA_FIELDS,
+  ...MAIL_FIELDS,
+  ...MAIL_NOTICE_FIELDS,
+];
 
 const ENTRA_ISSUER =
   /^https:\/\/login\.microsoftonline\.com\/([0-9a-fA-F-]{36})\/v2\.0\/?$/;
@@ -99,7 +155,9 @@ function toText(value: unknown, kind: Kind): string {
   if (value === undefined || value === null) return "";
   if (kind === "lines" && Array.isArray(value))
     return value.map(String).join("\n");
+  if (kind === "intlist" && Array.isArray(value)) return value.join(", ");
   if (kind === "bool") return value ? "true" : "";
+  if (kind === "tristate") return value ? "true" : "false";
   return String(value);
 }
 
@@ -114,6 +172,11 @@ function fromText(text: string, kind: Kind): unknown {
   }
   if (kind === "number") return t ? Number(t) : undefined;
   if (kind === "bool") return t === "true" ? true : undefined;
+  if (kind === "tristate") return t === "" ? undefined : t === "true";
+  if (kind === "intlist") {
+    const numbers = t.split(/[\s,]+/).filter(Boolean).map(Number);
+    return numbers.length ? numbers : undefined;
+  }
   return t || undefined;
 }
 
@@ -330,6 +393,30 @@ function SettingsForm({
             checked={value === "true"}
             onChange={(e) => set(e.target.checked ? "true" : "")}
           />
+        ) : f.kind === "choice" ? (
+          <select
+            value={value}
+            onChange={(e) => set(e.target.value)}
+            className="w-full rounded border px-2 py-1 text-sm"
+          >
+            {(f.options ?? []).map(([v, label]) => (
+              <option key={v} value={v}>
+                {label}
+              </option>
+            ))}
+          </select>
+        ) : f.kind === "tristate" ? (
+          <select
+            value={value}
+            onChange={(e) => set(e.target.value)}
+            className="w-full rounded border px-2 py-1 text-sm"
+          >
+            <option value="">
+              Vorgabe ({fallback === true ? "an" : "aus"})
+            </option>
+            <option value="true">an</option>
+            <option value="false">aus</option>
+          </select>
         ) : (
           <input
             type={f.kind === "number" ? "number" : "text"}
@@ -460,6 +547,29 @@ function SettingsForm({
             secret={sealed("ninja_client_secret")}
             label="Client-Secret"
           />
+        </div>
+      </section>
+
+      <section className="rounded border bg-white p-4">
+        <h2 className="mb-1 font-semibold">Mailversand</h2>
+        <p className="mb-3 text-xs text-slate-500">
+          Leer = Plattform-Standard (Plattform → Mailversand). Sobald hier auch
+          nur ein Feld der Anbindung gesetzt ist, gilt für diesen Kunden seine
+          ganze eigene Anbindung — mit seinem eigenen Geheimnis; das der
+          Plattform geht dann nicht an ihn.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-3">
+          {MAIL_FIELDS.map(renderField)}
+        </div>
+        <div className="mt-3">
+          <SecretField
+            tenantId={tenantId}
+            secret={sealed("mail_secret")}
+            label="Client-Secret bzw. SMTP-Passwort (eigene Anbindung)"
+          />
+        </div>
+        <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-3">
+          {MAIL_NOTICE_FIELDS.map(renderField)}
         </div>
       </section>
 

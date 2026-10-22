@@ -15,6 +15,7 @@ import type { AdUserOut } from "@/api/types";
 import { ResetPasswordModal, type ResetTarget } from "@/components/ResetPasswordModal";
 import { SkeletonRow } from "@/components/Skeleton";
 import { SortableHead } from "@/components/SortableHead";
+import { UsersSubNav } from "@/components/UsersSubNav";
 import { StatusPill } from "@/components/StatusPill";
 import { UserAvatar } from "@/components/UserAvatar";
 import { UserStatusModal } from "@/components/UserStatusModal";
@@ -237,6 +238,7 @@ export function UsersPage(): JSX.Element {
 
   return (
     <div className="space-y-6">
+      <UsersSubNav />
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
           <h1 className="font-serif text-3xl font-semibold tracking-tight">{t("users.title")}</h1>

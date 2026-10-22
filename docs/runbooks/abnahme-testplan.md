@@ -291,6 +291,9 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-20** Import Klassen-Zuteilungen mit Spalte `jahrgangsstufe`: Jahrgang überschreibt den bisherigen (Benutzerliste, Spalte Jahrgang); leer → bisheriger bleibt, ohne einen der der Klasse; schon in der Klasse → Zeile „Aktualisieren", nur der Jahrgang ändert sich; Zykluswechsel → Zyklus-Gruppen im AD folgen; alte CSV ohne die Spalte geht weiter.
 - [ ] **F-21** Abteilungen: Klick auf Name oder „Details" öffnet die Detailseite (nicht mehr die Liste); Übersicht zeigt Standort, Mitglieder, Leitung/Stellvertretung, AD-Gruppen, Beschreibung; Mitglieder mit „seit"-Datum.
 - [ ] **F-22** Reports: „Konten nach Kontoart" und „Konten nach Zielgruppe" (aktiv/deaktiviert, Passwort gespeichert, ohne Zielgruppe, fehlt im AD) stimmen mit der Benutzerliste überein; Schulleitung sieht nur ihren Standort; an einer Schule mit Modul Abteilungen erscheinen auch die Abteilungs-Reports.
+- [ ] **F-23** Passwort-Ablauf: nach einem AD-Abgleich zeigt Benutzer → Passwort-Ablauf die Konten mit Ablauf in 14 Tagen (Datum wie in `Get-ADUser -Properties msDS-UserPasswordExpiryTimeComputed`); „läuft nie ab“ erscheint nicht; Reiter „Ohne Mailadresse“ zeigt aktive Konten ohne Mail; an Schulen Spalte „Passwort“ in der Klasse.
+- [ ] **F-24** Mailversand: Cockpit → Plattform → Mailversand (Graph) mit versiegeltem Secret → beim Kunden Einstellungen → System → Testmail kommt an; falsches Secret → verständliche Meldung, kein Secret im Text. Eigene SMTP-Anbindung beim Kunden → Testmail über dessen Server; zurück auf „Plattform-Standard“ → wieder Graph.
+- [ ] **F-25** Erinnerung: Konto mit Ablauf in 5 Tagen und Mailadresse → genau eine Mail (Schwelle 7), Übersicht „gesendet am …“; zweiter Lauf schickt nichts; neues Passwort gesetzt → Erinnerungen beginnen neu; eigene Vorlage „Erinnerung Passwort-Ablauf“ wird verwendet.
 
 ### 7.2 Firma (Kunde B)
 

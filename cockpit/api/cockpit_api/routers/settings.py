@@ -20,12 +20,19 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.auth import Caller, require_identity, require_person
 from cockpit_api.db import get_session
 from cockpit_api.models import Tenant
+from cockpit_api.models.operations import PlatformSealedSecret, TenantStatusReport
 from cockpit_api.models.settings import TenantSettings
+from cockpit_api.schemas.operations import (
+    PlatformSealedSecretOut,
+    PlatformSecretsOut,
+    SealedSecretIn,
+)
 from cockpit_api.schemas.settings import (
     DesiredStateOut,
     PlatformSettingsOut,
@@ -37,6 +44,13 @@ from cockpit_api.schemas.settings import (
     TenantSettingsUpdate,
 )
 from cockpit_api.services.modules import KNOWN_PROFILES, MODULES, effective
+from cockpit_api.services.sealing import (
+    PLATFORM_REF,
+    PLATFORM_SEALABLE,
+    SealingError,
+    key_id,
+    seal,
+)
 from cockpit_api.services.settings import SettingsError, SettingsService, strip_retired
 
 logger = logging.getLogger(__name__)
@@ -115,6 +129,111 @@ async def put_platform_settings(
     await session.commit()
     logger.info("Plattform-Vorgaben geändert von %s", caller.actor)
     return PlatformSettingsOut.model_validate(row)
+
+
+# --- Plattform-Geheimnisse (Standard-Mailversand) ----------------------------
+
+
+async def _platform_key(session: AsyncSession) -> str | None:
+    """Der zuletzt gemeldete Plattform-Schlüssel — er ist für alle Kunden derselbe."""
+    rows = (
+        await session.execute(
+            select(TenantStatusReport).order_by(TenantStatusReport.reported_at.desc()).limit(50)
+        )
+    ).scalars()
+    for row in rows:
+        key = row.payload.get("platform_sealed_public_key")
+        if isinstance(key, str) and key:
+            return key
+    return None
+
+
+async def _platform_secrets_view(session: AsyncSession) -> PlatformSecretsOut:
+    public = await _platform_key(session)
+    current = key_id(public) if public else None
+    stored = {r.name: r for r in (await session.execute(select(PlatformSealedSecret))).scalars()}
+    return PlatformSecretsOut(
+        platform_key_reported=public is not None,
+        secrets=[
+            PlatformSealedSecretOut(
+                name=name,
+                sealed=name in stored,
+                key_current=(stored[name].key_id == current)
+                if name in stored and current
+                else None,
+                updated_at=stored[name].updated_at if name in stored else None,
+                updated_by=stored[name].updated_by if name in stored else None,
+            )
+            for name in sorted(PLATFORM_SEALABLE)
+        ],
+    )
+
+
+@platform.get("/sealed-secrets", response_model=PlatformSecretsOut)
+async def list_platform_secrets(
+    session: AsyncSession = Depends(get_session),
+) -> PlatformSecretsOut:
+    return await _platform_secrets_view(session)
+
+
+@platform.put("/sealed-secrets/{name}", response_model=PlatformSecretsOut)
+async def put_platform_secret(
+    name: str,
+    body: SealedSecretIn,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformSecretsOut:
+    """Das Geheimnis des Standard-Mailversands versiegeln — einmal für alle Kunden.
+
+    Der Klartext lebt nur in dieser Anfrage. Versiegelt wird mit dem
+    Plattform-Schlüssel der Datenebene; die Konsole kann es nicht öffnen.
+    """
+    if name not in PLATFORM_SEALABLE:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            f"'{name}' ist kein Plattform-Geheimnis. Erlaubt: "
+            f"{', '.join(sorted(PLATFORM_SEALABLE))}.",
+        )
+    public = await _platform_key(session)
+    if public is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Keine Installation hat einen Plattform-Schlüssel gemeldet. "
+            "MAGISTER_PLATFORM_SECRETS_KEY in der Datenebene setzen "
+            "(plattform-aufbau.sh update legt ihn an) und die nächste Zustandsmeldung abwarten.",
+        )
+    try:
+        ciphertext = seal(public, body.value, tenant_ref=PLATFORM_REF, name=name)
+    except SealingError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
+    stored = await session.get(PlatformSealedSecret, name)
+    if stored is None:
+        session.add(
+            PlatformSealedSecret(
+                name=name, ciphertext=ciphertext, key_id=key_id(public), updated_by=caller.actor
+            )
+        )
+    else:
+        stored.ciphertext = ciphertext
+        stored.key_id = key_id(public)
+        stored.updated_by = caller.actor
+    await session.commit()
+    logger.info("Plattform-Geheimnis %s versiegelt von %s", name, caller.actor)
+    return await _platform_secrets_view(session)
+
+
+@platform.delete("/sealed-secrets/{name}", response_model=PlatformSecretsOut)
+async def delete_platform_secret(
+    name: str,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> PlatformSecretsOut:
+    stored = await session.get(PlatformSealedSecret, name)
+    if stored is not None:
+        await session.delete(stored)
+        await session.commit()
+        logger.info("Plattform-Geheimnis %s entfernt von %s", name, caller.actor)
+    return await _platform_secrets_view(session)
 
 
 @tenant_scoped.get("/settings", response_model=TenantSettingsOut)

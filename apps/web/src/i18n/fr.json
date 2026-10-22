@@ -229,7 +229,8 @@
     "device_assignee": "Attribué à",
     "assignee_student": "Élève",
     "assignee_teacher": "Enseignant·e",
-    "assignee_class": "Classe"
+    "assignee_class": "Classe",
+    "password_col": "Mot de passe"
   },
   "users": {
     "title": "Utilisateurs",
@@ -424,7 +425,10 @@
     "filter_policy": "Filtrer la règle",
     "filter_policy_all": "Toutes les règles",
     "policy_stored": "Mot de passe enregistré dans Magister",
-    "policy_stored_short": "enregistré"
+    "policy_stored_short": "enregistré",
+    "subnav_label": "Domaine utilisateurs",
+    "subnav_overview": "Aperçu",
+    "subnav_password_expiry": "Expiration des mots de passe"
   },
   "password_reset": {
     "button": "Réinitialiser le mot de passe",
@@ -725,6 +729,44 @@
       "group_no_match": "Aucun résultat.",
       "group_not_synced": "(non synchronisé)",
       "group_selected_count": "{{count}} sélectionné(s)"
+    },
+    "mail": {
+      "title": "Envoi d'e-mails",
+      "desc": "Pour le rappel avant l'expiration du mot de passe. Un e-mail de test vérifie la connexion.",
+      "desc_managed": "La connexion est configurée par Vita Brevis (standard de la plateforme ou connexion propre). Vérifiez ici par un e-mail de test qu'elle fonctionne.",
+      "transport": "Envoi via",
+      "transport_off": "Désactivé",
+      "transport_smtp": "Serveur SMTP",
+      "transport_graph": "Microsoft 365 (Graph)",
+      "sender": "Expéditeur",
+      "state": "État",
+      "ready": "prêt",
+      "missing": "incomplet : {{fields}}",
+      "reminder": "Rappel avant expiration",
+      "reminder_on": "activé — {{days}} jours avant",
+      "reminder_off": "désactivé",
+      "test_to": "E-mail de test à",
+      "test_send": "Envoyer un e-mail de test",
+      "test_sending": "Envoi …",
+      "test_ok": "Envoyé. Veuillez vérifier la boîte de réception.",
+      "test_failed": "Non envoyé : {{error}}",
+      "edit_title": "Envoi d'e-mails et rappel",
+      "edit_desc": "Via Microsoft 365 (recommandé) ou un serveur SMTP. Le rappel va à tous les comptes actifs avec adresse e-mail dont le mot de passe expire.",
+      "from": "Adresse d'expéditeur",
+      "from_name": "Nom d'expéditeur",
+      "graph_tenant_id": "ID du locataire Entra",
+      "graph_client_id": "ID d'application (client)",
+      "graph_hint": "Inscription d'application avec l'autorisation d'application Mail.Send, limitée à la boîte de l'expéditeur.",
+      "smtp_host": "Serveur SMTP",
+      "smtp_port": "Port",
+      "smtp_security": "Chiffrement",
+      "smtp_username": "Nom d'utilisateur (vide = sans authentification)",
+      "secret_graph": "Secret client",
+      "secret_smtp": "Mot de passe",
+      "reminder_enabled": "Rappeler par e-mail avant l'expiration du mot de passe",
+      "reminder_enabled_hint": "Le texte, avec la marche à suivre pour changer le mot de passe, se gère sous Modèles (rappel d'expiration).",
+      "reminder_days": "Jours avant l'expiration",
+      "reminder_days_hint": "Séparés par des virgules, p. ex. 14, 7, 1 — un e-mail par seuil."
     }
   },
   "substitutions": {
@@ -1367,7 +1409,8 @@
     "key_enrollment": "Admission",
     "key_class_change": "Changement de classe",
     "key_password_handout": "Remise du mot de passe",
-    "load_starter": "Charger le modèle par défaut"
+    "load_starter": "Charger le modèle par défaut",
+    "key_password_expiry_notice": "Rappel d'expiration du mot de passe (e-mail)"
   },
   "group_templates": {
     "title": "Groupes cibles",
@@ -1494,5 +1537,35 @@
     "err_user_not_in_ad": "Compte introuvable dans l’AD.",
     "err_ad_unavailable": "AD indisponible.",
     "err_unknown": "Erreur inconnue."
+  },
+  "password_expiry": {
+    "title": "Expiration des mots de passe",
+    "intro": "Quels mots de passe expirent bientôt, qui a reçu un rappel — et qui le rappel n'atteint pas, faute d'adresse e-mail.",
+    "no_info": "Pas encore de dates d'expiration : la prochaine synchronisation AD les lit. Via le connecteur, une version récente de l'agent est nécessaire.",
+    "notice_off": "Le rappel par e-mail est désactivé. Activation sous Paramètres → Système (hébergé : par Vita Brevis).",
+    "mail_not_ready": "Le rappel est activé, mais l'envoi d'e-mails n'est pas entièrement configuré — aucun e-mail ne part.",
+    "view_expiring": "Expire bientôt",
+    "view_no_mail": "Sans adresse e-mail",
+    "within": "Période",
+    "days_one": "{{count}} jour",
+    "days_other": "{{count}} jours",
+    "count_one": "{{count}} compte",
+    "count_other": "{{count}} comptes",
+    "col_name": "Nom",
+    "col_zielgruppe": "Groupe cible",
+    "col_expires": "Expire le",
+    "col_mail": "Adresse e-mail",
+    "col_notice": "Rappel",
+    "empty_expiring": "Aucun mot de passe n'expire durant cette période.",
+    "empty_no_mail": "Tous les comptes actifs ont une adresse e-mail.",
+    "grade": "Année {{grade}}",
+    "no_mail": "pas d'e-mail",
+    "notice_sent": "envoyé le {{date}} ({{days}} jours avant)",
+    "notice_failed": "échec le {{date}} — sera répété",
+    "notice_no_mail": "impossible (pas d'adresse e-mail)",
+    "never": "n'expire jamais",
+    "expired": "expiré",
+    "in_days_one": "dans {{count}} jour",
+    "in_days_other": "dans {{count}} jours"
   }
 }

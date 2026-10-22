@@ -16,7 +16,7 @@ import struct
 import uuid
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from ldap3 import (
@@ -94,7 +94,16 @@ DEFAULT_USER_ATTRIBUTES: tuple[str, ...] = (
     "employeeID",
     # Multi-valued SMTP addresses; secondary (``smtp:``) entries become aliases.
     "proxyAddresses",
+    # Passwort-Ablauf: wann zuletzt gesetzt, und wann es abläuft. Das zweite
+    # ist ein berechnetes Attribut — es berücksichtigt Domänen-Richtlinie und
+    # Fine-Grained Password Policies (PSO), ohne dass Magister sie lesen muss.
+    "pwdLastSet",
+    "msDS-UserPasswordExpiryTimeComputed",
 )
+
+#: FILETIME (100-ns-Schritte seit 1601-01-01 UTC); der Höchstwert heisst "nie".
+_FILETIME_EPOCH = datetime(1601, 1, 1, tzinfo=UTC)
+_FILETIME_NEVER = 0x7FFFFFFFFFFFFFFF
 
 
 @dataclass(frozen=True)
@@ -136,6 +145,14 @@ class AdUserRecord:
     groups: tuple[str, ...] = ()
     # Secondary SMTP addresses parsed from proxyAddresses (``smtp:`` entries).
     mail_aliases: tuple[str, ...] = ()
+    # Passwort-Ablauf. ``password_info`` ist False, wenn die Quelle die beiden
+    # Attribute nicht liefert (älterer Connector-Agent) — dann bleibt der
+    # bisherige Stand im Cache, statt als "läuft nie ab" überschrieben zu werden.
+    password_info: bool = False
+    # None: muss bei der nächsten Anmeldung geändert werden (pwdLastSet = 0).
+    password_last_set: datetime | None = None
+    # None: läuft nie ab, oder Änderung bei der nächsten Anmeldung verlangt.
+    password_expires_at: datetime | None = None
 
     def matches_school_via_ou(self, scope_short: str) -> bool:
         """Heuristic: ``scope_short`` appears as an OU component in the DN."""
@@ -317,7 +334,46 @@ def parse_ad_entry(entry_attrs: dict[str, Any], dn: str) -> AdUserRecord:
         when_changed=_parse_generalized_time(_first_value(entry_attrs.get("whenChanged"))),
         groups=tuple(str(m) for m in member_of),
         mail_aliases=mail_aliases,
+        **_password_times(entry_attrs),
     )
+
+
+def _filetime(raw: Any) -> datetime | None:
+    """FILETIME (int, Ziffern-String oder schon ``datetime``) → UTC-Zeitpunkt.
+
+    0 und der Höchstwert ergeben ``None``: "nie gesetzt" bzw. "läuft nie ab".
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        moment = raw if raw.tzinfo else raw.replace(tzinfo=UTC)
+        return None if moment <= _FILETIME_EPOCH or moment.year >= 9999 else moment
+    try:
+        ticks = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if ticks <= 0 or ticks >= _FILETIME_NEVER:
+        return None
+    try:
+        return _FILETIME_EPOCH + timedelta(microseconds=ticks // 10)
+    except OverflowError:
+        return None
+
+
+def _password_times(entry_attrs: dict[str, Any]) -> dict[str, Any]:
+    """Felder ``password_*`` von :class:`AdUserRecord` aus den Rohattributen."""
+    if "pwdLastSet" not in entry_attrs and (
+        "msDS-UserPasswordExpiryTimeComputed" not in entry_attrs
+    ):
+        return {"password_info": False}
+    last_set = _filetime(_first_value(entry_attrs.get("pwdLastSet")))
+    expires = _filetime(_first_value(entry_attrs.get("msDS-UserPasswordExpiryTimeComputed")))
+    return {
+        "password_info": True,
+        "password_last_set": last_set,
+        # Ohne gesetztes Passwort (Änderung verlangt) gibt es keinen Ablauf.
+        "password_expires_at": expires if last_set is not None else None,
+    }
 
 
 def _parse_generalized_time(raw: Any) -> datetime | None:

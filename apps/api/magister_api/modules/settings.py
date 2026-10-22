@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
+from magister_api.routers.admin_mail import router as admin_mail_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
 from magister_api.routers.admin_modules import router as admin_modules_router
 from magister_api.routers.admin_modules import write_router as admin_modules_write_router
@@ -23,6 +24,7 @@ SETTINGS_MODULE = ModuleManifest(
     routers=(
         admin_settings_router,
         admin_local_admin_router,
+        admin_mail_router,
         group_templates_router,
         admin_roles_router,
         admin_rbac_router,

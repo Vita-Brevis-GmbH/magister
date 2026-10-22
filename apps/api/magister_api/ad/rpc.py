@@ -80,10 +80,15 @@ CONNECTOR_EXTRA_METHODS: frozenset[str] = frozenset(
 CONNECTOR_METHODS: frozenset[str] = ALLOWED_METHODS | CONNECTOR_EXTRA_METHODS
 
 
+_USER_DATETIME_FIELDS = ("when_changed", "password_last_set", "password_expires_at")
+
+
 def ad_user_record_to_jsonable(rec: AdUserRecord) -> dict[str, Any]:
     """Flatten an :class:`AdUserRecord` to JSON-safe primitives."""
     data = dataclasses.asdict(rec)
-    data["when_changed"] = rec.when_changed.isoformat() if rec.when_changed else None
+    for key in _USER_DATETIME_FIELDS:
+        value = getattr(rec, key)
+        data[key] = value.isoformat() if value else None
     data["groups"] = list(rec.groups)
     data["mail_aliases"] = list(rec.mail_aliases)
     return data
@@ -99,9 +104,13 @@ def ad_group_record_from_jsonable(data: dict[str, Any]) -> AdGroupRecord:
 
 def ad_user_record_from_jsonable(data: dict[str, Any]) -> AdUserRecord:
     """Rebuild an :class:`AdUserRecord` from :func:`ad_user_record_to_jsonable`."""
-    fields = dict(data)
-    when = fields.get("when_changed")
-    fields["when_changed"] = datetime.fromisoformat(when) if when else None
+    # Felder, die dieses AdUserRecord nicht kennt (neuerer Agent), fallen weg;
+    # fehlende behalten ihren Vorgabewert (älterer Agent).
+    known = {f.name for f in dataclasses.fields(AdUserRecord)}
+    fields = {k: v for k, v in data.items() if k in known}
+    for key in _USER_DATETIME_FIELDS:
+        raw = fields.get(key)
+        fields[key] = datetime.fromisoformat(raw) if raw else None
     fields["groups"] = tuple(fields.get("groups") or ())
     fields["mail_aliases"] = tuple(fields.get("mail_aliases") or ())
     return AdUserRecord(**fields)

@@ -4,6 +4,10 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 
 import { API_BASE, ApiError, apiFetch } from "./client";
 import type {
+  MailStatusOut,
+  PasswordExpiryOverview,
+  PasswordExpiryView,
+  TestMailOut,
   AccountsByKindReport,
   AccountsByZielgruppeReport,
   AdConnectionTestOut,
@@ -1786,4 +1790,31 @@ export function useSubjectAccess(guid: string | null) {
 
 export function subjectAccessCsvUrl(guid: string): string {
   return `${API_BASE}/privacy/subject-access/${guid}/export.csv`;
+}
+
+// --- Mailversand + Passwort-Ablauf -------------------------------------------
+
+export function usePasswordExpiry(view: PasswordExpiryView, days: number) {
+  return useQuery<PasswordExpiryOverview>({
+    queryKey: ["password-expiry", view, days],
+    queryFn: () =>
+      apiFetch<PasswordExpiryOverview>(
+        `/password-expiry?${new URLSearchParams({ view, days: String(days) }).toString()}`,
+      ),
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useMailStatus(enabled = true) {
+  return useQuery<MailStatusOut>({
+    queryKey: ["admin", "mail-status"],
+    queryFn: () => apiFetch<MailStatusOut>("/admin/mail/status"),
+    enabled,
+  });
+}
+
+export function useSendTestMail() {
+  return useMutation<TestMailOut, ApiError, string>({
+    mutationFn: (to) => apiFetch<TestMailOut>("/admin/mail/test", { method: "POST", body: { to } }),
+  });
 }

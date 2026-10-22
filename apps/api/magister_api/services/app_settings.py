@@ -96,6 +96,35 @@ class EffectiveAppSettings:
     ninja_region: str | None = None
     ninja_client_id: str | None = None
     ninja_client_secret: str | None = None
+    # Mailversand (Ablauf-Erinnerungen) — Geheimnis entschlüsselt.
+    mail_transport: str = "off"
+    mail_from: str | None = None
+    mail_from_name: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_security: str = "starttls"
+    smtp_username: str | None = None
+    graph_tenant_id: str | None = None
+    graph_client_id: str | None = None
+    mail_secret: str | None = None
+    expiry_notice_enabled: bool = False
+    expiry_notice_days: tuple[int, ...] = (14, 7, 1)
+
+
+#: Mail-Felder, die wie gewöhnliche Spalten gelesen und geschrieben werden.
+MAIL_PLAIN_FIELDS: tuple[str, ...] = (
+    "mail_transport",
+    "mail_from",
+    "mail_from_name",
+    "smtp_host",
+    "smtp_port",
+    "smtp_security",
+    "smtp_username",
+    "graph_tenant_id",
+    "graph_client_id",
+    "expiry_notice_enabled",
+    "expiry_notice_days",
+)
 
 
 @dataclass(frozen=True)
@@ -186,6 +215,8 @@ class AppSettingsService:
             func.pgp_sym_decrypt(AppSettings.ninja_client_secret_enc, self._key).label(
                 "ninja_client_secret"
             ),
+            *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
+            func.pgp_sym_decrypt(AppSettings.mail_secret_enc, self._key).label("mail_secret"),
         ).where(AppSettings.id == 1)
         result = await self.session.execute(stmt)
         row = result.one_or_none()
@@ -213,6 +244,18 @@ class AppSettingsService:
             ninja_region=row.ninja_region,
             ninja_client_id=row.ninja_client_id,
             ninja_client_secret=row.ninja_client_secret,
+            mail_transport=row.mail_transport,
+            mail_from=row.mail_from,
+            mail_from_name=row.mail_from_name,
+            smtp_host=row.smtp_host,
+            smtp_port=row.smtp_port,
+            smtp_security=row.smtp_security,
+            smtp_username=row.smtp_username,
+            graph_tenant_id=row.graph_tenant_id,
+            graph_client_id=row.graph_client_id,
+            mail_secret=row.mail_secret,
+            expiry_notice_enabled=bool(row.expiry_notice_enabled),
+            expiry_notice_days=tuple(int(d) for d in (row.expiry_notice_days or [])),
         )
 
     async def get_redacted_for_api(self) -> AppSettingsOut:
@@ -251,6 +294,8 @@ class AppSettingsService:
             AppSettings.ninja_region,
             AppSettings.ninja_client_id,
             (AppSettings.ninja_client_secret_enc.is_not(None)).label("ninja_client_secret_set"),
+            *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
+            (AppSettings.mail_secret_enc.is_not(None)).label("mail_secret_set"),
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -290,6 +335,8 @@ class AppSettingsService:
             ninja_region=row.ninja_region,
             ninja_client_id=row.ninja_client_id,
             ninja_client_secret_set=bool(row.ninja_client_secret_set),
+            **{f: getattr(row, f) for f in MAIL_PLAIN_FIELDS},
+            mail_secret_set=bool(row.mail_secret_set),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -347,6 +394,19 @@ class AppSettingsService:
             if val is not None:
                 values[col] = val
                 diff[col] = val
+        # Mail: ein leerer Text leert das Feld (NULL statt "").
+        for col in MAIL_PLAIN_FIELDS:
+            val = getattr(payload, col)
+            if val is None:
+                continue
+            if isinstance(val, str):
+                val = val.strip() or None
+                if val is None and col in ("mail_transport", "smtp_security"):
+                    continue  # Pflichtspalten: leer heisst "nicht ändern"
+            elif col == "smtp_port" and val == 0:
+                val = None
+            values[col] = val
+            diff[col] = val
 
         # The vault master switch is applied like a plain field, but its diff
         # key is neutral: the audit-payload allowlist forbids any key containing
@@ -375,6 +435,12 @@ class AppSettingsService:
                 payload.ninja_client_secret, self._key
             )
             diff["rotated_ninja_credential"] = True
+        if payload.mail_secret:
+            values["mail_secret_enc"] = func.pgp_sym_encrypt(payload.mail_secret, self._key)
+            diff["rotated_mail_credential"] = True
+        elif payload.clear_mail_secret:
+            values["mail_secret_enc"] = None
+            diff["cleared_mail_credential"] = True
 
         # CA PEM is not a secret, but it is bulky — record only whether a cert
         # is now present in the audit diff, never the PEM body. None = leave

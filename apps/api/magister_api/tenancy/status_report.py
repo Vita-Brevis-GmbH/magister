@@ -122,6 +122,7 @@ async def collect_status(
         "secrets_present": {
             "oidc_client_secret": bool(secrets.oidc_client_secret),
             "ninja_client_secret": bool(secrets.ninja_client_secret),
+            "mail_secret": bool(secrets.mail_secret),
         },
         "maintenance": maintenance or [],
         "local_admin": await _local_admin(session, base),
@@ -131,6 +132,13 @@ async def collect_status(
         public = public_key_b64(secrets_key)
         report["sealed_public_key"] = public
         report["sealed_key_id"] = key_id(public)
+    platform_key = base.platform_secrets_key.get_secret_value()
+    if platform_key:
+        # Für alle Kunden derselbe: die Konsole versiegelt den Plattform-
+        # Standard damit (ADR-0024 D3, Plattform-Geheimnisse).
+        platform_public = public_key_b64(platform_key)
+        report["platform_sealed_public_key"] = platform_public
+        report["platform_sealed_key_id"] = key_id(platform_public)
     return report
 
 

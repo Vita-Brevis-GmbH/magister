@@ -13,7 +13,7 @@ und eine leere Rechte-Matrix ist etwas anderes als keine.
 from __future__ import annotations
 
 import uuid
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,11 +22,14 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
 from cockpit_api.services.settings import (
+    MAIL_CONNECTION_KEYS,
     POLICY_KEYS,
     SECRET_LOOKING,
     SECRET_LOOKING_EXEMPT,
     SettingsError,
     effective,
+    has_own_mail,
+    mail_connection,
     validate_policy,
     validate_rbac,
 )
@@ -266,7 +269,9 @@ class TestTenantOverrides:
             {"overrides": {"ad_sync_interval_minutes": 15}},
         )
         state = console_client.get(f"/api/tenants/{tenant_row}/desired-state").json()
-        assert state["settings"] == {
+        # Die Mail-Anbindung steht immer vollständig drin (eigene Tests unten).
+        settings = {k: v for k, v in state["settings"].items() if k not in MAIL_CONNECTION_KEYS}
+        assert settings == {
             "ad_sync_interval_minutes": 15,
             "instance_profile": "school",
             # Immer eine Aussage über die Modul-Schalter (ADR-0024): ohne sie
@@ -497,3 +502,49 @@ class TestModulePolicyValidation:
 
     def test_accepted(self) -> None:
         validate_policy({"instance_profile": "company", "module_overrides": {"classes": True}})
+
+
+# --- Mailversand: Plattform-Standard oder eigene Anbindung, nie gemischt ------
+class TestMailConnection:
+    STANDARD: ClassVar[dict[str, Any]] = {
+        "mail_transport": "graph",
+        "mail_from": "noreply@vitabrevis.ch",
+        "graph_tenant_id": "vb",
+        "graph_client_id": "vb-app",
+    }
+
+    def test_the_standard_applies_complete_with_blanks(self) -> None:
+        got = mail_connection(self.STANDARD, {})
+        assert got["graph_client_id"] == "vb-app"
+        assert got["smtp_host"] == "" and got["smtp_port"] == 0
+        assert set(got) == set(MAIL_CONNECTION_KEYS)
+
+    def test_one_own_field_takes_the_whole_connection(self) -> None:
+        own = {"mail_transport": "smtp", "smtp_host": "mail.schule.ch"}
+        assert has_own_mail(own)
+        got = mail_connection(self.STANDARD, own)
+        # Nichts von der Plattform: weder Absender noch Graph-App.
+        assert got["mail_from"] == ""
+        assert got["graph_client_id"] == ""
+        assert got["smtp_host"] == "mail.schule.ch"
+        # Erinnerungs-Einstellungen gehören nicht zur Anbindung.
+        assert not has_own_mail({"expiry_notice_enabled": True})
+
+    @pytest.mark.parametrize(
+        "document",
+        [
+            {"mail_transport": "sendmail"},
+            {"smtp_security": "none"},
+            {"smtp_port": 70000},
+            {"mail_from": "kein-mail"},
+            {"expiry_notice_days": [0]},
+            {"expiry_notice_days": [1, 2, 3, 4, 5, 6]},
+        ],
+    )
+    def test_values_are_checked_like_on_the_data_plane(self, document: dict[str, Any]) -> None:
+        with pytest.raises(SettingsError):
+            validate_policy(document)
+
+    def test_the_secret_is_not_a_policy_key(self) -> None:
+        with pytest.raises(SettingsError):
+            validate_policy({"mail_secret": "x"})

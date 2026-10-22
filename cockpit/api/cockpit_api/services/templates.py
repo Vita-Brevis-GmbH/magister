@@ -30,7 +30,9 @@ from cockpit_api.models.tenant import Tenant, TenantProfile
 #: dieselben Namen; ein Test hält die beiden Listen zusammen, damit eine
 #: Umbenennung dort hier auffällt und nicht in einer stillen Nicht-Zuordnung
 #: endet.
-TEMPLATE_KEYS: frozenset[str] = frozenset({"enrollment", "class_change", "password_handout"})
+TEMPLATE_KEYS: frozenset[str] = frozenset(
+    {"enrollment", "class_change", "password_handout", "password_expiry_notice"}
+)
 
 #: Dieselben vier Sprachen wie in der Oberfläche des Kunden.
 LANGUAGES: frozenset[str] = frozenset({"de", "fr", "it", "en"})

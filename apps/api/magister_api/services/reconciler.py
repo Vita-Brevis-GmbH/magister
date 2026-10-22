@@ -62,7 +62,13 @@ from magister_api.tenancy.desired_state import (
     DesiredTemplate,
 )
 from magister_api.tenancy.keys import keys_for
-from magister_api.tenancy.sealing import SEALABLE, UnsealError, unseal
+from magister_api.tenancy.sealing import (
+    PLATFORM_REF,
+    PLATFORM_SEALABLE,
+    SEALABLE,
+    UnsealError,
+    unseal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +120,24 @@ RECONCILABLE: frozenset[str] = frozenset(
         "ninja_region",
         "ninja_client_id",
         "web_tls_cert_pem",
+        # Mailversand und Ablauf-Erinnerung: Plattform-Standard oder eigene
+        # Anbindung des Kunden — die Konsole entscheidet, welches gilt.
+        "mail_transport",
+        "mail_from",
+        "mail_from_name",
+        "smtp_host",
+        "smtp_port",
+        "smtp_security",
+        "smtp_username",
+        "graph_tenant_id",
+        "graph_client_id",
+        "expiry_notice_enabled",
+        "expiry_notice_days",
     }
 )
+
+#: Felder, bei denen 0 "leer" heisst (die Konsole leert eine Zahl mit 0).
+_ZERO_IS_BLANK = frozenset({"smtp_port"})
 
 #: Die zwei Felder, die nicht über `AppSettingsUpdate` geschrieben werden,
 #: sondern über `AppSettingsService.set_module_settings`.
@@ -180,6 +202,10 @@ def settings_diff(current: dict[str, Any], desired: dict[str, Any]) -> dict[str,
     diff: dict[str, tuple[Any, Any]] = {}
     for key, want in desired.items():
         have = current.get(key)
+        if _blank(key, have) and _blank(key, want):
+            # NULL in der Spalte und "" bzw. 0 aus der Konsole sind dasselbe
+            # "leer" — sonst schriebe jeder Lauf dasselbe Feld neu.
+            continue
         if isinstance(have, list) and isinstance(want, list) and key not in ORDER_MATTERS:
             differs = sorted(map(str, have)) != sorted(map(str, want))
         else:
@@ -187,6 +213,10 @@ def settings_diff(current: dict[str, Any], desired: dict[str, Any]) -> dict[str,
         if differs:
             diff[key] = (have, want)
     return diff
+
+
+def _blank(key: str, value: Any) -> bool:
+    return value is None or value == "" or (key in _ZERO_IS_BLANK and value == 0)
 
 
 def _flat(result: dict[str, Any]) -> dict[str, int | str]:
@@ -277,9 +307,19 @@ class Reconciler:
                 desired.templates, result, tenant_slug=tenant_slug, dry_run=dry_run
             )
 
-        if desired.sealed_secrets and tenant_ref and not dry_run:
+        manages_mail = "mail_transport" in desired.settings
+        if (
+            (desired.sealed_secrets or desired.platform_sealed_secrets or manages_mail)
+            and tenant_ref
+            and not dry_run
+        ):
             await self._reconcile_sealed(
-                desired.sealed_secrets, result, tenant_ref=tenant_ref, tenant_slug=tenant_slug
+                desired.sealed_secrets,
+                result,
+                tenant_ref=tenant_ref,
+                tenant_slug=tenant_slug,
+                platform_sealed=desired.platform_sealed_secrets,
+                manages_mail=manages_mail,
             )
 
         if desired.maintenance and not dry_run:
@@ -459,8 +499,16 @@ class Reconciler:
         *,
         tenant_ref: str,
         tenant_slug: str,
+        platform_sealed: dict[str, str] | None = None,
+        manages_mail: bool = False,
     ) -> None:
         """Versiegelte Geheimnisse öffnen und, wenn sie abweichen, schreiben (ADR-0024 D3).
+
+        Plattform-Geheimnisse (``platform_sealed``) sind mit dem Plattform-
+        Schlüssel versiegelt und gelten für Kunden ohne eigene Anbindung.
+        Verwaltet die Konsole den Mailversand (``manages_mail``) und schickt
+        kein Mail-Geheimnis, wird ein noch gespeichertes entfernt — sonst
+        bliebe das Geheimnis einer früheren Anbindung liegen.
 
         Verglichen wird mit dem entschlüsselten geltenden Wert, damit nicht
         jeder Lauf das Geheimnis neu schreibt und ein Audit-Ereignis erzeugt.
@@ -473,26 +521,44 @@ class Reconciler:
         have = {
             "oidc_client_secret": current.oidc_client_secret,
             "ninja_client_secret": current.ninja_client_secret,
+            "mail_secret": current.mail_secret,
         }
         updates: dict[str, str] = {}
-        for name, blob in sorted(sealed.items()):
+        sources: list[tuple[str, str, str, str]] = [
+            (name, blob, secrets_key, tenant_ref) for name, blob in sorted(sealed.items())
+        ]
+        platform_key = self.settings.platform_secrets_key.get_secret_value()
+        for name, blob in sorted((platform_sealed or {}).items()):
+            if name not in PLATFORM_SEALABLE:
+                result.rejected_secrets[name] = "nicht als Plattform-Geheimnis versiegelbar"
+                continue
+            if name in sealed:
+                continue  # eigene Anbindung des Kunden geht vor
+            sources.append((name, blob, platform_key, PLATFORM_REF))
+        for name, blob, key, ref in sources:
             if name not in SEALABLE:
                 result.rejected_secrets[name] = "nicht versiegelbar"
                 continue
             try:
-                plain = unseal(secrets_key, blob, tenant_ref=tenant_ref, name=name)
+                plain = unseal(key, blob, tenant_ref=ref, name=name)
             except UnsealError as exc:
                 result.rejected_secrets[name] = str(exc)
                 logger.warning("Geheimnis %s für %s nicht geöffnet: %s", name, tenant_slug, exc)
                 continue
             if plain != have.get(name):
                 updates[name] = plain
-        if not updates:
+        delivered = set(sealed) | set(platform_sealed or {})
+        clear_mail = (
+            manages_mail and "mail_secret" not in delivered and have["mail_secret"] is not None
+        )
+        if not updates and not clear_mail:
             return
         await AppSettingsService(self.session, self.settings).update(
             AppSettingsUpdate(
                 oidc_client_secret=updates.get("oidc_client_secret"),
                 ninja_client_secret=updates.get("ninja_client_secret"),
+                mail_secret=updates.get("mail_secret"),
+                clear_mail_secret=clear_mail or None,
             ),
             actor_upn=RECONCILER_ACTOR,
             actor_object_guid=None,
@@ -501,6 +567,8 @@ class Reconciler:
             action="platform_secret_reconciled",
         )
         result.changed_secrets.extend(sorted(updates))
+        if clear_mail:
+            result.changed_secrets.append("mail_secret")
 
     async def _maintenance_done(self, request_id: str) -> int | None:
         """Id des Ausführungs-Ereignisses zu diesem Auftrag, falls es eines gibt.

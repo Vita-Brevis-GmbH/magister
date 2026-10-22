@@ -279,3 +279,30 @@ Jetzt: *Kunde → Einstellungen → Lokales Administrationskonto*.
 Nebenbei: ein Wartungsauftrag, dessen Ergebnis `ok: false` ist, wurde der
 Konsole bisher trotzdem als erfolgreich gemeldet. Die bisherigen zwei Arten
 konnten nicht scheitern; der neue kann es (Siegel lässt sich nicht öffnen).
+
+## Nachtrag 2026-10-22 · Plattform-Geheimnisse (Standard-Mailversand)
+
+Die Erinnerung vor dem Passwort-Ablauf braucht einen Mailversand (SMTP
+oder Microsoft Graph). Vita Brevis stellt einen **Standard** für alle
+Kunden; ein Kunde kann eine eigene Anbindung bekommen. Der Standard hat ein
+Geheimnis (Graph-Client-Secret bzw. SMTP-Passwort), das allen Kunden gilt —
+D3 kannte bisher nur Geheimnisse **eines** Kunden.
+
+* Die Datenebene hat einen **Plattform-Schlüssel**
+  (`MAGISTER_PLATFORM_SECRETS_KEY`, von `plattform-aufbau.sh` einmal
+  erzeugt). Daraus wird wie beim Kundenschlüssel ein X25519-Paar abgeleitet;
+  der öffentliche Teil steht in jeder Zustandsmeldung (D1).
+* Das Cockpit versiegelt das Standard-Geheimnis **einmal** mit diesem
+  Schlüssel (AAD `v1|platform|mail_secret`) und speichert nur das Chiffrat
+  (`platform_sealed_secrets`). Es kann es so wenig öffnen wie ein
+  Kunden-Geheimnis. Neue Kunden bekommen es ohne erneute Eingabe.
+* Die Mail-Anbindung gilt **als Ganzes**: setzt ein Kunde auch nur ein Feld
+  davon selbst, kommt die ganze Anbindung aus seinen Abweichungen, sein
+  eigenes Geheimnis (mit seinem Schlüssel versiegelt) geht mit, und das
+  Plattform-Geheimnis geht **nicht** an ihn. Feldweise gemischt hiesse: der
+  SMTP-Server des Kunden mit dem Passwort von Vita Brevis.
+* Verwaltet das Cockpit den Mailversand und schickt kein Mail-Geheimnis,
+  entfernt der Abgleich ein noch gespeichertes — sonst bliebe das einer
+  früheren Anbindung liegen.
+* Nur `mail_secret` ist als Plattform-Geheimnis erlaubt
+  (`PLATFORM_SEALABLE`, auf beiden Seiten gleich).

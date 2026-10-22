@@ -10,6 +10,7 @@ Two surfaces:
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -73,6 +74,21 @@ class AppSettingsOut(BaseModel):
     ninja_region: str | None = None
     ninja_client_id: str | None = None
     ninja_client_secret_set: bool = False
+
+    # Mailversand + Ablauf-Erinnerung. Das Geheimnis (SMTP-Passwort bzw.
+    # Graph-Client-Secret) kommt nie zurück — nur ob eines hinterlegt ist.
+    mail_transport: str = "off"
+    mail_from: str | None = None
+    mail_from_name: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_security: str = "starttls"
+    smtp_username: str | None = None
+    graph_tenant_id: str | None = None
+    graph_client_id: str | None = None
+    mail_secret_set: bool = False
+    expiry_notice_enabled: bool = False
+    expiry_notice_days: list[int] = Field(default_factory=lambda: [14, 7, 1])
 
     # Audit fingerprint
     updated_at: datetime
@@ -186,6 +202,63 @@ class AppSettingsUpdate(BaseModel):
         ),
     )
 
+    # --- Mailversand (Ablauf-Erinnerungen) ---
+    mail_transport: str | None = Field(default=None, description="off / smtp / graph")
+    mail_from: str | None = Field(default=None, max_length=320)
+    mail_from_name: str | None = Field(default=None, max_length=128)
+    smtp_host: str | None = Field(default=None, max_length=255)
+    # 0 leert das Feld (Vorgabe 587 bzw. 465 je nach smtp_security).
+    smtp_port: int | None = Field(default=None, ge=0, le=65535)
+    smtp_security: str | None = Field(default=None, description="starttls / tls")
+    smtp_username: str | None = Field(default=None, max_length=320)
+    graph_tenant_id: str | None = Field(default=None, max_length=64)
+    graph_client_id: str | None = Field(default=None, max_length=64)
+    mail_secret: str | None = Field(
+        default=None,
+        description=(
+            "SMTP-Passwort bzw. Graph-Client-Secret. Nicht leer = neu setzen; "
+            "null/weglassen = unverändert."
+        ),
+    )
+    clear_mail_secret: bool | None = Field(
+        default=None, description="true entfernt das hinterlegte Geheimnis."
+    )
+    expiry_notice_enabled: bool | None = None
+    expiry_notice_days: list[int] | None = Field(
+        default=None, description="Tage vor dem Ablauf, an denen erinnert wird (1–90)."
+    )
+
+    @field_validator("mail_transport")
+    @classmethod
+    def _check_mail_transport(cls, v: str | None) -> str | None:
+        if v is not None and v.strip() and v not in {"off", "smtp", "graph"}:
+            raise ValueError("mail_transport must be off, smtp or graph")
+        return v
+
+    @field_validator("smtp_security")
+    @classmethod
+    def _check_smtp_security(cls, v: str | None) -> str | None:
+        # Unverschlüsselt gibt es nicht: STARTTLS (587) oder TLS (465).
+        if v is not None and v.strip() and v not in {"starttls", "tls"}:
+            raise ValueError("smtp_security must be starttls or tls")
+        return v
+
+    @field_validator("mail_from")
+    @classmethod
+    def _check_mail_from(cls, v: str | None) -> str | None:
+        if v is not None and v.strip() and not _MAIL_RE.match(v.strip()):
+            raise ValueError("mail_from must be an e-mail address")
+        return v
+
+    @field_validator("expiry_notice_days")
+    @classmethod
+    def _check_days(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return None
+        if not 1 <= len(v) <= 5 or any(not 1 <= d <= 90 for d in v):
+            raise ValueError("expiry_notice_days: 1 to 5 values between 1 and 90")
+        return sorted(set(v), reverse=True)
+
     @field_validator("ninja_region")
     @classmethod
     def _check_ninja_region(cls, v: str | None) -> str | None:
@@ -220,5 +293,7 @@ class AppSettingsUpdate(BaseModel):
             raise ValueError("zyklus1_max_grade must be < zyklus2_max_grade")
         return self
 
+
+_MAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 __all__ = ["AppSettingsOut", "AppSettingsUpdate"]

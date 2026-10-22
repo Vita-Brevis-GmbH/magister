@@ -15,6 +15,7 @@ const KEY_LABELS: Record<string, string> = {
   enrollment: "Eintritt",
   class_change: "Klassenwechsel",
   password_handout: "Passwort-Übergabe",
+  password_expiry_notice: "Erinnerung Passwort-Ablauf (Mail)",
 };
 
 const PROFILE_LABELS: Record<TenantProfile, string> = {

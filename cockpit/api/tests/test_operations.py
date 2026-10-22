@@ -494,3 +494,61 @@ class TestDailySchedule:
         assert slot_for(datetime(2026, 10, 6, 1, 29, tzinfo=UTC), at) is None
         slot = slot_for(datetime(2026, 10, 6, 7, 0, tzinfo=UTC), at)
         assert slot == datetime(2026, 10, 6, 1, 30, tzinfo=UTC)
+
+
+class TestPlatformMailSecret:
+    """Der Standard-Mailversand: ein Geheimnis für alle Kunden, versiegelt."""
+
+    def test_needs_a_reported_platform_key(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        resp = console_client.put("/api/platform/sealed-secrets/mail_secret", json={"value": "s"})
+        assert resp.status_code == 409
+        assert (
+            console_client.put(
+                "/api/platform/sealed-secrets/oidc_client_secret", json={"value": "s"}
+            ).status_code
+            == 422
+        )
+
+    def test_sealed_once_reaches_tenants_without_own_connection(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        dp = _dataplane_sealing()
+        platform_key = "plattformschluessel-" + "p" * 32
+        public = dp.public_key_b64(platform_key)
+        console_client.post(
+            f"/api/tenants/{tenant_id}/status",
+            json=_report(
+                platform_sealed_public_key=public, platform_sealed_key_id=dp.key_id(public)
+            ),
+        )
+        resp = console_client.put(
+            "/api/platform/sealed-secrets/mail_secret", json={"value": "vb-geheim"}
+        )
+        assert resp.status_code == 200, resp.text
+        assert "vb-geheim" not in resp.text
+        body = resp.json()
+        assert body["platform_key_reported"] is True
+        assert body["secrets"][0]["sealed"] is True and body["secrets"][0]["key_current"] is True
+
+        desired = console_client.get(f"/api/tenants/{tenant_id}/desired-state").json()
+        assert desired["mail_source"] == "platform"
+        blob = desired["platform_sealed_secrets"]["mail_secret"]
+        assert dp.unseal(platform_key, blob, tenant_ref="platform", name="mail_secret") == (
+            "vb-geheim"
+        )
+
+        # Eigene Anbindung: das Plattform-Geheimnis geht nicht mehr hinaus.
+        resp = console_client.put(
+            f"/api/tenants/{tenant_id}/settings",
+            json={"overrides": {"mail_transport": "smtp", "smtp_host": "mail.kunde.ch"}},
+        )
+        assert resp.status_code == 200, resp.text
+        desired = console_client.get(f"/api/tenants/{tenant_id}/desired-state").json()
+        assert desired["mail_source"] == "tenant"
+        assert desired["platform_sealed_secrets"] == {}
+        assert desired["settings"]["smtp_host"] == "mail.kunde.ch"
+
+        resp = console_client.delete("/api/platform/sealed-secrets/mail_secret")
+        assert resp.json()["secrets"][0]["sealed"] is False

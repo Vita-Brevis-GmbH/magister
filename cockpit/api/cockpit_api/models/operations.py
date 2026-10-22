@@ -70,6 +70,27 @@ class TenantSealedSecret(Base):
     updated_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
 
+class PlatformSealedSecret(Base):
+    """Ein Plattform-Geheimnis für alle Kunden ohne eigene Anbindung.
+
+    Heute: das Geheimnis des Standard-Mailversands (SMTP-Passwort bzw.
+    Graph-Client-Secret von Vita Brevis). Versiegelt mit dem **Plattform**-
+    Schlüssel der Datenebene — die Konsole kann es so wenig öffnen wie ein
+    Kunden-Geheimnis. Ein Chiffrat für alle: neue Kunden bekommen es ohne
+    erneute Eingabe.
+    """
+
+    __tablename__ = "platform_sealed_secrets"
+
+    name: Mapped[str] = mapped_column(String(64), primary_key=True)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    key_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    updated_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
 class MaintenanceAction(enum.StrEnum):
     #: Die Demoschule `BSP` und alles darunter entfernen.
     demo_purge = "demo_purge"

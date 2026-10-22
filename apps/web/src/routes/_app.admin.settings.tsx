@@ -13,6 +13,7 @@ import {
 } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { MailStatusCard } from "@/components/MailStatusCard";
 import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -46,6 +47,18 @@ interface FormState {
   ninja_region: string;
   ninja_client_id: string;
   ninja_client_secret: string;
+  mail_transport: string;
+  mail_from: string;
+  mail_from_name: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_security: string;
+  smtp_username: string;
+  graph_tenant_id: string;
+  graph_client_id: string;
+  mail_secret: string;
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -73,6 +86,18 @@ function fromOut(data: AppSettingsOut): FormState {
     ninja_region: data.ninja_region ?? "",
     ninja_client_id: data.ninja_client_id ?? "",
     ninja_client_secret: "", // never prefilled — placeholder communicates "set"
+    mail_transport: data.mail_transport ?? "off",
+    mail_from: data.mail_from ?? "",
+    mail_from_name: data.mail_from_name ?? "",
+    smtp_host: data.smtp_host ?? "",
+    smtp_port: data.smtp_port ? String(data.smtp_port) : "",
+    smtp_security: data.smtp_security ?? "starttls",
+    smtp_username: data.smtp_username ?? "",
+    graph_tenant_id: data.graph_tenant_id ?? "",
+    graph_client_id: data.graph_client_id ?? "",
+    mail_secret: "", // nie vorbelegt — der Platzhalter sagt, ob eines gesetzt ist
+    expiry_notice_enabled: data.expiry_notice_enabled ?? false,
+    expiry_notice_days: (data.expiry_notice_days ?? [14, 7, 1]).join(", "),
   };
 }
 
@@ -153,6 +178,36 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   // Only send the secret when the operator actually typed one.
   if (form.ninja_client_secret) payload.ninja_client_secret = form.ninja_client_secret;
+  // Mailversand: Texte leer = leeren ("" leert serverseitig); Port leer = 0.
+  const mailText = [
+    "mail_from",
+    "mail_from_name",
+    "smtp_host",
+    "smtp_username",
+    "graph_tenant_id",
+    "graph_client_id",
+  ] as const;
+  for (const key of mailText) {
+    if (form[key] !== (current[key] ?? "")) payload[key] = form[key];
+  }
+  if (form.mail_transport !== current.mail_transport) {
+    payload.mail_transport = form.mail_transport as AppSettingsOut["mail_transport"];
+  }
+  if (form.smtp_security !== current.smtp_security) {
+    payload.smtp_security = form.smtp_security as AppSettingsOut["smtp_security"];
+  }
+  const port = form.smtp_port.trim() ? Number(form.smtp_port) : 0;
+  if (Number.isFinite(port) && port !== (current.smtp_port ?? 0)) payload.smtp_port = port;
+  if (form.mail_secret) payload.mail_secret = form.mail_secret;
+  if (form.expiry_notice_enabled !== current.expiry_notice_enabled) {
+    payload.expiry_notice_enabled = form.expiry_notice_enabled;
+  }
+  const noticeDays = splitCsv(form.expiry_notice_days)
+    .map(Number)
+    .filter((d) => Number.isInteger(d));
+  if (noticeDays.join(",") !== (current.expiry_notice_days ?? []).join(",")) {
+    payload.expiry_notice_days = noticeDays;
+  }
   return payload;
 }
 
@@ -240,6 +295,7 @@ function AppSettingsPage(): JSX.Element {
         // Konfiguration nur mitverschwunden, weil er im selben Formular stand.
         <>
           <ManagedByPlatform area="settings" />
+          <MailStatusCard />
           <Card>
             <CardHeader>
               <CardTitle className="text-base">{t("admin.settings.ad_actions_title")}</CardTitle>
@@ -255,7 +311,10 @@ function AppSettingsPage(): JSX.Element {
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
       ) : settings.data ? (
-        <SettingsForm data={settings.data} profile={profile} />
+        <>
+          <SettingsForm data={settings.data} profile={profile} />
+          <MailStatusCard />
+        </>
       ) : null}
     </div>
   );
@@ -442,6 +501,136 @@ function SettingsForm({
             <p className="text-xs text-muted-foreground">
               {t("admin.settings.field.ninja_client_secret_hint")}
             </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("admin.mail.edit_title")}</CardTitle>
+          <CardDescription>{t("admin.mail.edit_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="mail-transport">{t("admin.mail.transport")}</Label>
+              <select
+                id="mail-transport"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                value={form.mail_transport}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, mail_transport: e.target.value }));
+                  setSuccess(false);
+                }}
+              >
+                <option value="off">{t("admin.mail.transport_off")}</option>
+                <option value="graph">{t("admin.mail.transport_graph")}</option>
+                <option value="smtp">{t("admin.mail.transport_smtp")}</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="mail-from">{t("admin.mail.from")}</Label>
+              <Input id="mail-from" type="email" {...field("mail_from")} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="mail-from-name">{t("admin.mail.from_name")}</Label>
+              <Input id="mail-from-name" {...field("mail_from_name")} />
+            </div>
+          </div>
+          {form.mail_transport === "graph" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="graph-tenant">{t("admin.mail.graph_tenant_id")}</Label>
+                <Input id="graph-tenant" {...field("graph_tenant_id")} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="graph-client">{t("admin.mail.graph_client_id")}</Label>
+                <Input id="graph-client" {...field("graph_client_id")} />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t("admin.mail.graph_hint")}
+              </p>
+            </div>
+          ) : null}
+          {form.mail_transport === "smtp" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="smtp-host">{t("admin.mail.smtp_host")}</Label>
+                <Input id="smtp-host" {...field("smtp_host")} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-port">{t("admin.mail.smtp_port")}</Label>
+                <Input
+                  id="smtp-port"
+                  inputMode="numeric"
+                  placeholder="587"
+                  {...field("smtp_port")}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-security">{t("admin.mail.smtp_security")}</Label>
+                <select
+                  id="smtp-security"
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  value={form.smtp_security}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, smtp_security: e.target.value }));
+                    setSuccess(false);
+                  }}
+                >
+                  <option value="starttls">STARTTLS (587)</option>
+                  <option value="tls">TLS (465)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-user">{t("admin.mail.smtp_username")}</Label>
+                <Input id="smtp-user" autoComplete="off" {...field("smtp_username")} />
+              </div>
+            </div>
+          ) : null}
+          {form.mail_transport !== "off" ? (
+            <div className="space-y-1">
+              <Label htmlFor="mail-secret">
+                {t(
+                  form.mail_transport === "graph"
+                    ? "admin.mail.secret_graph"
+                    : "admin.mail.secret_smtp",
+                )}
+              </Label>
+              <Input
+                id="mail-secret"
+                type="password"
+                autoComplete="new-password"
+                placeholder={
+                  data.mail_secret_set
+                    ? t("admin.settings.placeholder_secret_set")
+                    : t("admin.settings.placeholder_secret_unset")
+                }
+                {...field("mail_secret")}
+              />
+            </div>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.expiry_notice_enabled}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, expiry_notice_enabled: e.target.checked }));
+                setSuccess(false);
+              }}
+            />
+            <span>
+              <span className="font-medium">{t("admin.mail.reminder_enabled")}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t("admin.mail.reminder_enabled_hint")}
+              </span>
+            </span>
+          </label>
+          <div className="space-y-1">
+            <Label htmlFor="notice-days">{t("admin.mail.reminder_days")}</Label>
+            <Input id="notice-days" {...field("expiry_notice_days")} />
+            <p className="text-xs text-muted-foreground">{t("admin.mail.reminder_days_hint")}</p>
           </div>
         </CardContent>
       </Card>

@@ -167,10 +167,45 @@ class AppSettings(Base):
     web_tls_cert_pem: Mapped[str | None] = mapped_column(Text, nullable=True)
     web_tls_key_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
 
+    # --- Mailversand (Ablauf-Erinnerungen) ---
+    # "off" | "smtp" | "graph". Gehostete Kunden bekommen die Werte aus der
+    # Konsole (Plattform-Standard oder eigene Anbindung des Kunden); das
+    # Geheimnis — SMTP-Passwort bzw. Graph-Client-Secret — kommt versiegelt
+    # und liegt hier wie die anderen Geheimnisse pgcrypto-verschlüsselt.
+    mail_transport: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="off", server_default="off"
+    )
+    # Absender; bei Graph das Postfach, in dessen Namen gesendet wird.
+    mail_from: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    mail_from_name: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    smtp_host: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    smtp_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # "starttls" (587) | "tls" (465). Unverschlüsselt gibt es nicht.
+    smtp_security: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="starttls", server_default="starttls"
+    )
+    smtp_username: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    graph_tenant_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    graph_client_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mail_secret_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+
+    # --- Erinnerung vor Passwort-Ablauf ---
+    expiry_notice_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+    # Tage vor dem Ablauf, an denen erinnert wird (je eine Mail).
+    expiry_notice_days: Mapped[list[int]] = mapped_column(
+        JSONB, nullable=False, default=lambda: [14, 7, 1], server_default="[14, 7, 1]"
+    )
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     updated_by_upn: Mapped[str | None] = mapped_column(String(320), nullable=True)
 
-    __table_args__ = (CheckConstraint("id = 1", name="app_settings_singleton"),)
+    __table_args__ = (
+        CheckConstraint("id = 1", name="app_settings_singleton"),
+        CheckConstraint("mail_transport IN ('off', 'smtp', 'graph')", name="mail_transport_valid"),
+        CheckConstraint("smtp_security IN ('starttls', 'tls')", name="smtp_security_valid"),
+    )

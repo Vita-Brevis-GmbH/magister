@@ -269,6 +269,9 @@ class AdUserCacheSyncRepository:
                     "password_never_expires": r.password_never_expires,
                     "ad_groups": list(r.groups),
                     "mail_aliases": list(r.mail_aliases),
+                    "password_last_set": r.password_last_set,
+                    "password_expires_at": r.password_expires_at,
+                    "password_info_at": now if r.password_info else None,
                     # temp_device_name, jahrgangsstufe and cannot_change_password
                     # are Magister-only — do NOT overwrite on AD sync. We omit
                     # them from both VALUES and the ON-CONFLICT set; existing
@@ -314,6 +317,18 @@ class AdUserCacheSyncRepository:
                     ).excluded.password_never_expires,
                     "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
                     "mail_aliases": pg_insert(AdUserCache).excluded.mail_aliases,
+                    # Liefert die Quelle keinen Passwort-Ablauf (älterer
+                    # Connector-Agent), bleibt der bisherige Stand stehen.
+                    **{
+                        col: case(
+                            (
+                                pg_insert(AdUserCache).excluded.password_info_at.is_not(None),
+                                getattr(pg_insert(AdUserCache).excluded, col),
+                            ),
+                            else_=getattr(AdUserCache, col),
+                        )
+                        for col in ("password_last_set", "password_expires_at", "password_info_at")
+                    },
                     # Present in AD again → clear any "missing" marker.
                     "ad_missing_since": None,
                 },

@@ -768,6 +768,10 @@ MAGISTER_AUDIT_KEY=$(secret)
 MAGISTER_SESSION_SECRET=$(secret)
 MAGISTER_CSRF_SECRET=$(secret)
 MAGISTER_HEALTH_TOKEN=$(secret)
+# Plattform-Schlüssel: der Standard-Mailversand (Cockpit → Plattform) wird
+# damit versiegelt. Wie die Kundenschlüssel: wechselt er, ist das Geheimnis
+# im Cockpit neu zu setzen. Gehört in die Sicherung.
+MAGISTER_PLATFORM_SECRETS_KEY=$(secret)
 MAGISTER_BACKUP_AGE_RECIPIENT=$( [ -f "$CERTS/backup-age.pub" ] && cat "$CERTS/backup-age.pub" || echo "" )
 # Der Weg zur Konsole: über den Verwaltungs-Listener, mit beiden Nachweisen.
 MAGISTER_CONSOLE_REGISTRY_URL=https://$KONSOLE_HOST:4444/api/tenants/registry
@@ -802,6 +806,12 @@ EOF
     # Nachtrag für Installationen von vor 2026-10-06: ohne den Anker scheiterte
     # jeder Abruf der Konsole an der Zertifikatsprüfung.
     setze_wert "$daten_env" MAGISTER_CONSOLE_CA_PATH "$CERTS/root.pem" && geaendert=1
+    # Nachtrag 2026-10 (Ablauf-Erinnerung): einmal erzeugen, danach nie
+    # überschreiben — sonst wäre das versiegelte Plattform-Geheimnis unlesbar.
+    if ! grep -q '^MAGISTER_PLATFORM_SECRETS_KEY=.' "$daten_env"; then
+      echo "MAGISTER_PLATFORM_SECRETS_KEY=$(secret)" >> "$daten_env"
+      geaendert=1
+    fi
     if [ "$geaendert" -eq 1 ]; then
       say "Umgebung der Datenebene nachgeführt (Namen geändert)"
     else

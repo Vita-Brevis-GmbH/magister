@@ -648,6 +648,34 @@ function AssignTeacherModal({
 // --- Students --------------------------------------------------------------
 
 /** Single-student grade label: -1 = 1. KG, 0 = 2. KG, else the grade number. */
+/** Bald ablaufendes Passwort — und ob die Erinnerung das Kind per Mail erreicht. */
+const EXPIRY_WARN_DAYS = 14;
+
+function PasswordExpiryBadge({ row }: { row: ClassMembershipOut }): JSX.Element {
+  const { t } = useTranslation();
+  if (!row.password_expires_at) return <span className="text-muted-foreground">–</span>;
+  const left = Math.ceil((Date.parse(row.password_expires_at) - Date.now()) / 86_400_000);
+  if (left > EXPIRY_WARN_DAYS) return <span className="text-muted-foreground">–</span>;
+  return (
+    <span className="flex flex-wrap gap-1">
+      <span
+        className={
+          left <= 0
+            ? "rounded bg-destructive/15 px-1.5 py-0.5 text-xs font-medium text-destructive"
+            : "rounded bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300"
+        }
+      >
+        {left <= 0 ? t("password_expiry.expired") : t("password_expiry.in_days", { count: left })}
+      </span>
+      {row.has_mail === false ? (
+        <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+          {t("password_expiry.no_mail")}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
 function gradeLabel(
   g: number | null,
   t: (k: string, o?: Record<string, unknown>) => string,
@@ -768,6 +796,7 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
                 ) : null}
                 <TableHead>{t("classes.student")}</TableHead>
                 <TableHead>{t("classes.schuljahr")}</TableHead>
+                <TableHead>{t("classes.password_col")}</TableHead>
                 <TableHead>{t("classes.valid_from")}</TableHead>
                 <TableHead>{t("classes.valid_to")}</TableHead>
                 <TableHead className="w-0 text-right">{t("users.actions")}</TableHead>
@@ -793,6 +822,9 @@ function StudentsSection({ classId }: { classId: number }): JSX.Element {
                     <PersonCell row={row} />
                   </TableCell>
                   <TableCell>{gradeLabel(row.jahrgangsstufe, t)}</TableCell>
+                  <TableCell>
+                    <PasswordExpiryBadge row={row} />
+                  </TableCell>
                   <TableCell>{fmt.formatDate(row.valid_from)}</TableCell>
                   <TableCell>{row.valid_to ? fmt.formatDate(row.valid_to) : "–"}</TableCell>
                   <TableCell className="text-right">

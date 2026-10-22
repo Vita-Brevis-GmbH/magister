@@ -226,7 +226,8 @@
     "device_assignee": "Assigned to",
     "assignee_student": "Student",
     "assignee_teacher": "Teacher",
-    "assignee_class": "Class"
+    "assignee_class": "Class",
+    "password_col": "Password"
   },
   "users": {
     "title": "Users",
@@ -421,7 +422,10 @@
     "filter_policy": "Filter policy",
     "filter_policy_all": "All policies",
     "policy_stored": "Password stored in Magister",
-    "policy_stored_short": "stored"
+    "policy_stored_short": "stored",
+    "subnav_label": "Users area",
+    "subnav_overview": "Overview",
+    "subnav_password_expiry": "Password expiry"
   },
   "password_reset": {
     "button": "Reset password",
@@ -722,6 +726,44 @@
       "group_no_match": "No matches.",
       "group_not_synced": "(not synced)",
       "group_selected_count": "{{count}} selected"
+    },
+    "mail": {
+      "title": "E-mail sending",
+      "desc": "For the reminder before a password expires. A test e-mail checks the connection.",
+      "desc_managed": "The connection is set up by Vita Brevis (platform default or your own). Check here with a test e-mail that it works.",
+      "transport": "Send via",
+      "transport_off": "Off",
+      "transport_smtp": "SMTP server",
+      "transport_graph": "Microsoft 365 (Graph)",
+      "sender": "Sender",
+      "state": "State",
+      "ready": "ready",
+      "missing": "incomplete: {{fields}}",
+      "reminder": "Reminder before expiry",
+      "reminder_on": "on — {{days}} days before",
+      "reminder_off": "off",
+      "test_to": "Test e-mail to",
+      "test_send": "Send test e-mail",
+      "test_sending": "Sending …",
+      "test_ok": "Sent. Please check the mailbox.",
+      "test_failed": "Not sent: {{error}}",
+      "edit_title": "E-mail sending and reminder",
+      "edit_desc": "Via Microsoft 365 (recommended) or an SMTP server. The reminder goes to every active account with an e-mail address whose password expires.",
+      "from": "Sender address",
+      "from_name": "Sender name",
+      "graph_tenant_id": "Entra tenant ID",
+      "graph_client_id": "Application (client) ID",
+      "graph_hint": "App registration with the Mail.Send application permission, restricted to the sender mailbox.",
+      "smtp_host": "SMTP server",
+      "smtp_port": "Port",
+      "smtp_security": "Encryption",
+      "smtp_username": "User name (empty = no authentication)",
+      "secret_graph": "Client secret",
+      "secret_smtp": "Password",
+      "reminder_enabled": "Remind by e-mail before the password expires",
+      "reminder_enabled_hint": "Maintain the text, including how to change the password, under Templates (password expiry reminder).",
+      "reminder_days": "Days before expiry",
+      "reminder_days_hint": "Comma-separated, e.g. 14, 7, 1 — one e-mail per threshold."
     }
   },
   "substitutions": {
@@ -1364,7 +1406,8 @@
     "key_enrollment": "Enrolment",
     "key_class_change": "Class change",
     "key_password_handout": "Password handout",
-    "load_starter": "Load default template"
+    "load_starter": "Load default template",
+    "key_password_expiry_notice": "Password expiry reminder (e-mail)"
   },
   "group_templates": {
     "title": "Target groups",
@@ -1491,5 +1534,35 @@
     "err_user_not_in_ad": "Account not found in AD.",
     "err_ad_unavailable": "AD unavailable.",
     "err_unknown": "Unknown error."
+  },
+  "password_expiry": {
+    "title": "Password expiry",
+    "intro": "Whose password expires soon, who was reminded — and whom the reminder cannot reach because no e-mail address is set.",
+    "no_info": "No expiry dates yet: the next AD sync reads them. Via the connector, a current agent version is required.",
+    "notice_off": "The e-mail reminder is off. Turn it on under Settings → System (hosted: by Vita Brevis).",
+    "mail_not_ready": "The reminder is on, but e-mail sending is not fully set up — no e-mails go out.",
+    "view_expiring": "Expiring soon",
+    "view_no_mail": "Without e-mail address",
+    "within": "Period",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days",
+    "count_one": "{{count}} account",
+    "count_other": "{{count}} accounts",
+    "col_name": "Name",
+    "col_zielgruppe": "Target group",
+    "col_expires": "Expires",
+    "col_mail": "E-mail address",
+    "col_notice": "Reminder",
+    "empty_expiring": "No password expires in this period.",
+    "empty_no_mail": "All active accounts have an e-mail address.",
+    "grade": "Grade {{grade}}",
+    "no_mail": "no e-mail",
+    "notice_sent": "sent on {{date}} ({{days}} days before)",
+    "notice_failed": "failed on {{date}} — will retry",
+    "notice_no_mail": "not possible (no e-mail address)",
+    "never": "never expires",
+    "expired": "expired",
+    "in_days_one": "in {{count}} day",
+    "in_days_other": "in {{count}} days"
   }
 }

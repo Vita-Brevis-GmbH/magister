@@ -71,6 +71,11 @@ class StatusReport(BaseModel):
     #: sie nichts.
     sealed_public_key: str | None = Field(default=None, max_length=64)
     sealed_key_id: str | None = Field(default=None, max_length=64)
+    #: Der Plattform-Schlüssel (für alle Kunden derselbe), mit dem der
+    #: Standard des Mailversands versiegelt wird. Fehlt ohne
+    #: MAGISTER_PLATFORM_SECRETS_KEY in der Datenebene.
+    platform_sealed_public_key: str | None = Field(default=None, max_length=64)
+    platform_sealed_key_id: str | None = Field(default=None, max_length=64)
     #: Welche Geheimnisse im Kundenschema gesetzt sind — nur ob, nie was.
     secrets_present: dict[str, bool] = Field(default_factory=dict)
     maintenance: list[MaintenanceResult] = Field(
@@ -134,6 +139,22 @@ class SealedSecretIn(BaseModel):
     #: Klartext, genau einmal über TLS. Die Konsole versiegelt ihn sofort und
     #: speichert nur das Chiffrat.
     value: str = Field(min_length=1, max_length=4096)
+
+
+class PlatformSealedSecretOut(BaseModel):
+    name: str
+    sealed: bool
+    #: Passt der Schlüssel zu dem, den die Datenebene zuletzt gemeldet hat?
+    key_current: bool | None
+    updated_at: datetime | None
+    updated_by: str | None
+
+
+class PlatformSecretsOut(BaseModel):
+    #: Hat irgendeine Installation einen Plattform-Schlüssel gemeldet? Ohne
+    #: ihn lässt sich kein Plattform-Geheimnis versiegeln.
+    platform_key_reported: bool
+    secrets: list[PlatformSealedSecretOut]
 
 
 class SealedSecretOut(BaseModel):

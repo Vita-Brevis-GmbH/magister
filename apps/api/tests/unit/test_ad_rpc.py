@@ -7,6 +7,7 @@ to a fake directory, so no real AD (or Postgres) is needed.
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 from datetime import UTC, datetime
 from typing import Any
@@ -341,3 +342,21 @@ def test_server_mounted_when_url_blank() -> None:
         app = create_app(Settings(ad_rpc_url=blank, ad_rpc_secret=SecretStr("sec")))
         paths = {str(getattr(r, "path", "")) for r in app.routes}
         assert any(p.startswith(RPC_PATH) for p in paths), f"url={blank!r}"
+
+
+def test_password_times_survive_the_wire_and_agents_of_other_versions() -> None:
+    rec = dataclasses.replace(
+        _record(),
+        password_info=True,
+        password_last_set=datetime(2026, 9, 1, tzinfo=UTC),
+        password_expires_at=datetime(2026, 11, 30, tzinfo=UTC),
+    )
+    wire = ad_user_record_to_jsonable(rec)
+    assert ad_user_record_from_jsonable(wire) == rec
+    # Älterer Agent: die Felder fehlen → "unbekannt", nicht "läuft nie ab".
+    old = {k: v for k, v in wire.items() if not k.startswith("password_")}
+    old["password_never_expires"] = False
+    restored = ad_user_record_from_jsonable(old)
+    assert restored.password_info is False
+    # Neuerer Agent mit einem Feld, das hier noch keiner kennt: fällt weg.
+    assert ad_user_record_from_jsonable({**wire, "kuenftiges_feld": 1}) == rec

@@ -5,6 +5,7 @@ import { getOpsStatus, requestOps } from "../api/platform";
 import { StatusBadge } from "../components/Badge";
 import { ErrorBox } from "../components/ErrorBox";
 import { PlatformHealthPanel } from "../components/PlatformHealthPanel";
+import { PlatformMailSection } from "../components/PlatformMailSection";
 
 /**
  * Die Plattform als Ganzes (ADR-0024 D5, D6).
@@ -45,6 +46,8 @@ export function Platform() {
       <h1 className="text-xl font-semibold">Plattform</h1>
 
       <PlatformHealthPanel />
+
+      <PlatformMailSection />
 
       <section className="rounded border bg-white p-4">
         <h2 className="mb-2 font-semibold">Neustart und Update</h2>

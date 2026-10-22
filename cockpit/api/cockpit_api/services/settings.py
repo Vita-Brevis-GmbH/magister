@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from cockpit_api.models.operations import (
     MaintenanceState,
+    PlatformSealedSecret,
     TenantMaintenanceRequest,
     TenantSealedSecret,
 )
@@ -80,7 +81,60 @@ POLICY_KEYS: dict[str, type | tuple[type, ...]] = {
     #: Öffentlicher Teil des Webserver-Zertifikats. Der private Schlüssel
     #: (`web_tls_key_pem`) steht ausdrücklich NICHT hier.
     "web_tls_cert_pem": str,
+    # Mailversand (Erinnerung vor dem Passwort-Ablauf). Das Geheimnis —
+    # SMTP-Passwort bzw. Graph-Client-Secret — steht NICHT hier, es reist
+    # versiegelt als `mail_secret`.
+    "mail_transport": str,
+    "mail_from": str,
+    "mail_from_name": str,
+    "smtp_host": str,
+    "smtp_port": int,
+    "smtp_security": str,
+    "smtp_username": str,
+    "graph_tenant_id": str,
+    "graph_client_id": str,
+    "expiry_notice_enabled": bool,
+    "expiry_notice_days": list,
 }
+
+#: Die Anbindung des Mailversands, mit dem Wert, der "leer" heisst. Sie gilt
+#: **als Ganzes**: setzt ein Kunde auch nur ein Feld davon selbst, kommt die
+#: ganze Anbindung aus seinen Abweichungen und das Plattform-Geheimnis geht
+#: nicht hinaus. Feldweise gemischt hiesse: der Benutzername eines eigenen
+#: SMTP-Servers mit dem Passwort von Vita Brevis — an einen fremden Server.
+MAIL_CONNECTION_KEYS: dict[str, Any] = {
+    "mail_transport": "off",
+    "mail_from": "",
+    "mail_from_name": "",
+    "smtp_host": "",
+    "smtp_port": 0,
+    "smtp_security": "starttls",
+    "smtp_username": "",
+    "graph_tenant_id": "",
+    "graph_client_id": "",
+}
+
+#: Geheimnisse, die zur Mail-Anbindung gehören.
+MAIL_SECRET = "mail_secret"  # noqa: S105 — der Name, nicht der Wert
+
+
+def has_own_mail(overrides: dict[str, Any]) -> bool:
+    """Hat der Kunde eine eigene Mail-Anbindung (mindestens ein Feld gesetzt)?"""
+    return any(overrides.get(key) is not None for key in MAIL_CONNECTION_KEYS)
+
+
+def mail_connection(defaults: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    """Die geltende Anbindung, vollständig — fehlende Felder als "leer".
+
+    Vollständig, damit beim Kunden nichts aus einer früheren Anbindung stehen
+    bleibt: die Datenebene liest ein fehlendes Feld als "nicht anfassen".
+    """
+    source = overrides if has_own_mail(overrides) else defaults
+    return {
+        key: source[key] if source.get(key) is not None else blank
+        for key, blank in MAIL_CONNECTION_KEYS.items()
+    }
+
 
 #: Früher hier gepflegt, jetzt nicht mehr: OUs und Gruppen für Schüler:innen
 #: und Lehrpersonen. Sie gehören an den Standort bzw. an die Zielrollen im
@@ -164,7 +218,30 @@ def validate_policy(document: dict[str, Any]) -> dict[str, Any]:
             check_overrides(document["module_overrides"])
     except ModuleSettingsError as exc:
         raise SettingsError(str(exc)) from exc
+    _check_mail(document)
     return document
+
+
+def _check_mail(document: dict[str, Any]) -> None:
+    """Die Mail-Werte so streng wie die Datenebene: sonst scheiterte der Abgleich dort."""
+    transport = document.get("mail_transport")
+    if transport is not None and transport not in {"off", "smtp", "graph"}:
+        raise SettingsError("'mail_transport' muss off, smtp oder graph sein.")
+    security = document.get("smtp_security")
+    if security is not None and security not in {"starttls", "tls"}:
+        raise SettingsError("'smtp_security' muss starttls oder tls sein (kein Klartext).")
+    port = document.get("smtp_port")
+    if port is not None and not 0 <= port <= 65535:
+        raise SettingsError("'smtp_port' muss zwischen 0 (Vorgabe) und 65535 liegen.")
+    sender = document.get("mail_from")
+    if sender and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", sender):
+        raise SettingsError("'mail_from' muss eine Mailadresse sein.")
+    days = document.get("expiry_notice_days")
+    if days is not None and (
+        not 1 <= len(days) <= 5
+        or any(isinstance(d, bool) or not isinstance(d, int) or not 1 <= d <= 90 for d in days)
+    ):
+        raise SettingsError("'expiry_notice_days': 1 bis 5 Zahlen zwischen 1 und 90.")
 
 
 def validate_rbac(matrix: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -323,15 +400,28 @@ class SettingsService:
         # etwa „Klassen an" bei einem Kunden, der in der Konsole auf Firma
         # steht. Gehostet hat die Konsole das Feld allein (ADR-0017 Nachtrag).
         settings.setdefault("module_overrides", {})
+        settings.update(mail_connection(platform.defaults, overrides))
+        own_mail = has_own_mail(overrides)
+        sealed = await self._sealed(tenant.id)
+        if not own_mail:
+            # Ein früher gesetztes eigenes Geheimnis gilt nicht mehr, sobald
+            # die Anbindung wieder die der Plattform ist.
+            sealed.pop(MAIL_SECRET, None)
         return {
             "settings": settings,
             "rbac": rbac or {},
             "templates": await TemplateService(self.session).desired_templates(tenant),
             "settings_source": "tenant" if overrides else "platform",
             "rbac_source": "tenant" if own_rbac is not None else "platform",
-            "sealed_secrets": await self._sealed(tenant.id),
+            "mail_source": "tenant" if own_mail else "platform",
+            "sealed_secrets": sealed,
+            "platform_sealed_secrets": {} if own_mail else await self._platform_sealed(),
             "maintenance": await self._open_maintenance(tenant.id),
         }
+
+    async def _platform_sealed(self) -> dict[str, str]:
+        rows = (await self.session.execute(select(PlatformSealedSecret))).scalars()
+        return {row.name: row.ciphertext for row in rows}
 
     async def _sealed(self, tenant_id: UUID) -> dict[str, str]:
         rows = (

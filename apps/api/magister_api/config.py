@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     # Zertifikat. Gesetzt gilt NUR diese Datei: die Datenebene redet mit
     # genau einer Konsole und braucht dafür keine 150 Wurzeln.
     console_ca_file: str = Field(default="")
+    # Plattform-Schlüssel für versiegelte Geheimnisse, die allen Kunden
+    # gehören (Plattform-Standard des Mailversands). Wie ein Kunden-
+    # Geheimnisschlüssel: aus ihm wird ein X25519-Paar abgeleitet, die
+    # Konsole versiegelt mit dem öffentlichen Teil und kann selbst nichts
+    # öffnen. Leer heisst: kein Plattform-Standard, nur eigene Anbindungen.
+    platform_secrets_key: SecretStr = Field(default=SecretStr(""))
 
     # --- Operator-Zugriff (ADR-0019) --------------------------------------
     # ÖFFENTLICHER Ed25519-Schlüssel (PEM), gegen den ein Einlöseschein der

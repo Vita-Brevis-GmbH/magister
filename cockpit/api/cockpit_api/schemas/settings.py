@@ -98,6 +98,12 @@ class DesiredStateOut(BaseModel):
     #: {name: chiffrat} — versiegelte Geheimnisse (ADR-0024 D3). Die Konsole
     #: kann sie nicht öffnen.
     sealed_secrets: dict[str, str] = {}
+    #: Mit dem Plattform-Schlüssel versiegelt — der Standard für Kunden ohne
+    #: eigene Mail-Anbindung. Nie zugleich mit einem gleichnamigen Eintrag in
+    #: `sealed_secrets`.
+    platform_sealed_secrets: dict[str, str] = {}
+    #: Woher die Mail-Anbindung kommt: "platform" (Standard) oder "tenant".
+    mail_source: str = "platform"
     #: Offene Wartungsaufträge (ADR-0024 D4); die Datenebene führt jeden genau
     #: einmal aus.
     maintenance: list[dict[str, Any]] = []

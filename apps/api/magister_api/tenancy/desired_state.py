@@ -89,6 +89,10 @@ class DesiredState:
     #: Name, wird nichts angefasst: entfernt wird ein Geheimnis nicht über
     #: den Abgleich.
     sealed_secrets: dict[str, str] = field(default_factory=dict)
+    #: {name: chiffrat} mit dem Plattform-Schlüssel versiegelt — der
+    #: Plattform-Standard für Kunden ohne eigene Anbindung. Die Konsole
+    #: schickt für einen Namen nie beides.
+    platform_sealed_secrets: dict[str, str] = field(default_factory=dict)
     maintenance: tuple[DesiredMaintenance, ...] = ()
 
     @property
@@ -130,20 +134,21 @@ def parse_desired_state(payload: object) -> DesiredState:
         settings_source=str(payload.get("settings_source") or "platform"),
         rbac_source=str(payload.get("rbac_source") or "platform"),
         sealed_secrets=_parse_sealed(payload),
+        platform_sealed_secrets=_parse_sealed(payload, "platform_sealed_secrets"),
         maintenance=_parse_maintenance(payload),
     )
 
 
-def _parse_sealed(payload: dict[str, Any]) -> dict[str, str]:
-    raw = payload.get("sealed_secrets")
+def _parse_sealed(payload: dict[str, Any], key: str = "sealed_secrets") -> dict[str, str]:
+    raw = payload.get(key)
     if raw is None:
         return {}
     if not isinstance(raw, dict):
-        raise DesiredStateUnavailableError("'sealed_secrets' ist kein Objekt.")
+        raise DesiredStateUnavailableError(f"'{key}' ist kein Objekt.")
     out: dict[str, str] = {}
     for name, value in cast(dict[object, object], raw).items():
         if not isinstance(name, str) or not isinstance(value, str):
-            raise DesiredStateUnavailableError("'sealed_secrets' hat die falsche Form.")
+            raise DesiredStateUnavailableError(f"'{key}' hat die falsche Form.")
         out[name] = value
     return out
 

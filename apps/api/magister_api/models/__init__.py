@@ -21,6 +21,7 @@ from magister_api.models.import_job import ImportJob, ImportStagedRow
 from magister_api.models.local_admin import LocalAdmin
 from magister_api.models.manager_role import ManagerRole
 from magister_api.models.operator_access import OperatorAccess
+from magister_api.models.password_expiry_notice import PasswordExpiryNotice
 from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.models.rbac import Role, RoleCapability
 from magister_api.models.school import School
@@ -48,6 +49,7 @@ __all__ = [
     "LocalAdmin",
     "ManagerRole",
     "OperatorAccess",
+    "PasswordExpiryNotice",
     "PlatformDocumentTemplate",
     "Role",
     "RoleAssignment",

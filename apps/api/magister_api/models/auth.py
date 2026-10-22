@@ -117,7 +117,23 @@ class AdUserCache(Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
-    __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
+    # Passwort-Ablauf aus dem AD (pwdLastSet, msDS-UserPasswordExpiryTimeComputed).
+    # ``password_info_at``: wann der Abgleich die Werte zuletzt gelesen hat —
+    # NULL heisst "unbekannt" (älterer Connector-Agent), nicht "läuft nie ab".
+    password_last_set: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_info_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),
+        Index("ix_ad_user_cache_password_expires_at", "password_expires_at"),
+    )
 
 
 class Session(Base):

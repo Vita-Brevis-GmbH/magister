@@ -226,7 +226,8 @@
     "device_assignee": "Zugewiesen an",
     "assignee_student": "Schüler:in",
     "assignee_teacher": "Lehrperson",
-    "assignee_class": "Klasse"
+    "assignee_class": "Klasse",
+    "password_col": "Passwort"
   },
   "users": {
     "title": "User",
@@ -421,7 +422,10 @@
     "filter_policy": "Richtlinie filtern",
     "filter_policy_all": "Alle Richtlinien",
     "policy_stored": "Passwort in Magister gespeichert",
-    "policy_stored_short": "gespeichert"
+    "policy_stored_short": "gespeichert",
+    "subnav_label": "Bereich Benutzer",
+    "subnav_overview": "Übersicht",
+    "subnav_password_expiry": "Passwort-Ablauf"
   },
   "password_reset": {
     "button": "Passwort zurücksetzen",
@@ -722,6 +726,44 @@
       "group_no_match": "Keine Treffer.",
       "group_not_synced": "(nicht gesynct)",
       "group_selected_count": "{{count}} ausgewählt"
+    },
+    "mail": {
+      "title": "Mailversand",
+      "desc": "Für die Erinnerung vor dem Passwort-Ablauf. Mit einer Testmail prüfen, ob die Anbindung funktioniert.",
+      "desc_managed": "Die Anbindung stellt Vita Brevis ein (Plattform-Standard oder eine eigene für Sie). Hier prüfen Sie mit einer Testmail, ob sie funktioniert.",
+      "transport": "Versand über",
+      "transport_off": "Aus",
+      "transport_smtp": "SMTP-Server",
+      "transport_graph": "Microsoft 365 (Graph)",
+      "sender": "Absender",
+      "state": "Zustand",
+      "ready": "bereit",
+      "missing": "unvollständig: {{fields}}",
+      "reminder": "Erinnerung vor Ablauf",
+      "reminder_on": "an — {{days}} Tage vorher",
+      "reminder_off": "aus",
+      "test_to": "Testmail an",
+      "test_send": "Testmail senden",
+      "test_sending": "Wird gesendet …",
+      "test_ok": "Gesendet. Bitte im Postfach prüfen.",
+      "test_failed": "Nicht gesendet: {{error}}",
+      "edit_title": "Mailversand und Erinnerung",
+      "edit_desc": "Über Microsoft 365 (empfohlen) oder einen SMTP-Server. Die Erinnerung geht an alle aktiven Konten mit Mailadresse, deren Passwort abläuft.",
+      "from": "Absenderadresse",
+      "from_name": "Absendername",
+      "graph_tenant_id": "Entra-Mandanten-ID",
+      "graph_client_id": "Anwendungs-ID (Client-ID)",
+      "graph_hint": "App-Registrierung mit der Anwendungsberechtigung Mail.Send, beschränkt auf das Absender-Postfach.",
+      "smtp_host": "SMTP-Server",
+      "smtp_port": "Port",
+      "smtp_security": "Verschlüsselung",
+      "smtp_username": "Benutzername (leer = ohne Anmeldung)",
+      "secret_graph": "Client-Secret",
+      "secret_smtp": "Passwort",
+      "reminder_enabled": "Vor dem Passwort-Ablauf per Mail erinnern",
+      "reminder_enabled_hint": "Den Text samt Anleitung zum Ändern des Passworts pflegen Sie unter Vorlagen (Erinnerung Passwort-Ablauf).",
+      "reminder_days": "Tage vor dem Ablauf",
+      "reminder_days_hint": "Mit Komma getrennt, z. B. 14, 7, 1 — je Schwelle eine Mail."
     }
   },
   "substitutions": {
@@ -1364,7 +1406,8 @@
     "key_enrollment": "Eintritt (Anmeldung)",
     "key_class_change": "Klassenwechsel",
     "key_password_handout": "Passwort-Übergabe",
-    "load_starter": "Standardvorlage laden"
+    "load_starter": "Standardvorlage laden",
+    "key_password_expiry_notice": "Erinnerung Passwort-Ablauf (Mail)"
   },
   "group_templates": {
     "title": "Zielgruppen",
@@ -1491,5 +1534,35 @@
     "err_user_not_in_ad": "Konto im AD nicht gefunden.",
     "err_ad_unavailable": "AD nicht erreichbar.",
     "err_unknown": "Unbekannter Fehler."
+  },
+  "password_expiry": {
+    "title": "Passwort-Ablauf",
+    "intro": "Wessen Passwort bald abläuft, wer daran erinnert wurde — und wen die Erinnerung nicht erreicht, weil keine Mailadresse hinterlegt ist.",
+    "no_info": "Noch keine Ablaufdaten: der nächste AD-Abgleich liest sie ein. Läuft der Abgleich über den Connector, braucht es eine aktuelle Version des Agenten.",
+    "notice_off": "Die Erinnerung per Mail ist ausgeschaltet. Einschalten unter Einstellungen → System (gehostet: durch Vita Brevis).",
+    "mail_not_ready": "Die Erinnerung ist eingeschaltet, aber der Mailversand ist nicht vollständig eingerichtet — es gehen keine Mails hinaus.",
+    "view_expiring": "Läuft bald ab",
+    "view_no_mail": "Ohne Mailadresse",
+    "within": "Zeitraum",
+    "days_one": "{{count}} Tag",
+    "days_other": "{{count}} Tage",
+    "count_one": "{{count}} Konto",
+    "count_other": "{{count}} Konten",
+    "col_name": "Name",
+    "col_zielgruppe": "Zielgruppe",
+    "col_expires": "Läuft ab",
+    "col_mail": "Mailadresse",
+    "col_notice": "Erinnerung",
+    "empty_expiring": "In diesem Zeitraum läuft kein Passwort ab.",
+    "empty_no_mail": "Alle aktiven Konten haben eine Mailadresse.",
+    "grade": "Jahrgang {{grade}}",
+    "no_mail": "keine Mail",
+    "notice_sent": "gesendet am {{date}} ({{days}} Tage vorher)",
+    "notice_failed": "gescheitert am {{date}} — wird wiederholt",
+    "notice_no_mail": "nicht möglich (keine Mailadresse)",
+    "never": "läuft nie ab",
+    "expired": "abgelaufen",
+    "in_days_one": "in {{count}} Tag",
+    "in_days_other": "in {{count}} Tagen"
   }
 }

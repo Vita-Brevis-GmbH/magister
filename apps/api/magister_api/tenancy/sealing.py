@@ -35,7 +35,13 @@ _DERIVE_INFO = b"magister-sealed-secret-keypair-v1"
 
 #: Dieselbe Allowlist wie in der Konsole. Was nicht hier steht, wird nicht
 #: geöffnet — auch wenn die Konsole es schickt.
-SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret"})
+SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret", "mail_secret"})
+
+#: Was die Konsole als **Plattform**-Geheimnis versiegeln darf: gilt für alle
+#: Kunden ohne eigene Anbindung, versiegelt mit dem Plattform-Schlüssel und
+#: dem Verweis :data:`PLATFORM_REF` statt einer Kunden-Id.
+PLATFORM_SEALABLE: frozenset[str] = frozenset({"mail_secret"})
+PLATFORM_REF = "platform"
 
 #: Versiegelt, aber **kein** Einstellungs-Geheimnis: es reist in einem
 #: Wartungsauftrag und wird genau einmal angewandt (lokales Admin-Konto).

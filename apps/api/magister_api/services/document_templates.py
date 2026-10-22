@@ -24,7 +24,14 @@ from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.repositories.document_templates import DocumentTemplateRepository
 
 # The letter templates an operator may override (mirrors letters.ALLOWED_TEMPLATES).
-EDITABLE_KEYS: tuple[str, ...] = ("enrollment", "class_change", "password_handout")
+EDITABLE_KEYS: tuple[str, ...] = (
+    "enrollment",
+    "class_change",
+    "password_handout",
+    # Mail, kein Brief: Erinnerung vor dem Passwort-Ablauf. Die Anleitung, wie
+    # das Passwort zu ändern ist, schreibt der Kunde hier hinein.
+    "password_expiry_notice",
+)
 
 # Placeholders available to every template body (for the editor's variable list).
 PLACEHOLDERS: tuple[str, ...] = (
@@ -46,6 +53,11 @@ PLACEHOLDERS: tuple[str, ...] = (
     "old_class_name",
     "effective_date",
     "temp_password",
+    # Erinnerung vor dem Passwort-Ablauf (password_expiry_notice).
+    "person.display_name",
+    "person.upn",
+    "expires_on",
+    "days_left",
 )
 
 
@@ -75,6 +87,23 @@ STARTER_TEMPLATES: dict[str, dict[str, str]] = {
             "{{ old_class_name }} in die Klasse <strong>{{ class_.name }}</strong>.</p>\n"
             "<p>Neue Klassenlehrperson: {{ class_teacher }}.</p>\n"
             "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "password_expiry_notice": {
+        "subject": "Ihr Passwort läuft in {{ days_left }} Tagen ab",
+        "body_html": (
+            "<p>Guten Tag {{ person.display_name }}</p>\n"
+            "<p>Das Passwort Ihres Kontos <strong>{{ person.upn }}</strong> läuft am "
+            "<strong>{{ expires_on }}</strong> ab (in {{ days_left }} Tagen). Danach ist "
+            "keine Anmeldung mehr möglich, bis es neu gesetzt ist.</p>\n"
+            "<p><strong>So ändern Sie Ihr Passwort:</strong></p>\n"
+            "<ol>\n"
+            "<li>An einem Schulgerät anmelden.</li>\n"
+            "<li>Strg + Alt + Entf drücken und «Kennwort ändern» wählen.</li>\n"
+            "<li>Altes Passwort und zweimal das neue eingeben.</li>\n"
+            "</ol>\n"
+            "{% if school.contact %}<p>Bei Fragen: {{ school.contact }}</p>{% endif %}\n"
+            "<p>Freundliche Grüsse<br>{{ school.name }}</p>\n"
         ),
     },
     "password_handout": {
@@ -116,6 +145,23 @@ COMPANY_STARTER_TEMPLATES: dict[str, dict[str, str]] = {
             "<p>{{ student.display_name }} wechselt per {{ effective_date }} intern.</p>\n"
             "<p>Bei Fragen stehen wir gerne zur Verfügung.</p>\n"
             "<p>Freundliche Grüsse<br>{{ signed_by }}<br>{{ school.name }}</p>\n"
+        ),
+    },
+    "password_expiry_notice": {
+        "subject": "Ihr Passwort läuft in {{ days_left }} Tagen ab",
+        "body_html": (
+            "<p>Guten Tag {{ person.display_name }}</p>\n"
+            "<p>Das Passwort Ihres Kontos <strong>{{ person.upn }}</strong> läuft am "
+            "<strong>{{ expires_on }}</strong> ab (in {{ days_left }} Tagen). Danach ist "
+            "keine Anmeldung mehr möglich, bis es neu gesetzt ist.</p>\n"
+            "<p><strong>So ändern Sie Ihr Passwort:</strong></p>\n"
+            "<ol>\n"
+            "<li>An einem Firmengerät anmelden.</li>\n"
+            "<li>Strg + Alt + Entf drücken und «Kennwort ändern» wählen.</li>\n"
+            "<li>Altes Passwort und zweimal das neue eingeben.</li>\n"
+            "</ol>\n"
+            "{% if school.contact %}<p>Bei Fragen: {{ school.contact }}</p>{% endif %}\n"
+            "<p>Freundliche Grüsse<br>{{ school.name }}</p>\n"
         ),
     },
     "password_handout": {
@@ -203,6 +249,9 @@ def sample_context() -> dict[str, object]:
         "old_class_name": "3a",
         "effective_date": "01.02.2027",
         "temp_password": "Tiger-Wolke-47",
+        "person": {"display_name": "Anna Meier", "upn": "anna.meier@schule.example.ch"},
+        "expires_on": "05.11.2026",
+        "days_left": 7,
     }
 
 

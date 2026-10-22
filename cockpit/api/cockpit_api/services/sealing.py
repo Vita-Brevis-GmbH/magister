@@ -39,7 +39,13 @@ INFO = b"magister-sealed-secret-v1"
 
 #: Was sich versiegeln lässt. Eine Allowlist wie bei den Einstellungen: ein
 #: neues Geheimnis ist eine bewusste Entscheidung, kein freies Feld.
-SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret"})
+SEALABLE: frozenset[str] = frozenset({"oidc_client_secret", "ninja_client_secret", "mail_secret"})
+
+#: Plattform-Geheimnisse: einmal versiegelt mit dem Plattform-Schlüssel der
+#: Datenebene, gültig für alle Kunden ohne eigene Anbindung. Der Verweis im
+#: AAD ist PLATFORM_REF statt einer Kunden-Id. Dieselbe Liste wie dort.
+PLATFORM_SEALABLE: frozenset[str] = frozenset({"mail_secret"})
+PLATFORM_REF = "platform"
 
 #: Versiegelt, aber nicht als Einstellung gespeichert: reist in einem
 #: Wartungsauftrag und wird einmal angewandt (lokales Admin-Konto). Dieselbe
@@ -86,4 +92,12 @@ def seal(public_key_b64: str, plaintext: str, *, tenant_ref: str, name: str) -> 
     return f"{VERSION}.{_b64e(eph_pub + nonce + ct)}"
 
 
-__all__ = ["ONE_TIME_SEALABLE", "SEALABLE", "SealingError", "key_id", "seal"]
+__all__ = [
+    "ONE_TIME_SEALABLE",
+    "PLATFORM_REF",
+    "PLATFORM_SEALABLE",
+    "SEALABLE",
+    "SealingError",
+    "key_id",
+    "seal",
+]

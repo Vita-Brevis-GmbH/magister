@@ -42,6 +42,10 @@ class ClassMembershipOut(BaseModel):
     # Per-student grade ("Schuljahr"/Jahrgangsstufe) from ad_user_cache, so the
     # class roster can show which year each child is in. -1 = 1. KG … 13.
     jahrgangsstufe: int | None = None
+    # Passwort-Ablauf (None: läuft nie ab oder unbekannt) und ob die
+    # Erinnerung das Kind per Mail erreicht — sonst muss die Lehrperson es tun.
+    password_expires_at: datetime | None = None
+    has_mail: bool | None = None
 
 
 class BulkClassMembershipCreate(BaseModel):

@@ -113,6 +113,8 @@ PERSON = (
     "group_template_id",
     "last_sync_at",
     "ad_missing_since",
+    "password_last_set",
+    "password_expires_at",
 )
 
 
@@ -398,6 +400,23 @@ EXPORT_TABLES: tuple[ExportTable, ...] = (
             "Vorlagen, die Vita Brevis für diese Installation vorgegeben hat (ADR-0018) — "
             "hier die Kopfdaten. Der Text liegt unter vorlagen/plattform/. Sie stehen im "
             "Export, weil mit ihnen gedruckt wurde: wer geht, nimmt seine Briefe mit."
+        ),
+    ),
+    ExportTable(
+        table="password_expiry_notices",
+        columns=(
+            "id",
+            "ad_object_guid",
+            "expires_at",
+            "threshold_days",
+            "status",
+            "recipient",
+            "error",
+            "created_at",
+        ),
+        description=(
+            "Erinnerungen vor dem Passwort-Ablauf: an wen, zu welchem Ablauf und welcher "
+            "Schwelle, mit welchem Ergebnis (gesendet, gescheitert, kein Postfach)."
         ),
     ),
     ExportTable(
