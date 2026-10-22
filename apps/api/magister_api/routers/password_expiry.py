@@ -31,19 +31,28 @@ require_reader = require_capability(Capability.USER_READ)  # admin + schulleitun
 
 @router.get("", response_model=PasswordExpiryOverview)
 async def password_expiry_overview(
-    view: Literal["expiring", "no_mail"] = Query(default="expiring"),
+    view: Literal["expiring", "no_mail", "age"] = Query(default="expiring"),
     days: int = Query(default=14, ge=1, le=90),
     school_id: int | None = Query(default=None),
+    # Nur "age": älteste zuerst (desc = Alter absteigend) oder jüngste zuerst.
+    direction: Literal["asc", "desc"] = Query(default="desc", alias="dir"),
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     user: AuthenticatedUser = Depends(require_reader),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> PasswordExpiryOverview:
     now = utcnow()
     repo = PasswordExpiryRepository(session, user.to_scope())
+    total: int | None = None
     if view == "expiring":
         found = await repo.expiring(now=now, within_days=days, school_id=school_id)
-    else:
+    elif view == "no_mail":
         found = await repo.without_mail(school_id=school_id)
+    else:
+        found, total = await repo.by_age(
+            oldest_first=direction == "desc", offset=offset, limit=limit, school_id=school_id
+        )
     notices = await repo.last_notices([u for u, _ in found])
     rows: list[PasswordExpiryRow] = []
     for u, tpl_name in found:
@@ -70,6 +79,10 @@ async def password_expiry_overview(
                 notice_status=notice.status if notice else None,
                 notice_at=notice.created_at if notice else None,
                 notice_threshold_days=notice.threshold_days if notice else None,
+                password_last_set=u.password_last_set,
+                age_days=(now - u.password_last_set).days if u.password_last_set else None,
+                password_never_expires=u.password_never_expires,
+                password_known=u.password_info_at is not None,
             )
         )
     eff = await AppSettingsService(session, settings).get_effective()
@@ -79,6 +92,9 @@ async def password_expiry_overview(
         view=view,
         within_days=days,
         rows=rows,
+        total=total if total is not None else len(rows),
+        offset=offset if view == "age" else 0,
+        limit=limit if view == "age" else len(rows),
         notice_enabled=eff.expiry_notice_enabled,
         mail_ready=not mail_config_from(eff).missing(),
         info_as_of=info_as_of,

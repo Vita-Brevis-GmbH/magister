@@ -1563,6 +1563,15 @@
     "never": "never expires",
     "expired": "expired",
     "in_days_one": "in {{count}} day",
-    "in_days_other": "in {{count}} days"
+    "in_days_other": "in {{count}} days",
+    "view_age": "Password age",
+    "col_set": "Set on",
+    "col_age": "Age",
+    "empty_age": "No active accounts.",
+    "must_change": "change required",
+    "unknown": "unknown",
+    "range": "{{from}}–{{to}} of {{total}}",
+    "prev": "Previous",
+    "next": "Next"
   }
 }

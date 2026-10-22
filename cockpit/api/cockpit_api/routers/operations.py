@@ -31,6 +31,8 @@ from cockpit_api.models.operations import (
 )
 from cockpit_api.schemas.operations import (
     LocalAdminSetupIn,
+    MailTestIn,
+    MailTestOut,
     MaintenanceRequestIn,
     MaintenanceRequestOut,
     SealedSecretIn,
@@ -249,6 +251,11 @@ async def request_maintenance(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             "Das lokale Admin-Konto hat einen eigenen Weg: POST …/local-admin.",
         )
+    if body.action is MaintenanceAction.mail_test:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Die Testmail hat einen eigenen Weg: POST …/mail-test.",
+        )
     if body.confirm_slug.strip() != tenant.slug:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -283,6 +290,62 @@ async def request_maintenance(
         caller.actor,
     )
     return row
+
+
+async def order_mail_test(
+    session: AsyncSession, tenant: Tenant, to: str, actor: str
+) -> TenantMaintenanceRequest:
+    """Testmail als Auftrag erfassen; ein noch offener älterer wird ersetzt.
+
+    Ersetzt und nicht abgelehnt: wer die Empfängeradresse korrigiert, will
+    nicht erst auf den alten Auftrag warten.
+    """
+    old = (
+        await session.execute(
+            select(TenantMaintenanceRequest)
+            .where(TenantMaintenanceRequest.tenant_id == tenant.id)
+            .where(TenantMaintenanceRequest.action == MaintenanceAction.mail_test)
+            .where(TenantMaintenanceRequest.state == MaintenanceState.requested)
+        )
+    ).scalars()
+    for row in old:
+        row.state = MaintenanceState.cancelled
+        row.finished_at = datetime.now(UTC)
+        row.params = None
+    row = TenantMaintenanceRequest(
+        tenant_id=tenant.id,
+        action=MaintenanceAction.mail_test,
+        reason=f"Testmail an {to}"[:500],
+        requested_by=actor,
+        params={"to": to},
+    )
+    session.add(row)
+    await session.commit()
+    await session.refresh(row)
+    logger.info("Testmail für %s erfasst von %s", tenant.slug, actor)
+    return row
+
+
+@router.post("/mail-test", response_model=MailTestOut, status_code=status.HTTP_201_CREATED)
+async def mail_test(
+    tenant_id: UUID,
+    body: MailTestIn,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> MailTestOut:
+    """Echte Testmail über die Installation dieses Kunden (seine geltende Anbindung).
+
+    Die Konsole kann selbst nicht senden — sie kennt das Geheimnis nicht. Die
+    Datenebene führt den Auftrag beim nächsten Abgleich aus und meldet das
+    Ergebnis mit der Zustandsmeldung zurück.
+    """
+    tenant = await _tenant(session, tenant_id)
+    row = await order_mail_test(session, tenant, body.to, caller.actor)
+    return MailTestOut(
+        tenant_id=tenant.id,
+        tenant_slug=tenant.slug,
+        request=MaintenanceRequestOut.model_validate(row),
+    )
 
 
 @router.post(

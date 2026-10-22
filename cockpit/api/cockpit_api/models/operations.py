@@ -99,6 +99,9 @@ class MaintenanceAction(enum.StrEnum):
     #: Lokales Admin-Konto anlegen oder Passwort setzen. Eigener Endpunkt
     #: (POST …/local-admin), nicht über die allgemeine Wartung bestellbar.
     local_admin_setup = "local_admin_setup"
+    #: Eine echte Testmail mit der Mail-Anbindung des Kunden. Eigener
+    #: Endpunkt (POST …/mail-test bzw. /platform/mail-test).
+    mail_test = "mail_test"
 
 
 class MaintenanceState(enum.StrEnum):

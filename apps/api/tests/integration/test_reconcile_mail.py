@@ -159,3 +159,59 @@ async def test_the_status_report_carries_the_platform_key_only_when_set(
     )
     assert keyed["platform_sealed_public_key"] == public_key_b64(PLATFORM_KEY)
     assert PLATFORM_KEY not in repr(keyed)
+
+
+async def test_mail_test_order_sends_with_the_effective_connection(
+    db_session: AsyncSession, app_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from magister_api.mail import MailConfig, MailError, MailMessage
+    from magister_api.tenancy.desired_state import DesiredMaintenance
+
+    sent: list[tuple[MailConfig, MailMessage]] = []
+
+    async def fake_send(config: MailConfig, message: MailMessage) -> None:
+        if message.to == "kaputt@vb.ch":
+            raise MailError("graph: token 401 invalid_client: AADSTS7000215")
+        sent.append((config, message))
+
+    monkeypatch.setattr("magister_api.services.reconciler.send_mail", fake_send)
+    settings = _settings(app_settings)
+    console = _console_sealing()
+    blob = console.seal(
+        public_key_b64(PLATFORM_KEY), "vb-geheim", tenant_ref=PLATFORM_REF, name="mail_secret"
+    )
+
+    def order(order_id: str, to: str) -> DesiredState:
+        return DesiredState(
+            settings=GRAPH_STANDARD,
+            platform_sealed_secrets={"mail_secret": blob},
+            maintenance=(
+                DesiredMaintenance(
+                    id=order_id,
+                    action="mail_test",
+                    requested_by="ops@vitabrevis.ch",
+                    reason=f"Testmail an {to}",
+                    params={"to": to},
+                ),
+            ),
+        )
+
+    ok_id = "11111111-1111-1111-1111-111111111111"
+    result = await _run(db_session, settings, order(ok_id, "ops@vb.ch"))
+    # Dieselbe Runde: erst Anbindung und Geheimnis, dann der Versand damit.
+    config, message = sent[0]
+    assert (config.transport, config.secret, message.to) == ("graph", "vb-geheim", "ops@vb.ch")
+    assert result.maintenance_results[0]["id"] == ok_id
+    assert result.maintenance_results[0]["ok"] is True
+
+    # Nur einmal: der zweite Lauf meldet das Ergebnis, sendet aber nicht nochmals.
+    again = await _run(db_session, settings, order(ok_id, "ops@vb.ch"))
+    assert len(sent) == 1
+    assert again.maintenance_results[0]["ok"] is True
+
+    bad_id = "22222222-2222-2222-2222-222222222222"
+    failed = await _run(db_session, settings, order(bad_id, "kaputt@vb.ch"))
+    outcome = failed.maintenance_results[0]
+    assert outcome["ok"] is False
+    assert outcome["result"]["error"].startswith("graph: token 401")
+    assert "vb-geheim" not in repr(outcome)

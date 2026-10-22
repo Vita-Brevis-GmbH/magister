@@ -118,6 +118,23 @@ class MaintenanceRequestOut(BaseModel):
     result: dict[str, Any] | None
 
 
+class MailTestIn(BaseModel):
+    """Testmail: an wen. Bei der Plattform optional der Kunde, über den sie geht."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    to: str = Field(min_length=3, max_length=320, pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    tenant_id: UUID | None = None
+
+
+class MailTestOut(BaseModel):
+    """Der erfasste Auftrag und der Kunde, dessen Installation die Mail sendet."""
+
+    tenant_id: UUID
+    tenant_slug: str
+    request: MaintenanceRequestOut
+
+
 class LocalAdminSetupIn(BaseModel):
     """Lokales Admin-Konto einrichten oder Passwort neu setzen."""
 

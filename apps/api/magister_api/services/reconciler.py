@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.auth.capabilities import Capability
 from magister_api.config import Settings
+from magister_api.mail import MailError, MailMessage, mail_config_from, send_mail
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.audit import AuditEvent
 from magister_api.models.base import utcnow
@@ -635,6 +636,8 @@ class Reconciler:
             }
         elif request.action == "local_admin_setup":
             outcome = await self._local_admin_setup(request, actor=actor, tenant_ref=tenant_ref)
+        elif request.action == "mail_test":
+            outcome = await self._mail_test(request)
         else:  # audit_reset
             imports_deleted = await purge_import_history(self.session)
             deleted = await audit.purge(
@@ -666,6 +669,28 @@ class Reconciler:
         logger.info(
             "Wartungsauftrag %s (%s) für %s ausgeführt", request.id, request.action, tenant_slug
         )
+
+    async def _mail_test(self, request: DesiredMaintenance) -> dict[str, Any]:
+        """Testmail mit der geltenden Anbindung — echter Versand, Ergebnis an die Konsole.
+
+        Läuft nach dem Abgleich der Einstellungen und Geheimnisse derselben
+        Runde: geprüft wird also, was der Kunde ab jetzt verwendet. Die
+        Fehlermeldung nennt nie das Geheimnis (siehe ``magister_api.mail``).
+        """
+        to = (request.params.get("to") or "").strip()
+        if "@" not in to or " " in to:
+            return {"ok": False, "error": "recipient_invalid"}
+        eff = await AppSettingsService(self.session, self.settings).get_effective()
+        config = mail_config_from(eff)
+        text = "Diese Testmail bestätigt, dass Magister Mails versenden kann."
+        try:
+            await send_mail(
+                config,
+                MailMessage(to=to, subject="Magister: Testmail", html=f"<p>{text}</p>", text=text),
+            )
+        except MailError as exc:
+            return {"ok": False, "transport": config.transport, "error": str(exc)[:200]}
+        return {"ok": True, "transport": config.transport}
 
     async def _local_admin_setup(
         self, request: DesiredMaintenance, *, actor: str, tenant_ref: str | None

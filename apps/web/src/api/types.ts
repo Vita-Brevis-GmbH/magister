@@ -1320,7 +1320,7 @@ export interface TestMailOut {
   error: string | null;
 }
 
-export type PasswordExpiryView = "expiring" | "no_mail";
+export type PasswordExpiryView = "expiring" | "no_mail" | "age";
 
 export interface PasswordExpiryRow {
   ad_object_guid: string;
@@ -1339,12 +1339,20 @@ export interface PasswordExpiryRow {
   notice_status: "sent" | "failed" | "no_mail" | null;
   notice_at: string | null;
   notice_threshold_days: number | null;
+  // Zuletzt gesetzt und Alter in Tagen; null = Änderung verlangt oder unbekannt.
+  password_last_set: string | null;
+  age_days: number | null;
+  password_never_expires: boolean;
+  password_known: boolean;
 }
 
 export interface PasswordExpiryOverview {
   view: PasswordExpiryView;
   within_days: number;
   rows: PasswordExpiryRow[];
+  total: number;
+  offset: number;
+  limit: number;
   notice_enabled: boolean;
   mail_ready: boolean;
   info_as_of: string | null;

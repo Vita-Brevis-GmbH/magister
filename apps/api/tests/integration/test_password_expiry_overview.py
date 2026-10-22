@@ -138,3 +138,57 @@ async def test_reading_needs_a_role(as_schulleitung_a: AsyncClient) -> None:
     # Schulleitung liest die Übersicht, aber nicht den Mail-Status (nur Admin).
     assert (await as_schulleitung_a.get("/password-expiry")).status_code == 200
     assert (await as_schulleitung_a.get("/admin/mail/status")).status_code == 403
+
+
+async def test_password_age_of_all_accounts_sorted_and_paged(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int, school_b: int
+) -> None:
+    now = utcnow()
+    for n, school, days_ago in (
+        (31, school_a, 400),
+        (32, school_a, 10),
+        (33, school_a, 90),
+        (34, school_a, None),  # Änderung verlangt
+        (35, school_b, 999),  # fremder Standort
+    ):
+        db_session.add(
+            AdUserCache(
+                ad_object_guid=_guid(n),
+                school_id=school,
+                upn=f"alt{n}@schule.ch",
+                surname=f"Alter{n}",
+                kind="teacher",
+                enabled=True,
+                password_never_expires=n == 31,
+                password_last_set=now - timedelta(days=days_ago) if days_ago else None,
+                password_info_at=now,
+            )
+        )
+    await db_session.commit()
+
+    async def ages(**params: Any) -> tuple[list[tuple[str, Any]], int]:
+        r = await as_schulleitung_a.get("/password-expiry", params={"view": "age", **params})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        rows = [
+            (row["surname"], row["age_days"])
+            for row in body["rows"]
+            if (row["surname"] or "").startswith("Alter")
+        ]
+        return rows, body["total"]
+
+    oldest, total = await ages()
+    # Älteste zuerst; ohne Datum am Schluss; Schule B fehlt. Das Konto der
+    # Schulleitung (Fixture, ohne Datum) zählt mit.
+    assert oldest == [("Alter31", 400), ("Alter33", 90), ("Alter32", 10), ("Alter34", None)]
+    assert total == 5
+    newest, _ = await ages(dir="asc")
+    assert newest[:3] == [("Alter32", 10), ("Alter33", 90), ("Alter31", 400)]
+    page, _ = await ages(limit=2, offset=1)
+    assert page == [("Alter33", 90), ("Alter32", 10)]
+
+    r = await as_schulleitung_a.get("/password-expiry", params={"view": "age"})
+    first = r.json()["rows"][0]
+    assert first["password_never_expires"] is True
+    assert first["password_known"] is True
+    assert first["password_last_set"] is not None

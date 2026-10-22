@@ -48,6 +48,11 @@ die IP der Plattform zulässt).
 
 ## 3 · Prüfen
 
+* Cockpit → Einstellungen → Mailversand → **Testmail** (Empfänger frei
+  wählbar). Die Konsole kann selbst nicht senden; sie gibt einen Auftrag an
+  die Installation eines Kunden, der den Standard verwendet, und zeigt nach
+  dem nächsten Abgleich (meist unter einer Minute) das Ergebnis. Beim Kunden
+  (Kunde → Einstellungen → Mailversand) gilt dessen Anbindung.
 * Magister → Einstellungen → System → **Testmail senden**. Die Meldung nennt
   bei einem Fehler den Grund (z. B. `graph: sendMail 403 ErrorAccessDenied`
   = Zugriffsrichtlinie oder fehlende Zustimmung).

@@ -1563,6 +1563,15 @@
     "never": "läuft nie ab",
     "expired": "abgelaufen",
     "in_days_one": "in {{count}} Tag",
-    "in_days_other": "in {{count}} Tagen"
+    "in_days_other": "in {{count}} Tagen",
+    "view_age": "Passwortalter",
+    "col_set": "Gesetzt am",
+    "col_age": "Alter",
+    "empty_age": "Keine aktiven Konten.",
+    "must_change": "Änderung verlangt",
+    "unknown": "unbekannt",
+    "range": "{{from}}–{{to}} von {{total}}",
+    "prev": "Zurück",
+    "next": "Weiter"
   }
 }

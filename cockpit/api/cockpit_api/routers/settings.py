@@ -28,7 +28,12 @@ from cockpit_api.db import get_session
 from cockpit_api.models import Tenant
 from cockpit_api.models.operations import PlatformSealedSecret, TenantStatusReport
 from cockpit_api.models.settings import TenantSettings
+from cockpit_api.models.tenant import TenantStatus
+from cockpit_api.routers.operations import order_mail_test
 from cockpit_api.schemas.operations import (
+    MailTestIn,
+    MailTestOut,
+    MaintenanceRequestOut,
     PlatformSealedSecretOut,
     PlatformSecretsOut,
     SealedSecretIn,
@@ -51,7 +56,12 @@ from cockpit_api.services.sealing import (
     key_id,
     seal,
 )
-from cockpit_api.services.settings import SettingsError, SettingsService, strip_retired
+from cockpit_api.services.settings import (
+    SettingsError,
+    SettingsService,
+    has_own_mail,
+    strip_retired,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -234,6 +244,50 @@ async def delete_platform_secret(
         await session.commit()
         logger.info("Plattform-Geheimnis %s entfernt von %s", name, caller.actor)
     return await _platform_secrets_view(session)
+
+
+@platform.post("/mail-test", response_model=MailTestOut, status_code=status.HTTP_201_CREATED)
+async def platform_mail_test(
+    body: MailTestIn,
+    caller: Caller = Depends(require_person),
+    session: AsyncSession = Depends(get_session),
+) -> MailTestOut:
+    """Echte Testmail mit dem Plattform-Standard.
+
+    Gesendet wird über die Installation eines Kunden, der den Standard
+    verwendet (ohne eigene Anbindung) und sich zuletzt gemeldet hat — die
+    Konsole selbst kann das versiegelte Geheimnis nicht öffnen. Mit
+    ``tenant_id`` lässt sich der Kunde festlegen.
+    """
+    if body.tenant_id is not None:
+        tenant = await _known_tenant(session, body.tenant_id)
+    else:
+        own = {
+            row.tenant_id
+            for row in (await session.execute(select(TenantSettings))).scalars()
+            if has_own_mail(row.overrides)
+        }
+        rows = (
+            await session.execute(
+                select(Tenant)
+                .join(TenantStatusReport, TenantStatusReport.tenant_id == Tenant.id)
+                .where(Tenant.status == TenantStatus.active)
+                .order_by(TenantStatusReport.reported_at.desc())
+            )
+        ).scalars()
+        tenant = next((t for t in rows if t.id not in own), None)
+        if tenant is None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Kein aktiver Kunde verwendet den Plattform-Standard und meldet sich — "
+                "über ihn ginge die Testmail hinaus.",
+            )
+    row = await order_mail_test(session, tenant, body.to, caller.actor)
+    return MailTestOut(
+        tenant_id=tenant.id,
+        tenant_slug=tenant.slug,
+        request=MaintenanceRequestOut.model_validate(row),
+    )
 
 
 @tenant_scoped.get("/settings", response_model=TenantSettingsOut)

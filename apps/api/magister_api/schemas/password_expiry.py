@@ -21,6 +21,13 @@ class PasswordExpiryRow(BaseModel):
     password_expires_at: datetime | None
     #: Ganze Tage bis zum Ablauf; negativ heisst "seit … Tagen abgelaufen".
     days_left: int | None
+    #: Wann das Passwort zuletzt gesetzt wurde und wie alt es ist (Tage).
+    #: None: Änderung bei der nächsten Anmeldung verlangt — oder unbekannt.
+    password_last_set: datetime | None = None
+    age_days: int | None = None
+    password_never_expires: bool = False
+    #: Ob der Abgleich den Ablauf schon gelesen hat (sonst "unbekannt").
+    password_known: bool = False
     #: Letzte Erinnerung zum aktuellen Ablauf: sent / failed / no_mail.
     notice_status: str | None = None
     notice_at: datetime | None = None
@@ -31,6 +38,10 @@ class PasswordExpiryOverview(BaseModel):
     view: str
     within_days: int
     rows: list[PasswordExpiryRow]
+    #: Alle Treffer (für die Seitenwahl in der Ansicht "Passwortalter").
+    total: int = 0
+    offset: int = 0
+    limit: int = 0
     #: Ob die Erinnerung eingeschaltet und der Mailversand bereit ist —
     #: sonst steht über der Liste ein Hinweis.
     notice_enabled: bool

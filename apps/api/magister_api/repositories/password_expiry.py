@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import Select, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.auth import AdUserCache
@@ -61,6 +61,36 @@ class PasswordExpiryRepository(BaseRepository):
             .limit(MAX_ROWS)
         )
         return [(u, name) for u, name in (await self.session.execute(stmt)).all()]
+
+    async def by_age(
+        self,
+        *,
+        oldest_first: bool,
+        offset: int,
+        limit: int,
+        school_id: int | None = None,
+    ) -> tuple[list[tuple[AdUserCache, str | None]], int]:
+        """Alle aktiven Konten nach Passwortalter (``password_last_set``), seitenweise.
+
+        Ohne Datum (Änderung bei der nächsten Anmeldung verlangt, oder noch
+        nicht gelesen) stehen immer am Schluss.
+        """
+        base = self._base(school_id)
+        total = (
+            await self.session.execute(select(func.count()).select_from(base.subquery()))
+        ).scalar_one()
+        order = (
+            AdUserCache.password_last_set.asc().nulls_last()
+            if oldest_first
+            else AdUserCache.password_last_set.desc().nulls_last()
+        )
+        stmt = (
+            base.order_by(order, AdUserCache.surname, AdUserCache.given_name)
+            .offset(offset)
+            .limit(min(limit, MAX_ROWS))
+        )
+        rows = [(u, name) for u, name in (await self.session.execute(stmt)).all()]
+        return rows, int(total)
 
     async def last_notices(self, users: list[AdUserCache]) -> dict[str, PasswordExpiryNotice]:
         """Die jüngste Erinnerung je Konto — nur für dessen aktuellen Ablauf."""

@@ -36,6 +36,10 @@ const ROW = {
   mail: "lea@schule.ch",
   password_expires_at: "2026-10-27T06:00:00Z",
   days_left: 5,
+  password_last_set: "2026-07-29T06:00:00Z",
+  age_days: 85,
+  password_never_expires: false,
+  password_known: true,
   notice_status: "sent",
   notice_at: "2026-10-22T06:00:00Z",
   notice_threshold_days: 7,
@@ -56,9 +60,31 @@ beforeEach(() => {
           view,
           within_days: Number(u.searchParams.get("days")),
           rows:
-            view === "no_mail"
-              ? [{ ...ROW, ad_object_guid: "g2", display_name: "Tim Ohne", mail: null }]
-              : [ROW, { ...ROW, ad_object_guid: "g3", display_name: "Alt", days_left: -2 }],
+            view === "age"
+              ? u.searchParams.get("dir") === "asc"
+                ? [{ ...ROW, display_name: "Neu", age_days: 3 }]
+                : [
+                    {
+                      ...ROW,
+                      display_name: "Uralt",
+                      age_days: 400,
+                      password_last_set: "2025-09-17T08:00:00Z",
+                      password_never_expires: true,
+                    },
+                    {
+                      ...ROW,
+                      ad_object_guid: "g4",
+                      display_name: "Muss ändern",
+                      age_days: null,
+                      password_last_set: null,
+                    },
+                  ]
+              : view === "no_mail"
+                ? [{ ...ROW, ad_object_guid: "g2", display_name: "Tim Ohne", mail: null }]
+                : [ROW, { ...ROW, ad_object_guid: "g3", display_name: "Alt", days_left: -2 }],
+          total: view === "age" ? 250 : 2,
+          offset: Number(u.searchParams.get("offset") ?? 0),
+          limit: 100,
           notice_enabled: true,
           mail_ready: false,
           info_as_of: "2026-10-22T05:00:00Z",
@@ -120,5 +146,29 @@ describe("Passwort-Ablauf", () => {
       .map((c) => new URL(String(c[0]), "http://x"))
       .filter((u) => u.pathname === "/api/password-expiry");
     expect(calls.at(-1)?.searchParams.get("days")).toBe("30");
+  });
+
+  it("zeigt das Passwortalter aller Konten, älteste zuerst, umkehrbar und seitenweise", async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByText("Lea Muster");
+    await user.click(screen.getByRole("tab", { name: "Passwortalter" }));
+    const old = (await screen.findByText("Uralt")).closest("tr") as HTMLElement;
+    expect(within(old).getByText("400 Tage")).toBeTruthy();
+    expect(within(old).getByText("17.09.2025")).toBeTruthy();
+    expect(within(old).getByText("läuft nie ab")).toBeTruthy();
+    const must = screen.getByText("Muss ändern").closest("tr") as HTMLElement;
+    expect(within(must).getByText("Änderung verlangt")).toBeTruthy();
+    expect(screen.getByText("250 Konten")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /Alter/ }));
+    expect(await screen.findByText("Neu")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Weiter" }));
+    const calls = fetchMock.mock.calls
+      .map((c) => new URL(String(c[0]), "http://x"))
+      .filter((u) => u.searchParams.get("view") === "age");
+    const last = calls.at(-1);
+    expect(last?.searchParams.get("dir")).toBe("asc");
+    expect(last?.searchParams.get("offset")).toBe("100");
   });
 });

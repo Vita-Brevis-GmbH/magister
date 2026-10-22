@@ -52,7 +52,11 @@ export const listSealedSecrets = (tenantId: string) =>
 export const putSealedSecret = (tenantId: string, name: string, value: string) =>
   put<SealedSecret[]>(`/api/tenants/${tenantId}/sealed-secrets/${name}`, { value });
 
-export type MaintenanceAction = "demo_purge" | "audit_reset" | "local_admin_setup";
+export type MaintenanceAction =
+  | "demo_purge"
+  | "audit_reset"
+  | "local_admin_setup"
+  | "mail_test";
 export type MaintenanceState = "requested" | "done" | "failed" | "cancelled";
 
 export interface MaintenanceRequest {
@@ -82,3 +86,16 @@ export const setupLocalAdmin = (
   tenantId: string,
   body: { username: string; password: string; reset_mfa: boolean },
 ) => post<MaintenanceRequest>(`/api/tenants/${tenantId}/local-admin`, body);
+
+/** Echte Testmail: die Installation des Kunden sendet beim nächsten Abgleich. */
+export interface MailTestOrder {
+  tenant_id: string;
+  tenant_slug: string;
+  request: MaintenanceRequest;
+}
+
+export const orderTenantMailTest = (tenantId: string, to: string) =>
+  post<MailTestOrder>(`/api/tenants/${tenantId}/mail-test`, { to });
+
+export const orderPlatformMailTest = (to: string) =>
+  post<MailTestOrder>("/api/platform/mail-test", { to });

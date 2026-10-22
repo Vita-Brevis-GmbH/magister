@@ -60,7 +60,9 @@ class DesiredMaintenance:
 #: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
 #: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
 #: als Fehler zurückgemeldet.
-MAINTENANCE_ACTIONS: frozenset[str] = frozenset({"demo_purge", "audit_reset", "local_admin_setup"})
+MAINTENANCE_ACTIONS: frozenset[str] = frozenset(
+    {"demo_purge", "audit_reset", "local_admin_setup", "mail_test"}
+)
 
 
 @dataclass(frozen=True)

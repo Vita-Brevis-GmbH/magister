@@ -1566,6 +1566,15 @@
     "never": "non scade mai",
     "expired": "scaduta",
     "in_days_one": "tra {{count}} giorno",
-    "in_days_other": "tra {{count}} giorni"
+    "in_days_other": "tra {{count}} giorni",
+    "view_age": "Età delle password",
+    "col_set": "Impostata il",
+    "col_age": "Età",
+    "empty_age": "Nessun account attivo.",
+    "must_change": "cambio richiesto",
+    "unknown": "sconosciuta",
+    "range": "{{from}}–{{to}} di {{total}}",
+    "prev": "Indietro",
+    "next": "Avanti"
   }
 }

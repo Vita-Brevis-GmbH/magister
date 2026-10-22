@@ -1794,13 +1794,25 @@ export function subjectAccessCsvUrl(guid: string): string {
 
 // --- Mailversand + Passwort-Ablauf -------------------------------------------
 
-export function usePasswordExpiry(view: PasswordExpiryView, days: number) {
+export function usePasswordExpiry(
+  view: PasswordExpiryView,
+  days: number,
+  page: { dir: "asc" | "desc"; offset: number; limit: number } = {
+    dir: "desc",
+    offset: 0,
+    limit: 100,
+  },
+) {
+  const params = new URLSearchParams({ view, days: String(days) });
+  if (view === "age") {
+    params.set("dir", page.dir);
+    params.set("offset", String(page.offset));
+    params.set("limit", String(page.limit));
+  }
+  const qs = params.toString();
   return useQuery<PasswordExpiryOverview>({
-    queryKey: ["password-expiry", view, days],
-    queryFn: () =>
-      apiFetch<PasswordExpiryOverview>(
-        `/password-expiry?${new URLSearchParams({ view, days: String(days) }).toString()}`,
-      ),
+    queryKey: ["password-expiry", qs],
+    queryFn: () => apiFetch<PasswordExpiryOverview>(`/password-expiry?${qs}`),
     placeholderData: keepPreviousData,
   });
 }

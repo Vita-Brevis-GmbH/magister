@@ -1566,6 +1566,15 @@
     "never": "n'expire jamais",
     "expired": "expiré",
     "in_days_one": "dans {{count}} jour",
-    "in_days_other": "dans {{count}} jours"
+    "in_days_other": "dans {{count}} jours",
+    "view_age": "Âge des mots de passe",
+    "col_set": "Défini le",
+    "col_age": "Âge",
+    "empty_age": "Aucun compte actif.",
+    "must_change": "changement exigé",
+    "unknown": "inconnu",
+    "range": "{{from}}–{{to}} sur {{total}}",
+    "prev": "Précédent",
+    "next": "Suivant"
   }
 }

@@ -9,6 +9,7 @@ import {
   putPlatformSecret,
 } from "../api/tenantSettings";
 import { ErrorBox } from "./ErrorBox";
+import { MailTestBox } from "./MailTestBox";
 
 /** Felder des Standard-Mailversands — dieselben Namen wie in der Datenebene. */
 const TEXT_KEYS = [
@@ -271,6 +272,14 @@ function MailForm({
           {secretsError != null && <ErrorBox error={secretsError} />}
         </div>
       )}
+
+      <div className="mt-4 border-t pt-3">
+        <MailTestBox />
+        <p className="mt-1 text-xs text-slate-500">
+          Gesendet wird mit dem gespeicherten Standard (vorher speichern und versiegeln) über einen
+          Kunden, der ihn verwendet.
+        </p>
+      </div>
     </section>
   );
 }

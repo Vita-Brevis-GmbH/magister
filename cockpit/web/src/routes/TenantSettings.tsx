@@ -15,6 +15,7 @@ import {
 import { ErrorBox } from "../components/ErrorBox";
 import { EntraHelp, EntraHelpButton } from "../components/EntraHelp";
 import { LocalAdminSection } from "../components/LocalAdminSection";
+import { MailTestBox } from "../components/MailTestBox";
 
 type Kind = "text" | "lines" | "number" | "bool" | "choice" | "tristate" | "intlist";
 
@@ -570,6 +571,13 @@ function SettingsForm({
         </div>
         <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-3">
           {MAIL_NOTICE_FIELDS.map(renderField)}
+        </div>
+        <div className="mt-4 border-t pt-3">
+          <MailTestBox tenantId={tenantId} />
+          <p className="mt-1 text-xs text-slate-500">
+            Mit der Anbindung, die für diesen Kunden gilt (eigene oder Plattform-Standard) —
+            Änderungen vorher speichern.
+          </p>
         </div>
       </section>
 

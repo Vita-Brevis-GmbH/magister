@@ -552,3 +552,73 @@ class TestPlatformMailSecret:
 
         resp = console_client.delete("/api/platform/sealed-secrets/mail_secret")
         assert resp.json()["secrets"][0]["sealed"] is False
+
+
+class TestMailTest:
+    """Echte Testmail: als Auftrag an die Datenebene, Ergebnis mit der Zustandsmeldung."""
+
+    def test_tenant_mail_test_round_trip(self, console_client: TestClient, tenant_id: str) -> None:
+        resp = console_client.post(
+            f"/api/tenants/{tenant_id}/mail-test", json={"to": "it@kunde.ch"}
+        )
+        assert resp.status_code == 201, resp.text
+        first = resp.json()["request"]["id"]
+        # Neue Adresse: der offene Auftrag wird ersetzt, nicht abgelehnt.
+        resp = console_client.post(
+            f"/api/tenants/{tenant_id}/mail-test", json={"to": "ops@kunde.ch"}
+        )
+        second = resp.json()["request"]["id"]
+        desired = console_client.get(f"/api/tenants/{tenant_id}/desired-state").json()
+        orders = [m for m in desired["maintenance"] if m["action"] == "mail_test"]
+        assert [(m["id"], m["params"]) for m in orders] == [(second, {"to": "ops@kunde.ch"})]
+
+        # Die Datenebene meldet das Ergebnis — der Auftrag ist abgeschlossen.
+        console_client.post(
+            f"/api/tenants/{tenant_id}/status",
+            json=_report(
+                maintenance=[{"id": second, "ok": False, "result": {"error": "graph: token 401"}}]
+            ),
+        )
+        rows = {
+            r["id"]: r for r in console_client.get(f"/api/tenants/{tenant_id}/maintenance").json()
+        }
+        assert rows[first]["state"] == "cancelled"
+        assert rows[second]["state"] == "failed"
+        assert rows[second]["result"] == {"error": "graph: token 401"}
+
+    def test_invalid_address_and_generic_path_are_refused(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        assert (
+            console_client.post(
+                f"/api/tenants/{tenant_id}/mail-test", json={"to": "keine-adresse"}
+            ).status_code
+            == 422
+        )
+        resp = console_client.post(
+            f"/api/tenants/{tenant_id}/maintenance",
+            json={"action": "mail_test", "reason": "Testmail bitte", "confirm_slug": SLUG},
+        )
+        assert resp.status_code == 422
+
+    def test_platform_mail_test_goes_through_a_tenant_on_the_standard(
+        self, console_client: TestClient, tenant_id: str
+    ) -> None:
+        # Ohne Zustandsmeldung kein Kunde, über den gesendet werden könnte.
+        assert (
+            console_client.post("/api/platform/mail-test", json={"to": "x@vb.ch"}).status_code
+            == 409
+        )
+        console_client.post(f"/api/tenants/{tenant_id}/status", json=_report())
+        resp = console_client.post("/api/platform/mail-test", json={"to": "x@vb.ch"})
+        assert resp.status_code == 201, resp.text
+        assert resp.json()["tenant_slug"] == SLUG
+        # Mit eigener Anbindung verwendet der Kunde den Standard nicht mehr.
+        console_client.put(
+            f"/api/tenants/{tenant_id}/settings",
+            json={"overrides": {"mail_transport": "smtp", "smtp_host": "mail.kunde.ch"}},
+        )
+        assert (
+            console_client.post("/api/platform/mail-test", json={"to": "x@vb.ch"}).status_code
+            == 409
+        )

@@ -294,6 +294,8 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 - [ ] **F-23** Passwort-Ablauf: nach einem AD-Abgleich zeigt Benutzer → Passwort-Ablauf die Konten mit Ablauf in 14 Tagen (Datum wie in `Get-ADUser -Properties msDS-UserPasswordExpiryTimeComputed`); „läuft nie ab“ erscheint nicht; Reiter „Ohne Mailadresse“ zeigt aktive Konten ohne Mail; an Schulen Spalte „Passwort“ in der Klasse.
 - [ ] **F-24** Mailversand: Cockpit → Einstellungen → Mailversand (Graph) mit versiegeltem Secret → beim Kunden Einstellungen → System → Testmail kommt an; falsches Secret → verständliche Meldung, kein Secret im Text. Eigene SMTP-Anbindung beim Kunden → Testmail über dessen Server; zurück auf „Plattform-Standard“ → wieder Graph.
 - [ ] **F-25** Erinnerung: Konto mit Ablauf in 5 Tagen und Mailadresse → genau eine Mail (Schwelle 7), Übersicht „gesendet am …“; zweiter Lauf schickt nichts; neues Passwort gesetzt → Erinnerungen beginnen neu; eigene Vorlage „Erinnerung Passwort-Ablauf“ wird verwendet.
+- [ ] **F-26** Testmail aus dem Cockpit: Einstellungen → Mailversand → Testmail an eine eigene Adresse → innerhalb einer Minute „Gesendet … (über <Kunde>)“, Mail kommt an; falsches Secret → „Nicht gesendet: …“ ohne Secret im Text. Dasselbe unter Kunde → Einstellungen → Mailversand mit dessen Anbindung.
+- [ ] **F-27** Passwortalter: Benutzer → Passwort-Ablauf → Passwortalter listet alle aktiven Konten, älteste zuerst; Klick auf „Alter“ dreht die Reihenfolge; „Änderung verlangt“ für Konten mit pwdLastSet = 0; ab 100 Konten Zurück/Weiter.
 
 ### 7.2 Firma (Kunde B)
 
