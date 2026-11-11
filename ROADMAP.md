@@ -63,6 +63,7 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 - ✅ **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
 - ✅ **M4.2 Update-Tracking** — Release-Manifest-Poller, `update_requests`-Tabelle, "Update einplanen"-UI
 - ✅ **M4.3 Update-Runner** — atomic claim/complete/fail-Endpoints, Python-Runner mit SSH + pg_dump-Snapshot + Smoke-Test, systemd-Service, Runbook `cockpit-update-runner.md`; `last_error`-Härtung (sanitisierter unexpected-Pfad + whitelist-taugliche Step-Tokens) + Runner-Tests
+- ✅ **Cockpit ausgelagert** (2026-11-11) — `cockpit/` samt Skripten und Runbooks nach `Vita-Brevis-GmbH/vitabrevis-cockpit` (Verlauf erhalten, ADR-0003 Nachtrag); das Cockpit verwaltet künftig alle Produkte
 - ✅ **Performance: AD-Diff-Sync** — inkrementeller Sync via `whenChanged`-Cursor (ADR-0004)
 - ✅ **Performance: Read-Cache** — in-process TTL-Cache mit version-stamped Invalidation, angewendet auf `ClassRepository.list_active`
 - ✅ **Härtungs-Audit (Self-Assessment)** — `docs/security/hardening-audit-2026-06.md` mit 4 Medium-Findings als Pre-Pentest-Hardening-Liste

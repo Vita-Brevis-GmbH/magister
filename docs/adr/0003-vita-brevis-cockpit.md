@@ -1,6 +1,7 @@
 # ADR 0003: Vita Brevis Cockpit als separates Ops-Tool
 
-**Status:** Akzeptiert · 2026-06-02
+**Status:** Akzeptiert · 2026-06-02 · **umgesetzt 2026-11-11:** ausgelagert nach
+`Vita-Brevis-GmbH/vitabrevis-cockpit` (siehe Nachtrag unten)
 **Kontext:** M4 — Scale & Operations Maturity
 
 ## Problem
@@ -31,3 +32,22 @@ Wir bauen ein separates Tool **Vita Brevis Cockpit**:
 
 - **Cockpit als Magister-Subapp**: würde RBAC-Modell aufweichen (Vita-Brevis-Ops vs. Schulleitung in derselben App)
 - **Grafana + Custom-Plugin**: zu schwergewichtig für 5 Instanzen, schlechte UX für Update-Trigger
+
+## Nachtrag 2026-11-11 – ausgelagert
+
+- `cockpit/` ist mit `git subtree split` (Verlauf erhalten) nach
+  `Vita-Brevis-GmbH/vitabrevis-cockpit` (privat) umgezogen. Dazu kamen die Skripte
+  `install-cockpit.sh`, `bootstrap-cockpit-token.sh` und die Runbooks `install-cockpit.md` und
+  `cockpit-update-runner.md`.
+- Das Cockpit löst das bisherige Cockpit in Magister ab und bleibt eng mit Magister verbunden:
+  - gleiche Konventionen;
+  - Magister ist das erste Produkt;
+  - Release über GHCR und ein Manifest je Kanal.
+- Es verwaltet künftig auch Automato, NetBox und Keycloak.
+- Entscheide und Phasen stehen im Cockpit-Repo: ADR 0001/0002 und `ROADMAP.md`.
+- Für Magister kommen dazu:
+  - Anmeldung über Keycloak (Realm des Kunden, mit Entra verbunden), hinter dem Kundenportal
+    unter `<kunde>-um`;
+  - später ersetzt ein Host-Agent den SSH-Update-Runner.
+- Ein Cockpit, das bisher aus einem Magister-Klon unter `/opt/cockpit/src` lief, zieht nach dem
+  Runbook `install-cockpit.md` im Cockpit-Repo um (Abschnitt „Umzug“, die Datenbank bleibt).
