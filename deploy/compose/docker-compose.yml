@@ -11,6 +11,9 @@
 #   MAGISTER_WEB_IMAGE                  — defaults to ghcr.io/vita-brevis-gmbh/magister-web:latest
 #   POSTGRES_USER / _PASSWORD / _DB     — Postgres bootstrap
 #   MAGISTER_AUDIT_KEY                  — pgcrypto sym key (do NOT rotate)
+#   MAGISTER_BACKUP_AGE_RECIPIENT       — ÖFFENTLICHER age-Schlüssel für die
+#                                         Sicherungen (age-keygen auf dem
+#                                         Backup-Host, nicht hier)
 #   MAGISTER_SESSION_SECRET             — session signing
 #   MAGISTER_CSRF_SECRET                — csrf hmac
 #   MAGISTER_OIDC_*                     — OIDC against Entra
@@ -25,8 +28,11 @@
 #   (GUI-editable, no restart). Manual on-demand trigger:
 #   docker compose exec magister-api curl -X POST http://localhost:8000/admin/ad-sync ...
 # Backup:
-#   pg-backup writes /var/backups/magister/<date>.sql.gz; mount the volume
-#   to your backup host or rsync it off-box from there.
+#   pg-backup writes /var/backups/magister/<date>.dump.age — mit dem
+#   öffentlichen age-Schlüssel verschlüsselt (ADR-0016 D9). Volume auf den
+#   Backup-Host mounten oder von dort wegrsyncen. Prüfen mit
+#   `magister-cli backup verify`; das braucht den PRIVATEN Schlüssel und
+#   läuft deshalb auf dem Backup-Host, nicht hier.
 
 name: magister
 
@@ -53,6 +59,23 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # `env_file` ZUSÄTZLICH zur Liste unten, und nicht statt ihr.
+    #
+    # Der Grund sind die vier Werte JE KUNDE im gehosteten Betrieb
+    # (`MAGISTER_TENANT_DSN_<REF>` und Verwandte, ADR-0013 D4 / ADR-0016 D8):
+    # ihre Namen stehen erst fest, wenn es den Kunden gibt, also kann eine
+    # feste Liste sie nicht aufzählen. Ohne diese Zeile wären sie in der
+    # `.env` gesetzt und im Container nicht vorhanden — der Kunde würde mit
+    # Wartung bedient, und die Suche ginge in die Datenbank statt in die
+    # Compose-Datei.
+    #
+    # Die ausdrückliche Liste bleibt: sie erzwingt die Pflichtwerte (`:?`)
+    # beim Start statt bei der ersten Anfrage.
+    env_file:
+      # `required: false`, damit ein Stack ohne `.env` (alle Werte aus der
+      # Umgebung) startet statt mit „env file not found" abzubrechen.
+      - path: .env
+        required: false
     environment:
       MAGISTER_ENVIRONMENT: production
       MAGISTER_LOG_LEVEL: ${MAGISTER_LOG_LEVEL:-INFO}
@@ -73,6 +96,9 @@ services:
       MAGISTER_AD_BIND_PASSWORD: ${MAGISTER_AD_BIND_PASSWORD:-}
       MAGISTER_AD_USERS_SEARCH_BASE: ${MAGISTER_AD_USERS_SEARCH_BASE:-}
       MAGISTER_AD_SYNC_INTERVAL_MINUTES: ${MAGISTER_AD_SYNC_INTERVAL_MINUTES:-15}
+      MAGISTER_AD_FULL_SYNC_HOURS: ${MAGISTER_AD_FULL_SYNC_HOURS:-24}
+      MAGISTER_AD_SYNC_TRANSACTION_IDLE_MS: ${MAGISTER_AD_SYNC_TRANSACTION_IDLE_MS:-900000}
+      MAGISTER_HEALTH_TOKEN: ${MAGISTER_HEALTH_TOKEN:-}
       # Shared with Caddy: the API materializes tls.pem/tls.key + a Caddy `tls`
       # snippet here from the imported webserver cert (or a self-signed fallback).
       MAGISTER_WEB_CERT_DIR: /certs
@@ -162,6 +188,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-magister}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_CRON: ${BACKUP_CRON:-15 2 * * *}  # 02:15 daily by default
+      # ÖFFENTLICHER age-Schlüssel (ADR-0016 D9). Pflicht: ohne ihn bricht der
+      # Lauf ab, statt unverschlüsselt auf das Volume zu schreiben. Der
+      # PRIVATE Schlüssel gehört nicht auf diese Maschine.
+      MAGISTER_BACKUP_AGE_RECIPIENT: ${MAGISTER_BACKUP_AGE_RECIPIENT}
     volumes:
       - backups:/var/backups/magister
     networks: [internal]

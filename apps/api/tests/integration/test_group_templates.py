@@ -87,7 +87,12 @@ async def test_list_filter_by_school(as_admin: AsyncClient, school_a: int, schoo
     glob = (
         await as_admin.post(
             "/admin/group-templates",
-            json={"name": "Global", "ad_groups": ["CN=G,DC=x"], "school_ids": []},
+            json={
+                "name": "Global",
+                "ad_groups": ["CN=G,DC=x"],
+                "school_ids": [],
+                "ad_ou": "OU=Sonstige,DC=x",
+            },
         )
     ).json()["id"]
 

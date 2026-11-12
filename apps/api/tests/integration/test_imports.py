@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+from typing import Any
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
+from magister_api.models.base import utcnow
+from magister_api.models.class_membership import ClassMembership
 from magister_api.models.school_class import SchoolClass
 
 # ---------------------------------------------------------------------------
@@ -33,7 +39,7 @@ async def test_template_classes_csv(as_schulleitung_a: AsyncClient) -> None:
 async def test_template_class_memberships_csv(as_schulleitung_a: AsyncClient) -> None:
     r = await as_schulleitung_a.get("/imports/templates/class_memberships.csv")
     assert r.status_code == 200
-    assert r.text.splitlines()[0] == "student_upn,class_name,valid_from,valid_to"
+    assert r.text.splitlines()[0] == "student_upn,class_name,valid_from,valid_to,jahrgangsstufe"
 
 
 @pytest.mark.asyncio
@@ -328,3 +334,149 @@ async def test_other_school_cannot_see_job(
     job_id = r.json()["id"]
     r2 = await as_schulleitung_b.get(f"/imports/{job_id}")
     assert r2.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_membership_import_sets_and_overwrites_the_grade(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    """Der Jahrgang kommt mit der Klassenzuweisung und überschreibt den bisherigen."""
+    db_session.add(SchoolClass(school_id=school_a, name="3a", kuerzel="3a", jahrgangsstufe=3))
+    for n, upn, grade in ((1, "alt@example.ch", 2), (2, "neu@example.ch", None)):
+        guid = f"00000000-0000-0000-0000-0000000000d{n}"
+        db_session.add(
+            AdUserCache(
+                ad_object_guid=guid,
+                school_id=school_a,
+                upn=upn,
+                kind="student",
+                enabled=True,
+                jahrgangsstufe=grade,
+                ms_ds_consistency_guid=guid,
+            )
+        )
+    await db_session.commit()
+
+    async def run(csv: str) -> list[dict[str, Any]]:
+        r = await as_schulleitung_a.post(
+            "/imports?kind=class_memberships", files={"file": ("m.csv", csv, "text/csv")}
+        )
+        assert r.status_code == 201, r.text
+        job = (await as_schulleitung_a.get(f"/imports/{r.json()['id']}")).json()
+        applied = await as_schulleitung_a.post(f"/imports/{job['id']}/apply")
+        assert applied.status_code == 200, applied.text
+        return list(job["rows"])
+
+    header = "student_upn,class_name,valid_from,valid_to,jahrgangsstufe\n"
+    rows = await run(header + "alt@example.ch,3a,2026-08-12,,4\nneu@example.ch,3a,2026-08-12,,\n")
+    assert rows[0]["action"] == "create"
+    assert rows[0]["errors"] == ["jahrgangsstufe 2 → 4"]
+    # Leer und noch ohne Jahrgang: die Stufe der Klasse.
+    assert rows[1]["errors"] == ["jahrgangsstufe – → 3"]
+
+    # Schon in der Klasse, neuer Jahrgang: nur der Jahrgang wird übernommen.
+    rows = await run(header + "alt@example.ch,3a,2026-08-12,,3\nneu@example.ch,3a,2026-08-12,,3\n")
+    assert [r["action"] for r in rows] == ["update", "skip"]
+
+    db_session.expire_all()
+    alt = await db_session.get(AdUserCache, "00000000-0000-0000-0000-0000000000d1")
+    neu = await db_session.get(AdUserCache, "00000000-0000-0000-0000-0000000000d2")
+    assert alt is not None and neu is not None
+    assert (alt.jahrgangsstufe, neu.jahrgangsstufe) == (3, 3)
+    memberships = (
+        (
+            await db_session.execute(
+                select(ClassMembership).where(
+                    ClassMembership.ad_object_guid == "00000000-0000-0000-0000-0000000000d1"
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(memberships) == 1
+
+    bad = await as_schulleitung_a.post(
+        "/imports?kind=class_memberships",
+        files={"file": ("m.csv", header + "alt@example.ch,3a,,,dritte\n", "text/csv")},
+    )
+    row = (await as_schulleitung_a.get(f"/imports/{bad.json()['id']}")).json()["rows"][0]
+    assert row["action"] == "error"
+    assert row["errors"] == ["jahrgangsstufe must be an integer"]
+
+
+@pytest.mark.asyncio
+async def test_end_before_start_is_a_row_error_not_a_database_error(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    """Leeres valid_from = heute; ein valid_to davor fällt schon in der Vorschau auf."""
+    db_session.add(SchoolClass(school_id=school_a, name="3a", kuerzel="3a", jahrgangsstufe=3))
+    db_session.add(
+        AdUserCache(
+            ad_object_guid="00000000-0000-0000-0000-0000000000e1",
+            school_id=school_a,
+            upn="ende@example.ch",
+            kind="student",
+            enabled=True,
+        )
+    )
+    await db_session.commit()
+    csv = (
+        "student_upn,class_name,valid_from,valid_to,jahrgangsstufe\n"
+        "ende@example.ch,3a,,2020-07-12,\n"
+        "ende@example.ch,3a,2026-08-12,2026-08-01,\n"
+    )
+    r = await as_schulleitung_a.post(
+        "/imports?kind=class_memberships", files={"file": ("m.csv", csv, "text/csv")}
+    )
+    assert r.status_code == 201, r.text
+    rows = (await as_schulleitung_a.get(f"/imports/{r.json()['id']}")).json()["rows"]
+    assert [row["action"] for row in rows] == ["error", "error"]
+    assert rows[0]["errors"] == ["valid_to 2020-07-12 is before today (valid_from is empty)"]
+    assert rows[1]["errors"] == ["valid_to 2026-08-01 is before valid_from"]
+
+    teachers = (
+        "teacher_upn,class_name,role,valid_from,valid_to\nsl-a@example.ch,3a,haupt,,2020-07-12\n"
+    )
+    r = await as_schulleitung_a.post(
+        "/imports?kind=class_teachers", files={"file": ("t.csv", teachers, "text/csv")}
+    )
+    row = (await as_schulleitung_a.get(f"/imports/{r.json()['id']}")).json()["rows"][0]
+    assert row["action"] == "error"
+    assert "is before today" in row["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_new_class_starting_before_the_current_one_closes_it_cleanly(
+    as_schulleitung_a: AsyncClient, db_session: AsyncSession, school_a: int
+) -> None:
+    """Die bisherige Zuteilung begann nach der neuen: sie endet mit ihrem Beginn."""
+    old = SchoolClass(school_id=school_a, name="2a", kuerzel="2a", jahrgangsstufe=2)
+    new = SchoolClass(school_id=school_a, name="3a", kuerzel="3a", jahrgangsstufe=3)
+    db_session.add_all([old, new])
+    guid = "00000000-0000-0000-0000-0000000000e2"
+    db_session.add(
+        AdUserCache(
+            ad_object_guid=guid, school_id=school_a, upn="wechsel@example.ch", kind="student",
+            enabled=True,
+        )
+    )  # fmt: skip
+    await db_session.flush()
+    old_id = old.id
+    started = utcnow() - timedelta(days=10)
+    db_session.add(ClassMembership(class_id=old_id, ad_object_guid=guid, valid_from=started))
+    await db_session.commit()
+
+    earlier = (started - timedelta(days=30)).date().isoformat()
+    csv = f"student_upn,class_name,valid_from,valid_to\nwechsel@example.ch,3a,{earlier},\n"
+    r = await as_schulleitung_a.post(
+        "/imports?kind=class_memberships", files={"file": ("m.csv", csv, "text/csv")}
+    )
+    applied = await as_schulleitung_a.post(f"/imports/{r.json()['id']}/apply")
+    assert applied.status_code == 200, applied.text
+    assert applied.json()["summary"]["applied"]["created"] == 1
+    db_session.expire_all()
+    closed = (
+        await db_session.execute(select(ClassMembership).where(ClassMembership.class_id == old_id))
+    ).scalar_one()
+    assert closed.valid_to == closed.valid_from

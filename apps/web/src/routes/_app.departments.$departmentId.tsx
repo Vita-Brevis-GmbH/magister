@@ -10,10 +10,13 @@ import {
   useDepartmentMembers,
   useRemoveDepartmentMember,
   useRevokeManager,
+  useSchools,
 } from "@/api/hooks";
 import { Button } from "@/components/ui/button";
 import { UserPicker, type PickedUser } from "@/components/UserPicker";
 import { userLabel } from "@/lib/userDisplay";
+import { useFormatters } from "@/lib/useFormatters";
+import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/departments/$departmentId")({
   component: DepartmentDetailPage,
@@ -31,7 +34,12 @@ function personLabel(m: {
   return label === "?" ? m.ad_object_guid : label;
 }
 
-function DepartmentDetailPage(): JSX.Element {
+/** "CN=Lehrer,OU=…" → "Lehrer". */
+function groupName(dn: string): string {
+  return dn.startsWith("CN=") ? dn.slice(3).split(",")[0] : dn;
+}
+
+export function DepartmentDetailPage(): JSX.Element {
   const { t } = useTranslation();
   const { departmentId } = Route.useParams();
   const id = Number(departmentId);
@@ -43,6 +51,9 @@ function DepartmentDetailPage(): JSX.Element {
   const removeMember = useRemoveDepartmentMember(id);
   const assignManager = useAssignManager(id);
   const revokeManager = useRevokeManager(id);
+  const schools = useSchools();
+  const terms = useTerms();
+  const fmt = useFormatters();
 
   const [memberPick, setMemberPick] = useState<PickedUser | null>(null);
   const [managerPick, setManagerPick] = useState<PickedUser | null>(null);
@@ -75,6 +86,71 @@ function DepartmentDetailPage(): JSX.Element {
         ) : null}
       </header>
 
+      {dep.data ? (
+        <section className="rounded-md border bg-card">
+          <h2 className="border-b px-4 py-2 text-sm font-medium">{t("departments.overview")}</h2>
+          <dl className="grid gap-x-6 gap-y-3 px-4 py-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-xs text-muted-foreground">{terms.unit}</dt>
+              <dd>
+                {dep.data.school_id === null
+                  ? t("departments.global_label")
+                  : (schools.data?.find((s) => s.id === dep.data?.school_id)?.name ??
+                    dep.data.school_id)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("departments.members")}</dt>
+              <dd>{t("departments.members_count", { count: members.data?.length ?? 0 })}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("departments.role_lead")}</dt>
+              <dd>
+                {(managers.data ?? [])
+                  .filter((m) => m.role === "lead")
+                  .map(personLabel)
+                  .join(", ") || "—"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("departments.role_deputy")}</dt>
+              <dd>
+                {(managers.data ?? [])
+                  .filter((m) => m.role === "deputy")
+                  .map(personLabel)
+                  .join(", ") || "—"}
+              </dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-muted-foreground">{t("departments.groups_label")}</dt>
+              <dd className="mt-1 flex flex-wrap gap-1">
+                {dep.data.ad_groups.length > 0
+                  ? dep.data.ad_groups.map((g) => (
+                      <span
+                        key={g}
+                        title={g}
+                        className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground"
+                      >
+                        {groupName(g)}
+                      </span>
+                    ))
+                  : "—"}
+              </dd>
+            </div>
+            {dep.data.details ? (
+              <div className="sm:col-span-2">
+                <dt className="text-xs text-muted-foreground">{t("departments.details_text")}</dt>
+                <dd className="whitespace-pre-line">{dep.data.details}</dd>
+              </div>
+            ) : null}
+            <div>
+              <dt className="text-xs text-muted-foreground">{t("departments.created_at")}</dt>
+              <dd>{fmt.formatDate(dep.data.created_at)}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : null}
+
       <section className="rounded-md border bg-card">
         <h2 className="border-b px-4 py-2 text-sm font-medium">{t("departments.members")}</h2>
         <div className="flex flex-wrap items-end gap-3 border-b px-4 py-3">
@@ -101,7 +177,11 @@ function DepartmentDetailPage(): JSX.Element {
               <li key={m.id} className="flex items-center justify-between gap-4 px-4 py-2">
                 <div className="flex flex-col leading-tight">
                   <span className="text-sm font-medium">{personLabel(m)}</span>
-                  {m.upn ? <span className="text-xs text-muted-foreground">{m.upn}</span> : null}
+                  <span className="text-xs text-muted-foreground">
+                    {[m.upn, t("departments.since", { date: fmt.formatDate(m.valid_from) })]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
                 </div>
                 <Button
                   variant="ghost"

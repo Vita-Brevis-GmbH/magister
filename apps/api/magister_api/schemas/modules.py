@@ -13,6 +13,16 @@ class ModuleOut(BaseModel):
 class ModulesOut(BaseModel):
     profile: str
     modules: list[ModuleOut]
+    #: Ob diese Installation von einer Konsole verwaltet wird (ADR-0017 D1).
+    #:
+    #: Steht hier und nicht in einem eigenen Endpunkt, weil das Frontend diese
+    #: Antwort schon für die Navigation liest: es blendet Menüpunkte nach den
+    #: Modul-Ids aus. „Systemeinstellungen" und „Rechte" sind derselbe Fall —
+    #: nur ist der Grund kein abgeschaltetes Modul, sondern ein Betreiber.
+    #:
+    #: Vorgabe `False`, damit ein älteres Frontend gegen eine neuere API
+    #: dasselbe tut wie bisher.
+    platform_managed: bool = False
 
 
 class AdminModuleOut(BaseModel):
@@ -33,6 +43,9 @@ class AdminModulesOut(BaseModel):
     # so the switch-confirmation preview resolves target-enabled the same way the
     # backend does: overrides[id] if set, else (target profile in default_in_profiles).
     module_overrides: dict[str, bool]
+    #: Profil und Module kommen aus der Konsole (ADR-0017); die Seite zeigt
+    #: sie dann nur an. Vorgabe `False` wie bei `ModulesOut.platform_managed`.
+    managed_by_platform: bool = False
 
 
 class ModuleSettingsUpdate(BaseModel):

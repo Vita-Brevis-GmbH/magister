@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -359,3 +360,59 @@ class TestMakeTls:
 
         tls = _make_tls(self._settings())
         assert tls.ca_certs_file is None
+
+
+class TestPasswordTimes:
+    """Kennwort-Ablauf aus pwdLastSet / msDS-UserPasswordExpiryTimeComputed (FILETIME)."""
+
+    @staticmethod
+    def _attrs(**extra: Any) -> dict[str, Any]:
+        return {
+            "objectGUID": uuid.UUID("aabbccdd-eeff-0011-2233-445566778899").bytes_le,
+            "userPrincipalName": "anna@example.ch",
+            "userAccountControl": 0x200,
+            **extra,
+        }
+
+    @staticmethod
+    def _ft(moment: datetime) -> int:
+        return int((moment - datetime(1601, 1, 1, tzinfo=UTC)).total_seconds() * 10_000_000)
+
+    def test_expiry_and_last_set_are_read(self) -> None:
+        set_at = datetime(2026, 9, 1, 8, 0, tzinfo=UTC)
+        expires = datetime(2026, 11, 30, 8, 0, tzinfo=UTC)
+        rec = parse_ad_entry(
+            self._attrs(
+                pwdLastSet=str(self._ft(set_at)),  # ldap3 ohne Schema: Ziffern-String
+                **{"msDS-UserPasswordExpiryTimeComputed": [self._ft(expires)]},
+            ),
+            "CN=X",
+        )
+        assert rec.password_info is True
+        assert rec.password_last_set == set_at
+        assert rec.password_expires_at == expires
+
+    def test_never_expires_and_must_change(self) -> None:
+        never = parse_ad_entry(
+            self._attrs(
+                pwdLastSet=self._ft(datetime(2026, 9, 1, tzinfo=UTC)),
+                **{"msDS-UserPasswordExpiryTimeComputed": 0x7FFFFFFFFFFFFFFF},
+            ),
+            "CN=X",
+        )
+        assert never.password_info is True
+        assert never.password_expires_at is None
+        # pwdLastSet = 0: Änderung bei der nächsten Anmeldung — kein Ablauf.
+        must = parse_ad_entry(
+            self._attrs(pwdLastSet=0, **{"msDS-UserPasswordExpiryTimeComputed": 0}), "CN=X"
+        )
+        assert (must.password_info, must.password_last_set, must.password_expires_at) == (
+            True,
+            None,
+            None,
+        )
+
+    def test_missing_attributes_mean_unknown(self) -> None:
+        rec = parse_ad_entry(self._attrs(), "CN=X")
+        assert rec.password_info is False
+        assert rec.password_expires_at is None

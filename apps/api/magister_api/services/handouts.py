@@ -186,6 +186,46 @@ def _html_to_pdf(html: str) -> bytes:
     return pdf
 
 
+def _strings_for_audience(language: str, audience: str) -> dict[str, str]:
+    """Die Texte der Zettel, für Lehrpersonen mit deren Wortlaut überlagert."""
+    base = _strings_for(language)
+    strings = dict(base)
+    if audience == AUDIENCE_TEACHERS:
+        strings["title"] = base["teacher_title"]
+        strings["username"] = base["teacher_username"]
+        strings["force_change_note"] = base["teacher_force_change_note"]
+        strings["keep_safe"] = base["teacher_keep_safe"]
+        strings["confidential"] = base["teacher_confidential"]
+        strings["pw_change_note"] = base["teacher_pw_change_note"]
+    return strings
+
+
+def render_handout_pdf(
+    entries: list[HandoutEntry],
+    *,
+    school_name: str,
+    generated_on: str,
+    language: str = "de",
+    audience: str = AUDIENCE_STUDENTS,
+) -> bytes:
+    """Nur die Anmelde-Zettel als ein PDF — für ein einzeln angelegtes Konto.
+
+    Ohne die Klassenübersicht des Imports: für eine Person wäre sie dieselbe
+    Information ein zweites Mal. Synchron (WeasyPrint) — via
+    ``run_in_threadpool`` aufrufen.
+    """
+    strings = _strings_for_audience(language, audience)
+    sorted_entries = sorted(entries, key=lambda x: (x.class_name, x.display_name.lower()))
+    html = (
+        _build_env()
+        .get_template("student_handouts.html")
+        .render(
+            entries=sorted_entries, school_name=school_name, generated_on=generated_on, t=strings
+        )
+    )
+    return _html_to_pdf(html)
+
+
 def render_handouts_zip(
     entries: list[HandoutEntry],
     *,
@@ -203,17 +243,9 @@ def render_handouts_zip(
     """
     teachers = audience == AUDIENCE_TEACHERS
     env = _build_env()
-    base = _strings_for(language)
     # Overlay the audience-specific wording onto the base strings so the
     # templates stay audience-agnostic (they read the same keys).
-    strings = dict(base)
-    if teachers:
-        strings["title"] = base["teacher_title"]
-        strings["username"] = base["teacher_username"]
-        strings["force_change_note"] = base["teacher_force_change_note"]
-        strings["keep_safe"] = base["teacher_keep_safe"]
-        strings["confidential"] = base["teacher_confidential"]
-        strings["pw_change_note"] = base["teacher_pw_change_note"]
+    strings = _strings_for_audience(language, audience)
 
     sorted_entries = sorted(entries, key=lambda x: (x.class_name, x.display_name.lower()))
     handouts_html = env.get_template("student_handouts.html").render(
@@ -242,5 +274,6 @@ __all__ = [
     "CLASS_TABLE_FILE",
     "HANDOUT_FILE",
     "HandoutEntry",
+    "render_handout_pdf",
     "render_handouts_zip",
 ]

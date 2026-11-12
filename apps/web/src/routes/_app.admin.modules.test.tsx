@@ -102,3 +102,25 @@ describe("ModulesPage — safe edition switch", () => {
     expect(body.instance_profile).toBe("company");
   });
 });
+
+describe("ModulesPage — von der Plattform verwaltet", () => {
+  it("zeigt Profil und Module nur an, ohne Schreibweg", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(jsonResponse({ ...SCHOOL_MODULES, managed_by_platform: true })),
+    );
+    renderWithQuery(<ModulesPage />);
+
+    expect(await screen.findByRole("note")).toHaveTextContent("von Vita Brevis verwaltet");
+    expect(screen.getByRole("combobox")).toBeDisabled();
+    for (const box of screen.getAllByRole("checkbox")) expect(box).toBeDisabled();
+    expect(putCalls()).toHaveLength(0);
+  });
+
+  it("bleibt bedienbar, wenn keine Konsole dahintersteht", async () => {
+    fetchMock.mockImplementation(() => Promise.resolve(jsonResponse(SCHOOL_MODULES)));
+    renderWithQuery(<ModulesPage />);
+
+    await waitFor(() => expect(screen.getByRole("combobox")).toBeEnabled());
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+});

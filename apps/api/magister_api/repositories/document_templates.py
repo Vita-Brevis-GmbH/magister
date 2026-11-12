@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.models.base import utcnow
 from magister_api.models.document_template import DocumentTemplate
+from magister_api.models.platform_template import PlatformDocumentTemplate
 
 
 class DocumentTemplateRepository:
@@ -54,6 +55,40 @@ class DocumentTemplateRepository:
             .order_by(DocumentTemplate.key, DocumentTemplate.language, DocumentTemplate.school_id)
         )
         return list((await self.session.execute(stmt)).scalars().all())
+
+    async def platform_row(self, *, key: str, language: str) -> PlatformDocumentTemplate | None:
+        """Die vom Betreiber gelieferte Fassung, wenn es eine gibt (ADR-0018).
+
+        Ohne `school_id`: eine Plattformvorlage gilt für den ganzen Mandanten.
+
+        `# scope-bypass: Plattformvorlagen sind Betreiber-Konfiguration ohne
+        Personendaten und ohne Schul-Scope; die Mandantentrennung leistet der
+        ``search_path``.`
+        """
+        stmt = select(PlatformDocumentTemplate).where(
+            PlatformDocumentTemplate.key == key,
+            PlatformDocumentTemplate.language == language,
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def platform_rows(self) -> list[PlatformDocumentTemplate]:
+        """Alle gelieferten Fassungen — für die Übersicht und den Hinweis.
+
+        `# scope-bypass: siehe `platform_row`.`
+        """
+        stmt = select(PlatformDocumentTemplate).order_by(
+            PlatformDocumentTemplate.key, PlatformDocumentTemplate.language
+        )
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def touch(self, row: DocumentTemplate) -> None:
+        """Änderungen an einer geladenen Zeile schreiben.
+
+        Ohne `updated_at`/`updated_by` anzufassen: eine Quittung ist keine
+        Bearbeitung des Textes, und „zuletzt geändert von" soll nicht auf den
+        zeigen, der nur einen Hinweis weggeklickt hat.
+        """
+        await self.session.flush()
 
     async def get(self, template_id: int) -> DocumentTemplate | None:
         return await self.session.get(DocumentTemplate, template_id)

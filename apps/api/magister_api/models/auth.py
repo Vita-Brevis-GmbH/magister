@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import (
@@ -14,7 +15,7 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from magister_api.models.base import Base, utcnow
@@ -97,6 +98,12 @@ class AdUserCache(Base):
         Boolean, nullable=False, default=False, server_default="false"
     )
     password_enc: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    # Zielgruppe, nach der das Konto angelegt oder der es später zugeordnet
+    # wurde (Magister-only, von der Synchronisation nicht berührt). Bestimmt
+    # die Passwortart bei Resets und welche Gruppen ein Wechsel entfernt.
+    group_template_id: Mapped[int | None] = mapped_column(
+        ForeignKey("group_templates.id", ondelete="SET NULL"), nullable=True
+    )
     # AD group memberships (``memberOf`` DNs), refreshed on every sync. Purely
     # informational in Magister — display only.
     ad_groups: Mapped[list[str]] = mapped_column(
@@ -110,7 +117,23 @@ class AdUserCache(Base):
         JSONB, nullable=False, default=list, server_default="[]"
     )
 
-    __table_args__ = (Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),)
+    # Passwort-Ablauf aus dem AD (pwdLastSet, msDS-UserPasswordExpiryTimeComputed).
+    # ``password_info_at``: wann der Abgleich die Werte zuletzt gelesen hat —
+    # NULL heisst "unbekannt" (älterer Connector-Agent), nicht "läuft nie ab".
+    password_last_set: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    password_info_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_ad_user_cache_kind_enabled", "kind", "enabled"),
+        Index("ix_ad_user_cache_password_expires_at", "password_expires_at"),
+    )
 
 
 class Session(Base):
@@ -139,6 +162,17 @@ class Session(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+    #: Bei ``auth_kind='operator'`` (ADR-0019): wer von Vita Brevis hier
+    #: zusieht, und mit welchem Einlöseschein. Zwei Spalten an der Session und
+    #: kein Join auf ``operator_accesses`` bei jeder Anfrage — die Session wird
+    #: ohnehin bei jeder gelesen.
+    #:
+    #: Ein Operator ist **kein** Benutzer des Kunden: es gibt zu ihm keine
+    #: Zeile in ``ad_user_cache`` und keine Rollenzuweisung (ADR-0019 D5).
+    #: Deshalb steht seine Identität hier und nicht dort.
+    operator_upn: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    operator_jti: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
 class RoleAssignment(Base):

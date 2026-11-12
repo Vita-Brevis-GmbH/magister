@@ -18,10 +18,13 @@ from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
 from magister_api.models.department import DEPARTMENT_STATUS_ACTIVE, Department
 from magister_api.models.department_membership import DepartmentMembership
+from magister_api.models.group_template import GroupTemplate
 from magister_api.models.manager_role import MANAGER_ROLE_DEPUTY, MANAGER_ROLE_LEAD, ManagerRole
 from magister_api.models.school_class import CLASS_STATUS_ACTIVE, SchoolClass
 from magister_api.repositories.base import BaseRepository, ScopeContext
 from magister_api.schemas.reports import (
+    AccountsByKindRow,
+    AccountsByZielgruppeRow,
     ActivityRow,
     ManagerWorkloadRow,
     MembersByDepartmentRow,
@@ -246,6 +249,72 @@ class ReportsRepository(BaseRepository):
                 deputy_count=r[4] or 0,
                 total=r[5],
                 departments=sorted({d for d in (r[6] or []) if d}),
+            )
+            for r in rows
+        ]
+
+    async def accounts_by_zielgruppe(self) -> list[AccountsByZielgruppeRow]:
+        """Konten je Zielgruppe (plus "ohne Zielgruppe"), im Sichtbereich.
+
+        Gezählt wird nach dem Standort des Kontos, nicht der Zielgruppe: eine
+        globale Zielgruppe zeigt so nur die eigenen Konten.
+        """
+        enabled = func.count().filter(AdUserCache.enabled.is_(True))
+        stmt = (
+            select(
+                AdUserCache.group_template_id,
+                GroupTemplate.name,
+                GroupTemplate.kind,
+                func.count().label("total"),
+                enabled.label("enabled"),
+                func.count().filter(AdUserCache.store_password.is_(True)).label("stored"),
+            )
+            .select_from(AdUserCache)
+            .outerjoin(GroupTemplate, GroupTemplate.id == AdUserCache.group_template_id)
+            .group_by(AdUserCache.group_template_id, GroupTemplate.name, GroupTemplate.kind)
+            .order_by(GroupTemplate.name.nulls_last())
+        )
+        stmt = self.apply_scope(stmt, AdUserCache.school_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            AccountsByZielgruppeRow(
+                group_template_id=r[0],
+                name=r[1],
+                kind=r[2],
+                total=r[3],
+                enabled=r[4],
+                disabled=r[3] - r[4],
+                stored_password=r[5],
+            )
+            for r in rows
+        ]
+
+    async def accounts_by_kind(self) -> list[AccountsByKindRow]:
+        """Konten je Kontoart: aktiv/deaktiviert, Tresor, ohne Zielgruppe, fehlt im AD."""
+        enabled = func.count().filter(AdUserCache.enabled.is_(True))
+        stmt = (
+            select(
+                AdUserCache.kind,
+                func.count().label("total"),
+                enabled.label("enabled"),
+                func.count().filter(AdUserCache.store_password.is_(True)).label("stored"),
+                func.count().filter(AdUserCache.group_template_id.is_(None)).label("no_tpl"),
+                func.count().filter(AdUserCache.ad_missing_since.is_not(None)).label("missing"),
+            )
+            .group_by(AdUserCache.kind)
+            .order_by(AdUserCache.kind)
+        )
+        stmt = self.apply_scope(stmt, AdUserCache.school_id)
+        rows = (await self.session.execute(stmt)).all()
+        return [
+            AccountsByKindRow(
+                kind=r[0],
+                total=r[1],
+                enabled=r[2],
+                disabled=r[1] - r[2],
+                stored_password=r[3],
+                without_zielgruppe=r[4],
+                missing_in_ad=r[5],
             )
             for r in rows
         ]

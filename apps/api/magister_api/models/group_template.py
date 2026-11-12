@@ -1,4 +1,10 @@
-"""AD group templates ("Zielrollen"): named, reusable bundles of AD groups.
+"""Zielgruppen (vormals "Zielrollen"): wie ein neues Konto angelegt wird.
+
+Eine Zielgruppe bündelt die AD-Gruppen **und** die Anlage-Vorgaben: Kontoart
+und damit Ablage-OU (``kind``), Passwortart (``password_profile``) und die
+Konto-Einstellungen (bei erster Anmeldung ändern, darf nicht ändern, läuft nie
+ab, im Passworttresor ablegen). Jede Schule bekommt die Standard-Zielgruppen
+Schüler:in Zyklus 1/2/3 und Lehrperson (``services/zielgruppen.py``).
 
 A group template is a set of AD group DNs that grant access to tools or data.
 It is chosen at "neuen Benutzer anlegen" (filtered by the target Standort); the
@@ -15,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,6 +31,12 @@ GROUP_TEMPLATE_STATUS_ACTIVE = "active"
 GROUP_TEMPLATE_STATUS_ARCHIVED = "archived"
 ALLOWED_STATUSES: frozenset[str] = frozenset(
     {GROUP_TEMPLATE_STATUS_ACTIVE, GROUP_TEMPLATE_STATUS_ARCHIVED}
+)
+
+#: Kontoarten mit fester Ablage-OU (die des Standorts). Eine Zielgruppe ohne
+#: eine davon ("custom" oder leer) darf eine eigene Ziel-OU haben (``ad_ou``).
+FIXED_KINDS: frozenset[str] = frozenset(
+    {"teacher", "student_zyklus1", "student_zyklus2", "student_zyklus3", "company"}
 )
 
 
@@ -43,6 +55,28 @@ class GroupTemplate(Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=GROUP_TEMPLATE_STATUS_ACTIVE
     )
+    # Anlage-Vorgaben der Zielgruppe (Migration 0047). Die Passwortart gilt
+    # auch für spätere Resets der Konten, die dieser Zielgruppe zugeordnet sind.
+    password_profile: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="complex", server_default="complex"
+    )
+    force_change: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    cannot_change_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    password_never_expires: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Passwort im Tresor ablegen (Klassen-Passwortliste). Wirkt nur bei
+    # "darf nicht ändern" und eingeschaltetem Tresor — sonst veraltet die Kopie.
+    store_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+    # Ziel-OU neuer Konten (Migration 0049) — nur bei freier Kontoart; leer =
+    # die OU des Standorts für die bei der Anlage gewählte Kontoart.
+    ad_ou: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
@@ -54,6 +88,10 @@ class GroupTemplate(Base):
         CheckConstraint(
             f"status IN ('{GROUP_TEMPLATE_STATUS_ACTIVE}', '{GROUP_TEMPLATE_STATUS_ARCHIVED}')",
             name="ck_group_templates_status",
+        ),
+        CheckConstraint(
+            "password_profile IN ('readable', 'teacher', 'complex')",
+            name="ck_group_templates_password_profile",
         ),
     )
 

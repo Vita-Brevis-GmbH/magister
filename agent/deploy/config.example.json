@@ -1,0 +1,10 @@
+{
+  "_kommentar": "Lokale Konfiguration des Connector-Agenten (ADR-0014). Wird von 'magister-connector enroll --endpoint …' als config.json angelegt — von Hand muss hier nichts gepflegt werden. OU-Freigabe, geschützte Gruppen, Domänencontroller und Suchbasen stehen im Cockpit beim Kunden unter „AD-Connector“; der Agent holt sie dort.",
+
+  "_endpoint": "Die Adresse aus der Konsole. MUSS https sein. Der Name muss der aus dem Zertifikat der Plattform sein: keine IP-Adresse, kein anderer Name desselben Servers.",
+  "endpoint": "https://connect.magister.ch:46200",
+
+  "_ca_bundle": "CA-Bündel der Plattform, gegen das der Agent den Server prüft. Ohne Angabe: platform-ca.pem im Zustandsverzeichnis (enroll --ca legt sie dorthin); fehlt auch die, gilt der Windows-Truststore.",
+
+  "_proxy": "Optional, z. B. \"http://proxy.gemeinde.local:8080\". Bewusst explizit und nicht aus HTTPS_PROXY der Umgebung. Ein Proxy, der TLS aufbricht, macht die Client-Authentisierung unmöglich — dann muss er für diesen Host umgangen werden."
+}

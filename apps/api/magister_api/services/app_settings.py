@@ -28,6 +28,7 @@ from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.schemas.app_settings import AppSettingsOut, AppSettingsUpdate
 from magister_api.services import web_tls
+from magister_api.tenancy.keys import keys_for
 
 
 def _resolve_web_tls_import(
@@ -87,8 +88,6 @@ class EffectiveAppSettings:
     ad_bind_password: str | None
     ad_tls_verify: bool
     ad_tls_ca_pem: str | None
-    ad_login_enabled: bool
-    ad_login_group: str | None
     ad_users_search_base: str | None
     ad_computers_search_base: str | None
     ad_sync_interval_minutes: int
@@ -97,6 +96,36 @@ class EffectiveAppSettings:
     ninja_region: str | None = None
     ninja_client_id: str | None = None
     ninja_client_secret: str | None = None
+    # Mailversand (Ablauf-Erinnerungen) — Geheimnis entschlüsselt.
+    mail_transport: str = "off"
+    mail_from: str | None = None
+    mail_from_name: str | None = None
+    smtp_host: str | None = None
+    smtp_port: int | None = None
+    smtp_security: str = "starttls"
+    smtp_username: str | None = None
+    graph_tenant_id: str | None = None
+    graph_client_id: str | None = None
+    mail_secret: str | None = None
+    expiry_notice_enabled: bool = False
+    expiry_notice_days: tuple[int, ...] = (14, 7, 1)
+    upn_domains: tuple[str, ...] = ()
+
+
+#: Mail-Felder, die wie gewöhnliche Spalten gelesen und geschrieben werden.
+MAIL_PLAIN_FIELDS: tuple[str, ...] = (
+    "mail_transport",
+    "mail_from",
+    "mail_from_name",
+    "smtp_host",
+    "smtp_port",
+    "smtp_security",
+    "smtp_username",
+    "graph_tenant_id",
+    "graph_client_id",
+    "expiry_notice_enabled",
+    "expiry_notice_days",
+)
 
 
 @dataclass(frozen=True)
@@ -116,7 +145,9 @@ class AppSettingsService:
     @property
     def _key(self) -> str:
         # Dedicated secrets key when configured, else the audit key (default).
-        key = self._settings.app_secrets_key()
+        # Kundenschlüssel aus der SITZUNG, nicht aus den Einstellungen: Settings
+        # ist prozessweit gecacht und kennt den Mandanten nicht (ADR-0016 D8).
+        key = keys_for(self.session, self._settings).secrets_key
         if not key:
             raise RuntimeError(
                 "neither MAGISTER_SECRETS_KEY nor MAGISTER_AUDIT_KEY is set — "
@@ -176,8 +207,6 @@ class AppSettingsService:
             ),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
-            AppSettings.ad_login_enabled,
-            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -187,6 +216,9 @@ class AppSettingsService:
             func.pgp_sym_decrypt(AppSettings.ninja_client_secret_enc, self._key).label(
                 "ninja_client_secret"
             ),
+            *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
+            func.pgp_sym_decrypt(AppSettings.mail_secret_enc, self._key).label("mail_secret"),
+            AppSettings.upn_domains,
         ).where(AppSettings.id == 1)
         result = await self.session.execute(stmt)
         row = result.one_or_none()
@@ -207,8 +239,6 @@ class AppSettingsService:
             ad_bind_password=row.ad_bind_password,
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
-            ad_login_enabled=bool(row.ad_login_enabled),
-            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -216,6 +246,19 @@ class AppSettingsService:
             ninja_region=row.ninja_region,
             ninja_client_id=row.ninja_client_id,
             ninja_client_secret=row.ninja_client_secret,
+            mail_transport=row.mail_transport,
+            mail_from=row.mail_from,
+            mail_from_name=row.mail_from_name,
+            smtp_host=row.smtp_host,
+            smtp_port=row.smtp_port,
+            smtp_security=row.smtp_security,
+            smtp_username=row.smtp_username,
+            graph_tenant_id=row.graph_tenant_id,
+            graph_client_id=row.graph_client_id,
+            mail_secret=row.mail_secret,
+            expiry_notice_enabled=bool(row.expiry_notice_enabled),
+            expiry_notice_days=tuple(int(d) for d in (row.expiry_notice_days or [])),
+            upn_domains=tuple(row.upn_domains or ()),
         )
 
     async def get_redacted_for_api(self) -> AppSettingsOut:
@@ -235,8 +278,6 @@ class AppSettingsService:
             (AppSettings.ad_bind_password_enc.is_not(None)).label("ad_bind_password_set"),
             AppSettings.ad_tls_verify,
             AppSettings.ad_tls_ca_pem,
-            AppSettings.ad_login_enabled,
-            AppSettings.ad_login_group,
             AppSettings.ad_users_search_base,
             AppSettings.ad_computers_search_base,
             AppSettings.ad_sync_interval_minutes,
@@ -256,6 +297,9 @@ class AppSettingsService:
             AppSettings.ninja_region,
             AppSettings.ninja_client_id,
             (AppSettings.ninja_client_secret_enc.is_not(None)).label("ninja_client_secret_set"),
+            *(getattr(AppSettings, f) for f in MAIL_PLAIN_FIELDS),
+            (AppSettings.mail_secret_enc.is_not(None)).label("mail_secret_set"),
+            AppSettings.upn_domains,
             AppSettings.updated_at,
             AppSettings.updated_by_upn,
         ).where(AppSettings.id == 1)
@@ -276,8 +320,6 @@ class AppSettingsService:
             ad_bind_password_set=bool(row.ad_bind_password_set),
             ad_tls_verify=bool(row.ad_tls_verify),
             ad_tls_ca_pem=row.ad_tls_ca_pem,
-            ad_login_enabled=bool(row.ad_login_enabled),
-            ad_login_group=row.ad_login_group,
             ad_users_search_base=row.ad_users_search_base,
             ad_computers_search_base=row.ad_computers_search_base,
             ad_sync_interval_minutes=row.ad_sync_interval_minutes,
@@ -297,6 +339,9 @@ class AppSettingsService:
             ninja_region=row.ninja_region,
             ninja_client_id=row.ninja_client_id,
             ninja_client_secret_set=bool(row.ninja_client_secret_set),
+            **{f: getattr(row, f) for f in MAIL_PLAIN_FIELDS},
+            mail_secret_set=bool(row.mail_secret_set),
+            upn_domains=list(row.upn_domains or []),
             updated_at=row.updated_at,
             updated_by_upn=row.updated_by_upn,
         )
@@ -311,6 +356,7 @@ class AppSettingsService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        action: str = "app_settings_updated",
     ) -> AppSettingsOut:
         """Apply non-None fields, encrypt secrets only when payload sends them.
 
@@ -328,12 +374,11 @@ class AppSettingsService:
             "oidc_scopes": payload.oidc_scopes,
             "bootstrap_admins": payload.bootstrap_admins,
             "mail_domains": payload.mail_domains,
+            "upn_domains": payload.upn_domains,
             "ad_dcs": payload.ad_dcs,
             "ad_bind_mode": payload.ad_bind_mode,
             "ad_bind_dn": payload.ad_bind_dn,
             "ad_tls_verify": payload.ad_tls_verify,
-            "ad_login_enabled": payload.ad_login_enabled,
-            "ad_login_group": payload.ad_login_group,
             "ad_users_search_base": payload.ad_users_search_base,
             "ad_computers_search_base": payload.ad_computers_search_base,
             "ad_sync_interval_minutes": payload.ad_sync_interval_minutes,
@@ -355,6 +400,19 @@ class AppSettingsService:
             if val is not None:
                 values[col] = val
                 diff[col] = val
+        # Mail: ein leerer Text leert das Feld (NULL statt "").
+        for col in MAIL_PLAIN_FIELDS:
+            val = getattr(payload, col)
+            if val is None:
+                continue
+            if isinstance(val, str):
+                val = val.strip() or None
+                if val is None and col in ("mail_transport", "smtp_security"):
+                    continue  # Pflichtspalten: leer heisst "nicht ändern"
+            elif col == "smtp_port" and val == 0:
+                val = None
+            values[col] = val
+            diff[col] = val
 
         # The vault master switch is applied like a plain field, but its diff
         # key is neutral: the audit-payload allowlist forbids any key containing
@@ -383,6 +441,12 @@ class AppSettingsService:
                 payload.ninja_client_secret, self._key
             )
             diff["rotated_ninja_credential"] = True
+        if payload.mail_secret:
+            values["mail_secret_enc"] = func.pgp_sym_encrypt(payload.mail_secret, self._key)
+            diff["rotated_mail_credential"] = True
+        elif payload.clear_mail_secret:
+            values["mail_secret_enc"] = None
+            diff["cleared_mail_credential"] = True
 
         # CA PEM is not a secret, but it is bulky — record only whether a cert
         # is now present in the audit diff, never the PEM body. None = leave
@@ -417,7 +481,13 @@ class AppSettingsService:
         )
 
         await AuditService(self.session, self._settings).emit(
-            action="app_settings_updated",
+            # ``action`` ist überschreibbar, damit der Kunde im Protokoll
+            # unterscheiden kann, ob ein Mensch im Haus das Formular ausgefüllt
+            # hat oder die Plattform ihren Soll-Zustand materialisiert hat
+            # (ADR-0017 D4). Ein gemeinsamer Name für beides wäre eine
+            # Zeitersparnis beim Schreiben und eine Frage ohne Antwort beim
+            # Lesen.
+            action=action,
             target_kind="app_settings",
             target_id="1",
             actor_upn=actor_upn,
@@ -439,6 +509,7 @@ class AppSettingsService:
         actor_object_guid: str | None,
         ip: str | None,
         request_id: str,
+        action: str = "modules_configured",
     ) -> ModuleConfig:
         """Update the M6 profile and/or per-module overrides; bump version + audit.
 
@@ -461,7 +532,7 @@ class AppSettingsService:
                 sqla_update(AppSettings).where(AppSettings.id == 1).values(**values)
             )
             await AuditService(self.session, self._settings).emit(
-                action="modules_configured",
+                action=action,
                 target_kind="app_settings",
                 target_id="1",
                 actor_upn=actor_upn,
@@ -554,10 +625,6 @@ class AppSettingsService:
             values["ad_tls_ca_pem"] = settings.ad_tls_ca_pem
         if not settings.ad_tls_verify:
             values["ad_tls_verify"] = False
-        if settings.ad_login_enabled:
-            values["ad_login_enabled"] = True
-        if settings.ad_login_group:
-            values["ad_login_group"] = settings.ad_login_group
         if settings.ad_sync_interval_minutes:
             values["ad_sync_interval_minutes"] = settings.ad_sync_interval_minutes
 
@@ -594,8 +661,6 @@ def _empty_effective() -> EffectiveAppSettings:
         ad_bind_password=None,
         ad_tls_verify=True,
         ad_tls_ca_pem=None,
-        ad_login_enabled=False,
-        ad_login_group=None,
         ad_users_search_base=None,
         ad_computers_search_base=None,
         ad_sync_interval_minutes=15,

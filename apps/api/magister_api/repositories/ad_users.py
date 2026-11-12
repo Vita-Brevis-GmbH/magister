@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +22,7 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.base import utcnow
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.group_template import GroupTemplate
 from magister_api.repositories.base import BaseRepository, ScopeContext
 
 
@@ -33,6 +34,62 @@ class MissingMarkResult:
     total: int
     skipped: bool
     would_mark: int = 0
+
+
+#: Spalten, nach denen die Benutzerliste sortiert werden kann.
+SORT_KEYS: tuple[str, ...] = ("name", "kind", "status", "jahrgangsstufe", "zielgruppe", "policy")
+#: Filter auf die Konto-Richtlinien (Spalte "Richtlinien").
+POLICY_FILTERS: tuple[str, ...] = ("cannot_change", "never_expires", "stored")
+
+
+def _shown_name() -> Any:
+    """Der Name, den die Liste anzeigt (``displayLabel`` im Web): Anzeigename,
+    sonst "Vorname Nachname", sonst die UPN — klein, damit Gross/Klein nicht
+    über die Reihenfolge entscheidet. Danach sortieren, nicht nach Nachname:
+    sonst stimmt die Sortierung nicht mit dem überein, was man liest."""
+    return func.lower(
+        func.coalesce(
+            func.nullif(func.trim(AdUserCache.display_name), ""),
+            func.nullif(
+                func.trim(func.concat_ws(" ", AdUserCache.given_name, AdUserCache.surname)), ""
+            ),
+            AdUserCache.upn,
+        )
+    )
+
+
+def _order(sort: str, direction: str) -> list[Any]:
+    """ORDER BY für eine Spalte der Benutzerliste; leere Werte immer zuletzt.
+
+    Angezeigter Name und UPN hängen immer an: gleiche Werte bleiben so in
+    fester Reihenfolge, und das Blättern springt nicht.
+    """
+    desc = direction == "desc"
+    status = case(
+        (AdUserCache.ad_missing_since.is_not(None), 2),
+        (AdUserCache.enabled.is_(False), 1),
+        else_=0,
+    )
+    primary: list[Any] = {
+        "name": [_shown_name()],
+        "kind": [AdUserCache.kind],
+        "status": [status],
+        "jahrgangsstufe": [AdUserCache.jahrgangsstufe],
+        "zielgruppe": [func.lower(GroupTemplate.name)],
+        "policy": [
+            AdUserCache.cannot_change_password.desc(),
+            AdUserCache.password_never_expires.desc(),
+            AdUserCache.store_password.desc(),
+        ],
+    }.get(sort, [_shown_name()])
+    ordered: list[Any] = []
+    for col in primary:
+        if sort == "policy":
+            # Schon als "zuerst gesetzt" formuliert; absteigend kehrt um.
+            ordered.append(col if not desc else col.element.asc())
+        else:
+            ordered.append((col.desc() if desc else col.asc()).nulls_last())
+    return [*ordered, _shown_name(), AdUserCache.upn]
 
 
 class AdUserListingRepository(BaseRepository):
@@ -49,14 +106,48 @@ class AdUserListingRepository(BaseRepository):
         search: str | None = None,
         class_id: int | None = None,
         missing: bool | None = None,
+        jahrgangsstufe: int | None = None,
+        group_template_id: int | None = None,
+        policy: str | None = None,
+        sort: str = "name",
+        direction: str = "asc",
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[AdUserCache], int]:
-        """Return ``(rows, total_count)`` with all filters applied."""
-        stmt = self.apply_scope(select(AdUserCache), AdUserCache.school_id)
+        """Return ``(rows, total_count)`` with all filters applied.
+
+        Sortiert wird in der Datenbank, nicht auf der Seite: die Liste ist
+        seitenweise, und eine Sortierung nur der geladenen Seite wäre falsch.
+        ``group_template_id=0`` heisst "keine Zielgruppe".
+        """
+        stmt = self.apply_scope(
+            select(AdUserCache).outerjoin(
+                GroupTemplate, GroupTemplate.id == AdUserCache.group_template_id
+            ),
+            AdUserCache.school_id,
+        )
         count_stmt = self.apply_scope(
             select(func.count()).select_from(AdUserCache), AdUserCache.school_id
         )
+        if jahrgangsstufe is not None:
+            stmt = stmt.where(AdUserCache.jahrgangsstufe == jahrgangsstufe)
+            count_stmt = count_stmt.where(AdUserCache.jahrgangsstufe == jahrgangsstufe)
+        if group_template_id is not None:
+            tpl_pred = (
+                AdUserCache.group_template_id.is_(None)
+                if group_template_id == 0
+                else AdUserCache.group_template_id == group_template_id
+            )
+            stmt = stmt.where(tpl_pred)
+            count_stmt = count_stmt.where(tpl_pred)
+        if policy is not None:
+            policy_col = {
+                "cannot_change": AdUserCache.cannot_change_password,
+                "never_expires": AdUserCache.password_never_expires,
+                "stored": AdUserCache.store_password,
+            }[policy]
+            stmt = stmt.where(policy_col.is_(True))
+            count_stmt = count_stmt.where(policy_col.is_(True))
         if kind is not None:
             stmt = stmt.where(AdUserCache.kind == kind)
             count_stmt = count_stmt.where(AdUserCache.kind == kind)
@@ -105,14 +196,21 @@ class AdUserListingRepository(BaseRepository):
             )
             stmt = stmt.where(class_pred)
             count_stmt = count_stmt.where(class_pred)
-        stmt = (
-            stmt.order_by(AdUserCache.surname, AdUserCache.given_name, AdUserCache.upn)
-            .offset(offset)
-            .limit(limit)
-        )
+        stmt = stmt.order_by(*_order(sort, direction)).offset(offset).limit(limit)
         rows = list((await self.session.execute(stmt)).scalars().all())
         total = int((await self.session.execute(count_stmt)).scalar_one())
         return rows, total
+
+    async def zielgruppen_in_scope(self) -> list[tuple[int, str]]:
+        """Die Zielgruppen, denen Konten im Sichtbereich zugeordnet sind (für den Filter)."""
+        stmt = self.apply_scope(
+            select(GroupTemplate.id, GroupTemplate.name)
+            .join(AdUserCache, AdUserCache.group_template_id == GroupTemplate.id)
+            .distinct(),
+            AdUserCache.school_id,
+        )
+        rows = (await self.session.execute(stmt)).all()
+        return sorted(((int(i), str(n)) for i, n in rows), key=lambda r: r[1].casefold())
 
     async def latest_sync_for_scope(self) -> datetime | None:
         """Most recent ``last_sync_at`` across the user's school scope."""
@@ -128,6 +226,15 @@ class AdUserCacheSyncRepository:
 
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def has_password_info(self) -> bool:
+        """Hat der Abgleich je Passwortdaten geliefert (für irgendein Konto)?"""
+        stmt = (
+            select(AdUserCache.ad_object_guid)
+            .where(AdUserCache.password_info_at.is_not(None))
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).first() is not None
 
     async def upsert_from_ad(
         self,
@@ -171,6 +278,9 @@ class AdUserCacheSyncRepository:
                     "password_never_expires": r.password_never_expires,
                     "ad_groups": list(r.groups),
                     "mail_aliases": list(r.mail_aliases),
+                    "password_last_set": r.password_last_set,
+                    "password_expires_at": r.password_expires_at,
+                    "password_info_at": now if r.password_info else None,
                     # temp_device_name, jahrgangsstufe and cannot_change_password
                     # are Magister-only — do NOT overwrite on AD sync. We omit
                     # them from both VALUES and the ON-CONFLICT set; existing
@@ -216,6 +326,18 @@ class AdUserCacheSyncRepository:
                     ).excluded.password_never_expires,
                     "ad_groups": pg_insert(AdUserCache).excluded.ad_groups,
                     "mail_aliases": pg_insert(AdUserCache).excluded.mail_aliases,
+                    # Liefert die Quelle keinen Passwort-Ablauf (älterer
+                    # Connector-Agent), bleibt der bisherige Stand stehen.
+                    **{
+                        col: case(
+                            (
+                                pg_insert(AdUserCache).excluded.password_info_at.is_not(None),
+                                getattr(pg_insert(AdUserCache).excluded, col),
+                            ),
+                            else_=getattr(AdUserCache, col),
+                        )
+                        for col in ("password_last_set", "password_expires_at", "password_info_at")
+                    },
                     # Present in AD again → clear any "missing" marker.
                     "ad_missing_since": None,
                 },

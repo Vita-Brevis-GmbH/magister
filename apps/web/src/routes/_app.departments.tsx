@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useChildMatches } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -13,14 +13,17 @@ import {
 } from "@/api/hooks";
 import type { DepartmentOut } from "@/api/types";
 import { GroupPicker } from "@/components/GroupPicker";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/departments")({
   component: DepartmentsPage,
 });
 
-function DepartmentsPage(): JSX.Element {
+export function DepartmentsPage(): JSX.Element {
+  // Die Detailseite (/departments/$departmentId) ist eine Kind-Route dieser
+  // Seite; ohne Outlet bliebe nach dem Klick die Liste stehen.
+  const childMatches = useChildMatches();
   const { t } = useTranslation();
   const terms = useTerms();
   const q = useDepartments();
@@ -58,6 +61,12 @@ function DepartmentsPage(): JSX.Element {
   };
 
   const noUnits = !schools.isLoading && schoolList.length === 0;
+  const unitName = (id: number | null): string =>
+    id === null
+      ? t("departments.global_label")
+      : (schoolList.find((s) => s.id === id)?.name ?? String(id));
+
+  if (childMatches.length > 0) return <Outlet />;
 
   return (
     <div className="space-y-6">
@@ -154,7 +163,7 @@ function DepartmentsPage(): JSX.Element {
         <div className="overflow-hidden rounded-md border bg-card">
           <ul className="divide-y">
             {q.data.map((d) => (
-              <DepartmentRow key={d.id} dept={d} />
+              <DepartmentRow key={d.id} dept={d} unitName={unitName(d.school_id)} />
             ))}
           </ul>
         </div>
@@ -163,7 +172,7 @@ function DepartmentsPage(): JSX.Element {
   );
 }
 
-function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
+function DepartmentRow({ dept, unitName }: { dept: DepartmentOut; unitName: string }): JSX.Element {
   const { t } = useTranslation();
   const archive = useArchiveDepartment();
   const update = useUpdateDepartment();
@@ -250,6 +259,9 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
           ) : null}
         </Link>
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+          {unitName}
+        </span>
+        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
           {t("departments.members_count", { count: dept.member_count })}
         </span>
         {dept.ad_groups.length > 0 ? (
@@ -259,6 +271,13 @@ function DepartmentRow({ dept }: { dept: DepartmentOut }): JSX.Element {
         ) : null}
       </div>
       <div className="flex shrink-0 gap-1">
+        <Link
+          to="/departments/$departmentId"
+          params={{ departmentId: String(dept.id) }}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
+        >
+          {t("departments.details")}
+        </Link>
         <Button variant="ghost" size="sm" onClick={startEdit}>
           {t("departments.edit")}
         </Button>

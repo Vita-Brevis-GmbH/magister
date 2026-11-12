@@ -49,6 +49,8 @@ RUN groupadd --system --gid 1000 magister \
 # non-root API (uid 1000) cannot write /certs/tls.caddy — which silently leaves
 # Caddy without its `import /certs/tls.caddy` snippet and unable to start.
 RUN mkdir -p /certs && chown magister:magister /certs
+# Dasselbe für den Zwischenstand der Kundenliste (compose `registry_state`).
+RUN mkdir -p /var/lib/magister && chown magister:magister /var/lib/magister
 
 # Runtime libs:
 # - WeasyPrint (parent-letter + credential PDFs) needs Pango/Cairo/GDK-PixBuf.

@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.ad.client import AdClient
 from magister_api.ad.errors import AdUnavailableError
+from magister_api.ad.password import password_stays
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
 from magister_api.models.auth import AdUserCache
@@ -106,6 +107,10 @@ class AdminOnlyFieldError(PermissionError):
     """SMI attempted to change a field reserved to admins."""
 
 
+class StorePasswordNotAllowedError(ValueError):
+    """Tresor einschalten, obwohl das Passwort nicht so bleibt."""
+
+
 @dataclass(frozen=True)
 class UserAttributesResult:
     changed_keys: list[str]
@@ -134,6 +139,7 @@ class UserAttributesService:
         ip: str | None,
         request_id: str,
         audit_action: str = "user_attribute_changed",
+        upn_domains: list[str] | None = None,
     ) -> UserAttributesResult:
         # ------------------------------------------------------------------
         # 1) Slice the payload into "what the caller actually wants to change".
@@ -155,6 +161,8 @@ class UserAttributesService:
         # ------------------------------------------------------------------
         # 3) Domain allowlist: UPN + mail (when present and non-empty).
         # ------------------------------------------------------------------
+        # Der UPN darf jedes Suffix tragen, das das AD kennt (``upn_domains``,
+        # siehe services/upn_domains.py); die Mail-Adresse nur Mail-Domains.
         for field in ("upn", "mail"):
             if field not in provided:
                 continue
@@ -163,9 +171,12 @@ class UserAttributesService:
                 # Empty / None for `mail` clears the field — allowed.
                 continue
             domain = new_val.rsplit("@", 1)[1]
-            if not mail_domains:
+            allowed_here = (
+                upn_domains if field == "upn" and upn_domains is not None else mail_domains
+            )
+            if not allowed_here:
                 raise DomainAllowlistEmptyError(field)
-            if domain not in {d.lower() for d in mail_domains}:
+            if domain not in {d.lower() for d in allowed_here}:
                 raise DomainNotAllowedError(f"{field}:{domain}")
 
         # Aliases run through the same allowlist (validated shape from Pydantic).
@@ -193,6 +204,23 @@ class UserAttributesService:
 
         if not actual_changes:
             return UserAttributesResult(changed_keys=[])
+
+        # Tresor nur, wenn das Passwort so bleibt (kann nicht ändern + läuft
+        # nie ab; erzwungene Änderung gibt es hier nicht). Einschalten ohne
+        # das ist ein Fehler; nimmt eine Änderung eine der Bedingungen weg,
+        # geht der Tresor mit aus — die Kopie wäre bald falsch.
+        if actual_changes.get("store_password", target.store_password) and not password_stays(
+            force_change=False,
+            cannot_change_password=bool(
+                actual_changes.get("cannot_change_password", target.cannot_change_password)
+            ),
+            password_never_expires=bool(
+                actual_changes.get("password_never_expires", target.password_never_expires)
+            ),
+        ):
+            if actual_changes.get("store_password") is True:
+                raise StorePasswordNotAllowedError("store_password")
+            actual_changes["store_password"] = False
 
         if "upn" in actual_changes:
             await self._check_upn_unique(actual_changes["upn"], target.ad_object_guid)
@@ -344,6 +372,7 @@ class UserAttributesService:
 
 __all__ = [
     "AdminOnlyFieldError",
+    "StorePasswordNotAllowedError",
     "DomainAllowlistEmptyError",
     "DomainNotAllowedError",
     "UpnConflictError",

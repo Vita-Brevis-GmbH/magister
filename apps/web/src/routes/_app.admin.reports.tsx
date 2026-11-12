@@ -3,7 +3,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import {
+  useAccountsByKind,
+  useAccountsByZielgruppe,
   useActivityReport,
+  useEnabledModules,
   useInstanceProfile,
   useManagerWorkload,
   useMembersByDepartment,
@@ -40,13 +43,15 @@ function ErrorRow({ columns }: { columns: number }): JSX.Element {
   );
 }
 
-function ReportsPage(): JSX.Element {
+export function ReportsPage(): JSX.Element {
   const { t } = useTranslation();
   const { tt } = useTerms();
   // M6 #8: the company profile reports over Abteilungen/Kader instead of
   // Klassen/Lehrpersonen. Only the matching sections mount, so a school
   // instance never issues the department queries (and vice-versa).
   const isCompany = (useInstanceProfile().data ?? "school") === "company";
+  // Abteilungen gibt es auch an Schulen, wenn das Modul eingeschaltet ist.
+  const hasDepartments = useEnabledModules().data?.has("departments") ?? false;
   return (
     <div className="space-y-8">
       <header>
@@ -54,20 +59,138 @@ function ReportsPage(): JSX.Element {
         <p className="text-sm text-muted-foreground">{tt("reports.intro")}</p>
       </header>
 
-      {isCompany ? (
-        <>
-          <MembersByDepartmentSection />
-          <ManagerWorkloadSection />
-        </>
-      ) : (
+      <AccountsByKindSection />
+      <AccountsByZielgruppeSection />
+      {!isCompany && (
         <>
           <StudentsByClassSection />
           <StudentsBySchoolYearSection />
           <TeacherWorkloadSection />
         </>
       )}
+      {(isCompany || hasDepartments) && (
+        <>
+          <MembersByDepartmentSection />
+          <ManagerWorkloadSection />
+        </>
+      )}
       <ActivitySection />
     </div>
+  );
+}
+
+/** Zahl rechtsbündig; 0 gedämpft, damit Auffälliges heraussticht. */
+function Num({ value, strong }: { value: number; strong?: boolean }): JSX.Element {
+  return (
+    <TableCell
+      className={cn(
+        "text-right tabular-nums",
+        strong && "font-medium",
+        value === 0 && "text-muted-foreground",
+      )}
+    >
+      {value}
+    </TableCell>
+  );
+}
+
+function AccountsByKindSection(): JSX.Element {
+  const { t } = useTranslation();
+  const q = useAccountsByKind();
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-lg font-semibold">{t("reports.accounts_title")}</h2>
+        {q.data && (
+          <p className="text-sm text-muted-foreground">
+            {t("reports.accounts_total", { count: q.data.total })}
+          </p>
+        )}
+      </div>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("reports.col_kind")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_total")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_enabled")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_disabled")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_stored")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_without_zielgruppe")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_missing_in_ad")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {q.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} columns={7} />)
+            ) : q.isError ? (
+              <ErrorRow columns={7} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.kind}>
+                  <TableCell className="font-medium">
+                    {t(`users.kind_${row.kind}`, { defaultValue: row.kind })}
+                  </TableCell>
+                  <Num value={row.total} strong />
+                  <Num value={row.enabled} />
+                  <Num value={row.disabled} />
+                  <Num value={row.stored_password} />
+                  <Num value={row.without_zielgruppe} />
+                  <Num value={row.missing_in_ad} />
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
+  );
+}
+
+function AccountsByZielgruppeSection(): JSX.Element {
+  const { t } = useTranslation();
+  const q = useAccountsByZielgruppe();
+  return (
+    <section className="space-y-3">
+      <h2 className="text-lg font-semibold">{t("reports.zielgruppen_title")}</h2>
+      <p className="text-sm text-muted-foreground">{t("reports.zielgruppen_intro")}</p>
+      <div className="overflow-x-auto rounded-md border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t("reports.col_zielgruppe")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_total")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_enabled")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_disabled")}</TableHead>
+              <TableHead className="text-right">{t("reports.col_stored")}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {q.isLoading ? (
+              Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} columns={5} />)
+            ) : q.isError ? (
+              <ErrorRow columns={5} />
+            ) : (
+              (q.data?.rows ?? []).map((row) => (
+                <TableRow key={row.group_template_id ?? "none"}>
+                  <TableCell className="font-medium">
+                    {row.name ?? (
+                      <span className="text-muted-foreground">
+                        {t("reports.without_zielgruppe")}
+                      </span>
+                    )}
+                  </TableCell>
+                  <Num value={row.total} strong />
+                  <Num value={row.enabled} />
+                  <Num value={row.disabled} />
+                  <Num value={row.stored_password} />
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </section>
   );
 }
 

@@ -35,5 +35,18 @@ def validate_object_guid(value: str) -> str:
     return v
 
 
+def validate_object_guid_or_empty(value: str) -> str:
+    """Wie :func:`validate_object_guid`, lässt aber den leeren Wert zu.
+
+    Für die **eine** Sitzungsart, die zu keinem AD-Objekt gehört: ein
+    Operator-Zugriff (ADR-0019 D5). Ein erfundener Sentinel-GUID wäre bequemer
+    und schlechter — er sähe in jeder Abfrage wie ein echter aus.
+    """
+    if value == "":
+        return value
+    return validate_object_guid(value)
+
+
 Upn = Annotated[str, AfterValidator(validate_upn)]
 ObjectGuid = Annotated[str, AfterValidator(validate_object_guid)]
+ObjectGuidOrEmpty = Annotated[str, AfterValidator(validate_object_guid_or_empty)]

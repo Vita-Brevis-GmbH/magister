@@ -1,0 +1,188 @@
+# Management listener for the console (ADR-0015 D1).
+#
+# The console can mint sessions into every customer, so it must not be
+# reachable from the internet. Three layers, in the order they take effect:
+#
+#   1. The port is published only on the management address — see the
+#      `ports:` mapping in ../docker-compose.yml. What is not routed cannot be
+#      reached; this is the actual boundary.
+#   2. This site block requires a client certificate from the platform CA. Even
+#      a reachable port yields no TLS handshake without an operator certificate.
+#   3. It sets a marker header the application insists on
+#      (cockpit_api/management_guard.py), so a proxy misconfiguration cannot
+#      expose the console by accident.
+#
+# Source-IP filtering is deliberately NOT here: that belongs on the Fortigate
+# and the WAF, where it is maintained. Two places for one rule means one of
+# them is wrong.
+{
+	# No ACME: the management address is internal and has no public name to
+	# validate. The certificate is issued from the platform CA (see below).
+	auto_https off
+	admin off
+	# Wer die Konsole über die IP aufruft, schickt keinen SNI mit. Ohne
+	# diesen Vorgabenamen bricht Caddy den Handshake mit einem internen
+	# Fehler ab, statt das Zertifikat zu zeigen.
+	default_sni {$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}
+}
+
+# Zwei Adressen, weil die Konsole auf zwei Wegen gerufen wird: über ihren
+# Namen, und über die Adresse der Maschine, auf der sie steht (IP oder
+# Host-FQDN). Ohne die zweite antwortet Caddy auf einen Aufruf per IP mit
+# 421 — die Anfrage passt zu keinem Site-Block, und das sieht aus wie ein
+# kaputter Listener. `COCKPIT_EXTRA_HOST` ist mit `localhost` vorbelegt,
+# damit ein leerer Wert nichts kaputtmacht.
+https://{$COCKPIT_HOSTNAME:console.mgmt.vitabrevis.ch}:4444,
+https://{$COCKPIT_EXTRA_HOST:localhost}:4444 {
+	tls /certs/console.pem /certs/console-key.pem {
+		# `verify_if_given` seit ADR-0023 D3: ein Client-Zertifikat ist
+		# willkommen und wird gegen den Operator-Zweig geprüft — aber es ist
+		# nicht mehr Pflicht. Der erste Faktor ist das Passwort, und die
+		# Erreichbarkeit dieser Adresse regeln Netz und Firewall.
+		#
+		# Wer die alte Strenge will, setzt hier wieder `require_and_verify`:
+		# die Anwendung läuft mit und ohne Zertifikat. Dann kommt allerdings
+		# niemand ohne Zertifikat bis zur Anmeldeseite — genau das war der
+		# Grund für die Änderung.
+		client_auth {
+			mode verify_if_given
+			trust_pool file /certs/operator-ca.pem
+		}
+		protocols tls1.3 tls1.3
+	}
+
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Resource-Policy "same-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'"
+		-Server
+	}
+
+	# `handle`, not `handle_path`: the console API mounts its routers AT /api
+	# (see cockpit_api/main.py), so the prefix must survive the hop.
+	#
+	# The marker is what the application insists on. It is not a credential —
+	# it proves the request came through this block, nothing more. `header_up`
+	# REPLACES any value a client sent under that name, so a header smuggled in
+	# from outside cannot pass the guard.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Magister-Management {$COCKPIT_MANAGEMENT_MARKER}
+			# Das geprüfte Client-Zertifikat, damit die Anwendung weiss, WER
+			# anklopft (ADR-0020 D1). Sie bildet daraus den SPKI-Fingerprint
+			# und findet damit die Operator-Zeile.
+			#
+			# `certificate_der_base64` und NICHT `certificate_pem`: ein PEM
+			# enthält Zeilenumbrüche, Gos `net/http` weist einen solchen
+			# Header-Wert ab, und Caddy antwortet mit 502. Im
+			# Connector-Block unten steht dieselbe Zeile aus demselben Grund —
+			# dort wurde es einmal bezahlt.
+			#
+			# `header_up` ERSETZT einen vom Client gesetzten Wert, ein von
+			# aussen eingeschmuggelter Header kommt also nicht durch.
+			header_up X-Console-Client-Cert {http.request.tls.client.certificate_der_base64}
+		}
+	}
+
+	# Die Konsolen-Oberfläche (ADR-0013 Phase 2, steht seit 2026-09). Sie
+	# liegt als statische Dateien im Image und wird von hier ausgeliefert —
+	# dieselbe Herkunft wie die API, damit der Sitzungs-Cookie erststellig
+	# bleibt.
+	handle {
+		root * /srv/console
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# ---------------------------------------------------------------------------
+# Connector listener for the AD agents (ADR-0014, ADR-0013 D3).
+#
+# Deliberately PUBLIC on 0.0.0.0:46200 — the opposite of the block above, and
+# for a reason: the agent calls in from the customer's network, so the platform
+# never opens a connection inward and LDAP never leaves the customer's network.
+#
+# What protects it is not the binding but two factors the application checks
+# against the SAME agent row:
+#
+#   1. This block requires a client certificate from the platform CA
+#      (`require_and_verify`), so the handshake fails without one. It then
+#      forwards the verified certificate, and the application matches its SPKI
+#      fingerprint against the agent row — the chain alone would let any
+#      customer's agent onto any customer's channel.
+#   2. The agent's API key, stored only as an argon2id hash.
+#
+# The connector marker is a DIFFERENT value from the management one. Same value
+# on both would mean either marker opens either listener, and the console's
+# separation would be decoration (see cockpit_api/management_guard.py).
+#
+# No port 443 fallback (decision E11): the firewall opening is a hard
+# onboarding requirement, and a fallback would quietly hide a closed port until
+# the day it matters.
+https://{$COCKPIT_CONNECTOR_HOSTNAME:connect.vitabrevis.ch}:46200 {
+	tls /certs/connector.pem /certs/connector-key.pem {
+		client_auth {
+			# `verify_if_given`, NOT `require_and_verify` — and this is not a
+			# weakening, it is the only mode that works at all:
+			#
+			# A new agent has no certificate yet. Getting one IS the purpose of
+			# /connector/enroll. With `require_and_verify` the TLS handshake
+			# fails before the path is even known, so enrollment could never
+			# happen — measured against a running Caddy, where the agent got
+			# `tlsv13 alert certificate required` on its very first call.
+			#
+			# `verify_if_given` means: no certificate -> handshake succeeds;
+			# certificate presented -> chain verified against the platform CA.
+			# Everything except /connector/enroll then refuses to serve without
+			# a verified certificate, and that refusal is in the application
+			# (cockpit_api/routers/connector.py), where the path is known.
+			#
+			# What protects /connector/enroll is therefore the one-time token
+			# alone: 32 bytes of entropy, 24 hours, single-use. That is
+			# inherent — an agent without a certificate must be able to get
+			# one — and it is why the token is short-lived and why the console
+			# shows the fingerprint afterwards.
+			mode verify_if_given
+			# NUR der Connector-Zweig. Aus demselben Grund, aus dem der
+			# Konsolen-Listener nur den Operator-Zweig kennt: was hier liegt,
+			# ist ein Vertrauensanker. Mit der Wurzel im Pool gälte auch ein
+			# Operator-Zertifikat als gültiger Agent — und ein Zweig, der für
+			# Menschen gedacht ist, hätte plötzlich eine Maschinenrolle.
+			trust_pool file /certs/connector-int.pem
+		}
+		protocols tls1.3 tls1.3
+	}
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# Only the connector paths. Everything else on this listener is a 404 —
+	# the console's own /api/* must not be reachable from the internet, and the
+	# application's guard refuses it a second time even if this changed.
+	handle /connector/* {
+		reverse_proxy api:8000 {
+			header_up X-Magister-Connector {$COCKPIT_CONNECTOR_MARKER}
+			# The verified client certificate as base64-encoded DER, so the
+			# application can match the SPKI fingerprint. NOT
+			# `certificate_pem`: a PEM contains newlines and Go's net/http
+			# rejects such a header value, which turns every agent request
+			# into a 502 — measured against a running Caddy, not assumed.
+			# `header_up` REPLACES any value a client sent under this name, so
+			# an agent cannot present someone else's certificate by putting it
+			# in a header (also verified).
+			header_up X-Connector-Client-Cert {http.request.tls.client.certificate_der_base64}
+		}
+	}
+
+	handle {
+		respond "not found" 404
+	}
+}

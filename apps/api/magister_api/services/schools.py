@@ -6,14 +6,18 @@ Schools are org-level scope entities; create/update/delete are admin-only
 
 from __future__ import annotations
 
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
 from magister_api.config import Settings
+from magister_api.models.app_settings import AppSettings
+from magister_api.models.group_template import GroupTemplate, GroupTemplateSchool
 from magister_api.models.school import School
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.schools import SchoolRepository
+from magister_api.services.zielgruppen import ensure_defaults
 
 # Fields that carry no privacy risk and are safe to name in the audit payload.
 _AUDIT_SAFE_FIELDS = frozenset(
@@ -63,6 +67,14 @@ class SchoolService:
         except IntegrityError as exc:
             raise SchoolKuerzelConflictError("kuerzel") from exc
         await self._emit("school_created", row, ip, request_id, self._safe_payload(fields))
+        # Jeder neue Standort bekommt die Standard-Zielgruppen (Zyklus 1/2/3,
+        # Lehrperson) — sonst bietet "Benutzer anlegen" dort keine an.
+        profile = (
+            await self.session.execute(
+                select(AppSettings.instance_profile).where(AppSettings.id == 1)
+            )
+        ).scalar_one_or_none() or "school"
+        await ensure_defaults(self.session, school=row, instance_profile=profile)
         return row
 
     async def update(
@@ -84,6 +96,18 @@ class SchoolService:
         if dependents > 0:
             raise SchoolInUseError(str(dependents))
         payload = {"name": row.name, "kuerzel": row.kuerzel}
+        # Zielgruppen, die NUR an diesem Standort hingen, archivieren. Sonst
+        # verlören sie mit dem Standort ihre letzte Bindung (CASCADE) und
+        # wären danach global — an jedem anderen Standort angeboten.
+        only_here = (
+            select(GroupTemplateSchool.group_template_id)
+            .group_by(GroupTemplateSchool.group_template_id)
+            .having(func.count() == 1)
+            .having(func.bool_and(GroupTemplateSchool.school_id == school_id))
+        )
+        await self.session.execute(
+            update(GroupTemplate).where(GroupTemplate.id.in_(only_here)).values(status="archived")
+        )
         await self.repo.delete(row)
         # The school no longer exists, so the audit row must not reference it
         # (school_id=None); target_id keeps the deleted school's id for the trail.

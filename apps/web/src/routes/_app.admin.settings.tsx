@@ -6,12 +6,16 @@ import { ApiError } from "@/api/client";
 import {
   useAppSettings,
   useInstanceProfile,
+  usePlatformManaged,
   useTestAdConnection,
   useTriggerAdSync,
   useUpdateAppSettings,
 } from "@/api/hooks";
 import type { AppSettingsOut, AppSettingsUpdate } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { DomainsCard } from "@/components/DomainsCard";
+import { MailStatusCard } from "@/components/MailStatusCard";
+import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,15 +31,12 @@ interface FormState {
   oidc_redirect_uri: string;
   oidc_scopes: string;
   bootstrap_admins: string;
-  mail_domains: string;
   ad_dcs: string;
   ad_bind_mode: string;
   ad_bind_dn: string;
   ad_bind_password: string;
   ad_tls_verify: boolean;
   ad_tls_ca_pem: string;
-  ad_login_enabled: boolean;
-  ad_login_group: string;
   ad_users_search_base: string;
   ad_computers_search_base: string;
   ad_sync_interval_minutes: string;
@@ -46,6 +47,18 @@ interface FormState {
   ninja_region: string;
   ninja_client_id: string;
   ninja_client_secret: string;
+  mail_transport: string;
+  mail_from: string;
+  mail_from_name: string;
+  smtp_host: string;
+  smtp_port: string;
+  smtp_security: string;
+  smtp_username: string;
+  graph_tenant_id: string;
+  graph_client_id: string;
+  mail_secret: string;
+  expiry_notice_enabled: boolean;
+  expiry_notice_days: string;
 }
 
 function fromOut(data: AppSettingsOut): FormState {
@@ -56,15 +69,12 @@ function fromOut(data: AppSettingsOut): FormState {
     oidc_redirect_uri: data.oidc_redirect_uri ?? "",
     oidc_scopes: data.oidc_scopes.join(", "),
     bootstrap_admins: data.bootstrap_admins.join(", "),
-    mail_domains: data.mail_domains.join(", "),
     ad_dcs: data.ad_dcs.join(", "),
     ad_bind_mode: data.ad_bind_mode || "simple",
     ad_bind_dn: data.ad_bind_dn ?? "",
     ad_bind_password: "",
     ad_tls_verify: data.ad_tls_verify,
     ad_tls_ca_pem: data.ad_tls_ca_pem ?? "",
-    ad_login_enabled: data.ad_login_enabled,
-    ad_login_group: data.ad_login_group ?? "",
     ad_users_search_base: data.ad_users_search_base ?? "",
     ad_computers_search_base: data.ad_computers_search_base ?? "",
     ad_sync_interval_minutes: String(data.ad_sync_interval_minutes),
@@ -75,6 +85,18 @@ function fromOut(data: AppSettingsOut): FormState {
     ninja_region: data.ninja_region ?? "",
     ninja_client_id: data.ninja_client_id ?? "",
     ninja_client_secret: "", // never prefilled — placeholder communicates "set"
+    mail_transport: data.mail_transport ?? "off",
+    mail_from: data.mail_from ?? "",
+    mail_from_name: data.mail_from_name ?? "",
+    smtp_host: data.smtp_host ?? "",
+    smtp_port: data.smtp_port ? String(data.smtp_port) : "",
+    smtp_security: data.smtp_security ?? "starttls",
+    smtp_username: data.smtp_username ?? "",
+    graph_tenant_id: data.graph_tenant_id ?? "",
+    graph_client_id: data.graph_client_id ?? "",
+    mail_secret: "", // nie vorbelegt — der Platzhalter sagt, ob eines gesetzt ist
+    expiry_notice_enabled: data.expiry_notice_enabled ?? false,
+    expiry_notice_days: (data.expiry_notice_days ?? [14, 7, 1]).join(", "),
   };
 }
 
@@ -107,10 +129,6 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   if (JSON.stringify(admins) !== JSON.stringify(current.bootstrap_admins)) {
     payload.bootstrap_admins = admins;
   }
-  const mail_domains = splitCsv(form.mail_domains).map((d) => d.toLowerCase());
-  if (JSON.stringify(mail_domains) !== JSON.stringify(current.mail_domains)) {
-    payload.mail_domains = mail_domains;
-  }
   const dcs = splitCsv(form.ad_dcs);
   if (JSON.stringify(dcs) !== JSON.stringify(current.ad_dcs)) {
     payload.ad_dcs = dcs;
@@ -127,12 +145,6 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   if (form.ad_tls_ca_pem !== (current.ad_tls_ca_pem ?? "")) {
     // Empty string clears the stored cert (falls back to the OS trust store).
     payload.ad_tls_ca_pem = form.ad_tls_ca_pem;
-  }
-  if (form.ad_login_enabled !== current.ad_login_enabled) {
-    payload.ad_login_enabled = form.ad_login_enabled;
-  }
-  if (form.ad_login_group !== (current.ad_login_group ?? "")) {
-    payload.ad_login_group = form.ad_login_group || null;
   }
   if (form.ad_users_search_base !== (current.ad_users_search_base ?? "")) {
     payload.ad_users_search_base = form.ad_users_search_base || null;
@@ -161,7 +173,95 @@ function buildPayload(form: FormState, current: AppSettingsOut): AppSettingsUpda
   }
   // Only send the secret when the operator actually typed one.
   if (form.ninja_client_secret) payload.ninja_client_secret = form.ninja_client_secret;
+  // Mailversand: Texte leer = leeren ("" leert serverseitig); Port leer = 0.
+  const mailText = [
+    "mail_from",
+    "mail_from_name",
+    "smtp_host",
+    "smtp_username",
+    "graph_tenant_id",
+    "graph_client_id",
+  ] as const;
+  for (const key of mailText) {
+    if (form[key] !== (current[key] ?? "")) payload[key] = form[key];
+  }
+  if (form.mail_transport !== current.mail_transport) {
+    payload.mail_transport = form.mail_transport as AppSettingsOut["mail_transport"];
+  }
+  if (form.smtp_security !== current.smtp_security) {
+    payload.smtp_security = form.smtp_security as AppSettingsOut["smtp_security"];
+  }
+  const port = form.smtp_port.trim() ? Number(form.smtp_port) : 0;
+  if (Number.isFinite(port) && port !== (current.smtp_port ?? 0)) payload.smtp_port = port;
+  if (form.mail_secret) payload.mail_secret = form.mail_secret;
+  if (form.expiry_notice_enabled !== current.expiry_notice_enabled) {
+    payload.expiry_notice_enabled = form.expiry_notice_enabled;
+  }
+  const noticeDays = splitCsv(form.expiry_notice_days)
+    .map(Number)
+    .filter((d) => Number.isInteger(d));
+  if (noticeDays.join(",") !== (current.expiry_notice_days ?? []).join(",")) {
+    payload.expiry_notice_days = noticeDays;
+  }
   return payload;
+}
+
+/**
+ * „AD jetzt abgleichen" — Knopf, Ergebnis, Hinweis.
+ *
+ * Eigene Komponente, weil sie an zwei Stellen steht: im Formular der
+ * Einzelinstallation und, gehostet, allein auf dieser Seite. Der Abgleich ist
+ * **keine Konfiguration**: er liest das AD des Kunden und schreibt in dessen
+ * Schema. Dass er mit der Systemkonfiguration aus der Kunden-Oberfläche
+ * verschwand (ADR-0017 D1), war ein Nebeneffekt der Verlagerung, kein
+ * Entscheid — `POST /ad/sync` ist auch gehostet gemountet.
+ */
+export function SyncAdAction({ managed = false }: { managed?: boolean }): JSX.Element {
+  const { t } = useTranslation();
+  const syncAd = useTriggerAdSync();
+  // `managed` kommt von der Seite und wird nicht hier abgefragt (dieselbe
+  // Regel wie beim Profil oben): gehostet stehen die AD-Einstellungen nicht
+  // auf dieser Seite, sondern in der Konsole von Vita Brevis. Eine Meldung
+  // „oben eintragen" schickte den Kunden zu einem Feld, das es hier nicht gibt.
+
+  return (
+    <>
+      <div className="flex items-center gap-3">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => syncAd.mutate()}
+          disabled={syncAd.isPending}
+        >
+          {syncAd.isPending
+            ? t("admin.settings.sync_ad_running")
+            : t("admin.settings.sync_ad_button")}
+        </Button>
+        {syncAd.data ? (
+          <span className="text-sm text-emerald-700">
+            {t("admin.settings.sync_ad_ok", {
+              count: syncAd.data.synced_count,
+              groups: syncAd.data.group_count,
+              devices: syncAd.data.device_count,
+            })}
+          </span>
+        ) : syncAd.isError ? (
+          <span className="text-sm text-destructive">
+            {syncAd.error instanceof ApiError && syncAd.error.status === 503
+              ? t([
+                  ...(managed
+                    ? [`admin.settings.sync_ad_reason_managed.${syncAd.error.code}`]
+                    : []),
+                  `admin.settings.sync_ad_reason.${syncAd.error.code}`,
+                  "admin.settings.sync_ad_unavailable",
+                ])
+              : t("errors.generic")}
+          </span>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+    </>
+  );
 }
 
 function AppSettingsPage(): JSX.Element {
@@ -170,20 +270,48 @@ function AppSettingsPage(): JSX.Element {
   // Read the profile here (page level) and pass it down, so the form component
   // stays free of that extra query — keeps its unit test's fetch assertions valid.
   const profile = useInstanceProfile().data ?? "school";
+  const managed = usePlatformManaged().data ?? false;
 
   return (
     <div className="space-y-6">
       <header className="space-y-1">
         <h1 className="font-serif text-2xl font-semibold">{t("admin.settings.title")}</h1>
-        <p className="text-sm text-muted-foreground">{t("admin.settings.description")}</p>
+        <p className="text-sm text-muted-foreground">
+          {/* Gehostet wäre „Änderungen greifen sofort" schlicht falsch. */}
+          {t(managed ? "admin.settings.description_managed" : "admin.settings.description")}
+        </p>
       </header>
 
-      {settings.isLoading ? (
+      {managed ? (
+        // Gehostet gehört die Konfiguration dem Betreiber (ADR-0017 D1), und
+        // statt eines Formulars, das beim Speichern 404 sagt, steht hier, wer
+        // sie verwaltet. Der AD-Abgleich bleibt aber die Sache des Kunden: er
+        // liest dessen AD und schreibt in dessen Schema. Er ist mit der
+        // Konfiguration nur mitverschwunden, weil er im selben Formular stand.
+        <>
+          <ManagedByPlatform area="settings" />
+          <DomainsCard />
+          <MailStatusCard />
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">{t("admin.settings.ad_actions_title")}</CardTitle>
+              <CardDescription>{t("admin.settings.ad_actions_desc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <SyncAdAction managed />
+            </CardContent>
+          </Card>
+        </>
+      ) : settings.isLoading ? (
         <p>{t("common.loading")}</p>
       ) : settings.isError ? (
         <p className="text-destructive">{t("errors.generic")}</p>
       ) : settings.data ? (
-        <SettingsForm data={settings.data} profile={profile} />
+        <>
+          <SettingsForm data={settings.data} profile={profile} />
+          <DomainsCard />
+          <MailStatusCard />
+        </>
       ) : null}
     </div>
   );
@@ -199,7 +327,6 @@ function SettingsForm({
   const { t } = useTranslation();
   const update = useUpdateAppSettings();
   const testAd = useTestAdConnection();
-  const syncAd = useTriggerAdSync();
   // Term-pack vars from the passed-down profile (no extra query, keeps the
   // form's unit-test fetch assertions intact) so provisioning copy reads
   // "Standort" in the company edition instead of a hardcoded school word.
@@ -377,6 +504,136 @@ function SettingsForm({
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-base">{t("admin.mail.edit_title")}</CardTitle>
+          <CardDescription>{t("admin.mail.edit_desc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="mail-transport">{t("admin.mail.transport")}</Label>
+              <select
+                id="mail-transport"
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                value={form.mail_transport}
+                onChange={(e) => {
+                  setForm((prev) => ({ ...prev, mail_transport: e.target.value }));
+                  setSuccess(false);
+                }}
+              >
+                <option value="off">{t("admin.mail.transport_off")}</option>
+                <option value="graph">{t("admin.mail.transport_graph")}</option>
+                <option value="smtp">{t("admin.mail.transport_smtp")}</option>
+              </select>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="mail-from">{t("admin.mail.from")}</Label>
+              <Input id="mail-from" type="email" {...field("mail_from")} />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="mail-from-name">{t("admin.mail.from_name")}</Label>
+              <Input id="mail-from-name" {...field("mail_from_name")} />
+            </div>
+          </div>
+          {form.mail_transport === "graph" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="graph-tenant">{t("admin.mail.graph_tenant_id")}</Label>
+                <Input id="graph-tenant" {...field("graph_tenant_id")} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="graph-client">{t("admin.mail.graph_client_id")}</Label>
+                <Input id="graph-client" {...field("graph_client_id")} />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t("admin.mail.graph_hint")}
+              </p>
+            </div>
+          ) : null}
+          {form.mail_transport === "smtp" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="smtp-host">{t("admin.mail.smtp_host")}</Label>
+                <Input id="smtp-host" {...field("smtp_host")} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-port">{t("admin.mail.smtp_port")}</Label>
+                <Input
+                  id="smtp-port"
+                  inputMode="numeric"
+                  placeholder="587"
+                  {...field("smtp_port")}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-security">{t("admin.mail.smtp_security")}</Label>
+                <select
+                  id="smtp-security"
+                  className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm"
+                  value={form.smtp_security}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, smtp_security: e.target.value }));
+                    setSuccess(false);
+                  }}
+                >
+                  <option value="starttls">STARTTLS (587)</option>
+                  <option value="tls">TLS (465)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="smtp-user">{t("admin.mail.smtp_username")}</Label>
+                <Input id="smtp-user" autoComplete="off" {...field("smtp_username")} />
+              </div>
+            </div>
+          ) : null}
+          {form.mail_transport !== "off" ? (
+            <div className="space-y-1">
+              <Label htmlFor="mail-secret">
+                {t(
+                  form.mail_transport === "graph"
+                    ? "admin.mail.secret_graph"
+                    : "admin.mail.secret_smtp",
+                )}
+              </Label>
+              <Input
+                id="mail-secret"
+                type="password"
+                autoComplete="new-password"
+                placeholder={
+                  data.mail_secret_set
+                    ? t("admin.settings.placeholder_secret_set")
+                    : t("admin.settings.placeholder_secret_unset")
+                }
+                {...field("mail_secret")}
+              />
+            </div>
+          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.expiry_notice_enabled}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, expiry_notice_enabled: e.target.checked }));
+                setSuccess(false);
+              }}
+            />
+            <span>
+              <span className="font-medium">{t("admin.mail.reminder_enabled")}</span>
+              <span className="block text-xs text-muted-foreground">
+                {t("admin.mail.reminder_enabled_hint")}
+              </span>
+            </span>
+          </label>
+          <div className="space-y-1">
+            <Label htmlFor="notice-days">{t("admin.mail.reminder_days")}</Label>
+            <Input id="notice-days" {...field("expiry_notice_days")} />
+            <p className="text-xs text-muted-foreground">{t("admin.mail.reminder_days_hint")}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-base">{t("admin.settings.ad_section")}</CardTitle>
           <CardDescription>{t("admin.settings.ad_section_desc")}</CardDescription>
         </CardHeader>
@@ -484,46 +741,6 @@ function SettingsForm({
             </div>
           </div>
 
-          <div className="space-y-3 border-t pt-4">
-            <p className="text-sm font-medium">{t("admin.settings.ad_login_title")}</p>
-            <div className="space-y-1">
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5"
-                  checked={form.ad_login_enabled}
-                  onChange={(e) => {
-                    setForm((prev) => ({ ...prev, ad_login_enabled: e.target.checked }));
-                    setSuccess(false);
-                  }}
-                />
-                <span>
-                  <span className="font-medium">{t("admin.settings.field.ad_login_enabled")}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {t("admin.settings.ad_login_enabled_hint")}
-                  </span>
-                </span>
-              </label>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="ad-login-group">{t("admin.settings.field.ad_login_group")}</Label>
-              <Input
-                id="ad-login-group"
-                disabled={!form.ad_login_enabled}
-                placeholder="CN=Magister-Login,OU=Groups,DC=…"
-                {...field("ad_login_group")}
-              />
-              <p className="text-xs text-muted-foreground">
-                {t("admin.settings.field.ad_login_group_hint")}
-              </p>
-            </div>
-            {form.ad_login_enabled && !form.ad_login_group.trim() ? (
-              <p className="text-xs font-medium text-destructive">
-                {t("admin.settings.ad_login_group_required")}
-              </p>
-            ) : null}
-          </div>
-
           <div className="space-y-1">
             <Label htmlFor="ad-search-base">{t("admin.settings.field.ad_users_search_base")}</Label>
             <Input id="ad-search-base" {...field("ad_users_search_base")} />
@@ -581,37 +798,7 @@ function SettingsForm({
           </div>
 
           <div className="space-y-2 border-t pt-4">
-            <div className="flex items-center gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => syncAd.mutate()}
-                disabled={syncAd.isPending}
-              >
-                {syncAd.isPending
-                  ? t("admin.settings.sync_ad_running")
-                  : t("admin.settings.sync_ad_button")}
-              </Button>
-              {syncAd.data ? (
-                <span className="text-sm text-emerald-700">
-                  {t("admin.settings.sync_ad_ok", {
-                    count: syncAd.data.synced_count,
-                    groups: syncAd.data.group_count,
-                    devices: syncAd.data.device_count,
-                  })}
-                </span>
-              ) : syncAd.isError ? (
-                <span className="text-sm text-destructive">
-                  {syncAd.error instanceof ApiError && syncAd.error.status === 503
-                    ? t([
-                        `admin.settings.sync_ad_reason.${syncAd.error.code}`,
-                        "admin.settings.sync_ad_unavailable",
-                      ])
-                    : t("errors.generic")}
-                </span>
-              ) : null}
-            </div>
-            <p className="text-xs text-muted-foreground">{t("admin.settings.sync_ad_hint")}</p>
+            <SyncAdAction />
           </div>
         </CardContent>
       </Card>
@@ -668,20 +855,6 @@ function SettingsForm({
           <p className="text-xs text-muted-foreground">
             {t("admin.settings.provisioning_perschool_hint", unitVars)}
           </p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">{t("admin.settings.mail_section")}</CardTitle>
-          <CardDescription>{t("admin.settings.mail_section_desc")}</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="mail-domains">{t("admin.settings.field.mail_domains")}</Label>
-            <Input id="mail-domains" {...field("mail_domains")} />
-            <p className="text-xs text-muted-foreground">{t("admin.settings.csv_hint")}</p>
-          </div>
         </CardContent>
       </Card>
 

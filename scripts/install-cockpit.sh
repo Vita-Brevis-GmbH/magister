@@ -71,9 +71,14 @@ if [[ -f "$ENV_FILE" ]]; then
 else
     log "Generating bootstrap-token + .env"
     BOOTSTRAP_TOKEN=$(openssl rand -base64 32 | tr -d '/+=\n' | head -c 40)
+    # pgcrypto-Schlüssel für die TOTP-Geheimnisse der Operatoren (ADR-0020 D2).
+    # Hier erzeugt und nicht von Hand: ein Schlüssel, den man beim Aufsetzen
+    # eintippen muss, ist einer, der auf mehreren Installationen derselbe ist.
+    SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
     cat > "$ENV_FILE" <<EOF
 # --- generated $(date -Iseconds) by install-cockpit.sh ---
 COCKPIT_BOOTSTRAP_TOKEN=$BOOTSTRAP_TOKEN
+COCKPIT_SECRET_KEY=$SECRET_KEY
 EOF
     chmod 600 "$ENV_FILE"
     ok "Wrote $ENV_FILE"
@@ -81,6 +86,10 @@ EOF
     echo "  ⚠ BOOTSTRAP-TOKEN — sofort in 1Password speichern:"
     echo ""
     echo "      $BOOTSTRAP_TOKEN"
+    echo ""
+    echo "  ⚠ COCKPIT_SECRET_KEY steht in $ENV_FILE und gehört in die"
+    echo "    Sicherung. Ohne ihn ist nach einer Wiederherstellung kein"
+    echo "    zweiter Faktor prüfbar (docs/runbooks/key-rotation.md §5)."
     echo ""
 fi
 
@@ -130,8 +139,11 @@ Nächste Schritte:
      scripts/bootstrap-cockpit-token.sh --bootstrap-token "<token>"
   2. Erste Magister-Instanz registrieren (siehe docs/runbooks/install-cockpit.md §8)
   3. (Optional) Update-Runner installieren (siehe cockpit-update-runner.md)
-  4. Frontend deployen — bis es als Compose-Service drin ist:
+  4. Oberfläche bauen — der Konsolen-Listener liefert sie aus
+     (cockpit/deploy/caddy/Caddyfile, /srv/console). Ohne diesen Schritt
+     antwortet er auf alles ausser /api/* mit 404:
      cd $INSTALL_DIR/src/cockpit/web && pnpm install && pnpm build
-     # dist/ statisch ausliefern (z.B. via caddy oder nginx)
+  5. Operator eintragen, damit die Anmeldung nicht am Bootstrap-Token
+     hängt (docs/runbooks/konsolen-operator.md)
 ────────────────────────────────────────────────────────────
 EOF

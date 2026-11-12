@@ -4,11 +4,11 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from cockpit_api.models.base import Base
+from cockpit_api.models.base import Base, enum_column
 
 
 class UpdateRequestStatus(enum.StrEnum):
@@ -28,7 +28,7 @@ class UpdateRequest(Base):
     )
     target_version: Mapped[str] = mapped_column(String(64))
     status: Mapped[UpdateRequestStatus] = mapped_column(
-        Enum(UpdateRequestStatus, name="update_request_status"),
+        enum_column(UpdateRequestStatus, name="update_request_status"),
         default=UpdateRequestStatus.pending,
     )
     note: Mapped[str | None] = mapped_column(String(500), default=None)

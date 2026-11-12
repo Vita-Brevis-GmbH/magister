@@ -8,6 +8,7 @@ mutations it triggers go through the ``ad`` module.
 from __future__ import annotations
 
 from magister_api.modules.manifest import ModuleManifest
+from magister_api.routers.password_expiry import router as password_expiry_router
 from magister_api.routers.student_password_reset import router as student_pw_reset_router
 from magister_api.routers.teacher_password_reset import router as teacher_pw_reset_router
 from magister_api.routers.user_password_reset import router as user_pw_reset_router
@@ -17,6 +18,7 @@ USERS_MODULE = ModuleManifest(
     id="users",
     routers=(
         users_router,
+        password_expiry_router,
         student_pw_reset_router,
         teacher_pw_reset_router,
         user_pw_reset_router,

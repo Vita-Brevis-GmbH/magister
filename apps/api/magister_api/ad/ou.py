@@ -76,9 +76,20 @@ def select_provision_groups(
     return list(groups_student_zyklus3)
 
 
+def ou_within_school(ou_dn: str, scope_short: str) -> bool:
+    """Liegt ``ou_dn`` im Standort? Dieselbe Regel wie der AD-Abgleich
+    (``AdUserRecord.matches_school_via_ou``): ``OU=<Kürzel>`` kommt im DN vor.
+
+    Ein Konto ausserhalb ordnet der nächste Abgleich keinem Standort zu — es
+    verschwände aus allen Standort-Ansichten.
+    """
+    return f"OU={scope_short.upper()}" in ou_dn.upper()
+
+
 __all__ = [
     "DEFAULT_ZYKLUS1_MAX",
     "DEFAULT_ZYKLUS2_MAX",
+    "ou_within_school",
     "select_provision_groups",
     "select_student_ou",
     "zyklus_for_jahrgangsstufe",

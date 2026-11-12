@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
-from magister_api.auth.capabilities import Capability
+from magister_api.auth.capabilities import TENANT_CAPABILITIES, Capability
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_admin
 from magister_api.config import Settings, get_settings
@@ -28,6 +28,7 @@ from magister_api.schemas.rbac import (
     RoleRename,
 )
 from magister_api.services.rbac import (
+    PlatformCapabilityError,
     RbacService,
     RoleConflictError,
     RoleImmutableError,
@@ -56,7 +57,10 @@ async def _config(svc: RbacService) -> RbacConfigOut:
     roles = await svc.list_roles()
     caps_by_role = await svc.capabilities_by_role()
     return RbacConfigOut(
-        capabilities=[c.value for c in Capability],
+        # Nur die Kunden-Capabilities: die Plattform-Rechte kann diese Rolle
+        # nicht halten (ADR-0017 D5), und eine Matrix, die sie anzeigt, wäre
+        # eine Reihe Kästchen, die beim Anklicken 403 geben.
+        capabilities=sorted(c.value for c in TENANT_CAPABILITIES),
         roles=[_role_out(r, caps_by_role.get(r.key, [])) for r in roles],
     )
 
@@ -162,6 +166,12 @@ async def set_capabilities(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "role_not_found") from exc
     except RoleImmutableError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, "role_not_editable") from exc
+    except PlatformCapabilityError as exc:
+        # 403 und nicht 409: die Anfrage ist richtig geformt und die Rolle ist
+        # bearbeitbar — was fehlt, ist die Berechtigung. Ein Kunden-Admin darf
+        # sich kein Plattform-Recht geben (ADR-0017 D5). Die Meldung nennt das
+        # Recht, damit niemand raten muss.
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
     await _emit(
         session,
         settings,

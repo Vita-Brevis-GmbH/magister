@@ -36,11 +36,10 @@ from magister_api.models.class_teacher_role import (
     KL_ROLE_HAUPT,
     ClassTeacherRole,
 )
-from magister_api.models.document_template import DocumentTemplate
 from magister_api.models.school import School
 from magister_api.models.school_class import SchoolClass
 from magister_api.repositories.base import ScopeContext
-from magister_api.services.document_templates import DocumentTemplateService
+from magister_api.services.document_templates import DocumentTemplateService, ResolvedTemplate
 
 TEMPLATE_ENROLLMENT = "enrollment"
 TEMPLATE_CLASS_CHANGE = "class_change"
@@ -140,9 +139,10 @@ class LetterService:
 
         self._require_inputs(template, ctx, has_class=active_class is not None)
 
-        # Feature B: an operator override (per school, else global) wins over the
-        # built-in template; falls back to the built-in when none is active.
-        custom = await DocumentTemplateService(self.session, self.settings).resolve(
+        # Welche Fassung gilt, entscheidet die Kette aus ADR-0018 D3: eine
+        # gesperrte Plattformvorlage, sonst die eigene (Standort vor global),
+        # sonst die freigegebene Plattformvorlage, sonst die eingebaute.
+        custom = await DocumentTemplateService(self.session, self.settings).resolve_effective(
             key=template, language="de", school_id=student.school_id
         )
 
@@ -243,7 +243,7 @@ class LetterService:
         active_class: SchoolClass | None,
         kl_name: str | None,
         ctx: LetterContext,
-        custom: DocumentTemplate | None = None,
+        custom: ResolvedTemplate | None = None,
     ) -> str:
         strings = LETTER_STRINGS_DE
         subject = strings[template]["subject"].format(
