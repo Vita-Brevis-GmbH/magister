@@ -49,6 +49,11 @@ Ohne `caddy` läuft alles, nur ohne TLS und ohne Client-Zertifikate — dann
 fehlt genau der Teil, der in Produktion die Konsole schützt. Für einen
 ernsthaften Durchgang lohnt es sich.
 
+Dazu die Konsole selbst: sie lebt im Repo `vitabrevis-cockpit`. Das Skript
+nimmt den Checkout neben diesem Repo (`../vitabrevis-cockpit`) oder den, den
+`PLATTFORM_KONSOLE` nennt (`scripts/lib/konsole-pfad.sh`). Die Befehle unten
+gehen vom Checkout daneben aus.
+
 ## 3 · Aufbauen
 
 ```bash
@@ -95,8 +100,8 @@ echo "127.0.0.1 console.mgmt.vitabrevis.dev thun.mgmt.vitabrevis.dev bern.mgmt.v
   | sudo tee -a /etc/hosts
 
 # Oberflächen bauen
-(cd cockpit/web && pnpm install && pnpm build)
-(cd apps/web    && pnpm install && pnpm build)
+(cd ../vitabrevis-cockpit/web && pnpm install && pnpm build)
+(cd apps/web                   && pnpm install && pnpm build)
 ```
 
 Zustand jederzeit:
@@ -117,7 +122,7 @@ eintragen, anmelden, beim ersten Anmelden den zweiten Faktor einrichten.
 
 ```bash
 source dev/env.console
-(cd cockpit/api && uv run python -m cockpit_api.cli.add_operator \
+(cd ../vitabrevis-cockpit/api && uv run python -m cockpit_api.cli.add_operator \
    --upn dev@vitabrevis.dev --name "Dev Operator" --set-password)
 # Passwort: (wird abgefragt, mindestens 12 Zeichen)
 ```
@@ -129,8 +134,9 @@ Passwort eingeben, QR-Code scannen, Code eingeben.
 `--set-password` das Zertifikat eintragen und in den Browser legen.
 
 ```bash
-(cd cockpit/api && uv run python -m cockpit_api.cli.add_operator \
-   --upn dev@vitabrevis.dev --name "Dev Operator" --cert ../../dev/certs/operator.pem)
+MAG="$PWD"   # Wurzel dieses Repos — die Zertifikate liegen unter dev/certs
+(cd ../vitabrevis-cockpit/api && uv run python -m cockpit_api.cli.add_operator \
+   --upn dev@vitabrevis.dev --name "Dev Operator" --cert "$MAG/dev/certs/operator.pem")
 
 openssl pkcs12 -export -inkey dev/certs/operator-key.pem -in dev/certs/operator.pem \
   -certfile dev/certs/platform-ca.pem -out dev/certs/operator.p12 -passout pass:dev
@@ -274,7 +280,7 @@ gesperrt werden muss.
 
 ```bash
 source dev/env.console
-(cd cockpit/api && uv run python -m cockpit_api.cli.fleet_check); echo "Exit: $?"
+(cd ../vitabrevis-cockpit/api && uv run python -m cockpit_api.cli.fleet_check); echo "Exit: $?"
 #   0 kritisch, 2 Warnung(en).  … Exit: 1
 ```
 

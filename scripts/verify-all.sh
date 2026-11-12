@@ -17,8 +17,8 @@
 #   MAGISTER_ADMIN_DSN         Verwaltungszugang in den Cluster (CREATEDB)
 #   COCKPIT_API_DIR            Verzeichnis mit dem cockpit_api-Paket. Vorgabe:
 #                              <konsole>/api, gewählt wie in plattform-aufbau.sh
-#                              (PLATTFORM_KONSOLE, plattform.conf, cockpit/ in
-#                              diesem Repo, /opt/cockpit/src —
+#                              (PLATTFORM_KONSOLE, plattform.conf,
+#                              /opt/cockpit/src —
 #                              scripts/lib/konsole-pfad.sh)
 #   MAGISTER_PSQL_DSN         optional: derselbe Cluster als libpq-URL
 #                              (postgresql://…), um Referenz-Zeilenzahlen aus

@@ -7,14 +7,15 @@
 > **zweiten Faktor** auf seinem Telefon.
 > Die Zeile entsteht mit einem CLI-Befehl, der zweite Faktor von der Person
 > selbst.
-> Betrifft: **Konsolen-Host** (`console.magister.ch`, interne Adresse).
+> Betrifft: **Konsolen-Host** (`console.magister.ch`, interne Adresse). Die Konsole liegt
+> dort im Checkout von `vitabrevis-cockpit` unter `/opt/cockpit/src`.
 
 ## 0 · Der kurze Weg (Passwort)
 
 Für den Normalfall reicht ein Befehl auf dem Konsolen-Host:
 
 ```bash
-cd /opt/magister/cockpit/api
+cd /opt/cockpit/src/api
 uv run python -m cockpit_api.cli.add_operator \
     --upn vorname.nachname@vitabrevis.ch \
     --name "Vorname Nachname" \
@@ -28,8 +29,8 @@ uv run python -m cockpit_api.cli.add_operator \
 Im Container-Aufbau steht derselbe Befehl in der Konsole:
 
 ```bash
-docker compose --project-directory cockpit/deploy \
-  -f cockpit/deploy/docker-compose.yml -f cockpit/deploy/docker-compose.plattform.yml \
+cd /opt/cockpit/src/deploy
+docker compose -f docker-compose.yml -f docker-compose.plattform.yml \
   exec api python -m cockpit_api.cli.add_operator --upn … --name … --set-password
 ```
 
@@ -94,7 +95,7 @@ Auf dem Konsolen-Host, im Verzeichnis der API. Es braucht **nur den
 öffentlichen Teil** des Zertifikats (`.crt`/`.pem`), nie den Schlüssel:
 
 ```bash
-cd /opt/magister/cockpit/api
+cd /opt/cockpit/src/api
 uv run python -m cockpit_api.cli.add_operator \
     --upn vorname.nachname@vitabrevis.ch \
     --name "Vorname Nachname" \

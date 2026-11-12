@@ -8,7 +8,7 @@
 ## 1 · Voraussetzungen der Konsole
 
 ```bash
-# in cockpit/deploy/.env
+# in /opt/cockpit/src/deploy/.env (Checkout von vitabrevis-cockpit)
 # Verwaltungszugang in den Magister-Cluster: eine Rolle mit CREATEROLE und
 # CREATE auf der Datenbank. NICHT eine Mandantenrolle. Superuser ist nicht
 # nötig: die Konsole verschafft sich beim Anlegen einer Mandantenrolle
@@ -211,7 +211,7 @@ Gegenprobe von aussen.
 ### 8.1 Voraussetzungen der Plattform
 
 ```bash
-# cockpit/deploy/.env
+# /opt/cockpit/src/deploy/.env
 # Das Intermediate Connector. Der Root bleibt offline (platform-ca.md).
 COCKPIT_CONNECTOR_CA_CERT=/certs/connector-int.pem
 COCKPIT_CONNECTOR_CA_KEY=/certs/connector-int-key.pem
@@ -222,7 +222,7 @@ COCKPIT_CONNECTOR_MARKER=$(openssl rand -hex 32)
 COCKPIT_CONNECTOR_HOSTNAME=connect.magister.ch
 ```
 
-Dazu `connector.pem` und `connector-key.pem` in `cockpit/deploy/certs/` — das
+Dazu `connector.pem` und `connector-key.pem` in `/opt/cockpit/src/deploy/certs/` — das
 Serverzertifikat für `connect.magister.ch`. Der Caddy-Container verweigert
 sonst den Start.
 

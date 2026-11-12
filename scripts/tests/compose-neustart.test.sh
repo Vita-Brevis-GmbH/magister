@@ -2,7 +2,9 @@
 # Nach einem Neustart des Hosts muss jeder Dienst von selbst wiederkommen:
 # jeder Dienst in den Compose-Dateien der Plattform braucht eine
 # `restart:`-Zeile. Die Konsole hatte keine — nach dem nächtlichen Patchen
-# blieb sie aus, und die Datenebene kannte keinen Kunden mehr.
+# blieb sie aus, und die Datenebene kannte keinen Kunden mehr. Die Konsole
+# lebt inzwischen im Repo vitabrevis-cockpit; geprüft wird hier nur noch die
+# Datenebene.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -10,7 +12,7 @@ python3 - <<'PY'
 import re, sys
 
 # Basisdateien: dort stehen die Dienste. Overrides erben die Policy.
-FILES = ["cockpit/deploy/docker-compose.yml", "deploy/compose/docker-compose.yml"]
+FILES = ["deploy/compose/docker-compose.yml"]
 fehler = []
 for path in FILES:
     lines = open(path, encoding="utf-8").read().splitlines()

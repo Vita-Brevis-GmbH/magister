@@ -30,8 +30,8 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Wo die Konsole liegt: PLATTFORM_KONSOLE, sonst cockpit/ hier, sonst ein
-# Checkout von vitabrevis-cockpit neben diesem Repo, sonst /opt/cockpit/src.
+# Wo die Konsole liegt: PLATTFORM_KONSOLE, sonst ein Checkout von
+# vitabrevis-cockpit neben diesem Repo, sonst /opt/cockpit/src.
 # Gewählt wird erst in `up` — `status` und `down` brauchen sie nicht.
 # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
 source "$REPO/scripts/lib/konsole-pfad.sh"

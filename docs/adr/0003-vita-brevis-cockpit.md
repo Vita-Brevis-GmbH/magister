@@ -31,3 +31,10 @@ Wir bauen ein separates Tool **Vita Brevis Cockpit**:
 
 - **Cockpit als Magister-Subapp**: würde RBAC-Modell aufweichen (Vita-Brevis-Ops vs. Schulleitung in derselben App)
 - **Grafana + Custom-Plugin**: zu schwergewichtig für 5 Instanzen, schlechte UX für Update-Trigger
+
+## Nachtrag 2026-11-12 · Im eigenen Repo
+
+Seit 2026-11 im eigenen Repo `vitabrevis-cockpit` (mit Verlauf herausgelöst, auf den Hosts
+`/opt/cockpit/src`); `cockpit/` ist aus Magister entfernt. Den Umzug eines laufenden Cockpits
+beschreibt dort `docs/runbooks/umzug-aus-magister.md`, in Magister
+`docs/runbooks/plattform-auf-einem-host.md` §2.3.

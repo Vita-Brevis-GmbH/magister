@@ -41,6 +41,8 @@ Ports: **443** und **80** für die Kundenseiten, **4444** für die Konsole
 ## 2 · Aufbauen
 
 ```bash
+# die Konsole, einmal (§2.3)
+git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpit/src
 cd /opt/magister
 ./scripts/plattform-aufbau.sh up
 ```
@@ -93,7 +95,7 @@ Was entsteht:
 | Schritt | Ergebnis |
 |---|---|
 | Plattform-CA | Wurzel, zwei Zwischenstellen, Server- und Client-Zertifikate in `plattform/certs/` |
-| Umgebung | `cockpit/deploy/.env` und `deploy/compose/.env`, beide `0600` |
+| Umgebung | `/opt/cockpit/src/deploy/.env` (Konsole) und `deploy/compose/.env`, beide `0600` |
 | Netz | `magister-plattform`, damit die Konsole den Magister-Cluster erreicht |
 | Konsolen-Stack | Postgres, API, Caddy auf `<bind>:4444` mit Client-Zertifikat |
 | Datenebenen-Stack | Postgres, API, Web, Caddy auf 443 nach Hostname getrennt, Sicherungs-Container |
@@ -102,7 +104,8 @@ Was entsteht:
 ### 2.2 Nach einem `git pull`
 
 ```bash
-git pull && ./scripts/plattform-aufbau.sh update   # `up` tut dasselbe
+git pull && git -C /opt/cockpit/src pull \
+  && ./scripts/plattform-aufbau.sh update   # `up` tut dasselbe; Konsole: §2.3
 ```
 
 `up` ist der Weg für ein Update, nicht nur für den ersten Aufbau — `update`
@@ -114,7 +117,7 @@ Was ein Update anfasst:
 | | |
 |---|---|
 | Abbilder | neu gebaut (`--build`) resp. gezogen (`--ziehen`) |
-| Oberfläche | neu gebaut, sobald `cockpit/web/src` neuer ist als `cockpit/web/dist` |
+| Oberfläche | neu gebaut, sobald `web/src` der Konsole neuer ist als `web/dist` |
 | Caddy | immer neu erzeugt (die Konfiguration ist eine eingehängte Datei) |
 | `.env` beider Stacks | Namen und Adressen nachgeführt, Geheimnisse unangetastet |
 | Zertifikate | neu ausgestellt, wenn ein Name fehlt; sonst unangetastet |
@@ -140,16 +143,18 @@ nicht.
 
 ### 2.3 Konsole aus eigenem Repo
 
-Die Konsole ist nach `vitabrevis-cockpit` ausgezogen; `cockpit/` in diesem
-Repo ist eingefroren und fällt später weg. Welchen Checkout die Skripte
-nehmen, steht an einer Stelle (`scripts/lib/konsole-pfad.sh`): `--konsole`
-bzw. `PLATTFORM_KONSOLE` → gespeichert in `plattform.conf` → `cockpit/` hier,
-solange es das gibt → `/opt/cockpit/src` (auf dem Entwicklerrechner davor
-noch `vitabrevis-cockpit` neben dem Magister-Repo). Eine Angabe, die ins
-Leere zeigt, bricht ab, statt still auf einen anderen Checkout zu fallen.
-Welcher gilt, zeigt `konfig` (`KONSOLE_PFAD`).
+Die Konsole lebt im Repo `vitabrevis-cockpit`; `cockpit/` ist seit 2026-11
+aus Magister entfernt. Welchen Checkout die Skripte nehmen, steht an einer
+Stelle (`scripts/lib/konsole-pfad.sh`): `--konsole` bzw. `PLATTFORM_KONSOLE`
+→ gespeichert in `plattform.conf` → `/opt/cockpit/src` (auf dem
+Entwicklerrechner davor noch `vitabrevis-cockpit` neben dem Magister-Repo).
+Eine Angabe, die ins Leere zeigt, bricht ab, statt still auf einen anderen
+Checkout zu fallen. Welcher gilt, zeigt `konfig` (`KONSOLE_PFAD`).
 
-Umziehen, einmal je Host (als Betriebsbenutzer, wie `/opt/magister`):
+**Umziehen**, einmal je Host, auf dem die Konsole noch aus `cockpit/` lief
+(als Betriebsbenutzer, wie `/opt/magister`). Ausführlich, mit Prüfungen und
+Sicherung vorab: im Repo `vitabrevis-cockpit` unter
+`docs/runbooks/umzug-aus-magister.md`.
 
 ```bash
 git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpit/src
@@ -157,23 +162,42 @@ git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpi
 ./scripts/plattform-aufbau.sh up
 ```
 
-`konsole-umziehen` hält die alte Konsole an (`down` ohne `-v`), kopiert
-`.env` und `certs/` nur, wo sie im neuen Checkout fehlen, und kopiert die
-Datenbank aus dem alten Volume (`deploy_cockpit-pg`) in das neue
-(`cockpit_cockpit-pg`) — nur, wenn das neue leer ist. Das alte Volume bleibt
-als Reserve, der Pfad landet in `plattform.conf`. Der Befehl löscht nichts
-und darf wiederholt werden.
+Am besten noch auf dem letzten Stand von Magister mit `cockpit/`, sonst
+gleich nach dem `git pull` auf diesen. Ab dann fehlen in `cockpit/` die
+versionierten Dateien (Compose, Caddyfile, Code); stehen bleiben nur die
+unversionierten Reste — `.env`, `certs/`, `web/dist`. Sie sind ignoriert und
+die Quelle für den Umzug. Die alte Konsole läuft weiter, bis
+`konsole-umziehen` sie anhält, übersteht aber keinen Neustart des Hosts mehr
+(die eingehängte Caddyfile ist weg), und jedes `up`/`update` bricht bis
+zum Umzug ab — auch das aus der Konsole angestossene.
+
+`konsole-umziehen` hält die alte Konsole an: über ihren Projektnamen aus dem
+Label der alten Datenbank (`docker compose -p deploy down` — ohne
+Compose-Datei, ohne `-v`), und nur, wenn in dem Projekt nichts anderes
+läuft. Es kopiert `.env` und `certs/` aus dem Rest in `cockpit/deploy` nur,
+wo sie im neuen Checkout fehlen, und die Datenbank aus dem alten Volume
+(`deploy_cockpit-pg`) in das neue (`cockpit_cockpit-pg`) — nur, wenn das
+neue leer ist. Fehlt die `.env` an beiden Orten, bricht es ab, bevor es
+etwas anfasst. Das alte Volume bleibt als Reserve, der Pfad landet in
+`plattform.conf`. Der Befehl löscht nichts und darf wiederholt werden.
 
 Ohne Umzug startet `up` (auch `restart`) aus dem neuen Checkout nicht,
-solange die Datenbank noch im alten Volume liegt — sonst käme die Konsole
-mit leerer Datenbank hoch, und jede Kundenseite wäre „unbekannt".
+solange `.env` oder Datenbank noch am alten Ort liegen — sonst käme die
+Konsole mit neuen Geheimnissen oder leerer Datenbank hoch, und jede
+Kundenseite wäre „unbekannt". Der Abbruch nennt den Befehl für den Umzug.
 
 Nach dem Umzug gehört zu jedem Update auch `git -C /opt/cockpit/src pull`;
 das Update aus der Konsole (Ops-Agent) holt beide Stände selbst.
 
-Zurück:
+Zurück: die versionierten Dateien von `cockpit/` aus dem letzten Stand davor
+zurückholen — Magister selbst bleibt auf seinem Stand, der Ordner ist
+ignoriert — und die alte Konsole von dort starten. `konsole-umziehen` nennt
+den Stand am Ende; von Hand:
 
 ```bash
+cd /opt/magister
+stand="$(git log -1 --format=%h --diff-filter=D -- cockpit/deploy/docker-compose.yml)^"
+git archive "$stand" cockpit | tar -x -C /opt/magister
 ./scripts/plattform-aufbau.sh down
 ./scripts/plattform-aufbau.sh up --konsole /opt/magister/cockpit
 ```
@@ -181,6 +205,10 @@ Zurück:
 Die alte Konsole läuft dann wieder mit dem alten Volume; was die neue
 seither geschrieben hat, fehlt dort. Ein erneutes `konsole-umziehen` kopiert
 nicht noch einmal, solange im neuen Volume eine Datenbank liegt.
+
+Aufräumen erst, wenn die neue Konsole eine Weile läuft: das alte Volume
+(`docker volume rm deploy_cockpit-pg deploy_caddy-data`) und der Rest in
+`/opt/magister/cockpit` (`.env`, `certs/` mit privaten Schlüsseln).
 
 ## 3 · Die zwei Vertrauenslisten
 

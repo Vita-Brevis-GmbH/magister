@@ -42,7 +42,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Wo die Konsole liegt (eigener Checkout oder noch cockpit/ hier).
+# Wo die Konsole liegt (der Checkout von vitabrevis-cockpit).
 # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
 source "$REPO/scripts/lib/konsole-pfad.sh"
 WORKFLOW="agent-ci.yml"

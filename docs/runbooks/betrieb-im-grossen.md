@@ -90,7 +90,7 @@ pflegt und die dann in der Nacht schweigt, in der sie zählt.
 
 ```bash
 # Auf dem Konsolen-Host. 0 = in Ordnung, 1 = Warnung, 2 = kritisch.
-cd /opt/cockpit/src/cockpit/api
+cd /opt/cockpit/src/api
 uv run python -m cockpit_api.cli.fleet_check
 ```
 
@@ -98,7 +98,7 @@ In die Überwachung (Icinga, Zabbix, Nagios — alle lesen diese Codes):
 
 ```
 # /etc/cron.d/magister-fleet-check  — oder als Check-Kommando
-*/15 * * * * cockpit cd /opt/cockpit/src/cockpit/api && \
+*/15 * * * * cockpit cd /opt/cockpit/src/api && \
   uv run python -m cockpit_api.cli.fleet_check --quiet
 ```
 

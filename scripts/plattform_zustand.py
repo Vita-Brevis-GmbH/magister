@@ -37,10 +37,11 @@ from pathlib import Path
 from typing import Any
 
 #: Dieselben Projektnamen wie in plattform-aufbau.sh. Die Konsole heisst im
-#: eigenen Checkout (vitabrevis-cockpit, ``name: cockpit``) nach ihrem Projekt,
-#: aus ``cockpit/`` im Magister-Repo nach dem Ordner ``deploy``. Gefragt wird
-#: nach beiden: nach ``konsole-umziehen`` hat das alte Projekt keine Container
-#: mehr und taucht nicht auf.
+#: eigenen Checkout (vitabrevis-cockpit, ``name: cockpit``) nach ihrem Projekt;
+#: ``deploy`` hiess sie, als sie noch aus ``cockpit/`` im Magister-Repo lief —
+#: auf einem Host, der noch nicht umgezogen ist, läuft sie so weiter. Gefragt
+#: wird nach beiden: nach ``konsole-umziehen`` hat das alte Projekt keine
+#: Container mehr und taucht nicht auf.
 STACKS = (("konsole", "cockpit"), ("konsole", "deploy"), ("daten", "magister"))
 
 #: Die Ports und wem sie gehören sollen.

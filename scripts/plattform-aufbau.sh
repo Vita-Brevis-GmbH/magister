@@ -23,8 +23,9 @@
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
-#   ./scripts/plattform-aufbau.sh konsole-umziehen <pfad>  # laufende Konsole aus
-#                                     # cockpit/ in den eigenen Checkout von
+#   ./scripts/plattform-aufbau.sh konsole-umziehen <pfad>  # Konsole vom alten
+#                                     # Ort (cockpit/ im Magister-Repo, Projekt
+#                                     # deploy) in den eigenen Checkout von
 #                                     # vitabrevis-cockpit umziehen (löscht nichts)
 #   ./scripts/plattform-aufbau.sh up --konsole <pfad>  # Konsole aus diesem
 #                                     # Checkout (wird gespeichert; ohne Angabe
@@ -62,7 +63,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# Wo die Konsole liegt (eigener Checkout oder noch cockpit/ hier).
+# Wo die Konsole liegt (der Checkout von vitabrevis-cockpit).
 # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
 source "$REPO/scripts/lib/konsole-pfad.sh"
 ZIEL="${PLATTFORM_ROOT:-$REPO/plattform}"
@@ -130,8 +131,8 @@ TLS_GESETZT=0;  [ -n "${PLATTFORM_TLS:-}" ] && TLS_GESETZT=1
 ACME_GESETZT=0; [ -n "${PLATTFORM_ACME_MAIL:-}" ] && ACME_GESETZT=1
 # Der Checkout der Konsole (vitabrevis-cockpit). Leer heisst „nicht
 # angegeben": dann gilt die Rangfolge aus scripts/lib/konsole-pfad.sh —
-# solange es cockpit/ in diesem Repo gibt, ist es dieses. Kein Teil der
-# Erstfragen: wer umzieht, sagt es mit --konsole oder `konsole-umziehen`.
+# auf einem Host /opt/cockpit/src. Kein Teil der Erstfragen: wer einen
+# anderen Ort will, sagt es mit --konsole oder `konsole-umziehen`.
 KONSOLE="$(konsole_absolut "${PLATTFORM_KONSOLE:-}")"
 KONSOLE_GESETZT=0; KONSOLE_QUELLE=""
 if [ -n "${PLATTFORM_KONSOLE:-}" ]; then
@@ -156,9 +157,8 @@ die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; DIE_GERUFEN=1; exit 1; }
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ -z "${DIE_GERUFEN:-}" ]; then printf "\033[31m !! Abbruch (Code %s) bei: %s\033[0m\n" "$rc" "$BASH_COMMAND" >&2; fi' EXIT
 
 dc_konsole() {
-  # MAGISTER_DIR: die Plattform-Überlagerung im eigenen Checkout hängt die
-  # Datenebene (apps/api, für die Migrationen der Kunden) von dort ein. Die
-  # Fassung in cockpit/ nimmt ../../apps/api und übersieht den Wert.
+  # MAGISTER_DIR: die Plattform-Überlagerung der Konsole hängt die
+  # Datenebene (apps/api, für die Migrationen der Kunden) von dort ein.
   MAGISTER_DIR="$REPO" docker compose --project-directory "$KONSOLE_PFAD/deploy" \
     -f "$KONSOLE_PFAD/deploy/docker-compose.yml" \
     -f "$KONSOLE_PFAD/deploy/docker-compose.plattform.yml" "$@"
@@ -349,8 +349,8 @@ konf_speichern() {
 # Die Angaben zu DIESER Installation. Erzeugt von plattform-aufbau.sh,
 # gelesen von jedem weiteren Aufruf. Von Hand änderbar; ein 'up' mit
 # --domaene/--bind/--zusatzname/--konsole schreibt die neuen Werte hierher
-# zurück. PLATTFORM_KONSOLE leer: Konsole aus cockpit/ im Magister-Repo,
-# sonst /opt/cockpit/src (scripts/lib/konsole-pfad.sh).
+# zurück. PLATTFORM_KONSOLE leer: Konsole aus /opt/cockpit/src
+# (scripts/lib/konsole-pfad.sh).
 #
 # Diese Datei überlebt ein 'purge' (sie enthält keine Geheimnisse und keine
 # Kundendaten). Wirklich alles weg: purge --auch-konfiguration
@@ -431,8 +431,10 @@ neustartfest() {
 port_pruefen() {  # $1 = Port
   local port="$1" container prozess
   container="$(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null | head -1)"
-  # deploy-*: die Konsole aus cockpit/; im eigenen Checkout heisst sie nach
-  # ihrem Projekt (cockpit-*).
+  # Die Konsole heisst nach ihrem Projekt (cockpit-*). deploy-*: die alte
+  # aus cockpit/ im Magister-Repo, solange der Host nicht umgezogen ist —
+  # nicht hier abbrechen, sondern beim Schutz in cmd_up, der den Weg kennt
+  # (konsole-umziehen); hier hiesse der Rat sonst „docker stop".
   case "$container" in
     magister-*|deploy-*|"$KONSOLE_PROJEKT"-*) return 0 ;;
     "") ;;
@@ -1628,36 +1630,60 @@ cmd_purge() {
 }
 
 # --- Konsole in den eigenen Checkout umziehen --------------------------------
-# Die Konsole ist in ein eigenes Repository ausgezogen (vitabrevis-cockpit).
-# Ihre Datenbank liegt in einem Volume, das nach dem Compose-Projekt heisst:
-# aus cockpit/ hier `deploy_cockpit-pg` (Projekt nach dem Ordner `deploy`),
-# im eigenen Checkout `cockpit_cockpit-pg` (`name: cockpit`). Ein `up` auf
-# den neuen Checkout ohne Umzug legte ein LEERES Volume an: die Konsole
-# startete ohne Kunden, die Datenebene holte eine leere Liste, und jede
-# Kundenseite wäre „unbekannt". `konsole-umziehen` bringt die Daten mit, der
-# Schutz in `up` und `restart` verhindert den Start ohne sie.
+# Die Konsole lebt in einem eigenen Repository (vitabrevis-cockpit); cockpit/
+# ist aus Magister entfernt. Ihre Datenbank liegt in einem Volume, das nach
+# dem Compose-Projekt heisst: aus cockpit/ im Magister-Repo
+# `deploy_cockpit-pg` (Projekt nach dem Ordner `deploy`), im eigenen
+# Checkout `cockpit_cockpit-pg` (`name: cockpit`). Ein `up` auf den neuen
+# Checkout ohne Umzug legte ein LEERES Volume an: die Konsole startete ohne
+# Kunden, die Datenebene holte eine leere Liste, und jede Kundenseite wäre
+# „unbekannt". `konsole-umziehen` bringt die Daten mit, der Schutz in `up`
+# und `restart` verhindert den Start ohne sie.
+#
+# Ein Host, der noch nicht umgezogen ist, aber diesen Stand schon hat: in
+# $REPO/cockpit fehlen die versionierten Dateien (Compose, Caddyfile, Code),
+# die unversionierten liegen noch da (.env, certs/, web/dist) — git lässt sie
+# beim Pull stehen. Der alte Stack läuft weiter, bis `konsole-umziehen` ihn
+# anhält: über seinen Projektnamen aus dem Label der alten Datenbank, denn
+# eine Compose-Datei dafür gibt es nicht mehr.
 
-#: Die Volumes der Konsolen-Datenbank, die NICHT zum Projekt $1 gehören.
-#: Antwortet Docker nicht, ist die Liste leer — kein Abbruch über pipefail.
-alte_konsolen_volumes() {  # $1 = Projekt der Konsole
+#: Die Volumes der Konsolen-Datenbank, die NICHT zum Projekt $1 gehören, eine
+#: Zeile je Volume: „<volume> <projekt>" — das Projekt aus dem Label, das
+#: Compose beim Anlegen setzt. Antwortet Docker nicht, ist die Liste leer —
+#: kein Abbruch über pipefail.
+alte_konsolen_db() {  # $1 = Projekt der Konsole
   { docker volume ls --filter "label=com.docker.compose.volume=cockpit-pg" \
       --format '{{.Name}} {{.Label "com.docker.compose.project"}}' 2>/dev/null || true; } \
-    | awk -v p="$1" 'NF && $2 != p { print $1 }'
+    | awk -v p="$1" 'NF && $2 != p { print $1, $2 }'
+}
+
+#: Nur die Namen dieser Volumes.
+alte_konsolen_volumes() {  # $1 = Projekt der Konsole
+  alte_konsolen_db "$1" | cut -d' ' -f1
+}
+
+#: Die Projekte dieser Volumes, jedes einmal — so heisst der alte Stack.
+alte_konsolen_projekte() {  # $1 = Projekt der Konsole
+  alte_konsolen_db "$1" | awk 'NF > 1 && !gesehen[$2]++ { print $2 }'
+}
+
+#: Die Dienste, die im Projekt $1 gerade laufen, einer je Zeile.
+laufende_dienste() {  # $1 = Projekt
+  { docker ps --filter "label=com.docker.compose.project=$1" \
+      --format '{{.Label "com.docker.compose.service"}}' 2>/dev/null || true; } | sort -u
 }
 
 konsole_umzug_pruefen() {
-  # Aus cockpit/ in diesem Repo: nichts umzuziehen.
-  if [ -d "$REPO/cockpit" ] && [ "$KONSOLE_PFAD" -ef "$REPO/cockpit" ]; then
-    return 0
-  fi
+  # Die Umgebung zuerst: liegt sie nur noch im Rest des alten Orts, ist der
+  # Host nicht umgezogen — auch wenn es das alte Volume nicht mehr gäbe.
   if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] && [ -f "$REPO/cockpit/deploy/.env" ]; then
-    die "Die Konsole läuft jetzt aus $KONSOLE_PFAD, ihre Umgebung (.env mit den Geheimnissen) liegt aber noch in $REPO/cockpit/deploy. Ein Start legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
+    die "Die Konsole soll jetzt aus $KONSOLE_PFAD laufen, ihre Umgebung (.env mit den Geheimnissen) liegt aber noch am alten Ort $REPO/cockpit/deploy. Ein Start legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
   fi
   docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1 && return 0
   local alte
   alte="$(alte_konsolen_volumes "$KONSOLE_PROJEKT" | paste -sd ' ' -)"
   [ -z "$alte" ] && return 0
-  die "Die Konsole läuft jetzt aus $KONSOLE_PFAD (Projekt $KONSOLE_PROJEKT), ihre Datenbank liegt aber noch im alten Volume $alte. Ein Start legte ein leeres an — ohne Kunden, und jede Kundenseite wäre 'unbekannt'. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
+  die "Die Konsole soll jetzt aus $KONSOLE_PFAD laufen (Projekt $KONSOLE_PROJEKT), ihre Datenbank liegt aber noch im alten Volume $alte. Ein Start legte ein leeres an — ohne Kunden, und jede Kundenseite wäre 'unbekannt'. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
 }
 
 #: Was liegt im Volume: leer, postgres (eine Datenbank) oder anderes. Leer
@@ -1672,10 +1698,12 @@ volume_inhalt() {  # $1 = Volume
 
 # Idempotent, und es löscht nichts: der alte Stack wird angehalten (ohne -v),
 # Umgebung und Zertifikate nur kopiert, wo sie im Ziel fehlen, die Datenbank
-# nur in ein leeres Ziel. Das alte Volume bleibt als Reserve stehen.
+# nur in ein leeres Ziel. Das alte Volume bleibt als Reserve stehen, ebenso
+# der Rest in $REPO/cockpit.
 cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
   local alt="$REPO/cockpit" neu projekt ziel quelle="" inhalt kopieren=1 datei alte
-  local -a quellen=()
+  local p dienste fremd zurueck
+  local -a quellen=() alt_projekte=() anhalten=()
   [ -n "${1:-}" ] || die "Wohin? $0 konsole-umziehen <pfad> — der Checkout von vitabrevis-cockpit (git clone $KONSOLE_REPO_URL $KONSOLE_KLON)"
   neu="$(konsole_absolut "$1")"
 
@@ -1720,15 +1748,38 @@ cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
       || die "Im alten Volume $quelle liegt keine Postgres-Datenbank (${inhalt:-nicht prüfbar}). Nichts geändert."
   fi
 
-  # --- Dann handeln ---
-  # 1. Den alten Stack anhalten. `down` OHNE -v: die Volumes bleiben.
-  if [ -f "$alt/deploy/docker-compose.yml" ]; then
-    say "Alte Konsole anhalten ($alt/deploy — Volumes bleiben)"
-    MAGISTER_DIR="$REPO" docker compose --project-directory "$alt/deploy" \
-      -f "$alt/deploy/docker-compose.yml" \
-      -f "$alt/deploy/docker-compose.plattform.yml" down \
-      || die "Die alte Konsole liess sich nicht anhalten (Meldung oben). Nichts kopiert."
+  # Ohne Umgebung kein Umzug: das nächste `up` legte sonst eine neue an, mit
+  # Geheimnissen, die nicht zur Datenebene passen (Rollenpasswort im DSN,
+  # Bootstrap-Token). Nach dem Auszug liegt die alte nur noch im Rest von
+  # $alt/deploy — oder nirgends, wenn jemand den Ordner weggeräumt hat.
+  if [ ! -f "$neu/deploy/.env" ] && [ ! -f "$alt/deploy/.env" ]; then
+    die "Die Umgebung der Konsole fehlt: weder $alt/deploy/.env noch $neu/deploy/.env. Ein 'up' legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Die bisherige .env (z. B. aus der Sicherung) nach $neu/deploy/.env legen und erneut aufrufen. Nichts geändert."
   fi
+
+  # Der alte Stack: angehalten wird er über den Projektnamen aus dem Label
+  # seiner Datenbank, denn seine Compose-Dateien sind mit cockpit/ aus dem
+  # Repo verschwunden. Ein Name wie `deploy` kann auch einem anderen Stack
+  # gehören — als Ganzes angehalten wird ein Projekt deshalb nur, wenn darin
+  # nichts als die Konsole läuft.
+  mapfile -t alt_projekte < <(alte_konsolen_projekte "$projekt")
+  for p in "${alt_projekte[@]}"; do
+    dienste="$(laufende_dienste "$p")"
+    grep -qxE 'postgres|api|caddy' <<<"$dienste" || continue
+    fremd="$({ grep -vxE 'postgres|api|caddy' <<<"$dienste" || true; } | paste -sd ' ' -)"
+    [ -z "$fremd" ] \
+      || die "Im Projekt $p läuft neben der alten Konsole noch anderes ($fremd) — es wird nicht als Ganzes angehalten. Die Container der Konsole von Hand anhalten (docker ps --filter label=com.docker.compose.project=$p; docker stop …) und erneut aufrufen. Nichts geändert."
+    anhalten+=("$p")
+  done
+
+  # --- Dann handeln ---
+  # 1. Den alten Stack anhalten — ohne Compose-Datei, nur über den Namen. Aus
+  #    / heraus und ohne COMPOSE_FILE, damit Compose keine Datei findet und
+  #    deren Dienste meint. `down` OHNE -v: die Volumes bleiben.
+  for p in "${anhalten[@]}"; do
+    say "Alte Konsole anhalten (Projekt $p — Volumes bleiben)"
+    (cd / && env -u COMPOSE_FILE docker compose -p "$p" down) \
+      || die "Die alte Konsole (Projekt $p) liess sich nicht anhalten (Meldung oben). Nichts kopiert."
+  done
 
   # 2. Umgebung und Zertifikate — nur, was im Ziel fehlt; Rechte bleiben.
   if [ -f "$alt/deploy/.env" ]; then
@@ -1784,6 +1835,11 @@ cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
   say "Gespeichert in $KONF: PLATTFORM_KONSOLE=$neu"
 
   alte="$(alte_konsolen_volumes "$projekt" | paste -sd ' ' -)"
+  # Für den Weg zurück: der letzte Stand, der cockpit/ noch hatte. Ohne
+  # git-Verlauf (flacher Klon) bleibt es ein Platzhalter.
+  zurueck="$(git -C "$REPO" log -1 --format=%h --diff-filter=D \
+    -- cockpit/deploy/docker-compose.yml 2>/dev/null || true)"
+  zurueck="${zurueck:+$zurueck^}"
   cat <<EOF
 
 Die Konsole ist umgezogen nach $neu und steht, bis das nächste 'up' sie aus
@@ -1793,14 +1849,19 @@ dem neuen Checkout startet (Abbild, Oberfläche, Migration):
 
 Die Datenebene bedient die Kunden derweil aus ihrem Zwischenstand.
 
-Zurück zum alten Stand (cockpit/ hier, Volume ${alte:-des alten Projekts}):
+Zurück zum alten Stand (Volume ${alte:-des alten Projekts}): die versionierten
+Dateien von cockpit/ aus dem letzten Stand davor zurückholen — Magister
+selbst bleibt, wie es ist, der Ordner ist ignoriert — und die alte Konsole
+von dort starten:
 
+  git -C $REPO archive ${zurueck:-<letzter Stand mit cockpit/>} cockpit | tar -x -C $REPO
   $0 down
   $0 up --konsole $alt
 
 Was die neue Konsole bis dahin geschrieben hat, fehlt dort. Das alte Volume
-bleibt als Reserve stehen; entfernen erst, wenn die neue Konsole eine Weile
-läuft (docker volume rm <name>).
+bleibt als Reserve stehen, ebenso der Rest in $alt (.env,
+certs/); beides erst entfernen, wenn die neue Konsole eine Weile läuft
+(docker volume rm <name>, rm -r $alt).
 EOF
 }
 

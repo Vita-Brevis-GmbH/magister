@@ -99,7 +99,8 @@ Datenebene erreicht die Konsole über einen festen Eintrag, nicht über den DNS.
 ## 3 · Repository holen
 
 Wer das Repository nicht schon hat: Personal Access Token auf GitHub
-(fine-grained, nur `Vita-Brevis-GmbH/magister`, **Contents: read**).
+(fine-grained, nur `Vita-Brevis-GmbH/magister` und
+`Vita-Brevis-GmbH/vitabrevis-cockpit`, **Contents: read**).
 
 ```bash
 sudo mkdir -p /opt/magister && sudo chown "$USER" /opt/magister
@@ -110,6 +111,14 @@ git clone --branch claude/multitenant-capability-planning-t6mygz \
 
 Solange PR #57 nicht gemergt ist, gilt der Branch oben. Danach `main`
 (`git switch main`).
+
+Die Konsole lebt im eigenen Repo `vitabrevis-cockpit`; `plattform-aufbau.sh`
+nimmt sie aus `/opt/cockpit/src` ([plattform-auf-einem-host.md](plattform-auf-einem-host.md) §2.3):
+
+```bash
+sudo mkdir -p /opt/cockpit && sudo chown "$USER" /opt/cockpit
+git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpit/src
+```
 
 ## 3a · Wildcard-Zertifikat ablegen
 
@@ -322,7 +331,7 @@ Zertifikate der Konsole und des Connector-Kanals.
 1. Diese Dateien in den Passwortspeicher bzw. den Tresor übernehmen:
    - `plattform/plattform.conf`
    - `plattform/certs/` (ganz)
-   - `cockpit/deploy/.env`
+   - `/opt/cockpit/src/deploy/.env` (Konsole)
    - `deploy/compose/.env`
 
    Besonders wichtig: in `deploy/compose/.env` stehen die

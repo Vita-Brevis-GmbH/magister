@@ -2,22 +2,26 @@
 # Wo die Konsole liegt (scripts/lib/konsole-pfad.sh) — und dass
 # plattform-aufbau.sh sie umzieht, ohne etwas zu verlieren.
 #
-# Warum es diesen Test gibt: die Konsole zieht aus cockpit/ in einen eigenen
-# Checkout (vitabrevis-cockpit). Wählt ein Skript einen anderen Ort als das
-# nächste, baut `up` die Oberfläche im einen Checkout und Caddy hängt den
-# anderen ein — und startet die Konsole im neuen Checkout ohne ihre
-# Datenbank, kennt die Datenebene danach keinen Kunden mehr.
+# Warum es diesen Test gibt: die Konsole ist aus cockpit/ in einen eigenen
+# Checkout (vitabrevis-cockpit) gezogen, und cockpit/ ist aus Magister
+# entfernt. Wählt ein Skript einen anderen Ort als das nächste, baut `up` die
+# Oberfläche im einen Checkout und Caddy hängt den anderen ein — und startet
+# die Konsole im neuen Checkout ohne ihre Datenbank, kennt die Datenebene
+# danach keinen Kunden mehr. Ein Host, der noch nicht umgezogen ist, hat nach
+# dem Pull nur noch die unversionierten Reste in cockpit/ (.env, certs/) und
+# keine Compose-Datei mehr, mit der sich der alte Stack anhalten liesse.
 #
 # Ohne Docker und ohne Netz: die Pfade sind Verzeichnisse unter einem
 # Arbeitsordner, plattform-aufbau.sh läuft als Kopie in einem nachgebauten
 # Repo, und `docker` ist eine Attrappe, die jeden Aufruf mitschreibt. Volumes
-# sind darin Dateien mit Projekt und Inhalt.
+# sind darin Dateien mit Projekt und Inhalt, laufende Container Dateien je
+# Projekt mit ihren Diensten.
 #
 #   ./scripts/tests/konsole-pfad.test.sh
 
 set -uo pipefail
 # Was die Umgebung des Aufrufers sagt, gilt hier nicht.
-unset PLATTFORM_KONSOLE PLATTFORM_KONF
+unset PLATTFORM_KONSOLE PLATTFORM_KONF COMPOSE_FILE
 
 ECHT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LIB="$ECHT/scripts/lib/konsole-pfad.sh"
@@ -48,7 +52,7 @@ konsole() {  # $1 = Pfad, $2 = Zeile mit name: (leer = keine) — ein Checkout
 # --- Arbeitsplatz: Magister, ein Checkout daneben, der Klon unter „/opt" ----
 WS="$T/ws"
 MAG="$WS/magister"
-konsole "$MAG/cockpit"
+mkdir -p "$MAG"
 konsole "$WS/vitabrevis-cockpit" "name: cockpit"
 konsole "$T/opt/cockpit/src" "name: cockpit"
 konsole "$T/eigen" "name: cockpit"
@@ -72,30 +76,46 @@ waehle() {  # $1 = Konfigurationsdatei, $2 = dev -> "Pfad|Herkunft" oder "FEHLER
 }
 pfad() { printf '%s' "${1%%|*}"; }
 
-printf '\n\033[1m1 · Rangfolge: Umgebung → gespeichert → cockpit/ → (dev: daneben) → /opt/cockpit/src\033[0m\n'
+printf '\n\033[1m1 · Rangfolge: Umgebung → gespeichert → (dev: daneben) → /opt/cockpit/src\033[0m\n'
 A="$(PLATTFORM_KONSOLE="$T/eigen" waehle "$T/conf/plattform.conf")"
 pruefe "Umgebung schlägt die Konfiguration"    "$T/eigen"              "$(pfad "$A")"
 A="$(waehle "$T/conf/plattform.conf")"
 pruefe "gespeichert schlägt den Rückfall"      "$T/gespeichert"        "$(pfad "$A")"
 pruefe "…und sagt, woher"                      "gespeichert in $T/conf/plattform.conf" "${A#*|}"
 A="$(waehle "$T/conf/leer.conf")"
-pruefe "ohne Angabe: cockpit/ im Magister-Repo" "$MAG/cockpit"         "$(pfad "$A")"
+pruefe "ohne Angabe: der Klon unter /opt"      "$T/opt/cockpit/src"    "$(pfad "$A")"
+pruefe "…als Vorgabe"                          "Vorgabe"               "${A#*|}"
 A="$(waehle "")"
-pruefe "ohne Konfigurationsdatei ebenso"       "$MAG/cockpit"          "$(pfad "$A")"
+pruefe "ohne Konfigurationsdatei ebenso"       "$T/opt/cockpit/src"    "$(pfad "$A")"
 A="$(waehle "" dev)"
-pruefe "Entwicklerrechner: cockpit/ geht vor"  "$MAG/cockpit"          "$(pfad "$A")"
+pruefe "Entwicklerrechner: der Checkout daneben" "$WS/vitabrevis-cockpit" "$(pfad "$A")"
 
-# Der spätere Zustand: cockpit/ ist aus Magister entfernt.
-mv "$MAG/cockpit" "$T/cockpit-weg"
-ohne() { waehle "" "${1:-}"; }
-pruefe "ohne cockpit/: der Klon unter /opt"    "$T/opt/cockpit/src"    "$(pfad "$(ohne)")"
-pruefe "Entwicklerrechner: der Checkout daneben" "$WS/vitabrevis-cockpit" "$(pfad "$(ohne dev)")"
+# Den Rückfall auf cockpit/ im Magister-Repo gibt es nicht mehr — auch dann
+# nicht, wenn dort (von Hand zurückgeholt) wieder eine Compose-Datei liegt.
+konsole "$MAG/cockpit"
+pruefe "cockpit/ im Magister-Repo zählt nicht mehr" "$T/opt/cockpit/src" "$(pfad "$(waehle "")")"
+pruefe "…auch nicht auf dem Entwicklerrechner"  "$WS/vitabrevis-cockpit" "$(pfad "$(waehle "" dev)")"
+rm -r "$MAG/cockpit"
+
 mv "$T/opt/cockpit/src" "$T/klon-weg"
-A="$(ohne)"
+A="$(waehle "")"
 pruefe "nichts gefunden: Fehler statt Raten"   "FEHLER"                "$(pfad "$A")"
 pruefe "…mit dem Weg zum Klon"                 "ja" "$(ja_wenn grep -q 'git clone .*vitabrevis-cockpit' <<<"$A")"
+pruefe "…ohne Umzug, wo es nichts umzuziehen gibt" "nein" "$(ja_wenn grep -q 'konsole-umziehen' <<<"$A")"
+# Ein Host vor dem Umzug: vom alten Ort ist nur der unversionierte Rest da.
+mkdir -p "$MAG/cockpit/deploy"
+printf 'COCKPIT_BOOTSTRAP_TOKEN=alt\n' > "$MAG/cockpit/deploy/.env"
+A="$(waehle "")"
+pruefe "Rest am alten Ort: weiterhin kein Rückfall" "FEHLER"           "$(pfad "$A")"
+pruefe "…aber der Hinweis auf den Umzug"       "ja" \
+  "$(ja_wenn grep -qF "konsole-umziehen $T/opt/cockpit/src" <<<"$A")"
+rm -r "$MAG/cockpit"
+mv "$WS/vitabrevis-cockpit" "$T/daneben-weg"
+A="$(waehle "" dev)"
+pruefe "Entwicklerrechner ohne alles: Fehler nennt beide Orte" "ja" \
+  "$(ja_wenn grep -qF "fehlt in $WS/vitabrevis-cockpit und $T/opt/cockpit/src" <<<"$A")"
+mv "$T/daneben-weg" "$WS/vitabrevis-cockpit"
 mv "$T/klon-weg" "$T/opt/cockpit/src"
-mv "$T/cockpit-weg" "$MAG/cockpit"
 
 printf '\n\033[1m2 · Eine Angabe, die ins Leere zeigt, ist ein Fehler — kein stiller Rückfall\033[0m\n'
 A="$(PLATTFORM_KONSOLE="$T/vertippt" waehle "")"
@@ -115,7 +135,9 @@ projekt() {
   # shellcheck source-path=SCRIPTDIR source=../lib/konsole-pfad.sh
   ( REPO="$MAG"; source "$LIB"; konsole_projekt "$1" )
 }
-pruefe "ohne name: heisst das Projekt deploy"  "deploy"                "$(projekt "$MAG/cockpit")"
+konsole "$T/ohne-name"
+pruefe "ohne name: heisst das Projekt deploy"  "deploy"                "$(projekt "$T/ohne-name")"
+pruefe "alter Ort ohne Compose-Datei: ebenso deploy" "deploy"          "$(projekt "$MAG/cockpit")"
 pruefe "name: cockpit"                         "cockpit"               "$(projekt "$T/eigen")"
 konsole "$T/zitiert" "name: \"Cockpit\"  # fest"
 pruefe "Anführungszeichen, Kommentar, Grossbuchstaben" "cockpit"       "$(projekt "$T/zitiert")"
@@ -130,15 +152,34 @@ REPO_T="$T/repo"
 mkdir -p "$REPO_T/scripts/lib"
 cp "$ECHT/scripts/plattform-aufbau.sh" "$REPO_T/scripts/"
 cp "$LIB" "$REPO_T/scripts/lib/"
-konsole "$REPO_T/cockpit"
+# Der Klon unter „/opt" — in der Kopie umgelenkt, damit der Test nie einen
+# echten Checkout auf dieser Maschine findet oder anfasst.
+KLON="$T/klon"
+sed -i "s|^KONSOLE_KLON=.*|KONSOLE_KLON=\"$KLON\"|" "$REPO_T/scripts/lib/konsole-pfad.sh"
+grep -qxF "KONSOLE_KLON=\"$KLON\"" "$REPO_T/scripts/lib/konsole-pfad.sh" \
+  || { echo "KONSOLE_KLON liess sich in der Kopie nicht umlenken" >&2; exit 1; }
+# Ein Verlauf wie im echten Repo: cockpit/ erst versioniert, dann entfernt.
+# Daraus nennt konsole-umziehen den Stand für den Weg zurück.
+git_t() {
+  git -C "$REPO_T" -c user.name=Test -c user.email=test@example.ch -c commit.gpgsign=false \
+    "$@" >/dev/null 2>&1
+}
+git_t init -q
+mkdir -p "$REPO_T/cockpit/deploy"
+printf 'services: {}\n' > "$REPO_T/cockpit/deploy/docker-compose.yml"
+git_t add cockpit && git_t commit -q -m "Konsole in cockpit/"
+git_t rm -q -r cockpit && git_t commit -q -m "Konsole entfernt"
+ENTFERNT="$(git -C "$REPO_T" log -1 --format=%h 2>/dev/null)"
+# Der Host vor dem Umzug, mit diesem Stand: in cockpit/ liegen nur noch die
+# unversionierten Reste — keine Compose-Datei, keine Caddyfile.
 ALT="$REPO_T/cockpit/deploy"
-printf 'COCKPIT_BOOTSTRAP_TOKEN=alt\n' > "$ALT/.env"; chmod 600 "$ALT/.env"
 mkdir -p "$ALT/certs"
+printf 'COCKPIT_BOOTSTRAP_TOKEN=alt\n' > "$ALT/.env"; chmod 600 "$ALT/.env"
 printf 'alt\n' > "$ALT/certs/console.pem"; printf 'alt\n' > "$ALT/certs/root.pem"
 
 ROOT="$T/plattform"
 KONF="$ROOT/plattform.conf"
-mkdir -p "$ROOT" "$T/bin" "$T/dz/vol"
+mkdir -p "$ROOT" "$T/bin" "$T/dz/vol" "$T/dz/laeuft"
 
 lauf() {  # $1 = Befehl, Rest = Argumente -> Ausgabe (stdout + stderr)
   env -u PLATTFORM_DOMAIN -u PLATTFORM_BIND -u PLATTFORM_ZUSATZNAME \
@@ -156,7 +197,9 @@ UMGEBUNG=()
 
 # --- Docker-Attrappe ----------------------------------------------------------
 # Ein Volume ist die Datei $DZ/vol/<name> mit „<projekt> <inhalt>" (inhalt:
-# leer oder postgres). Jeder Aufruf landet mit MAGISTER_DIR in $DZ/aufrufe.
+# leer oder postgres). Laufende Container eines Projekts stehen in
+# $DZ/laeuft/<projekt>, ein Dienst je Zeile; `compose -p <projekt> down`
+# räumt die Datei weg. Jeder Aufruf landet mit MAGISTER_DIR in $DZ/aufrufe.
 cat > "$T/bin/docker" <<'X'
 #!/usr/bin/env bash
 echo "MAGISTER_DIR=${MAGISTER_DIR:-} docker $*" >> "$DZ/aufrufe"
@@ -182,9 +225,30 @@ case "${1:-} ${2:-}" in
       cut -d' ' -f2 "$DZ/vol/$v"
     fi
     exit 0 ;;
-  "ps -q") exit 0 ;;   # kein laufender Container hält ein Volume
 esac
+if [ "${1:-}" = "ps" ]; then
+  # Gefiltert nach Projekt oder nach Volume (dann das Projekt des Volumes).
+  p=""
+  for a in "$@"; do
+    case "$a" in
+      label=com.docker.compose.project=*) p="${a#label=com.docker.compose.project=}" ;;
+      volume=*) [ -f "$DZ/vol/${a#volume=}" ] && p="$(cut -d' ' -f1 "$DZ/vol/${a#volume=}")" ;;
+    esac
+  done
+  [ -n "$p" ] && [ -f "$DZ/laeuft/$p" ] || exit 0
+  case "$*" in
+    *com.docker.compose.service*) cat "$DZ/laeuft/$p" ;;
+    *) sed "s/.*/$p-&-1/" "$DZ/laeuft/$p" ;;
+  esac
+  exit 0
+fi
 case "$*" in
+  "compose -p "*" down"*)
+    # Wo und womit Compose gerufen wurde: aus einem Ordner mit Compose-Datei
+    # oder mit COMPOSE_FILE läse es eine Datei und meinte deren Dienste.
+    printf '%s\n' "$PWD" > "$DZ/down-ort"
+    [ -n "${COMPOSE_FILE+x}" ] && printf '%s\n' "$COMPOSE_FILE" > "$DZ/down-compose-file"
+    rm -f "$DZ/laeuft/$3" ;;
   *"up --no-start postgres"*)
     [ -f "$DZ/vol/cockpit_cockpit-pg" ] || echo "cockpit leer" > "$DZ/vol/cockpit_cockpit-pg" ;;
 esac
@@ -192,12 +256,24 @@ exit 0
 X
 chmod +x "$T/bin/docker"
 aufrufe() { cat "$T/dz/aufrufe" 2>/dev/null; }
-neu_aufrufe() { : > "$T/dz/aufrufe"; }
+neu_aufrufe() { : > "$T/dz/aufrufe"; rm -f "$T/dz/down-ort" "$T/dz/down-compose-file"; }
+alte_konsole_laeuft() { printf 'api\ncaddy\npostgres\n' > "$T/dz/laeuft/deploy"; }
 
-printf '\n\033[1m4 · plattform-aufbau.sh: bestehende Installation läuft weiter aus cockpit/\033[0m\n'
+printf '\n\033[1m4 · Host vor dem Umzug, dieser Stand ausgecheckt: cockpit/ hat nur noch .env und certs\033[0m\n'
 A="$(lauf konfig)"
-pruefe "ohne Angabe: cockpit/ im Repo"         "$REPO_T/cockpit"       "$(wert KONSOLE_PFAD "$A")"
-pruefe "…Projekt wie bisher"                   "deploy"                "$(wert KONSOLE_PROJEKT "$A")"
+pruefe "ohne Angabe: der Klon, nicht cockpit/" "$KLON"                 "$(wert KONSOLE_PFAD "$A")"
+pruefe "…noch nicht geklont: der Grund steht da" "ja" \
+  "$(ja_wenn grep -q "Keine Konsole gefunden" <<<"$A")"
+pruefe "…mit dem Weg: erst umziehen"           "ja" "$(ja_wenn grep -qF "konsole-umziehen $KLON" <<<"$A")"
+neu_aufrufe
+A="$(lauf restart)"
+pruefe "restart ohne Klon: Abbruch"            "ja" "$(ja_wenn grep -q "Keine Konsole gefunden" <<<"$A")"
+pruefe "…bevor Docker gefragt wird"            "nein" "$(ja_wenn test -s "$T/dz/aufrufe")"
+konsole "$KLON" "name: cockpit"
+A="$(lauf konfig)"
+pruefe "geklont: der Klon gilt"                "$KLON"                 "$(wert KONSOLE_PFAD "$A")"
+pruefe "…Projekt cockpit"                      "cockpit"               "$(wert KONSOLE_PROJEKT "$A")"
+pruefe "…ohne Fehler"                          "nein" "$(ja_wenn grep -q "Keine Konsole gefunden" <<<"$A")"
 
 printf '\n\033[1m5 · --konsole wird bei up gespeichert, und ein Update vergisst es nicht\033[0m\n'
 konsole "$T/neu" "name: cockpit"
@@ -227,7 +303,7 @@ A="$(lauf konfig --konsole "$T/vertippt")"
 pruefe "konfig zeigt den Fehler, ohne abzubrechen" "ja" \
   "$(ja_wenn grep -q '^KONSOLE_URL=' <<<"$A")"
 A="$(lauf up --konsole "")"
-pruefe "--konsole \"\": zurück zur Automatik"    "$REPO_T/cockpit"       "$(wert KONSOLE_PFAD "$A")"
+pruefe "--konsole \"\": zurück zur Automatik"    "$KLON"                 "$(wert KONSOLE_PFAD "$A")"
 pruefe "…gespeichert als leer"                 "PLATTFORM_KONSOLE="    "$(grep '^PLATTFORM_KONSOLE=' "$KONF")"
 
 printf '\n\033[1m6 · konsole-umziehen prüft sein Ziel, bevor es etwas anfasst\033[0m\n'
@@ -240,67 +316,115 @@ konsole "$T/ohne-namen"
 A="$(lauf konsole-umziehen "$T/ohne-namen")"
 pruefe "Ziel ohne festes name:: Abbruch"       "ja" "$(ja_wenn grep -q "kein festes 'name:'" <<<"$A")"
 A="$(lauf konsole-umziehen "$REPO_T/cockpit")"
+pruefe "Rest am alten Ort ist kein Ziel"       "ja" "$(ja_wenn grep -q 'kein Checkout von vitabrevis-cockpit' <<<"$A")"
+# Jemand hat vitabrevis-cockpit an den alten Ort geklont.
+konsole "$REPO_T/cockpit" "name: cockpit"
+A="$(lauf konsole-umziehen "$REPO_T/cockpit")"
 pruefe "Ziel ist der alte Ort: Abbruch"        "ja" "$(ja_wenn grep -q 'bisherige Ort' <<<"$A")"
+rm -f "$ALT/docker-compose.yml" "$ALT/docker-compose.plattform.yml"
 pruefe "…und Docker wurde nie gefragt"         "nein" "$(ja_wenn test -s "$T/dz/aufrufe")"
 
-printf '\n\033[1m7 · Eine bestehende Installation startet unverändert\033[0m\n'
+printf '\n\033[1m7 · Schutz: Klon da, Umgebung und Daten noch am alten Ort — kein Start\033[0m\n'
+printf 'PLATTFORM_DOMAIN=example.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$KONF"
 echo "deploy postgres" > "$T/dz/vol/deploy_cockpit-pg"
+alte_konsole_laeuft
 neu_aufrufe
 A="$(lauf restart)"
-pruefe "restart aus cockpit/ läuft durch"      "ja" "$(ja_wenn grep -q "project-directory $REPO_T/cockpit/deploy .* restart" <(aufrufe))"
-pruefe "…mit MAGISTER_DIR"                     "ja" "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $REPO_T/cockpit/deploy" <(aufrufe))"
+pruefe ".env nur im Rest am alten Ort: Abbruch" "ja" "$(ja_wenn grep -qF "konsole-umziehen $KLON" <<<"$A")"
+pruefe "…mit dem Grund"                        "ja" "$(ja_wenn grep -qF "Umgebung (.env mit den Geheimnissen) liegt aber noch am alten Ort $ALT" <<<"$A")"
+pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+pruefe "…die alte Konsole läuft weiter"        "ja" "$(ja_wenn test -f "$T/dz/laeuft/deploy")"
 
-printf '\n\033[1m8 · Schutz: neuer Checkout, Daten noch im alten — kein Start\033[0m\n'
 konsole "$T/schutz" "name: cockpit"
 printf 'PLATTFORM_KONSOLE=%s\n' "$T/schutz" > "$KONF"
-neu_aufrufe
-A="$(lauf restart)"
-pruefe ".env fehlt im neuen Checkout: Abbruch" "ja" "$(ja_wenn grep -q 'konsole-umziehen' <<<"$A")"
-pruefe "…mit dem Grund"                        "ja" "$(ja_wenn grep -q 'Umgebung (.env' <<<"$A")"
 printf 'COCKPIT_BOOTSTRAP_TOKEN=x\n' > "$T/schutz/deploy/.env"
+neu_aufrufe
 A="$(lauf restart)"
 pruefe "Volume fehlt, altes da: Abbruch"       "ja" "$(ja_wenn grep -q "alten Volume deploy_cockpit-pg" <<<"$A")"
 pruefe "…mit dem Hinweis auf konsole-umziehen" "ja" "$(ja_wenn grep -q "konsole-umziehen $T/schutz" <<<"$A")"
 pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
 
-printf '\n\033[1m9 · konsole-umziehen: anhalten, kopieren, merken — nichts löschen\033[0m\n'
+printf '\n\033[1m8 · konsole-umziehen ohne die alten Compose-Dateien: anhalten über das Projekt, kopieren, merken\033[0m\n'
 printf 'PLATTFORM_DOMAIN=example.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$KONF"
-mkdir -p "$T/neu/deploy/certs"
-printf 'neu\n' > "$T/neu/deploy/certs/console.pem"   # vorhanden: bleibt
+mkdir -p "$KLON/deploy/certs"
+printf 'neu\n' > "$KLON/deploy/certs/console.pem"   # vorhanden: bleibt
+alte_konsole_laeuft
 neu_aufrufe
-A="$(lauf konsole-umziehen "$T/neu")"
+# Eine COMPOSE_FILE in der Umgebung darf das Anhalten nicht umlenken.
+UMGEBUNG=(COMPOSE_FILE="$T/fremd/docker-compose.yml")
+A="$(lauf konsole-umziehen "$KLON")"
+UMGEBUNG=()
 pruefe "läuft durch"                           "ja" "$(ja_wenn grep -q 'Die Konsole ist umgezogen' <<<"$A")"
-pruefe "alter Stack: down, mit beiden Dateien" "ja" \
-  "$(ja_wenn grep -q "project-directory $ALT -f $ALT/docker-compose.yml -f $ALT/docker-compose.plattform.yml down" <(aufrufe))"
+pruefe "alter Stack: down über das Projekt aus dem Volume-Label" "ja" \
+  "$(ja_wenn grep -qE ' docker compose -p deploy down$' <(aufrufe))"
+pruefe "…ohne Compose-Datei"                   "0" "$(grep -E ' -p deploy ' <(aufrufe) | grep -c -- ' -f ')"
+pruefe "…aus /, wo Compose keine Datei findet" "/"  "$(cat "$T/dz/down-ort" 2>/dev/null)"
+pruefe "…ohne COMPOSE_FILE"                    "nein" "$(ja_wenn test -e "$T/dz/down-compose-file")"
 pruefe "…ohne -v"                              "nein" "$(ja_wenn grep -qE ' down .*-v|--volumes' <(aufrufe))"
-pruefe ".env übernommen"                       "COCKPIT_BOOTSTRAP_TOKEN=alt" "$(cat "$T/neu/deploy/.env")"
-pruefe "…mit ihren Rechten"                    "600" "$(stat -c %a "$T/neu/deploy/.env")"
-pruefe "fehlendes Zertifikat übernommen"       "alt" "$(cat "$T/neu/deploy/certs/root.pem")"
-pruefe "vorhandenes nicht überschrieben"       "neu" "$(cat "$T/neu/deploy/certs/console.pem")"
+pruefe "die alte Konsole ist angehalten"       "nein" "$(ja_wenn test -f "$T/dz/laeuft/deploy")"
+pruefe ".env aus dem Rest übernommen"          "COCKPIT_BOOTSTRAP_TOKEN=alt" "$(cat "$KLON/deploy/.env")"
+pruefe "…mit ihren Rechten"                    "600" "$(stat -c %a "$KLON/deploy/.env")"
+pruefe "fehlendes Zertifikat übernommen"       "alt" "$(cat "$KLON/deploy/certs/root.pem")"
+pruefe "vorhandenes nicht überschrieben"       "neu" "$(cat "$KLON/deploy/certs/console.pem")"
 pruefe "Ziel-Volume über Compose angelegt"     "ja" \
-  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $T/neu/deploy .* up --no-start postgres" <(aufrufe))"
+  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $KLON/deploy .* up --no-start postgres" <(aufrufe))"
 pruefe "Datenbank kopiert, Quelle nur lesend"  "ja" \
   "$(ja_wenn grep -q 'run --rm -v deploy_cockpit-pg:/quelle:ro -v cockpit_cockpit-pg:/ziel postgres:16 cp -a /quelle/. /ziel/' <(aufrufe))"
 pruefe "…und im Ziel angekommen"               "cockpit postgres" "$(cat "$T/dz/vol/cockpit_cockpit-pg")"
 pruefe "altes Volume bleibt"                   "deploy postgres" "$(cat "$T/dz/vol/deploy_cockpit-pg")"
 pruefe "nichts gelöscht"                       "nein" "$(ja_wenn grep -qE 'volume (rm|prune)' <(aufrufe))"
-pruefe "Ort gespeichert"                       "PLATTFORM_KONSOLE=$T/neu" "$(grep '^PLATTFORM_KONSOLE=' "$KONF")"
+pruefe "der Rest am alten Ort bleibt"          "COCKPIT_BOOTSTRAP_TOKEN=alt" "$(cat "$ALT/.env")"
+pruefe "Ort gespeichert"                       "PLATTFORM_KONSOLE=$KLON" "$(grep '^PLATTFORM_KONSOLE=' "$KONF")"
 pruefe "übrige Angaben unangetastet"           "PLATTFORM_BIND=10.0.0.5" "$(grep '^PLATTFORM_BIND=' "$KONF")"
 pruefe "sagt, was als Nächstes kommt"          "ja" "$(ja_wenn grep -q 'plattform-aufbau.sh up$' <<<"$A")"
-pruefe "…und wie es zurückgeht"                "ja" "$(ja_wenn grep -q "up --konsole $REPO_T/cockpit" <<<"$A")"
+pruefe "…wie es zurückgeht: cockpit/ aus dem Stand davor" "ja" \
+  "$(ja_wenn grep -qF "git -C $REPO_T archive ${ENTFERNT}^ cockpit | tar -x -C $REPO_T" <<<"$A")"
+pruefe "…und von dort starten"                 "ja" "$(ja_wenn grep -qF "up --konsole $REPO_T/cockpit" <<<"$A")"
 
 neu_aufrufe
-A="$(lauf konsole-umziehen "$T/neu")"
+A="$(lauf konsole-umziehen "$KLON")"
 pruefe "zweiter Lauf: läuft durch"             "ja" "$(ja_wenn grep -q 'Die Konsole ist umgezogen' <<<"$A")"
+pruefe "…hält nichts mehr an"                  "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
 pruefe "…kopiert nichts mehr"                  "nein" "$(ja_wenn grep -q 'cp -a' <(aufrufe))"
 
 neu_aufrufe
 A="$(lauf restart)"
-pruefe "danach startet die Konsole aus dem neuen Checkout" "ja" \
-  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $T/neu/deploy .* restart" <(aufrufe))"
+pruefe "danach startet die Konsole aus dem Klon" "ja" \
+  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $KLON/deploy .* restart" <(aufrufe))"
+
+printf '\n\033[1m9 · Was nicht sicher zur alten Konsole gehört, fasst konsole-umziehen nicht an\033[0m\n'
+rm -f "$T/dz/vol/"* "$T/dz/laeuft/"*
+echo "deploy postgres" > "$T/dz/vol/deploy_cockpit-pg"
+printf 'api\ncaddy\npostgres\nwebshop\n' > "$T/dz/laeuft/deploy"
+konsole "$T/fremd-ziel" "name: cockpit"
+neu_aufrufe
+A="$(lauf konsole-umziehen "$T/fremd-ziel")"
+pruefe "fremder Dienst im alten Projekt: Abbruch" "ja" "$(ja_wenn grep -q 'noch anderes (webshop)' <<<"$A")"
+pruefe "…kein Stack angehalten"                "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
+pruefe "…nichts kopiert"                       "nein" "$(ja_wenn test -e "$T/fremd-ziel/deploy/.env")"
+pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'up --no-start' <(aufrufe))"
+
+# Der Rest am alten Ort ist weggeräumt, und im Ziel liegt keine .env.
+alte_konsole_laeuft
+mv "$REPO_T/cockpit" "$T/rest-weg"
+neu_aufrufe
+A="$(lauf konsole-umziehen "$T/fremd-ziel")"
+pruefe "keine .env, weder alt noch neu: Abbruch" "ja" "$(ja_wenn grep -q 'Die Umgebung der Konsole fehlt' <<<"$A")"
+pruefe "…kein Stack angehalten"                "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
+pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'up --no-start' <(aufrufe))"
+# Liegt die .env schon im Ziel, geht es auch ohne den Rest.
+printf 'COCKPIT_BOOTSTRAP_TOKEN=gerettet\n' > "$T/fremd-ziel/deploy/.env"
+neu_aufrufe
+A="$(lauf konsole-umziehen "$T/fremd-ziel")"
+pruefe "ohne Rest, .env im Ziel: läuft durch"  "ja" "$(ja_wenn grep -q 'Die Konsole ist umgezogen' <<<"$A")"
+pruefe "…alter Stack über das Projekt angehalten" "ja" \
+  "$(ja_wenn grep -qE ' docker compose -p deploy down$' <(aufrufe))"
+pruefe "…Datenbank kopiert"                    "cockpit postgres" "$(cat "$T/dz/vol/cockpit_cockpit-pg")"
+pruefe "…die .env im Ziel unangetastet"        "COCKPIT_BOOTSTRAP_TOKEN=gerettet" "$(cat "$T/fremd-ziel/deploy/.env")"
+mv "$T/rest-weg" "$REPO_T/cockpit"
 
 printf '\n\033[1m10 · Keine oder mehrere alte Datenbanken: Abbruch, nichts angefasst\033[0m\n'
-rm -f "$T/dz/vol/"*
+rm -f "$T/dz/vol/"* "$T/dz/laeuft/"*
 konsole "$T/frisch" "name: cockpit"
 neu_aufrufe
 A="$(lauf konsole-umziehen "$T/frisch")"
@@ -308,6 +432,7 @@ pruefe "kein altes Volume: Abbruch"            "ja" "$(ja_wenn grep -q 'Kein alt
 pruefe "…mit dem Weg für eine neue Installation" "ja" "$(ja_wenn grep -q "up --konsole $T/frisch" <<<"$A")"
 echo "deploy postgres" > "$T/dz/vol/deploy_cockpit-pg"
 echo "anderes postgres" > "$T/dz/vol/anderes_cockpit-pg"
+alte_konsole_laeuft
 neu_aufrufe
 A="$(lauf konsole-umziehen "$T/frisch")"
 pruefe "mehrere alte Volumes: Abbruch"         "ja" "$(ja_wenn grep -q 'Mehrere alte Volumes' <<<"$A")"
