@@ -16,13 +16,15 @@
 # ausführen.
 #
 #   restart  beide Stacks neu starten (ohne Neubau)
-#   update   git pull --ff-only, dann plattform-aufbau.sh update
+#   update   git pull --ff-only (auch im eigenen Checkout der Konsole, wenn sie
+#            dort liegt), dann plattform-aufbau.sh update
 #   attach   plattform-aufbau.sh kunde-anbinden <kürzel>: DSN und Kundenschlüssel
 #            eines in der Konsole angelegten Kunden nachtragen (Daten bleiben)
 #   rotate-role  plattform-aufbau.sh rollenpasswort-neu <kürzel>: neues
 #            Rollenpasswort setzen und im selben Lauf in den DSN schreiben
 #
-# Umgebung: OPS_DIR (Pflicht), REPO (Vorgabe: Verzeichnis über diesem Skript).
+# Umgebung: OPS_DIR (Pflicht), REPO (Vorgabe: Verzeichnis über diesem Skript),
+# PLATTFORM_ROOT und PLATTFORM_KONF (wo der Ort der Konsole gespeichert ist).
 set -uo pipefail
 
 REPO="${REPO:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
@@ -52,10 +54,32 @@ write_status() {  # action state message started finished requested_by [slug]
   mv -f "$tmp" "$STATUS"
 }
 
+# Liegt die Konsole in einem eigenen Checkout (vitabrevis-cockpit), holt ein
+# Update auch dort den neuen Stand — sonst bliebe sie auf dem alten, und das
+# Update meldete trotzdem Erfolg. Aus cockpit/ im Magister-Repo kommt sie mit
+# dessen `git pull`. Welcher Checkout gilt, wählt scripts/lib/konsole-pfad.sh,
+# eingebunden erst nach dem Pull: der neue Stand entscheidet.
+konsole_pull() {
+  # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+  source "$REPO/scripts/lib/konsole-pfad.sh" || return 1
+  if ! konsole_waehlen "${PLATTFORM_KONF:-${PLATTFORM_ROOT:-$REPO/plattform}/plattform.conf}"; then
+    # plattform-aufbau.sh bricht gleich mit demselben Grund ab.
+    echo "$KONSOLE_FEHLER"
+    return 0
+  fi
+  case "$KONSOLE_PFAD/" in "$REPO"/*) return 0 ;; esac
+  if [ ! -e "$KONSOLE_PFAD/.git" ]; then
+    echo "Konsole in $KONSOLE_PFAD ist kein git-Checkout — nicht aktualisiert."
+    return 0
+  fi
+  echo "Konsole aktualisieren ($KONSOLE_PFAD)"
+  git -c safe.directory="$KONSOLE_PFAD" -C "$KONSOLE_PFAD" pull --ff-only
+}
+
 run_action() {  # $1 = Auftrag, $2 = Kürzel (nur bei attach/rotate-role)
   case "$1" in
     restart) "$AUFBAU" restart ;;
-    update)  git_r pull --ff-only && "$AUFBAU" update ;;
+    update)  git_r pull --ff-only && konsole_pull && "$AUFBAU" update ;;
     attach)  "$AUFBAU" kunde-anbinden "$2" ;;
     rotate-role) "$AUFBAU" rollenpasswort-neu "$2" ;;
     *)       echo "unbekannter Auftrag: $1"; return 2 ;;

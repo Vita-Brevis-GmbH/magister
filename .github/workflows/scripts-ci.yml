@@ -40,6 +40,9 @@ jobs:
       - name: Rangfolge der Installations-Angaben
         run: ./scripts/tests/plattform-konfig.test.sh
 
+      - name: Ort der Konsole und Umzug in den eigenen Checkout
+        run: ./scripts/tests/konsole-pfad.test.sh
+
       - name: Zustandsbericht für die Überwachung
         run: ./scripts/tests/plattform-zustand.test.sh
 

@@ -15,8 +15,12 @@
 #   MAGISTER_BACKUP_IDENTITY   private age-Identitätsdatei
 #   MAGISTER_BACKUP_SHARE      Wurzel des Shares, z. B. /mnt/magister-backup
 #   MAGISTER_ADMIN_DSN         Verwaltungszugang in den Cluster (CREATEDB)
-#   COCKPIT_API_DIR            Verzeichnis mit dem cockpit_api-Paket
-#   MAGISTER_PSQL_DSN          optional: derselbe Cluster als libpq-URL
+#   COCKPIT_API_DIR            Verzeichnis mit dem cockpit_api-Paket. Vorgabe:
+#                              <konsole>/api, gewählt wie in plattform-aufbau.sh
+#                              (PLATTFORM_KONSOLE, plattform.conf, cockpit/ in
+#                              diesem Repo, /opt/cockpit/src —
+#                              scripts/lib/konsole-pfad.sh)
+#   MAGISTER_PSQL_DSN         optional: derselbe Cluster als libpq-URL
 #                              (postgresql://…), um Referenz-Zeilenzahlen aus
 #                              der Produktion zu holen. Ohne ihn entfaellt der
 #                              Groessenordnungs-Vergleich — dann prueft der
@@ -29,7 +33,18 @@ set -uo pipefail
 : "${MAGISTER_BACKUP_IDENTITY:?MAGISTER_BACKUP_IDENTITY fehlt}"
 : "${MAGISTER_BACKUP_SHARE:?MAGISTER_BACKUP_SHARE fehlt}"
 : "${MAGISTER_ADMIN_DSN:?MAGISTER_ADMIN_DSN fehlt}"
-: "${COCKPIT_API_DIR:=/opt/magister/cockpit/api}"
+
+if [[ -z "${COCKPIT_API_DIR:-}" ]]; then
+    REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+    # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+    source "$REPO/scripts/lib/konsole-pfad.sh"
+    if ! konsole_waehlen "${PLATTFORM_KONF:-${PLATTFORM_ROOT:-$REPO/plattform}/plattform.conf}"; then
+        echo "[verify-all] FEHLER: ${KONSOLE_FEHLER}" >&2
+        echo "[verify-all] Oder das Paket direkt angeben: COCKPIT_API_DIR=<konsole>/api" >&2
+        exit 2
+    fi
+    COCKPIT_API_DIR="$KONSOLE_PFAD/api"
+fi
 
 if [[ ! -r "$MAGISTER_BACKUP_IDENTITY" ]]; then
     echo "[verify-all] FEHLER: ${MAGISTER_BACKUP_IDENTITY} ist nicht lesbar." >&2

@@ -138,6 +138,50 @@ nicht.
    eine vorhandene CA unangetastet.
 2. Die Abbilder kommen aus GHCR (`--ziehen`).
 
+### 2.3 Konsole aus eigenem Repo
+
+Die Konsole ist nach `vitabrevis-cockpit` ausgezogen; `cockpit/` in diesem
+Repo ist eingefroren und fällt später weg. Welchen Checkout die Skripte
+nehmen, steht an einer Stelle (`scripts/lib/konsole-pfad.sh`): `--konsole`
+bzw. `PLATTFORM_KONSOLE` → gespeichert in `plattform.conf` → `cockpit/` hier,
+solange es das gibt → `/opt/cockpit/src` (auf dem Entwicklerrechner davor
+noch `vitabrevis-cockpit` neben dem Magister-Repo). Eine Angabe, die ins
+Leere zeigt, bricht ab, statt still auf einen anderen Checkout zu fallen.
+Welcher gilt, zeigt `konfig` (`KONSOLE_PFAD`).
+
+Umziehen, einmal je Host (als Betriebsbenutzer, wie `/opt/magister`):
+
+```bash
+git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpit/src
+./scripts/plattform-aufbau.sh konsole-umziehen /opt/cockpit/src
+./scripts/plattform-aufbau.sh up
+```
+
+`konsole-umziehen` hält die alte Konsole an (`down` ohne `-v`), kopiert
+`.env` und `certs/` nur, wo sie im neuen Checkout fehlen, und kopiert die
+Datenbank aus dem alten Volume (`deploy_cockpit-pg`) in das neue
+(`cockpit_cockpit-pg`) — nur, wenn das neue leer ist. Das alte Volume bleibt
+als Reserve, der Pfad landet in `plattform.conf`. Der Befehl löscht nichts
+und darf wiederholt werden.
+
+Ohne Umzug startet `up` (auch `restart`) aus dem neuen Checkout nicht,
+solange die Datenbank noch im alten Volume liegt — sonst käme die Konsole
+mit leerer Datenbank hoch, und jede Kundenseite wäre „unbekannt".
+
+Nach dem Umzug gehört zu jedem Update auch `git -C /opt/cockpit/src pull`;
+das Update aus der Konsole (Ops-Agent) holt beide Stände selbst.
+
+Zurück:
+
+```bash
+./scripts/plattform-aufbau.sh down
+./scripts/plattform-aufbau.sh up --konsole /opt/magister/cockpit
+```
+
+Die alte Konsole läuft dann wieder mit dem alten Volume; was die neue
+seither geschrieben hat, fehlt dort. Ein erneutes `konsole-umziehen` kopiert
+nicht noch einmal, solange im neuen Volume eine Datenbank liegt.
+
 ## 3 · Die zwei Vertrauenslisten
 
 Am Konsolen-Listener hängen zwei Dateien, und sie beantworten verschiedene

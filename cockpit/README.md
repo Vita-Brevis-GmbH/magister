@@ -1,5 +1,10 @@
 # Vita Brevis Cockpit
 
+> **Eingefroren seit dem Auszug nach `vitabrevis-cockpit` – Änderungen nur noch dort.**
+> Dieser Ordner bleibt vorerst als Rückfall für bestehende Installationen
+> stehen; Umzug: `./scripts/plattform-aufbau.sh konsole-umziehen <pfad>`
+> (docs/runbooks/plattform-auf-einem-host.md §2.3).
+
 > Internes Ops-Dashboard für die Verwaltung von Magister-Instanzen über mehrere Schulträger hinweg.
 > Teil von **Schola Levis** by **Vita Brevis**.
 
