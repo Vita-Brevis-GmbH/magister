@@ -5,15 +5,19 @@
 > auf 443 bleibt öffentlich und ist mit MFA geschützt; das Management liegt auf
 > einem eigenen Port, gebunden an eine interne Adresse.
 > Status: **Listener gebaut und verifiziert; die Konsolen-Oberfläche liegt
-> seit ADR-0020 dahinter und wird von Caddy aus `cockpit/web/dist` ausgeliefert.**
+> seit ADR-0020 dahinter und wird von Caddy aus `web/dist` ausgeliefert.**
+>
+> Pfade wie `deploy/…`, `api/…` und `web/…` gelten im Repo `vitabrevis-cockpit`, auf den
+> Hosts im Checkout `/opt/cockpit/src` (bis 2026-11 lag die Konsole unter `cockpit/` in
+> Magister).
 
 ## 1 · Drei Schichten
 
 | Schicht | Massnahme | Wo | Was sie verhindert |
 |---------|-----------|-----|--------------------|
-| 1 | Port-Mapping auf die Management-Adresse (`10.0.0.5:4444`), nicht `0.0.0.0` | `cockpit/deploy/docker-compose.yml` | Der Port existiert im Internet gar nicht. Das ist die eigentliche Trennlinie. |
-| 2 | `client_auth require_and_verify` gegen die Plattform-CA | `cockpit/deploy/caddy/Caddyfile` | Wer den Port erreicht, aber kein Operator-Zertifikat hat, kommt über den TLS-Handshake nicht hinaus — es gibt keine HTTP-Antwort. |
-| 3 | Marker-Riegel: die API verwirft jede Anfrage ohne `X-Magister-Management` | `cockpit/api/cockpit_api/management_guard.py` | Eine zweite Route zur API (falsches Port-Mapping, Container-Netz, Fehlkonfiguration in Zukunft) läuft ins 404. |
+| 1 | Port-Mapping auf die Management-Adresse (`10.0.0.5:4444`), nicht `0.0.0.0` | `deploy/docker-compose.yml` | Der Port existiert im Internet gar nicht. Das ist die eigentliche Trennlinie. |
+| 2 | `client_auth require_and_verify` gegen die Plattform-CA | `deploy/caddy/Caddyfile` | Wer den Port erreicht, aber kein Operator-Zertifikat hat, kommt über den TLS-Handshake nicht hinaus — es gibt keine HTTP-Antwort. |
+| 3 | Marker-Riegel: die API verwirft jede Anfrage ohne `X-Magister-Management` | `api/cockpit_api/management_guard.py` | Eine zweite Route zur API (falsches Port-Mapping, Container-Netz, Fehlkonfiguration in Zukunft) läuft ins 404. |
 
 Ehrlich zur Reichweite: **Schicht 3 kann Schicht 1 und 2 nicht überprüfen.**
 Der Marker beweist nur, dass die Anfrage durch *einen* Reverse-Proxy kam, der
@@ -31,7 +35,7 @@ Beides bricht den Start ab, statt still eine offene Konsole zu starten.
 
 ### 2.1 Zertifikate
 
-Drei Dateien müssen in `cockpit/deploy/certs/` liegen, bevor der Stack startet
+Drei Dateien müssen in `deploy/certs/` (`/opt/cockpit/src/deploy/certs/`) liegen, bevor der Stack startet
 (der Caddy-Container verweigert sonst den Start und sagt, welche fehlt):
 
 | Datei | Inhalt | Herkunft |
@@ -145,9 +149,9 @@ auf, dass er dort versehentlich freigegeben wurde.
 Seit ADR-0020 liefert dieser Listener **auch die Konsolen-Oberfläche** aus:
 Nicht-API-Pfade gehen nach `/srv/console` (`try_files {path} /index.html`).
 Dieselbe Herkunft wie die API, damit der Sitzungs-Cookie erststellig bleibt.
-Das Verzeichnis kommt als Mount aus `cockpit/web/dist` — die Oberfläche ändert
+Das Verzeichnis kommt als Mount aus `web/dist` — die Oberfläche ändert
 sich öfter als der Listener, und ein Neubau des Caddy-Images dafür wäre Aufwand
-ohne Grund. Vor dem ersten Start also `cd cockpit/web && pnpm build`; ohne
+ohne Grund. Vor dem ersten Start also `cd /opt/cockpit/src/web && pnpm build`; ohne
 `dist` antwortet der Listener mit 404 auf alles ausser `/api/*`.
 
 Der API-Block gibt zusätzlich das geprüfte Client-Zertifikat weiter:
@@ -181,4 +185,4 @@ Faktor. Operator anlegen, widerrufen, Faktor verloren:
 - [ADR-0020](../adr/0020-konsolen-anmeldung.md) — Zertifikat als Identität, TOTP als zweiter Faktor
 - [Runbook Plattform-CA](platform-ca.md) — Ausstellung der Operator-Zertifikate
 - [Runbook Konsolen-Operator](konsolen-operator.md) — Zeile anlegen, erstes Anmelden, Widerruf
-- `cockpit/deploy/caddy/README.md` — Dateien und Marker aus Betriebssicht
+- `deploy/caddy/README.md` im Repo `vitabrevis-cockpit` — Dateien und Marker aus Betriebssicht

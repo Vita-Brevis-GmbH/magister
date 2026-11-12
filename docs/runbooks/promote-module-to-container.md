@@ -166,7 +166,8 @@ Schule:
 ## Variante B — echter Split: `git subtree split` in ein eigenes Repo
 
 Wenn das Modul wirklich getrennt ausgeliefert/lizenziert wird, wandert sein Code
-mechanisch in ein eigenes Repo — der Weg, den `cockpit/` (ADR-0003) vorzeichnet.
+mechanisch in ein eigenes Repo — der Weg, den die Konsole gegangen ist (ADR-0003:
+`cockpit/`, seit 2026-11 das Repo `vitabrevis-cockpit`).
 Möglich, weil die Module mit sauberen Grenzen gebaut sind (Modul-Vertrags-CI,
 ADR-0008 D8): ein Modul ist ein `modules/<id>.py`-Manifest über
 `routers/…`-Paketen, ohne Quer-Importe zwischen Fachmodulen.
@@ -188,7 +189,7 @@ Danach im neuen Repo einen schlanken FastAPI-Einstieg bauen, der NUR die
 Modul-Router plus eine dünne Auth-/Session-Schicht mountet, und weiterhin auf
 dieselbe Magister-DB + dieselben Secrets zeigt (D5). Konventionen (uv, ruff,
 pyright, Alembic, Caddy) identisch zu Magister übernehmen — Onboarding-Reibung
-minimal, wie bei `cockpit/`.
+minimal, wie bei der Konsole.
 
 **Bevor du B nimmst, prüfe ehrlich, ob A reicht.** A liefert eigene Skalierung
 und Fehler-Isolation ohne zweite Codebase; B lohnt nur bei echt getrenntem

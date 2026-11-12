@@ -4,7 +4,12 @@ Vom leeren Ubuntu 24.04 LTS bis zum lauffähigen Cockpit für das Vita-Brevis-Op
 
 **Geschätzter Zeitaufwand:** 20 Minuten
 
-> **TL;DR:** Wenn du es eilig hast: `scripts/install-cockpit.sh` auf einem frischen Ubuntu-Host ausführen. Dieses Runbook ist die Langform mit Erklärungen.
+> **Seit 2026-11 lebt das Cockpit im eigenen Repo `vitabrevis-cockpit`.** Installation und
+> Umzug eines laufenden Cockpits sind dort beschrieben (`README.md`,
+> `docs/runbooks/umzug-aus-magister.md`); gehostet zusammen mit der Datenebene:
+> [plattform-auf-einem-host.md](plattform-auf-einem-host.md) §2.3. Der frühere Installer
+> `scripts/install-cockpit.sh` ist mit `cockpit/` aus Magister entfernt. Dieses Runbook bleibt
+> als Langform stehen; die Pfade zeigen auf den eigenen Checkout unter `/opt/cockpit/src`.
 
 ---
 
@@ -46,8 +51,8 @@ sudo systemctl enable --now docker
 ```bash
 sudo mkdir -p /opt/cockpit
 sudo chown $USER:$USER /opt/cockpit
-git clone https://github.com/vita-brevis-gmbh/magister.git /opt/cockpit/src
-cd /opt/cockpit/src/cockpit/deploy
+git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /opt/cockpit/src
+cd /opt/cockpit/src/deploy
 ```
 
 ---
@@ -55,7 +60,7 @@ cd /opt/cockpit/src/cockpit/deploy
 ## 3. Secrets generieren
 
 ```bash
-ENV_FILE=/opt/cockpit/src/cockpit/deploy/.env
+ENV_FILE=/opt/cockpit/src/deploy/.env
 BOOTSTRAP_TOKEN=$(openssl rand -base64 32 | tr -d '/+=' | head -c 40)
 # pgcrypto-Schlüssel für die TOTP-Geheimnisse der Operatoren (ADR-0020 D2).
 SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
@@ -80,7 +85,7 @@ Nicht hier erzeugt, weil sie von dir kommen: `COCKPIT_BIND_ADDRESS` (die
 Management-Adresse), `COCKPIT_MANAGEMENT_MARKER` und
 `COCKPIT_CONNECTOR_MARKER` (zwei **verschiedene** Werte, je
 `openssl rand -hex 32`) sowie `COCKPIT_HOSTNAME`. Ohne sie startet der Stack
-absichtlich nicht — siehe den Kopf von `cockpit/deploy/docker-compose.yml` und
+absichtlich nicht — siehe den Kopf von `deploy/docker-compose.yml` und
 [console-listener.md](console-listener.md).
 
 ---
@@ -88,7 +93,7 @@ absichtlich nicht — siehe den Kopf von `cockpit/deploy/docker-compose.yml` und
 ## 4. Stack starten
 
 ```bash
-cd /opt/cockpit/src/cockpit/deploy
+cd /opt/cockpit/src/deploy
 docker compose up -d
 ```
 
@@ -136,7 +141,8 @@ curl -sf -H "Authorization: Bearer $BOOTSTRAP_TOKEN" http://localhost:8001/api/i
 Der Bootstrap-Token bleibt Break-Glass-Credential. Für den Alltag erstellen wir per Bootstrap-Token einen rotierenden Service-Token:
 
 ```bash
-/opt/cockpit/src/scripts/bootstrap-cockpit-token.sh \
+# aus dem Magister-Repo, nicht aus vitabrevis-cockpit
+/opt/magister/scripts/bootstrap-cockpit-token.sh \
   --url http://localhost:8001 \
   --bootstrap-token "$BOOTSTRAP_TOKEN" \
   --description "ops-team-default" \
@@ -179,7 +185,7 @@ Wenn das Ops-Team auch automatisierte Updates via Cockpit triggern soll, jetzt d
 sudo tee /etc/cron.daily/cockpit-backup <<'EOF'
 #!/bin/bash
 set -e
-cd /opt/cockpit/src/cockpit/deploy
+cd /opt/cockpit/src/deploy
 mkdir -p /backup
 docker compose exec -T postgres pg_dump -U cockpit cockpit \
   | gzip > /backup/cockpit-$(date +%Y%m%d).sql.gz
@@ -205,4 +211,4 @@ sudo chmod +x /etc/cron.daily/cockpit-backup
 
 - **Backup**: täglich (siehe §10)
 - **Token-Rotation**: alle 90 Tage neue Service-Tokens via `bootstrap-cockpit-token.sh`
-- **Updates des Cockpits selbst**: `cd /opt/cockpit/src && git pull && cd cockpit/deploy && docker compose pull && docker compose up -d && docker compose exec api alembic upgrade head`
+- **Updates des Cockpits selbst**: `cd /opt/cockpit/src && git pull && cd deploy && docker compose pull && docker compose up -d && docker compose exec api alembic upgrade head`

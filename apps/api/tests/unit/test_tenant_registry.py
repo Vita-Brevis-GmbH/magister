@@ -40,8 +40,8 @@ def test_the_slug_pattern_matches_the_console() -> None:
     beim Start ablehnt — und das fällt erst im Betrieb auf. Die Konsole kann
     ``magister_api`` nicht importieren (getrennte Anwendung, getrennte
     Abhängigkeiten), deshalb ist beiden Seiten dasselbe Literal
-    festgeschrieben: ein Test hier, ein Test in
-    ``cockpit/api/tests/test_tenants.py``. Eine Änderung auf einer Seite
+    festgeschrieben: ein Test hier, ein Test in ``api/tests/test_tenants.py``
+    im Repo vitabrevis-cockpit. Eine Änderung auf einer Seite
     bricht einen der beiden.
     """
     assert SLUG_PATTERN.pattern == r"^[a-z][a-z0-9_]{1,30}$"

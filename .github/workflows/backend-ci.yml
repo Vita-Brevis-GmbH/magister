@@ -15,7 +15,11 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Fest 24.04: dort gibt es postgresql-client-16 passend zum Server.
+    # ubuntu-latest ist seit 2026-11 Ubuntu 26.04; dessen pg_restore schreibt
+    # "SET transaction_timeout", das ein Server 16 nicht kennt – jede
+    # Wiederherstellung in den Backup-Tests scheiterte daran.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: apps/api
@@ -59,7 +63,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz0b libcairo2 libgdk-pixbuf-2.0-0 \
-            age postgresql-client
+            age postgresql-client-16
+          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: uv sync --extra dev

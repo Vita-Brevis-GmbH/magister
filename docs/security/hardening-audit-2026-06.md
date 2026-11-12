@@ -4,6 +4,9 @@
 **Methodik:** Self-Assessment durch Vita-Brevis-Engineering vor externem Pentest
 **Reviewer:** Engineering-Lead + Sicherheitsverantwortlicher
 
+> Nachtrag 2026-11: Die Pfade unter `cockpit/` beziehen sich auf den Stand des Audits. Das
+> Cockpit lebt seither im eigenen Repo `vitabrevis-cockpit` (dort ohne Präfix `cockpit/`).
+
 ---
 
 ## Zusammenfassung

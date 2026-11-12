@@ -12,8 +12,8 @@ jeder Kunde hat seinen eigenen. Wird der Kundenschlüssel gedreht, ändert sich
 das Schlüsselpaar; der Fingerabdruck in der Zustandsmeldung ändert sich mit,
 und die Konsole zeigt das Geheimnis als neu zu setzen.
 
-Die Gegenstelle (Versiegeln) steht in
-``cockpit/api/cockpit_api/services/sealing.py``; ein Paritätstest dort
+Die Gegenstelle (Versiegeln) steht im Repo vitabrevis-cockpit in
+``api/cockpit_api/services/sealing.py``; ein Paritätstest dort
 versiegelt mit jener Datei und öffnet mit dieser.
 """
 

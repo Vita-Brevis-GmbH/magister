@@ -58,11 +58,11 @@ git log -1 --format=%h                   # im Protokoll notieren
 - [ ] **A-02** Lokal, Datenebene:
   `cd apps/api && uv sync && uv run ruff check && uv run ruff format --check && uv run pyright && uv run pytest`
   — Erwartet: grün; DB-gestützte Tests laufen **mit** Testcluster, nicht übersprungen.
-- [ ] **A-03** Lokal, Konsole: dasselbe in `cockpit/api`.
+- [ ] **A-03** Lokal, Konsole: dasselbe in `api/` im Repo `vitabrevis-cockpit`.
 - [ ] **A-04** Lokal, Agent: `cd agent && uv run ruff check connector_agent tests && uv run pyright && uv run pyright --pythonplatform Windows && uv run pytest`.
 - [ ] **A-05** Frontends: in `apps/web`
   `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`,
-  in `cockpit/web` `pnpm lint && pnpm build` (mehr Skripte hat sie nicht).
+  in `web/` im Repo `vitabrevis-cockpit` `pnpm lint && pnpm build` (mehr Skripte hat sie nicht).
 - [ ] **A-06** Skripte: `bash scripts/tests/plattform-konfig.test.sh`, `bash scripts/tests/plattform-zustand.test.sh`, `bash scripts/tests/plattform-schritte.test.sh` — alle bestanden.
 - [ ] **A-07** Prüfer gegen die Prozess-Umgebung (auf einer Entwicklermaschine):
   `./scripts/dev-umgebung.sh up && ./scripts/dev-pruefen.sh` — **38 bestanden, 0 gescheitert**.
@@ -116,7 +116,7 @@ Jeder Fall einmal **A → B** und einmal **B → A**.
 
 - [ ] **K-10** Kunde C anlegen (Profil neutral): Bereitstellungsauftrag läuft alle fünf Schritte; Abbruch simulieren (Postgres kurz stoppen) → „weiterführen" setzt am richtigen Schritt fort, ohne Doppel-Schema.
 - [ ] **K-11** Slug-Prüfung: Grossbuchstaben, Umlaute, Bindestrich, Ziffer am Anfang → abgelehnt mit Feldname in der Meldung.
-- [ ] **K-11a** Hostname `konsole.dev-mgmt.int.vitabrevis.ch`, `connect.…`, ein Name mit `_`, eine IP, ein Name ausserhalb der Plattform-Domäne (`kunde.example.com`) und einer zwei Ebenen darunter (`a.thun.dev-mgmt…`) → je 422 mit Begründung, nichts angelegt. Voraussetzung: `COCKPIT_TENANT_DOMAIN` steht in `cockpit/deploy/.env` (setzt `plattform-aufbau.sh` seit L-11 selbst).
+- [ ] **K-11a** Hostname `konsole.dev-mgmt.int.vitabrevis.ch`, `connect.…`, ein Name mit `_`, eine IP, ein Name ausserhalb der Plattform-Domäne (`kunde.example.com`) und einer zwei Ebenen darunter (`a.thun.dev-mgmt…`) → je 422 mit Begründung, nichts angelegt. Voraussetzung: `COCKPIT_TENANT_DOMAIN` steht in `/opt/cockpit/src/deploy/.env` (setzt `plattform-aufbau.sh` seit L-11 selbst).
 - [ ] **K-12** Kunde C erscheint im Registry-Feed, Hostname antwortet nach ≤ 1 min.
 
 ### 4.3 Soll-Zustand: Einstellungen, Rechte, Vorlagen
@@ -330,7 +330,7 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 ## 9 · Stufe 8 — Betrieb
 
 - [ ] **B-01** Update-Weg: `git pull && ./scripts/plattform-aufbau.sh` auf einem laufenden System → keine Unterbrechung länger als der Neustart, Konsole danach erreichbar (Fehler, der zweimal passiert ist).
-- [ ] **B-02** Neustart des ganzen Hosts (`reboot`) → alles kommt von selbst wieder, Agenten verbinden sich neu; `docker ps` zeigt Konsole und Datenebene, Kundenseiten antworten ohne Eingriff. Gegenprobe: Konsole nach dem Neustart gestoppt (`docker stop deploy-api-1`) → Kundenseiten antworten trotzdem (Log: „Kundenliste aus dem Zwischenstand"), nach `docker start` holt die Datenebene die Liste binnen 15 s.
+- [ ] **B-02** Neustart des ganzen Hosts (`reboot`) → alles kommt von selbst wieder, Agenten verbinden sich neu; `docker ps` zeigt Konsole und Datenebene, Kundenseiten antworten ohne Eingriff. Gegenprobe: Konsole nach dem Neustart gestoppt (`docker stop cockpit-api-1`) → Kundenseiten antworten trotzdem (Log: „Kundenliste aus dem Zwischenstand"), nach `docker start` holt die Datenebene die Liste binnen 15 s.
 - [ ] **B-03** Postgres-Neustart während Last → Anfragen scheitern kurz, Pools erholen sich ohne Neustart der API.
 - [ ] **B-04** Plattenplatz: WAL-Archiv und Dumps nach einer Woche messen (Reserve 32 GB, E17).
 - [ ] **B-05** Runbooks folgen können: eine zweite Person legt mit [kunde-anlegen-konsole.md](kunde-anlegen-konsole.md) und [kunden-onboarding.md](kunden-onboarding.md) einen Kunden an, ohne nachzufragen. Jede Rückfrage ist ein Doku-Befund.

@@ -10,7 +10,7 @@ Vollständige Dokumentation für **Magister** und das interne **Vita Brevis Cock
 |---|---|
 | Magister verstehen | [`README.md`](../README.md) → [`SPEC.md`](../SPEC.md) → [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
 | Magister auf einem Schulträger-Host installieren | [`scripts/install-magister.sh`](../scripts/install-magister.sh) (`--mode prod\|dev`, empfohlen) ODER [`runbooks/install-ubuntu.md`](runbooks/install-ubuntu.md) (manuell) |
-| Das Cockpit (intern) installieren | [`runbooks/install-cockpit.md`](runbooks/install-cockpit.md) ODER [`scripts/install-cockpit.sh`](../scripts/install-cockpit.sh) |
+| Das Cockpit (intern) installieren | Repo `vitabrevis-cockpit` (`README.md`, Umzug aus Magister: `docs/runbooks/umzug-aus-magister.md`); gehostet mit der Datenebene: [`runbooks/plattform-auf-einem-host.md`](runbooks/plattform-auf-einem-host.md) |
 | Eine bestehende Magister-Instanz upgraden | [`runbooks/upgrade-to-mX.md`](runbooks/) |
 | Die Plattform vor dem ersten Fremdkunden abnehmen | [`runbooks/abnahme-testplan.md`](runbooks/abnahme-testplan.md) |
 | Verstehen wie wir entscheiden | [`adr/`](adr/) |
@@ -35,7 +35,9 @@ Das Schul-Tool. Eine Instanz pro Schulträger. Wird auf einem Linux-Host beim Sc
 - Upgrades: [`runbooks/upgrade-to-m1.5.md`](runbooks/upgrade-to-m1.5.md), [`upgrade-to-m2.md`](runbooks/upgrade-to-m2.md), [`upgrade-to-m3.md`](runbooks/upgrade-to-m3.md), [`upgrade-to-extensions-2026-06.md`](runbooks/upgrade-to-extensions-2026-06.md)
 - Demo-Daten: [`runbooks/demo.md`](runbooks/demo.md)
 
-### 2. Cockpit (`cockpit/api` + `cockpit/web`)
+### 2. Cockpit (eigenes Repo `vitabrevis-cockpit`)
+
+Seit 2026-11 im eigenen Repo `vitabrevis-cockpit` (`api/`, `web/`, `runner/`, `deploy/`), auf den Hosts geklont nach `/opt/cockpit/src`. Hier bleiben die Runbooks für den Betrieb zusammen mit Magister.
 
 Internes Ops-Tool von Vita Brevis. Verwaltet alle Magister-Instanzen zentral: Health-Polling, Versions-Tracking, Update-Scheduling.
 
@@ -49,7 +51,7 @@ Internes Ops-Tool von Vita Brevis. Verwaltet alle Magister-Instanzen zentral: He
 - Architektur: [`adr/0003-vita-brevis-cockpit.md`](adr/0003-vita-brevis-cockpit.md)
 - Update-Runner: [`runbooks/cockpit-update-runner.md`](runbooks/cockpit-update-runner.md)
 
-### 3. Cockpit Update-Runner (`cockpit/runner`)
+### 3. Cockpit Update-Runner (`runner/` im Repo `vitabrevis-cockpit`)
 
 Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops-Host mit SSH-Zugriff auf alle Magister-Instanzen.
 
@@ -113,6 +115,5 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 | Script | Was tut es? |
 |---|---|
 | [`scripts/install-magister.sh`](../scripts/install-magister.sh) | Interaktiver End-to-End-Installer (Ubuntu/Debian): erzeugt Secrets + argon2-Hash, schreibt `.env`, startet den Stack. `--mode prod` (HTTPS/FQDN) oder `--mode dev` (HTTP/IP). Idempotent (bewahrt Secrets). |
-| [`scripts/install-cockpit.sh`](../scripts/install-cockpit.sh) | Idempotenter Cockpit-Installer (Compose-Stack) |
 | [`scripts/bootstrap-cockpit-token.sh`](../scripts/bootstrap-cockpit-token.sh) | Ersten Service-Token via Bootstrap-Token erzeugen |
 | [`scripts/magister-cli`](../scripts/magister-cli) | Kleine Ops-CLI (z.B. Password-Hashing) |

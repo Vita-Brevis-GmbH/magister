@@ -54,11 +54,13 @@ write_status() {  # action state message started finished requested_by [slug]
   mv -f "$tmp" "$STATUS"
 }
 
-# Liegt die Konsole in einem eigenen Checkout (vitabrevis-cockpit), holt ein
-# Update auch dort den neuen Stand — sonst bliebe sie auf dem alten, und das
-# Update meldete trotzdem Erfolg. Aus cockpit/ im Magister-Repo kommt sie mit
-# dessen `git pull`. Welcher Checkout gilt, wählt scripts/lib/konsole-pfad.sh,
-# eingebunden erst nach dem Pull: der neue Stand entscheidet.
+# Die Konsole liegt in einem eigenen Checkout (vitabrevis-cockpit); ein
+# Update holt auch dort den neuen Stand — sonst bliebe sie auf dem alten, und
+# das Update meldete trotzdem Erfolg. Liegt sie doch im Magister-Repo (der Weg
+# zurück nach einem Umzug, cockpit/ von Hand zurückgeholt), gibt es dort
+# nichts eigenes zu holen. Welcher Checkout gilt, wählt
+# scripts/lib/konsole-pfad.sh, eingebunden erst nach dem Pull: der neue Stand
+# entscheidet.
 konsole_pull() {
   # shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
   source "$REPO/scripts/lib/konsole-pfad.sh" || return 1

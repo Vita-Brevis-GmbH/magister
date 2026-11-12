@@ -37,7 +37,7 @@ On-prem bleibt gebraucht und bekommt keine eingeschränkte Variante.
 |---|---|
 | Kunde / Mandant | Ein Schulträger oder eine Firma. Eigenes Schema, eigene DB-Rolle, eigener Pfad. |
 | Standort | Bisherige `schools`-Zeile. Bleibt die Scope-Einheit *innerhalb* eines Kunden. |
-| Konsole / Control Plane | Global-Admin-Oberfläche plus deren API und Datenbank. Weiterentwicklung von `cockpit/`. |
+| Konsole / Control Plane | Global-Admin-Oberfläche plus deren API und Datenbank. Weiterentwicklung von `cockpit/`, seit 2026-11 im eigenen Repo `vitabrevis-cockpit`. |
 | Kunden-Ebene / Data Plane | Die bestehende `magister-api` plus `magister-web`, pro Anfrage auf genau einen Kunden aufgelöst. |
 | Global Admin | Vita-Brevis-Rolle: Kunden, Systemeinstellungen, Rechte, Vorlagen. |
 | Global Operator | Vita-Brevis-Rolle: alle Kunden sehen und bedienen, keine Plattformkonfiguration. |
@@ -301,7 +301,7 @@ gemessen, nicht überlegt:
 ### Phase 2 — Konsole und Bereitstellung (API fertig, Oberfläche und OIDC offen)
 
 - ✅ **Konsolen-DB** mit `tenants` und `provisioning_jobs`
-  (`cockpit/api/alembic/versions/0004_tenants.py`). Kein DSN und kein Passwort
+  (`api/alembic/versions/0004_tenants.py` im Repo `vitabrevis-cockpit`). Kein DSN und kein Passwort
   in der Konsole: `dsn_ref` ist ein **Verweis**, den die Datenebene aus ihrem
   eigenen Geheimnisspeicher auflöst. Die Konsole kann Sitzungen in jeden Kunden
   ausstellen — ein Geheimnis, das dort nicht liegt, kann dort nicht gestohlen
@@ -336,7 +336,7 @@ gemessen, nicht überlegt:
 - ✅ **Die Oberfläche** steht: Kundenliste und -Detail mit den Reitern
   Übersicht, Sicherungen, AD-Connector, Zugriff und Kündigung, dazu Instanzen
   und Vorlagen. Ausgeliefert wird sie vom Konsolen-Listener selbst
-  (`cockpit/deploy/caddy/Caddyfile`, `/srv/console`) — dieselbe Herkunft wie
+  (`deploy/caddy/Caddyfile` im Repo `vitabrevis-cockpit`, `/srv/console`) — dieselbe Herkunft wie
   die API, damit der Sitzungs-Cookie erststellig bleibt.
 
 **Zwei Fallstricke, die beim Bauen aufgefallen sind** — beide gemessen:

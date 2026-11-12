@@ -20,9 +20,9 @@ sudo useradd -r -d /opt/cockpit-runner -s /usr/sbin/nologin cockpit-runner
 sudo mkdir -p /opt/cockpit-runner /etc/cockpit-runner
 sudo chown -R cockpit-runner:cockpit-runner /opt/cockpit-runner
 
-# Code deployen
-sudo -u cockpit-runner git clone https://github.com/vita-brevis-gmbh/magister.git /tmp/magister
-sudo -u cockpit-runner cp -r /tmp/magister/cockpit/runner /opt/cockpit-runner/src
+# Code deployen (der Runner liegt im Repo vitabrevis-cockpit unter runner/)
+sudo -u cockpit-runner git clone https://github.com/Vita-Brevis-GmbH/vitabrevis-cockpit.git /tmp/vitabrevis-cockpit
+sudo -u cockpit-runner cp -r /tmp/vitabrevis-cockpit/runner /opt/cockpit-runner/src
 sudo -u cockpit-runner python3.12 -m venv /opt/cockpit-runner/.venv
 sudo -u cockpit-runner /opt/cockpit-runner/.venv/bin/pip install /opt/cockpit-runner/src
 
