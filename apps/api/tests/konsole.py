@@ -60,8 +60,7 @@ def konsole_datei_oder_skip(*teile: str) -> Path:
     pfad = konsole_datei(*teile)
     if pfad is None:
         gesucht = Path(
-            os.environ.get("MAGISTER_TEST_KONSOLE_DIR", "").strip()
-            or REPO / "vitabrevis-cockpit"
+            os.environ.get("MAGISTER_TEST_KONSOLE_DIR", "").strip() or REPO / "vitabrevis-cockpit"
         ).joinpath("api", "cockpit_api", *teile)
         pytest.skip(
             f"Konsole nicht gefunden: {gesucht} "

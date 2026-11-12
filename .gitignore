@@ -65,6 +65,9 @@ tsconfig.tsbuildinfo
 # Quelle für `plattform-aufbau.sh konsole-umziehen`. Ohne diese Zeile zeigte
 # `git status` sie als neu an, und ein `git add -A` nähme sie mit.
 /cockpit/
+# Der Checkout von vitabrevis-cockpit, den die CI für die Abgleichstests
+# dazuholt (apps/api/tests/konsole.py, docs/runbooks/ci-cockpit.md).
+/vitabrevis-cockpit/
 # Erzeugt von neueren pnpm-Fassungen, wenn sie Einstellungen ablegen — hier
 # gibt es keinen Workspace, und eine Datei ohne `packages:` bricht jeden
 # folgenden `pnpm install` ab.

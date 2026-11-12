@@ -62,6 +62,7 @@ Roadmap-Sicht 2026. Konkrete Daten kommen pro Milestone in der README-Status-Sek
 **Akzeptanz:**
 - ✅ **M4.1 Vita Brevis Cockpit Foundation** — Instanz-Inventar, Health-Polling, Version-Tracking (`cockpit/` Subtree, ADR-0003)
 - ✅ **Konsole ausgezogen (2026-11)** — `cockpit/` aus Magister entfernt, lebt im eigenen Repo `vitabrevis-cockpit` (Hosts: `/opt/cockpit/src`); laufende Hosts ziehen mit `plattform-aufbau.sh konsole-umziehen` um (ADR-0003 Nachtrag)
+- ✅ **Abgleich mit der Konsole (2026-11)** — Abgleichstests finden den Checkout von `vitabrevis-cockpit` (`MAGISTER_TEST_KONSOLE_DIR`), die `backend-ci` holt ihn mit dem Secret `COCKPIT_DEPLOY_KEY` (`docs/runbooks/ci-cockpit.md`); `up`/`update` bricht ab, wenn die Datenbank der Konsole besteht, ihre `.env` aber fehlt, statt neue Geheimnisse anzulegen
 - ✅ **M4.2 Update-Tracking** — Release-Manifest-Poller, `update_requests`-Tabelle, "Update einplanen"-UI
 - ✅ **M4.3 Update-Runner** — atomic claim/complete/fail-Endpoints, Python-Runner mit SSH + pg_dump-Snapshot + Smoke-Test, systemd-Service, Runbook `cockpit-update-runner.md`; `last_error`-Härtung (sanitisierter unexpected-Pfad + whitelist-taugliche Step-Tokens) + Runner-Tests
 - ✅ **Performance: AD-Diff-Sync** — inkrementeller Sync via `whenChanged`-Cursor (ADR-0004)
