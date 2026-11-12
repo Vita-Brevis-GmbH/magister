@@ -42,6 +42,9 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Wo die Konsole liegt (eigener Checkout oder noch cockpit/ hier).
+# shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+source "$REPO/scripts/lib/konsole-pfad.sh"
 WORKFLOW="agent-ci.yml"
 # Der Zweig, der hier ausgecheckt ist — nicht fest `main`. Sonst holte ein
 # Host, der einen Arbeitszweig fährt, das Paket eines anderen Stands, und das
@@ -68,13 +71,19 @@ die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; exit 1; }
 # --- Wohin ------------------------------------------------------------------
 # Derselbe Pfad, den die Konsole liest. Er steht in ihrer Umgebung; ihn hier
 # noch einmal zu erraten wäre die zweite Quelle für dieselbe Wahrheit.
+# Welche Konsole, wählt scripts/lib/konsole-pfad.sh wie plattform-aufbau.sh
+# (der Name KONF ist hier schon vergeben — für die curl-Konfiguration).
 ziel_verzeichnis() {
-  local aus_env=""
-  if [ -f "$REPO/cockpit/deploy/.env" ]; then
-    aus_env="$(grep -oP '(?<=^COCKPIT_AGENT_PACKAGE_DIR=).*' "$REPO/cockpit/deploy/.env" || true)"
+  local pfad="${AGENT_PAKETE_ZIEL:-}" konsole_env
+  if [ -z "$pfad" ]; then
+    konsole_waehlen "${PLATTFORM_KONF:-${PLATTFORM_ROOT:-$REPO/plattform}/plattform.conf}" \
+      || die "$KONSOLE_FEHLER"
+    konsole_env="$KONSOLE_PFAD/deploy/.env"
+    if [ -f "$konsole_env" ]; then
+      pfad="$(grep -oP '(?<=^COCKPIT_AGENT_PACKAGE_DIR=).*' "$konsole_env" || true)"
+    fi
+    [ -n "$pfad" ] || die "Kein Paketverzeichnis: COCKPIT_AGENT_PACKAGE_DIR fehlt in $konsole_env (erst 'plattform-aufbau.sh up')."
   fi
-  local pfad="${AGENT_PAKETE_ZIEL:-$aus_env}"
-  [ -n "$pfad" ] || die "Kein Paketverzeichnis: COCKPIT_AGENT_PACKAGE_DIR fehlt in cockpit/deploy/.env (erst 'plattform-aufbau.sh up')."
   mkdir -p "$pfad"
   printf '%s' "$pfad"
 }

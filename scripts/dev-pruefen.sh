@@ -20,6 +20,9 @@
 set -uo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Wo die Konsole liegt — dieselbe Wahl wie in dev-umgebung.sh.
+# shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+source "$REPO/scripts/lib/konsole-pfad.sh"
 DEV="${DEV_ROOT:-$REPO/dev}"
 CERTS="$DEV/certs"
 API_PORT="${DEV_API_PORT:-8000}"
@@ -326,9 +329,13 @@ t9() {
     || bad "die Konsolen-Sonde antwortet nicht: $(echo "$konsole" | head -c 80)"
 
   local exitcode
-  (cd "$REPO/cockpit/api" && uv run python -m cockpit_api.cli.fleet_check >/dev/null 2>&1); exitcode=$?
-  [ "$exitcode" -le 2 ] && ok "fleet_check liefert Exit-Code $exitcode (0/1/2 wie erwartet)" \
-    || bad "fleet_check: Exit $exitcode"
+  if konsole_waehlen "" dev; then
+    (cd "$KONSOLE_PFAD/api" && uv run python -m cockpit_api.cli.fleet_check >/dev/null 2>&1); exitcode=$?
+    [ "$exitcode" -le 2 ] && ok "fleet_check liefert Exit-Code $exitcode (0/1/2 wie erwartet)" \
+      || bad "fleet_check: Exit $exitcode"
+  else
+    bad "fleet_check nicht aufrufbar: $KONSOLE_FEHLER"
+  fi
 }
 
 # --- T10 ---------------------------------------------------------------------

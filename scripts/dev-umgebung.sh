@@ -30,6 +30,11 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Wo die Konsole liegt: PLATTFORM_KONSOLE, sonst cockpit/ hier, sonst ein
+# Checkout von vitabrevis-cockpit neben diesem Repo, sonst /opt/cockpit/src.
+# Gewählt wird erst in `up` — `status` und `down` brauchen sie nicht.
+# shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+source "$REPO/scripts/lib/konsole-pfad.sh"
 DEV="${DEV_ROOT:-$REPO/dev}"
 RUN="$DEV/run"
 CERTS="$DEV/certs"
@@ -312,7 +317,7 @@ start_console() {
   # shellcheck disable=SC1091
   source "$DEV/env.console"
   say "Konsolen-Schema migrieren"
-  (cd "$REPO/cockpit/api" && uv sync --quiet --extra dev && uv run alembic upgrade head >/dev/null)
+  (cd "$KONSOLE_PFAD/api" && uv sync --quiet --extra dev && uv run alembic upgrade head >/dev/null)
 
   say "Konsole starten (127.0.0.1:$CONSOLE_PORT)"
   # `setsid`: eigene Prozessgruppe. Ohne das nimmt ein Aufrufer, der selbst
@@ -323,7 +328,7 @@ start_console() {
   # aufträge — anders als die Hauptshell. Ohne das kehrt `up` nach getaner
   # Arbeit nie zurück, weil es auf den Dienst wartet, den es gerade gestartet
   # hat. Gemessen: die Umgebung stand vollständig, das Skript hing trotzdem.
-  (cd "$REPO/cockpit/api" && setsid nohup uv run uvicorn cockpit_api.main:app \
+  (cd "$KONSOLE_PFAD/api" && setsid nohup uv run uvicorn cockpit_api.main:app \
       --host 127.0.0.1 --port "$CONSOLE_PORT" > "$LOGS/console.log" 2>&1 < /dev/null &
       echo $! > "$RUN/console.pid"; disown -a)
   wait_for "http://127.0.0.1:$CONSOLE_PORT/api/health" "Konsole" "$LOGS/console.log"
@@ -548,7 +553,7 @@ https://$CONSOLE_HOST:$CONSOLE_TLS_PORT, https://127.0.0.1:$CONSOLE_TLS_PORT {
 		}
 	}
 	handle {
-		root * $REPO/cockpit/web/dist
+		root * $KONSOLE_PFAD/web/dist
 		try_files {path} /index.html
 		file_server
 	}
@@ -602,6 +607,8 @@ wait_for() {  # $1 = URL, $2 = Name, $3 = Logdatei (optional)
 
 # --- Befehle -----------------------------------------------------------------
 cmd_up() {
+  konsole_waehlen "" dev || die "$KONSOLE_FEHLER"
+  say "Konsole aus $KONSOLE_PFAD ($KONSOLE_HERKUNFT)"
   preflight
   make_ca
   make_databases
@@ -620,8 +627,8 @@ $(printf '\033[1mNächste Schritte\033[0m')
        echo "127.0.0.1 $CONSOLE_HOST ${TENANTS[0]}.mgmt.vitabrevis.dev ${TENANTS[1]}.mgmt.vitabrevis.dev" >> /etc/hosts
 
   2. Oberflächen bauen, falls noch nicht geschehen:
-       (cd $REPO/cockpit/web && pnpm install && pnpm build)
-       (cd $REPO/apps/web     && pnpm install && pnpm build)
+       (cd $KONSOLE_PFAD/web && pnpm install && pnpm build)
+       (cd $REPO/apps/web && pnpm install && pnpm build)
 
   3. Konsole öffnen: https://$CONSOLE_HOST:$CONSOLE_TLS_PORT
      Das Client-Zertifikat liegt in $CERTS/operator.pem (+ -key.pem);

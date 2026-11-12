@@ -23,6 +23,13 @@
 #   ./scripts/plattform-aufbau.sh down    # beide Stacks anhalten
 #   ./scripts/plattform-aufbau.sh purge   # anhalten UND alles löschen
 #
+#   ./scripts/plattform-aufbau.sh konsole-umziehen <pfad>  # laufende Konsole aus
+#                                     # cockpit/ in den eigenen Checkout von
+#                                     # vitabrevis-cockpit umziehen (löscht nichts)
+#   ./scripts/plattform-aufbau.sh up --konsole <pfad>  # Konsole aus diesem
+#                                     # Checkout (wird gespeichert; ohne Angabe
+#                                     # siehe scripts/lib/konsole-pfad.sh)
+#
 #   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
 #   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
 #   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
@@ -55,6 +62,9 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Wo die Konsole liegt (eigener Checkout oder noch cockpit/ hier).
+# shellcheck source-path=SCRIPTDIR source=lib/konsole-pfad.sh
+source "$REPO/scripts/lib/konsole-pfad.sh"
 ZIEL="${PLATTFORM_ROOT:-$REPO/plattform}"
 CERTS="$ZIEL/certs"
 # Ablage der gebauten Agentenpakete; die Konsole liest sie nur (ADR-0014).
@@ -118,6 +128,16 @@ WAF_GESETZT=0; [ -n "${PLATTFORM_WAF+x}" ] && WAF_GESETZT=1
 ART_GESETZT=0;  [ -n "${PLATTFORM_ART:-}" ] && ART_GESETZT=1
 TLS_GESETZT=0;  [ -n "${PLATTFORM_TLS:-}" ] && TLS_GESETZT=1
 ACME_GESETZT=0; [ -n "${PLATTFORM_ACME_MAIL:-}" ] && ACME_GESETZT=1
+# Der Checkout der Konsole (vitabrevis-cockpit). Leer heisst „nicht
+# angegeben": dann gilt die Rangfolge aus scripts/lib/konsole-pfad.sh —
+# solange es cockpit/ in diesem Repo gibt, ist es dieses. Kein Teil der
+# Erstfragen: wer umzieht, sagt es mit --konsole oder `konsole-umziehen`.
+KONSOLE="$(konsole_absolut "${PLATTFORM_KONSOLE:-}")"
+KONSOLE_GESETZT=0; KONSOLE_QUELLE=""
+if [ -n "${PLATTFORM_KONSOLE:-}" ]; then
+  KONSOLE_GESETZT=1; KONSOLE_QUELLE="Umgebung PLATTFORM_KONSOLE"
+fi
+KONSOLE_PROJEKT=""
 KONSOLE_HOST=""
 KUNDEN=("thun" "bern")
 ZIEHEN=0
@@ -136,9 +156,18 @@ die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; DIE_GERUFEN=1; exit 1; }
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ -z "${DIE_GERUFEN:-}" ]; then printf "\033[31m !! Abbruch (Code %s) bei: %s\033[0m\n" "$rc" "$BASH_COMMAND" >&2; fi' EXIT
 
 dc_konsole() {
-  docker compose --project-directory "$REPO/cockpit/deploy" \
-    -f "$REPO/cockpit/deploy/docker-compose.yml" \
-    -f "$REPO/cockpit/deploy/docker-compose.plattform.yml" "$@"
+  # MAGISTER_DIR: die Plattform-Überlagerung im eigenen Checkout hängt die
+  # Datenebene (apps/api, für die Migrationen der Kunden) von dort ein. Die
+  # Fassung in cockpit/ nimmt ../../apps/api und übersieht den Wert.
+  MAGISTER_DIR="$REPO" docker compose --project-directory "$KONSOLE_PFAD/deploy" \
+    -f "$KONSOLE_PFAD/deploy/docker-compose.yml" \
+    -f "$KONSOLE_PFAD/deploy/docker-compose.plattform.yml" "$@"
+}
+
+# Die Befehle, die die Konsole anfassen, brechen hier ab, wenn ihr Checkout
+# fehlt — mit dem Grund, statt später mit „no such file" von Compose.
+konsole_noetig() {
+  [ -z "$KONSOLE_FEHLER" ] || die "$KONSOLE_FEHLER"
 }
 
 dc_daten() {
@@ -197,6 +226,10 @@ konf_laden() {
         if [ "$ACME_GESETZT" -eq 0 ]; then ACME_MAIL="$wert"; ACME_GESETZT=1; fi ;;
       PLATTFORM_WAF)
         if [ "$WAF_GESETZT" -eq 0 ]; then WAF="$wert"; WAF_GESETZT=1; fi ;;
+      PLATTFORM_KONSOLE)
+        if [ "$KONSOLE_GESETZT" -eq 0 ]; then
+          KONSOLE="$wert"; KONSOLE_GESETZT=1; KONSOLE_QUELLE="gespeichert in $KONF"
+        fi ;;
     esac
   done < <(grep -E '^PLATTFORM_[A-Z_]+=' "$KONF" || true)
   # Eine Konfiguration von vor diesen Schlüsseln ist beantwortet: Test mit
@@ -303,6 +336,10 @@ konf_anwenden() {
   if [ "$ART" = "prod" ] && [ "$BIND" = "127.0.0.1" ]; then
     die "In Produktion braucht die Konsole eine Verwaltungsadresse (die private IP dieses Hosts), nicht 127.0.0.1 — sonst erreicht die Datenebene sie nicht: --bind <ip>"
   fi
+  # Der Checkout der Konsole. Hier noch kein Abbruch: `konfig` und `csr`
+  # brauchen ihn nicht — wer ihn braucht, ruft konsole_noetig.
+  konsole_aufloesen "$KONSOLE" "$KONSOLE_QUELLE" || true
+  KONSOLE_PROJEKT="$(konsole_projekt "$KONSOLE_PFAD")"
   return 0
 }
 
@@ -311,7 +348,9 @@ konf_speichern() {
   cat > "$KONF" <<EOF
 # Die Angaben zu DIESER Installation. Erzeugt von plattform-aufbau.sh,
 # gelesen von jedem weiteren Aufruf. Von Hand änderbar; ein 'up' mit
-# --domaene/--bind/--zusatzname schreibt die neuen Werte hierher zurück.
+# --domaene/--bind/--zusatzname/--konsole schreibt die neuen Werte hierher
+# zurück. PLATTFORM_KONSOLE leer: Konsole aus cockpit/ im Magister-Repo,
+# sonst /opt/cockpit/src (scripts/lib/konsole-pfad.sh).
 #
 # Diese Datei überlebt ein 'purge' (sie enthält keine Geheimnisse und keine
 # Kundendaten). Wirklich alles weg: purge --auch-konfiguration
@@ -322,6 +361,7 @@ PLATTFORM_ART=$ART
 PLATTFORM_TLS=$TLS_MODUS
 PLATTFORM_ACME_MAIL=$ACME_MAIL
 PLATTFORM_WAF=$WAF
+PLATTFORM_KONSOLE=$KONSOLE
 EOF
 }
 
@@ -391,8 +431,10 @@ neustartfest() {
 port_pruefen() {  # $1 = Port
   local port="$1" container prozess
   container="$(docker ps --filter "publish=$port" --format '{{.Names}}' 2>/dev/null | head -1)"
+  # deploy-*: die Konsole aus cockpit/; im eigenen Checkout heisst sie nach
+  # ihrem Projekt (cockpit-*).
   case "$container" in
-    magister-*|deploy-*) return 0 ;;
+    magister-*|deploy-*|"$KONSOLE_PROJEKT"-*) return 0 ;;
     "") ;;
     *) die "Port $port hält der Container '$container' — nicht dieser Stack. Anhalten: docker stop $container" ;;
   esac
@@ -527,7 +569,7 @@ konsolen_san() {
 
 konsolen_zertifikat() {
   zertifikat "console" "$KONSOLE_HOST" "$(konsolen_san)"
-  cp -f "$CERTS/console.pem" "$CERTS/console-key.pem" "$REPO/cockpit/deploy/certs/" 2>/dev/null || true
+  cp -f "$CERTS/console.pem" "$CERTS/console-key.pem" "$KONSOLE_PFAD/deploy/certs/" 2>/dev/null || true
 }
 
 zertifikat_deckt_ab() {  # Trägt das Konsolenzertifikat alle verlangten Namen?
@@ -663,7 +705,7 @@ daten_env_tls() {  # $1 = Datei
 # entstehen hier per Zufall statt aus dem Passwortspeicher.
 write_env() {
   mkdir -p "$ZIEL" "$PAKETE" "$ZIEL/ops/requests"
-  local konsole_env="$REPO/cockpit/deploy/.env" daten_env="$REPO/deploy/compose/.env"
+  local konsole_env="$KONSOLE_PFAD/deploy/.env" daten_env="$REPO/deploy/compose/.env"
 
   if [ ! -f "$konsole_env" ]; then
     say "Umgebung der Konsole schreiben ($konsole_env)"
@@ -822,7 +864,7 @@ EOF
 
 # --- Oberflächen -------------------------------------------------------------
 build_ui() {
-  # Die gebaute Oberfläche ist keine Kür: Caddy hängt `cockpit/web/dist`
+  # Die gebaute Oberfläche ist keine Kür: Caddy hängt `web/dist` der Konsole
   # ein und liefert daraus alles aus, was nicht `/api/*` ist. Fehlt sie,
   # antwortet die Konsole im Browser mit **404** — die API läuft, die Seite
   # gibt es nicht. Genau so auf dev01 passiert.
@@ -837,27 +879,28 @@ build_ui() {
   # `find -newer` statt eines Zeitstempels im Skript: ein `git checkout`
   # setzt die mtime der geänderten Dateien auf jetzt, und genau danach wird
   # hier gefragt.
-  if [ -f "$REPO/cockpit/web/dist/index.html" ] && [ "$UI_NEU" -eq 0 ]; then
+  local web="$KONSOLE_PFAD/web"
+  if [ -f "$web/dist/index.html" ] && [ "$UI_NEU" -eq 0 ]; then
     local neuer=""
     for quelle in src package.json pnpm-lock.yaml index.html vite.config.ts \
                   tailwind.config.js postcss.config.js tsconfig.json; do
-      [ -e "$REPO/cockpit/web/$quelle" ] || continue
-      neuer="$(find "$REPO/cockpit/web/$quelle" \
-                 -newer "$REPO/cockpit/web/dist/index.html" -print -quit 2>/dev/null)"
+      [ -e "$web/$quelle" ] || continue
+      neuer="$(find "$web/$quelle" \
+                 -newer "$web/dist/index.html" -print -quit 2>/dev/null)"
       # Kein `[ -n … ] && break`: schlägt der Test in der letzten Runde fehl,
       # endet die Schleife mit Status 1 und `set -e` bricht das Skript ab.
       if [ -n "$neuer" ]; then break; fi
     done
     if [ -z "$neuer" ]; then
-      say "Konsolen-Oberfläche steht bereits und ist aktuell ($REPO/cockpit/web/dist)"
+      say "Konsolen-Oberfläche steht bereits und ist aktuell ($web/dist)"
       return 0
     fi
-    say "Quellstand ist neuer als der Bau (${neuer#"$REPO"/cockpit/web/}) — neu bauen"
+    say "Quellstand ist neuer als der Bau (${neuer#"$web"/}) — neu bauen"
   fi
 
   if command -v pnpm >/dev/null; then
     say "Konsolen-Oberfläche bauen"
-    (cd "$REPO/cockpit/web" && pnpm install --silent && pnpm build >/dev/null)
+    (cd "$web" && pnpm install --silent && pnpm build >/dev/null)
     return 0
   fi
 
@@ -882,7 +925,7 @@ build_ui() {
   # hinterlässt also eine Datei, die jeden folgenden Lauf verhindert. Hier
   # gibt es keinen Workspace, also geht die Datei uns nichts an.
   if ! docker run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-       -v "$REPO/cockpit/web:/arbeit" -w /arbeit node:22-alpine \
+       -v "$web:/arbeit" -w /arbeit node:22-alpine \
        sh -c 'corepack enable pnpm && pnpm install --ignore-workspace && pnpm build' \
        > "$protokoll" 2>&1; then
     warn "Der Bau der Oberfläche ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
@@ -892,7 +935,7 @@ build_ui() {
     tail -15 "$protokoll" >&2
     return 0
   fi
-  [ -f "$REPO/cockpit/web/dist/index.html" ] \
+  [ -f "$web/dist/index.html" ] \
     || warn "Der Bau lief durch, aber dist/index.html fehlt — bitte die Ausgabe von Hand ansehen."
 }
 
@@ -905,13 +948,13 @@ netz() {
 
 start_konsole() {
   # Die Zertifikate liegen dort, wo die Compose-Datei sie erwartet.
-  mkdir -p "$REPO/cockpit/deploy/certs"
+  mkdir -p "$KONSOLE_PFAD/deploy/certs"
   # root.pem: nur das öffentliche Stammzertifikat — die Konsole bietet es
   # zum Herunterladen an (`enroll --ca` auf dem DC). Der Schlüssel bleibt hier.
   for datei in root.pem platform-ca.pem operator-ca.pem console.pem console-key.pem \
                connector.pem connector-key.pem \
                connector-int.pem connector-int-key.pem operator-signing.pem; do
-    cp -f "$CERTS/$datei" "$REPO/cockpit/deploy/certs/$datei"
+    cp -f "$CERTS/$datei" "$KONSOLE_PFAD/deploy/certs/$datei"
   done
   say "Konsole starten (Container, Listener auf $BIND:4444)"
   # `--build`, weil das Abbild der Konsole aus dem Arbeitsstand entsteht:
@@ -972,7 +1015,7 @@ warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
 # Datenebene, nicht in die Konsole (ADR-0013 D4).
 konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
   local token args
-  token="$(grep -oP '(?<=^COCKPIT_BOOTSTRAP_TOKEN=).*' "$REPO/cockpit/deploy/.env")"
+  token="$(grep -oP '(?<=^COCKPIT_BOOTSTRAP_TOKEN=).*' "$KONSOLE_PFAD/deploy/.env")"
   args=(-sS --noproxy '*' -k -o /dev/stdout -w "\n%{http_code}"
         --resolve "$KONSOLE_HOST:4444:$BIND"
         --cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem"
@@ -1287,6 +1330,9 @@ cmd_up() {
   # halbe Plattform (scripts/tests/plattform-konfig.test.sh).
   if [ -n "${PLATTFORM_NUR_KONFIG:-}" ]; then cmd_konfig; return 0; fi
   preflight
+  # Vor allem anderen: write_env legte im neuen Checkout sonst eine frische
+  # `.env` mit neuen Geheimnissen an, und Compose ein leeres Volume.
+  konsole_umzug_pruefen
   neustartfest
   eigenes_zertifikat_pruefen
   make_ca
@@ -1317,7 +1363,8 @@ agentenpakete_auffrischen() {
     return 0
   fi
   say "Agenten-MSI des aktuellen Stands holen"
-  AGENT_PAKETE_ZIEL="$PAKETE" "$REPO/scripts/agentenpakete.sh" holen \
+  AGENT_PAKETE_ZIEL="$PAKETE" PLATTFORM_KONSOLE="$KONSOLE_PFAD" \
+    "$REPO/scripts/agentenpakete.sh" holen \
     || warn "Agenten-MSI nicht geholt (Grund oben) — von Hand: ./scripts/agentenpakete.sh holen"
 }
 
@@ -1501,6 +1548,7 @@ cmd_down() {
 }
 
 cmd_restart() {
+  konsole_umzug_pruefen
   say "Beide Stacks neu starten"
   dc_daten restart
   dc_konsole restart
@@ -1522,6 +1570,7 @@ Type=oneshot
 Environment=REPO=$REPO
 Environment=OPS_DIR=$ZIEL/ops
 Environment=PLATTFORM_ROOT=$ZIEL
+Environment=PLATTFORM_KONF=$KONF
 ExecStart=$3
 UNIT
   cat > "/etc/systemd/system/$1.timer" <<UNIT
@@ -1560,8 +1609,8 @@ cmd_purge() {
   dc_daten down -v 2>/dev/null || true
   dc_konsole down -v 2>/dev/null || true
   docker network rm "$NETZ" >/dev/null 2>&1 || true
-  rm -rf "$REPO/cockpit/deploy/certs" \
-         "$REPO/cockpit/deploy/.env" "$REPO/deploy/compose/.env"
+  rm -rf "$KONSOLE_PFAD/deploy/certs" \
+         "$KONSOLE_PFAD/deploy/.env" "$REPO/deploy/compose/.env"
   # Alles unter $ZIEL — aber die Konfiguration bleibt, sofern sie dort liegt.
   # Sie enthält keine Geheimnisse und keine Kundendaten, nur die Antworten
   # aus der Erstinstallation. Wer sie mitlöscht, tippt sie beim
@@ -1576,6 +1625,183 @@ cmd_purge() {
     find "$ZIEL" -mindepth 1 -maxdepth 1 ! -name "$behalten" -exec rm -rf {} + 2>/dev/null || true
     say "Gelöscht — der nächste 'up' beginnt von vorn, mit denselben Angaben aus $KONF"
   fi
+}
+
+# --- Konsole in den eigenen Checkout umziehen --------------------------------
+# Die Konsole ist in ein eigenes Repository ausgezogen (vitabrevis-cockpit).
+# Ihre Datenbank liegt in einem Volume, das nach dem Compose-Projekt heisst:
+# aus cockpit/ hier `deploy_cockpit-pg` (Projekt nach dem Ordner `deploy`),
+# im eigenen Checkout `cockpit_cockpit-pg` (`name: cockpit`). Ein `up` auf
+# den neuen Checkout ohne Umzug legte ein LEERES Volume an: die Konsole
+# startete ohne Kunden, die Datenebene holte eine leere Liste, und jede
+# Kundenseite wäre „unbekannt". `konsole-umziehen` bringt die Daten mit, der
+# Schutz in `up` und `restart` verhindert den Start ohne sie.
+
+#: Die Volumes der Konsolen-Datenbank, die NICHT zum Projekt $1 gehören.
+#: Antwortet Docker nicht, ist die Liste leer — kein Abbruch über pipefail.
+alte_konsolen_volumes() {  # $1 = Projekt der Konsole
+  { docker volume ls --filter "label=com.docker.compose.volume=cockpit-pg" \
+      --format '{{.Name}} {{.Label "com.docker.compose.project"}}' 2>/dev/null || true; } \
+    | awk -v p="$1" 'NF && $2 != p { print $1 }'
+}
+
+konsole_umzug_pruefen() {
+  # Aus cockpit/ in diesem Repo: nichts umzuziehen.
+  if [ -d "$REPO/cockpit" ] && [ "$KONSOLE_PFAD" -ef "$REPO/cockpit" ]; then
+    return 0
+  fi
+  if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] && [ -f "$REPO/cockpit/deploy/.env" ]; then
+    die "Die Konsole läuft jetzt aus $KONSOLE_PFAD, ihre Umgebung (.env mit den Geheimnissen) liegt aber noch in $REPO/cockpit/deploy. Ein Start legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
+  fi
+  docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1 && return 0
+  local alte
+  alte="$(alte_konsolen_volumes "$KONSOLE_PROJEKT" | paste -sd ' ' -)"
+  [ -z "$alte" ] && return 0
+  die "Die Konsole läuft jetzt aus $KONSOLE_PFAD (Projekt $KONSOLE_PROJEKT), ihre Datenbank liegt aber noch im alten Volume $alte. Ein Start legte ein leeres an — ohne Kunden, und jede Kundenseite wäre 'unbekannt'. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
+}
+
+#: Was liegt im Volume: leer, postgres (eine Datenbank) oder anderes. Leer
+#: zurück, wenn es sich nicht prüfen liess. Nur lesend eingehängt, mit dem
+#: Abbild, das die Konsole ohnehin hat. Nur für Volumes, die es gibt —
+#: `docker run -v` legte ein fehlendes sonst an.
+volume_inhalt() {  # $1 = Volume
+  { docker run --rm -v "$1:/v:ro" postgres:16 sh -c \
+      'if [ -z "$(ls -A /v)" ]; then echo leer; elif [ -f /v/PG_VERSION ]; then echo postgres; else echo anderes; fi' \
+      2>/dev/null || true; } | tail -1
+}
+
+# Idempotent, und es löscht nichts: der alte Stack wird angehalten (ohne -v),
+# Umgebung und Zertifikate nur kopiert, wo sie im Ziel fehlen, die Datenbank
+# nur in ein leeres Ziel. Das alte Volume bleibt als Reserve stehen.
+cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
+  local alt="$REPO/cockpit" neu projekt ziel quelle="" inhalt kopieren=1 datei alte
+  local -a quellen=()
+  [ -n "${1:-}" ] || die "Wohin? $0 konsole-umziehen <pfad> — der Checkout von vitabrevis-cockpit (git clone $KONSOLE_REPO_URL $KONSOLE_KLON)"
+  neu="$(konsole_absolut "$1")"
+
+  # --- Erst alles prüfen ---
+  [ -f "$neu/deploy/docker-compose.yml" ] \
+    || die "$neu/deploy/docker-compose.yml fehlt — kein Checkout von vitabrevis-cockpit (git clone $KONSOLE_REPO_URL $neu)."
+  if [ -d "$alt" ] && [ "$neu" -ef "$alt" ]; then
+    die "$neu ist der bisherige Ort der Konsole. Umziehen heisst: in den eigenen Checkout (z. B. $KONSOLE_KLON)."
+  fi
+  konsole_hat_namen "$neu" \
+    || die "$neu/deploy/docker-compose.yml hat kein festes 'name:'. Das Projekt hiesse dann nach dem Ordner (deploy) wie das alte, und beide teilten sich Container und Volumes. Einen Stand von vitabrevis-cockpit mit 'name: cockpit' auschecken."
+  projekt="$(konsole_projekt "$neu")"
+  [ "$projekt" != "$(konsole_projekt "$alt")" ] \
+    || die "Das neue Projekt heisst wie das alte ($projekt) — es gäbe nichts zu trennen."
+  command -v docker >/dev/null || die "docker fehlt."
+  docker compose version >/dev/null 2>&1 || die "Das compose-Plugin von Docker fehlt (docker-compose-plugin)."
+  docker info >/dev/null 2>&1 || die "Der Docker-Dienst antwortet nicht (systemctl start docker)."
+
+  say "Konsole umziehen: $alt → $neu (Projekt $projekt)"
+  ziel="${projekt}_cockpit-pg"
+  # Ab hier gilt der neue Checkout: dc_konsole arbeitet damit.
+  KONSOLE_PFAD="$neu"; KONSOLE_PROJEKT="$projekt"; KONSOLE_FEHLER=""
+
+  if docker volume inspect "$ziel" >/dev/null 2>&1; then
+    inhalt="$(volume_inhalt "$ziel")"
+    case "$inhalt" in
+      leer) ;;
+      postgres) kopieren=0 ;;
+      anderes) die "Im Volume $ziel liegt etwas, aber keine Postgres-Datenbank — nicht angefasst. Von Hand prüfen: docker volume inspect $ziel" ;;
+      *) die "Inhalt von $ziel nicht prüfbar (docker run mit postgres:16 gescheitert)." ;;
+    esac
+  fi
+  if [ "$kopieren" -eq 1 ]; then
+    mapfile -t quellen < <(alte_konsolen_volumes "$projekt")
+    case "${#quellen[@]}" in
+      0) die "Kein altes Volume der Konsolen-Datenbank (Label com.docker.compose.volume=cockpit-pg) — nichts umzuziehen. Eine neue Installation startet direkt: $0 up --konsole $neu" ;;
+      1) quelle="${quellen[0]}" ;;
+      *) die "Mehrere alte Volumes der Konsolen-Datenbank: ${quellen[*]}. Welches gilt, entscheidet dieses Skript nicht — nachsehen mit: docker volume inspect ${quellen[*]} (Projekt, CreatedAt). Nichts geändert." ;;
+    esac
+    inhalt="$(volume_inhalt "$quelle")"
+    [ "$inhalt" = "postgres" ] \
+      || die "Im alten Volume $quelle liegt keine Postgres-Datenbank (${inhalt:-nicht prüfbar}). Nichts geändert."
+  fi
+
+  # --- Dann handeln ---
+  # 1. Den alten Stack anhalten. `down` OHNE -v: die Volumes bleiben.
+  if [ -f "$alt/deploy/docker-compose.yml" ]; then
+    say "Alte Konsole anhalten ($alt/deploy — Volumes bleiben)"
+    MAGISTER_DIR="$REPO" docker compose --project-directory "$alt/deploy" \
+      -f "$alt/deploy/docker-compose.yml" \
+      -f "$alt/deploy/docker-compose.plattform.yml" down \
+      || die "Die alte Konsole liess sich nicht anhalten (Meldung oben). Nichts kopiert."
+  fi
+
+  # 2. Umgebung und Zertifikate — nur, was im Ziel fehlt; Rechte bleiben.
+  if [ -f "$alt/deploy/.env" ]; then
+    if [ ! -e "$neu/deploy/.env" ]; then
+      cp -p "$alt/deploy/.env" "$neu/deploy/.env"
+      say "Umgebung übernommen ($neu/deploy/.env)"
+    elif ! cmp -s "$alt/deploy/.env" "$neu/deploy/.env"; then
+      warn "$neu/deploy/.env besteht und weicht von der alten ab — nicht überschrieben. Ihre Geheimnisse müssen zur Datenebene passen (COCKPIT_TENANT_ADMIN_DSN, COCKPIT_BOOTSTRAP_TOKEN)."
+    fi
+  fi
+  if [ -d "$alt/deploy/certs" ]; then
+    if [ ! -e "$neu/deploy/certs" ]; then
+      cp -Rp "$alt/deploy/certs" "$neu/deploy/certs"
+      say "Zertifikate übernommen ($neu/deploy/certs)"
+    else
+      for datei in "$alt/deploy/certs"/*; do
+        [ -e "$datei" ] || continue
+        [ -e "$neu/deploy/certs/${datei##*/}" ] || cp -p "$datei" "$neu/deploy/certs/"
+      done
+    fi
+  fi
+
+  # 3. Das Ziel-Volume legt Compose selbst an — mit seinen Labels, damit es
+  #    beim nächsten `up` als das eigene gilt. Gestartet wird nichts.
+  netz
+  dc_konsole up --no-start postgres \
+    || die "Compose konnte das neue Projekt nicht anlegen (Meldung oben). Das alte Volume ist unverändert."
+  docker volume inspect "$ziel" >/dev/null 2>&1 \
+    || die "Compose hat $ziel nicht angelegt — heisst das Projekt anders als '$projekt'? (docker volume ls)"
+
+  # 4. Die Datenbank kopieren: nur in ein leeres Ziel, die Quelle nur lesend.
+  inhalt="$(volume_inhalt "$ziel")"
+  case "$inhalt" in
+    postgres) say "Die Datenbank liegt bereits in $ziel — nicht kopiert" ;;
+    leer)
+      [ "$kopieren" -eq 1 ] || die "$ziel ist leer, obwohl eben noch eine Datenbank darin lag — von Hand prüfen."
+      if [ -n "$(docker ps -q --filter "volume=$quelle")" ]; then
+        die "Das alte Volume $quelle ist noch in Gebrauch ($(docker ps --filter "volume=$quelle" --format '{{.Names}}' | paste -sd ' ' -)) — eine laufende Datenbank wird nicht kopiert."
+      fi
+      say "Datenbank kopieren: $quelle → $ziel (das alte bleibt als Reserve)"
+      docker run --rm -v "$quelle:/quelle:ro" -v "$ziel:/ziel" postgres:16 \
+        cp -a /quelle/. /ziel/ \
+        || die "Kopieren gescheitert (Meldung oben). Das alte Volume $quelle ist unverändert."
+      [ "$(volume_inhalt "$ziel")" = "postgres" ] \
+        || die "Nach dem Kopieren liegt in $ziel keine Datenbank — von Hand prüfen, bevor die Konsole startet." ;;
+    *) die "Inhalt von $ziel nicht prüfbar (${inhalt:-docker run mit postgres:16 gescheitert}) — nichts kopiert, die Konsole nicht starten." ;;
+  esac
+
+  # 5. Den Ort merken. Nur dieser eine Wert: die übrigen Angaben in $KONF
+  #    bleiben, wie sie sind.
+  mkdir -p "$(dirname "$KONF")"
+  setze_wert "$KONF" PLATTFORM_KONSOLE "$neu" || true
+  say "Gespeichert in $KONF: PLATTFORM_KONSOLE=$neu"
+
+  alte="$(alte_konsolen_volumes "$projekt" | paste -sd ' ' -)"
+  cat <<EOF
+
+Die Konsole ist umgezogen nach $neu und steht, bis das nächste 'up' sie aus
+dem neuen Checkout startet (Abbild, Oberfläche, Migration):
+
+  $0 up
+
+Die Datenebene bedient die Kunden derweil aus ihrem Zwischenstand.
+
+Zurück zum alten Stand (cockpit/ hier, Volume ${alte:-des alten Projekts}):
+
+  $0 down
+  $0 up --konsole $alt
+
+Was die neue Konsole bis dahin geschrieben hat, fehlt dort. Das alte Volume
+bleibt als Reserve stehen; entfernen erst, wenn die neue Konsole eine Weile
+läuft (docker volume rm <name>).
+EOF
 }
 
 # Schlüssel und Zertifikatsantrag für ein gekauftes Wildcard (--tls eigen).
@@ -1625,7 +1851,12 @@ cmd_konfig() {
   printf 'PLATTFORM_TLS=%s\n' "$TLS_MODUS"
   printf 'PLATTFORM_ACME_MAIL=%s\n' "$ACME_MAIL"
   printf 'PLATTFORM_WAF=%s\n' "$WAF"
+  printf 'PLATTFORM_KONSOLE=%s\n' "$KONSOLE"
   printf '# abgeleitet\n'
+  printf 'KONSOLE_PFAD=%s\n' "$KONSOLE_PFAD"
+  printf 'KONSOLE_HERKUNFT=%s\n' "$KONSOLE_HERKUNFT"
+  printf 'KONSOLE_PROJEKT=%s\n' "$KONSOLE_PROJEKT"
+  [ -z "$KONSOLE_FEHLER" ] || warn "$KONSOLE_FEHLER"
   printf 'KONSOLE_URL=https://%s:4444\n' "$KONSOLE_HOST"
   printf 'CONNECTOR=connect.%s:46200\n' "$DOMAIN"
   printf 'KUNDEN_CADDYFILE=%s\n' "$(kunden_caddyfile)"
@@ -1668,8 +1899,8 @@ konf_laden
 # `operator` und `totp` nehmen die Argumente ihres Werkzeugs, nicht die
 # dieses Skripts — deshalb vor der Optionsschleife.
 case "$BEFEHL" in
-  operator) konf_anwenden; cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
-  totp)     konf_anwenden; cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
+  operator) konf_anwenden; konsole_noetig; cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
+  totp)     konf_anwenden; konsole_noetig; cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
 esac
 
 # `kunde-anbinden` nimmt optional ein Kürzel — ohne alle Kunden der Konsole.
@@ -1680,6 +1911,10 @@ if { [ "$BEFEHL" = "kunde-anbinden" ] || [ "$BEFEHL" = "rollenpasswort-neu" ]; }
 fi
 if [ "$BEFEHL" = "kunden-migrieren" ] && [ "${1:-}" = "--ohne-sicherung" ]; then
   OHNE_SICHERUNG=1; shift
+fi
+# `konsole-umziehen` nimmt den neuen Checkout als Argument.
+if [ "$BEFEHL" = "konsole-umziehen" ] && [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+  UMZUG_ZIEL="$1"; shift
 fi
 
 while [ $# -gt 0 ]; do
@@ -1693,6 +1928,8 @@ while [ $# -gt 0 ]; do
     --tls)     TLS_MODUS="$2"; TLS_GESETZT=1; shift 2 ;;
     --acme-mail) ACME_MAIL="$2"; ACME_GESETZT=1; shift 2 ;;
     --waf)     WAF="$2"; WAF_GESETZT=1; shift 2 ;;
+    --konsole) KONSOLE="$(konsole_absolut "$2")"; KONSOLE_GESETZT=1
+               KONSOLE_QUELLE="Option --konsole"; shift 2 ;;
     --auch-konfiguration) KONF_LOESCHEN=1; shift ;;
     *) die "Unbekannte Option: $1" ;;
   esac
@@ -1704,6 +1941,14 @@ done
 case "$BEFEHL" in up|update) konf_erfragen ;; esac
 konf_anwenden
 case "$BEFEHL" in up|update) konf_speichern ;; esac
+
+# Wer die Konsole anfasst, braucht ihren Checkout. `konfig` zeigt den Fehler
+# nur an; `konsole-umziehen` prüft sein eigenes Ziel.
+case "$BEFEHL" in
+  up|update) [ -n "${PLATTFORM_NUR_KONFIG:-}" ] || konsole_noetig ;;
+  status|schritte|restart|down|purge|kunde-anbinden|kunden-migrieren|rollenpasswort-neu)
+    konsole_noetig ;;
+esac
 
 case "$BEFEHL" in
   up|update) cmd_up ;;
@@ -1727,5 +1972,6 @@ case "$BEFEHL" in
     [ -n "${KUNDE_SLUG:-}" ] || die "Kürzel fehlt: $0 rollenpasswort-neu <kürzel>"
     ROLLE_NEU=1
     kunde_anbinden_kuerzel "$KUNDE_SLUG" ;;
-  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden, kunden-migrieren, rollenpasswort-neu)" ;;
+  konsole-umziehen) cmd_konsole_umziehen "${UMZUG_ZIEL:-}" ;;
+  *) die "Unbekannter Befehl: $BEFEHL (up/update, status, schritte, restart, konfig, csr, down, purge, operator, totp, ops-agent, backup-pruefer, kunde-anbinden, kunden-migrieren, rollenpasswort-neu, konsole-umziehen)" ;;
 esac

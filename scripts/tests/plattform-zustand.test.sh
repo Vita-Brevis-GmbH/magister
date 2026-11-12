@@ -17,7 +17,10 @@ printf 'PLATTFORM_DOMAIN=beispiel.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$T/plattform
 cat > "$T/bin/docker" <<'X'
 #!/usr/bin/env bash
 case "$*" in
-  *project=deploy*) printf 'api\trunning\tUp 3 hours (healthy)\tdeploy-api-1\ncaddy\trunning\tUp 3 hours\tdeploy-caddy-1\n' ;;
+  # Die Konsole aus ihrem eigenen Checkout (Projekt cockpit); das alte
+  # Projekt deploy hat nach dem Umzug keine Container mehr.
+  *project=cockpit*) printf 'api\trunning\tUp 3 hours (healthy)\tcockpit-api-1\ncaddy\trunning\tUp 3 hours\tcockpit-caddy-1\n' ;;
+  *project=deploy*) : ;;
   *project=magister*) printf 'magister-api\trunning\tUp 1 hour (healthy)\tmagister-magister-api-1\ncaddy\tcreated\tCreated\tmagister-caddy-1\n' ;;
 esac
 X
@@ -67,6 +70,8 @@ def soll(bedingung, text):
 
 dienste = {(s["stack"], s["service"]): s for s in r["services"]}
 soll(dienste[("konsole", "api")]["ok"], "laufender, gesunder Dienst ist in Ordnung")
+soll(dienste[("konsole", "api")]["container"] == "cockpit-api-1",
+     "Konsole aus dem eigenen Checkout (Projekt cockpit) wird gefunden")
 soll(not dienste[("daten", "caddy")]["ok"], "nur angelegter Caddy der Datenebene ist eine Störung")
 
 ports = {p["port"]: p for p in r["ports"]}

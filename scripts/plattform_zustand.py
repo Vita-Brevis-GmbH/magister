@@ -36,8 +36,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-#: Dieselben Projektnamen wie in plattform-aufbau.sh.
-STACKS = {"konsole": "deploy", "daten": "magister"}
+#: Dieselben Projektnamen wie in plattform-aufbau.sh. Die Konsole heisst im
+#: eigenen Checkout (vitabrevis-cockpit, ``name: cockpit``) nach ihrem Projekt,
+#: aus ``cockpit/`` im Magister-Repo nach dem Ordner ``deploy``. Gefragt wird
+#: nach beiden: nach ``konsole-umziehen`` hat das alte Projekt keine Container
+#: mehr und taucht nicht auf.
+STACKS = (("konsole", "cockpit"), ("konsole", "deploy"), ("daten", "magister"))
 
 #: Die Ports und wem sie gehören sollen.
 PORTS = {
@@ -82,7 +86,7 @@ def konf(plattform: Path) -> dict[str, str]:
 def services() -> list[dict[str, Any]]:
     """Jeder Container beider Stacks, auch die angehaltenen."""
     out: list[dict[str, Any]] = []
-    for stack, project in STACKS.items():
+    for stack, project in STACKS:
         code, text = _run(
             [
                 "docker",
