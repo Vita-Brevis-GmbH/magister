@@ -243,18 +243,10 @@ def test_the_prefix_matches_the_console() -> None:
     deshalb die Datei, nicht importiert.
     """
     import ast
-    from pathlib import Path
 
-    path = (
-        Path(__file__).resolve().parents[4]
-        / "cockpit"
-        / "api"
-        / "cockpit_api"
-        / "services"
-        / "operator_access.py"
-    )
-    if not path.exists():
-        pytest.skip("Konsole liegt in dieser Umgebung nicht daneben")
+    from tests.konsole import konsole_datei_oder_skip
+
+    path = konsole_datei_oder_skip("services", "operator_access.py")
     tree = ast.parse(path.read_text(encoding="utf-8"))
     for node in tree.body:
         if not isinstance(node, ast.Assign):

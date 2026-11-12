@@ -11,7 +11,6 @@ from __future__ import annotations
 import importlib.util
 import sys
 import uuid
-from pathlib import Path
 from types import ModuleType
 
 import pytest
@@ -30,6 +29,7 @@ from magister_api.tenancy.keys import keys_for
 from magister_api.tenancy.registry import Tenant
 from magister_api.tenancy.sealing import public_key_b64
 from magister_api.tenancy.status_report import collect_status, reconcile_outcome
+from tests.konsole import konsole_datei_oder_skip
 
 pytestmark = pytest.mark.postgres
 
@@ -38,16 +38,7 @@ TENANT_REF = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
 def _console_sealing() -> ModuleType:
     """Die Versiegel-Hälfte der Konsole, aus ihrer Datei geladen (kein Import über Pakete)."""
-    path = (
-        Path(__file__).resolve().parents[4]
-        / "cockpit"
-        / "api"
-        / "cockpit_api"
-        / "services"
-        / "sealing.py"
-    )
-    if not path.is_file():
-        pytest.skip(f"Konsole nicht gefunden: {path}")
+    path = konsole_datei_oder_skip("services", "sealing.py")
     spec = importlib.util.spec_from_file_location("console_sealing_it", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)

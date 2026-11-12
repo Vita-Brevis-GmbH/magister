@@ -39,8 +39,33 @@ jobs:
           --health-retries 10
     env:
       MAGISTER_TEST_DATABASE_URL: postgresql+asyncpg://magister_test:magister_test@localhost:5432/magister_test
+      HAT_KONSOLE_KEY: ${{ secrets.COCKPIT_DEPLOY_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      # Die Konsole lebt seit PR #60 im Repo vitabrevis-cockpit. Ohne ihren
+      # Checkout überspringen sich die Abgleichstests (Versiegeln,
+      # Operator-Assertion, Policy-Keys) – grün, aber ohne Beweis. Gegenstück:
+      # die CI des Cockpits holt Magister mit MAGISTER_DEPLOY_KEY.
+      - name: Konsole holen (vitabrevis-cockpit, für die Abgleichstests)
+        if: env.HAT_KONSOLE_KEY == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Vita-Brevis-GmbH/vitabrevis-cockpit
+          ssh-key: ${{ secrets.COCKPIT_DEPLOY_KEY }}
+          path: vitabrevis-cockpit
+          persist-credentials: false
+
+      - name: Pfad der Konsole setzen
+        working-directory: .
+        run: |
+          if [ -d vitabrevis-cockpit/api/cockpit_api ]; then
+            echo "MAGISTER_TEST_KONSOLE_DIR=$GITHUB_WORKSPACE/vitabrevis-cockpit" >> "$GITHUB_ENV"
+            echo "Konsole (vitabrevis-cockpit): $(git -C vitabrevis-cockpit rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Secret COCKPIT_DEPLOY_KEY fehlt – die Abgleichstests gegen die Konsole werden übersprungen (docs/runbooks/ci-cockpit.md)."
+            echo "**Lücke:** ohne Checkout von vitabrevis-cockpit überspringen sich die Abgleichstests gegen die Konsole (Secret \`COCKPIT_DEPLOY_KEY\`, docs/runbooks/ci-cockpit.md)." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@v3

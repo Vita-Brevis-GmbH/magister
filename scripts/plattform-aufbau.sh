@@ -1679,6 +1679,15 @@ konsole_umzug_pruefen() {
   if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] && [ -f "$REPO/cockpit/deploy/.env" ]; then
     die "Die Konsole soll jetzt aus $KONSOLE_PFAD laufen, ihre Umgebung (.env mit den Geheimnissen) liegt aber noch am alten Ort $REPO/cockpit/deploy. Ein Start legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
   fi
+  # Die Datenbank der Konsole gibt es, ihre Umgebung nicht: der Checkout wurde
+  # neu geklont oder weggeräumt (so auf dem Dev-Host am 2026-11-12). write_env
+  # legte sonst eine neue .env an – mit neuem Schlüssel für die
+  # TOTP-Geheimnisse und neuem Rollenpasswort zur Datenebene. Danach meldet
+  # sich kein Operator mehr mit TOTP an, und keine Bereitstellung passt.
+  if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] \
+     && docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1; then
+    die "Die Datenbank der Konsole besteht (Volume ${KONSOLE_PROJEKT}_cockpit-pg), ihre Umgebung fehlt: $KONSOLE_PFAD/deploy/.env. Ein Start legte eine neue an, deren Geheimnisse weder zur Datenbank noch zur Datenebene passen. Die bisherige .env zurücklegen – aus der Sicherung oder, solange die Konsole läuft, aus ihren Containern (vitabrevis-cockpit: docs/runbooks/checkout-wiederherstellen.md). Nichts geändert."
+  fi
   docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1 && return 0
   local alte
   alte="$(alte_konsolen_volumes "$KONSOLE_PROJEKT" | paste -sd ' ' -)"

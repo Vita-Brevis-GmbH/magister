@@ -344,6 +344,34 @@ pruefe "Volume fehlt, altes da: Abbruch"       "ja" "$(ja_wenn grep -q "alten Vo
 pruefe "…mit dem Hinweis auf konsole-umziehen" "ja" "$(ja_wenn grep -q "konsole-umziehen $T/schutz" <<<"$A")"
 pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
 
+# Der Checkout wurde weggeräumt und neu geklont: Datenbank da, .env nicht.
+# Ein Start legte eine neue .env mit neuen Geheimnissen an. Der Host ist
+# umgezogen und aufgeräumt – am alten Ort liegt keine .env mehr.
+mv "$ALT/.env" "$T/alt.env.weg"
+konsole "$T/neu-geklont" "name: cockpit"
+printf 'PLATTFORM_KONSOLE=%s\n' "$T/neu-geklont" > "$KONF"
+echo "cockpit postgres" > "$T/dz/vol/cockpit_cockpit-pg"
+neu_aufrufe
+A="$(lauf restart)"
+pruefe "Datenbank da, .env fehlt: Abbruch"     "ja" "$(ja_wenn grep -qF "ihre Umgebung fehlt: $T/neu-geklont/deploy/.env" <<<"$A")"
+pruefe "…mit dem Weg zurück"                   "ja" "$(ja_wenn grep -q "checkout-wiederherstellen.md" <<<"$A")"
+pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+printf 'COCKPIT_BOOTSTRAP_TOKEN=x\n' > "$T/neu-geklont/deploy/.env"
+neu_aufrufe
+A="$(lauf restart)"
+pruefe ".env zurückgelegt: Start"              "ja" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+rm -f "$T/dz/vol/cockpit_cockpit-pg"
+# Neue Installation: weder Datenbank noch .env – write_env legt sie an.
+konsole "$T/frisch" "name: cockpit"
+printf 'PLATTFORM_KONSOLE=%s\n' "$T/frisch" > "$KONF"
+mv "$T/dz/vol/deploy_cockpit-pg" "$T/dz/deploy_cockpit-pg.weg"
+neu_aufrufe
+A="$(lauf restart)"
+pruefe "neue Installation ohne .env: kein Abbruch" "nein" "$(ja_wenn grep -q "ihre Umgebung fehlt" <<<"$A")"
+pruefe "…und gestartet"                        "ja" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+mv "$T/dz/deploy_cockpit-pg.weg" "$T/dz/vol/deploy_cockpit-pg"
+mv "$T/alt.env.weg" "$ALT/.env"
+
 printf '\n\033[1m8 · konsole-umziehen ohne die alten Compose-Dateien: anhalten über das Projekt, kopieren, merken\033[0m\n'
 printf 'PLATTFORM_DOMAIN=example.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$KONF"
 mkdir -p "$KLON/deploy/certs"
