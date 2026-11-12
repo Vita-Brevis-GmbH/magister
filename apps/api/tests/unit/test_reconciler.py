@@ -14,6 +14,7 @@ Die Zusagen, die hier geprüft werden:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -152,9 +153,14 @@ class TestReconcilableIsSafe:
         der Abgleich verwirft es mit einer Meldung). Umgekehrt wäre es ein
         Feld, das nie ankommt.
         """
-        console_keys = _console_policy_keys()
+        from tests.konsole import konsole_datei_oder_skip
+
+        console_keys = _console_policy_keys(konsole_datei_oder_skip("services", "settings.py"))
         if console_keys is None:
-            pytest.skip("Konsole nicht im Pfad — läuft in CI mit beiden Paketen")
+            # Die Datei ist da, aber die Allowlist nicht mehr dort, wo dieser
+            # Test sie sucht: das ist ein Bruch des Abgleichs, kein Grund zum
+            # Überspringen.
+            pytest.fail("POLICY_KEYS in der Konsole nicht gefunden (services/settings.py)")
         never_arrives = sorted(RECONCILABLE - console_keys)
         assert never_arrives == [], (
             f"Diese Felder gleicht die Datenebene ab, aber die Konsole kann sie "
@@ -162,27 +168,15 @@ class TestReconcilableIsSafe:
         )
 
 
-def _console_policy_keys() -> set[str] | None:
-    """Die Allowlist der Konsole, wenn sie erreichbar ist.
+def _console_policy_keys(candidate: Path) -> set[str] | None:
+    """Die Allowlist der Konsole aus ihrer `settings.py`, sonst `None`.
 
     Über den Dateipfad und nicht über einen Import: die Datenebene hat
     `cockpit_api` nicht als Abhängigkeit, und das soll so bleiben — die
-    Konsole ist ein eigenes Paket und wird später ein eigenes Repository.
+    Konsole ist ein eigenes Repository (vitabrevis-cockpit, `tests/konsole.py`).
     """
     import ast
-    from pathlib import Path
 
-    # tests/unit/x.py -> tests -> apps/api -> apps -> Repository-Wurzel
-    candidate = (
-        Path(__file__).resolve().parents[4]
-        / "cockpit"
-        / "api"
-        / "cockpit_api"
-        / "services"
-        / "settings.py"
-    )
-    if not candidate.is_file():
-        return None
     tree = ast.parse(candidate.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
