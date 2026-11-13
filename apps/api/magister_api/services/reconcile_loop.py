@@ -92,7 +92,7 @@ async def reconcile_tenant(settings: Settings, tenant: Tenant) -> bool:
                 # zurückgeht ("idle in transaction" hält Sperren und blockiert
                 # Migrationen).
                 await session.rollback()
-            errors = [f"{name}: {why}" for name, why in result.rejected_secrets.items()]
+            errors = result.problems
     except Exception as exc:
         # Ein Satz statt nur des Typnamens: "ValidationError" allein sagt dem
         # Betreiber nicht, welches Feld. Ohne SQL und Parameter (safe_error).

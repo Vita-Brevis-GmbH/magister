@@ -11,10 +11,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
+from magister_api.auth.roles import GRANTED_BY_COCKPIT
 from magister_api.config import Settings
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.group_template import GroupTemplate, GroupTemplateSchool
 from magister_api.models.school import School
+from magister_api.repositories.auth import RoleAssignmentRepository
 from magister_api.repositories.base import ScopeContext
 from magister_api.repositories.schools import SchoolRepository
 from magister_api.services.zielgruppen import ensure_defaults
@@ -108,6 +110,28 @@ class SchoolService:
         await self.session.execute(
             update(GroupTemplate).where(GroupTemplate.id.in_(only_here)).values(status="archived")
         )
+        # Zuweisungen aus dem Cockpit gehen mit der Einheit (ADR-0026): die
+        # Rolle gilt für den ganzen Kunden, an einer Einheit, die es nicht mehr
+        # gibt, hat sie nichts zu suchen. Die aktiven werden als entzogen
+        # auditiert; der nächste Abgleich legt sie nicht wieder an.
+        removed = await RoleAssignmentRepository(self.session).delete_for_school(
+            school_id, granted_by=GRANTED_BY_COCKPIT
+        )
+        for grant in sorted(
+            (r for r in removed if r.revoked_at is None),
+            key=lambda r: (r.ad_object_guid, r.role),
+        ):
+            await self.audit.emit(
+                action="role_revoked",
+                target_kind="role_assignment",
+                target_id=grant.ad_object_guid,
+                actor_upn=self.scope.upn,
+                actor_object_guid=self.scope.ad_object_guid,
+                school_id=None,
+                ip=ip,
+                request_id=request_id,
+                payload={"role": grant.role, "school_id": school_id, "via": "school_deleted"},
+            )
         await self.repo.delete(row)
         # The school no longer exists, so the audit row must not reference it
         # (school_id=None); target_id keeps the deleted school's id for the trail.

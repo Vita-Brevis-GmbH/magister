@@ -26,3 +26,8 @@ ROLE_KL = "kl"
 
 # Roles that live in ``role_assignments`` (kl is in ``class_teacher_roles``).
 ROLE_ASSIGNMENT_ROLES: frozenset[str] = frozenset({ROLE_ADMIN, ROLE_SCHULLEITUNG, ROLE_SMI})
+
+#: ``role_assignments.granted_by`` einer Zuweisung aus dem Cockpit (ADR-0026).
+#: Nur Zuweisungen mit dieser Herkunft nimmt der Abgleich wieder zurück; von Hand
+#: oder per Bootstrap vergebene fasst er nie an.
+GRANTED_BY_COCKPIT = "cockpit"

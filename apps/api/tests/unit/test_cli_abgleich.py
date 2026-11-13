@@ -30,3 +30,21 @@ async def test_a_tenant_from_the_environment_is_named_not_reconciled(
     )
     assert await _check(get_settings(), tenant, apply=True) is False
     assert "Kein Konsolen-Kunde" in capsys.readouterr().out
+
+
+def test_the_roles_line_counts_and_names_nobody() -> None:
+    from magister_api.cli.abgleich import _roles_line
+    from magister_api.services.cockpit_roles import RoleAssignmentChange
+    from magister_api.services.reconciler import ReconcileResult
+    from magister_api.tenancy.desired_state import DesiredRoleAssignment, DesiredState
+
+    assert _roles_line(DesiredState(), ReconcileResult()) == "keine Aussage"
+    preview = ReconcileResult(
+        granted_assignments=[RoleAssignmentChange("anna", "g", "smi", 1)],
+        created_login_accounts=["anna"],
+    )
+    line = _roles_line(
+        DesiredState(role_assignments=(DesiredRoleAssignment("anna", "smi"),)), preview
+    )
+    assert line == "1 Eintrag/Einträge; +1/-0 Zuweisungen, 1 Konto/Konten vorab"
+    assert "anna" not in line

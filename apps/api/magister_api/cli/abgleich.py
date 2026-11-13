@@ -26,7 +26,7 @@ import sys
 from magister_api.config import Settings, get_settings
 from magister_api.services.app_settings import AppSettingsService
 from magister_api.services.reconcile_loop import reconcile_tenant, tenant_keys
-from magister_api.services.reconciler import Reconciler
+from magister_api.services.reconciler import Reconciler, ReconcileResult
 from magister_api.tenancy.context import (
     dispose_tenancy,
     get_engines,
@@ -35,6 +35,7 @@ from magister_api.tenancy.context import (
     refresh_from_console,
 )
 from magister_api.tenancy.desired_state import (
+    DesiredState,
     DesiredStateUnavailableError,
     fetch_desired_state,
 )
@@ -53,6 +54,17 @@ def _out(msg: str) -> None:
 def _first_line(exc: BaseException) -> str:
     text = str(exc).strip().splitlines()
     return f"{type(exc).__name__}: {text[0][:300] if text else ''}"
+
+
+def _roles_line(desired: DesiredState, preview: ReconcileResult) -> str:
+    """Rollen aus dem Cockpit (ADR-0026) als Zahlen, ohne Namen."""
+    if desired.role_assignments is None:
+        return "keine Aussage"
+    return (
+        f"{len(desired.role_assignments)} Eintrag/Einträge; "
+        f"+{len(preview.granted_assignments)}/-{len(preview.revoked_assignments)} Zuweisungen, "
+        f"{len(preview.created_login_accounts)} Konto/Konten vorab"
+    )
 
 
 async def _current(settings: Settings, tenant: Tenant) -> tuple[str, dict[str, bool], int]:
@@ -111,6 +123,9 @@ async def _check(settings: Settings, tenant: Tenant, *, apply: bool) -> bool:
     _out(f"   Abweichende Felder {changed}")
     if preview.unknown_keys:
         _out(f"   Unbekannte Felder  {', '.join(sorted(preview.unknown_keys))}")
+    _out(f"   Rollen (Cockpit)   {_roles_line(desired, preview)}")
+    for name, why in sorted(preview.skipped_assignments.items()):
+        _out(f"   !! Rolle ausgelassen: {name} ({why})")
 
     if not apply:
         return want_profile in (None, have_profile)

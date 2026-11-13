@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_admin
+from magister_api.auth.roles import GRANTED_BY_COCKPIT
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
@@ -49,6 +50,18 @@ async def _role_holder(session: AsyncSession, ad_object_guid: str) -> UserLabelF
     if account is not None:
         return login_account_label_fields(account)
     raise HTTPException(status_code=404, detail="user_not_found")
+
+
+def _grantor(user: AuthenticatedUser) -> str:
+    """``granted_by`` einer Vergabe von Hand.
+
+    Ein Keycloak-Benutzer, der zufällig ``cockpit`` heisst, darf keine
+    Zuweisungen mit der Herkunft des Cockpits erzeugen — der nächste Abgleich
+    nähme sie sonst als „nicht mehr gewollt" zurück (ADR-0026).
+    """
+    if user.upn.strip().lower() == GRANTED_BY_COCKPIT:
+        return f"konto:{user.upn}"
+    return user.upn
 
 
 async def _school_names(session: AsyncSession) -> dict[int, str]:
@@ -94,6 +107,7 @@ async def list_roles(
             school_name=schools.get(r.school_id) if r.school_id is not None else None,
             granted_by=r.granted_by,
             granted_at=r.granted_at,
+            from_cockpit=r.granted_by == GRANTED_BY_COCKPIT,
             **(labels.get(r.ad_object_guid) or user_label_fields(None)),
         )
         for r in rows
@@ -124,7 +138,7 @@ async def grant_role(
         ad_object_guid=ad_object_guid,
         role=payload.role,
         school_id=payload.school_id,
-        granted_by=user.upn,
+        granted_by=_grantor(user),
     )
     ip, request_id = _ip_request_id(request)
     await AuditService(session, settings).emit(
@@ -146,6 +160,7 @@ async def grant_role(
         school_name=schools.get(payload.school_id) if payload.school_id is not None else None,
         granted_by=assignment.granted_by,
         granted_at=assignment.granted_at,
+        from_cockpit=assignment.granted_by == GRANTED_BY_COCKPIT,
         **target,
     )
 
@@ -196,7 +211,7 @@ async def set_roles(
             ad_object_guid=ad_object_guid,
             role=role,
             school_id=school_id,
-            granted_by=user.upn,
+            granted_by=_grantor(user),
         )
         await audit.emit(
             action="role_granted",
@@ -234,6 +249,7 @@ async def set_roles(
             school_name=schools.get(r.school_id) if r.school_id is not None else None,
             granted_by=r.granted_by,
             granted_at=r.granted_at,
+            from_cockpit=r.granted_by == GRANTED_BY_COCKPIT,
             **target,
         )
         for r in rows

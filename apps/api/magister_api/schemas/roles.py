@@ -14,6 +14,9 @@ class RoleAssignmentOut(BaseModel):
     school_name: str | None
     granted_by: str | None
     granted_at: datetime
+    #: Vergeben vom Cockpit (ADR-0026). Entziehen geht, wirkt aber nur bis zum
+    #: nächsten Abgleich, solange die Person dort mit dieser Rolle steht.
+    from_cockpit: bool = False
     # Display labels (from ad_user_cache) so the UI can name the holder.
     display_name: str | None = None
     given_name: str | None = None

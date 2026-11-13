@@ -122,6 +122,18 @@ class RoleAssignmentRepository:
         existing = await self._find_active(ad_object_guid, role, school_id)
         if existing is not None:
             return existing
+        revoked = await self._find_revoked(ad_object_guid, role, school_id)
+        if revoked is not None:
+            # Die Eindeutigkeit (Person, Rolle, Einheit) gilt auch für
+            # zurückgenommene Zeilen (uq_role_assignments_user_role_school).
+            # Neu vergeben heisst deshalb: die zurückgenommene Zeile lebt mit
+            # neuer Herkunft wieder auf — ein zweites INSERT scheiterte. Den
+            # Verlauf (wer wann vergab und entzog) hält das Audit.
+            revoked.revoked_at = None
+            revoked.granted_by = granted_by
+            revoked.granted_at = utcnow()
+            await self.session.flush()
+            return revoked
         row = RoleAssignment(
             ad_object_guid=ad_object_guid,
             role=role,
@@ -146,6 +158,23 @@ class RoleAssignmentRepository:
         await self.session.flush()
         return row
 
+    async def delete_for_school(self, school_id: int, *, granted_by: str) -> list[RoleAssignment]:
+        """Alle Zeilen einer Herkunft an einer Einheit löschen, aktive und zurückgenommene.
+
+        Nur für das Löschen der Einheit (Fremdschlüssel RESTRICT). Gibt die
+        gelöschten Zeilen zurück, damit die aktiven auditiert werden können.
+
+        # scope-bypass: admin-only delete path of the school itself.
+        """
+        stmt = (
+            delete(RoleAssignment)
+            .where(RoleAssignment.school_id == school_id, RoleAssignment.granted_by == granted_by)
+            .returning(RoleAssignment)
+        )
+        rows = list((await self.session.execute(stmt)).scalars().all())
+        await self.session.flush()
+        return rows
+
     async def _find_active(
         self, ad_object_guid: str, role: str, school_id: int | None
     ) -> RoleAssignment | None:
@@ -160,6 +189,26 @@ class RoleAssignmentRepository:
             cond = and_(cond, RoleAssignment.school_id == school_id)
         result = await self.session.execute(select(RoleAssignment).where(cond))
         return result.scalar_one_or_none()
+
+    async def _find_revoked(
+        self, ad_object_guid: str, role: str, school_id: int | None
+    ) -> RoleAssignment | None:
+        """Die zuletzt zurückgenommene Zeile dieses Tripels, falls es eine gibt."""
+        cond = and_(
+            RoleAssignment.ad_object_guid == ad_object_guid,
+            RoleAssignment.role == role,
+            RoleAssignment.revoked_at.is_not(None),
+            RoleAssignment.school_id.is_(None)
+            if school_id is None
+            else RoleAssignment.school_id == school_id,
+        )
+        stmt = (
+            select(RoleAssignment)
+            .where(cond)
+            .order_by(RoleAssignment.revoked_at.desc(), RoleAssignment.id.desc())
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
 
 class AdUserCacheRepository:

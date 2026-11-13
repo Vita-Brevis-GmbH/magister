@@ -16,6 +16,8 @@ from typing import Any, cast
 
 import httpx
 
+from magister_api.auth.roles import ROLE_ASSIGNMENT_ROLES
+from magister_api.schemas.common import validate_login_name
 from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 
 logger = logging.getLogger(__name__)
@@ -57,6 +59,19 @@ class DesiredMaintenance:
     params: dict[str, str] = field(default_factory=dict[str, str])
 
 
+@dataclass(frozen=True)
+class DesiredRoleAssignment:
+    """Ein Eintrag der Rollenliste aus dem Cockpit (ADR-0026): Keycloak-Benutzer → Rolle.
+
+    Die Rolle gilt für den ganzen Kunden: ``admin`` ohne Einheit,
+    ``schulleitung`` und ``smi`` an jeder Einheit. Das Cockpit sieht die
+    Einheiten nicht; welche es gibt, weiss nur diese Datenebene.
+    """
+
+    username: str
+    role: str
+
+
 #: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
 #: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
 #: als Fehler zurückgemeldet.
@@ -96,6 +111,12 @@ class DesiredState:
     #: schickt für einen Namen nie beides.
     platform_sealed_secrets: dict[str, str] = field(default_factory=dict)
     maintenance: tuple[DesiredMaintenance, ...] = ()
+    #: Rollen aus dem Cockpit (ADR-0026). Wie bei ``templates``: `None` heisst
+    #: **keine Aussage** (das Cockpit führt die Anmeldung dieses Kunden nicht,
+    #: oder es kennt das Feld nicht) und es wird nichts angefasst; eine Liste
+    #: ist **vollständig**, auch `[]` — sonst liesse sich eine Rolle im Cockpit
+    #: nie wieder wegnehmen.
+    role_assignments: tuple[DesiredRoleAssignment, ...] | None = None
 
     @property
     def has_rbac(self) -> bool:
@@ -138,7 +159,52 @@ def parse_desired_state(payload: object) -> DesiredState:
         sealed_secrets=_parse_sealed(payload),
         platform_sealed_secrets=_parse_sealed(payload, "platform_sealed_secrets"),
         maintenance=_parse_maintenance(payload),
+        role_assignments=_parse_role_assignments(payload),
     )
+
+
+def _parse_role_assignments(
+    payload: dict[str, Any],
+) -> tuple[DesiredRoleAssignment, ...] | None:
+    """Die Rollenliste aus dem Cockpit — oder `None`, wenn keine drinsteht (ADR-0026).
+
+    Streng wie der Rest: ein Benutzername, den `validate_login_name` nicht
+    annimmt, oder eine Rolle ausserhalb von ``ROLE_ASSIGNMENT_ROLES`` ist ein
+    Fehler im Soll-Zustand und kein Eintrag, den man auslässt. Eine Liste, aus
+    der still Einträge fielen, würde die fehlenden Rollen **zurücknehmen**.
+    Zusätzliche Felder eines Eintrags werden übergangen (ein neueres Cockpit).
+    Doppelte Paare zählen einmal.
+    """
+    raw = payload.get("role_assignments")
+    if raw is None:
+        return None
+    if not isinstance(raw, list):
+        raise DesiredStateUnavailableError("'role_assignments' ist keine Liste.")
+    parsed: list[DesiredRoleAssignment] = []
+    for index, entry in enumerate(cast(list[object], raw)):
+        if not isinstance(entry, dict):
+            raise DesiredStateUnavailableError(f"Rollenzuweisung {index} ist kein Objekt.")
+        item = cast(dict[str, object], entry)
+        username, role = item.get("username"), item.get("role")
+        if not isinstance(username, str) or not isinstance(role, str):
+            raise DesiredStateUnavailableError(
+                f"Rollenzuweisung {index} hat nicht die erwartete Form (username, role)."
+            )
+        try:
+            name = validate_login_name(username)
+        except ValueError as exc:
+            # Ohne den Namen: die Meldung geht in den Log und an die Konsole.
+            raise DesiredStateUnavailableError(
+                f"Rollenzuweisung {index}: Benutzername ungültig ({exc})."
+            ) from exc
+        if role not in ROLE_ASSIGNMENT_ROLES:
+            raise DesiredStateUnavailableError(
+                f"Rollenzuweisung {index}: Rolle {role[:40]!r} unbekannt."
+            )
+        assignment = DesiredRoleAssignment(username=name, role=role)
+        if assignment not in parsed:
+            parsed.append(assignment)
+    return tuple(parsed)
 
 
 def _parse_sealed(payload: dict[str, Any], key: str = "sealed_secrets") -> dict[str, str]:
@@ -289,6 +355,7 @@ async def fetch_desired_state(
 
 
 __all__ = [
+    "DesiredRoleAssignment",
     "DesiredState",
     "DesiredTemplate",
     "DesiredStateUnavailableError",

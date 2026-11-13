@@ -43,6 +43,7 @@ from magister_api.models.base import utcnow
 from magister_api.models.platform_template import PlatformDocumentTemplate
 from magister_api.schemas.app_settings import AppSettingsUpdate
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.cockpit_roles import CockpitRoleSync, RoleAssignmentChange
 from magister_api.services.demo_data import DemoDataService
 from magister_api.services.document_templates import (
     DocumentTemplateService,
@@ -175,6 +176,33 @@ class ReconcileResult:
     maintenance_results: list[dict[str, Any]] = field(default_factory=list)
     #: Ob in diesem Lauf ein Wartungsauftrag tatsächlich ausgeführt wurde.
     maintenance_executed: bool = False
+    #: Rollen aus dem Cockpit (ADR-0026): vergebene und zurückgenommene
+    #: Zuweisungen an Personen — nicht zu verwechseln mit ``changed_roles``,
+    #: der Rechte-Matrix.
+    granted_assignments: list[RoleAssignmentChange] = field(
+        default_factory=list[RoleAssignmentChange]
+    )
+    revoked_assignments: list[RoleAssignmentChange] = field(
+        default_factory=list[RoleAssignmentChange]
+    )
+    #: Für die Rollenliste vorab angelegte Anmeldekonten (Benutzernamen).
+    created_login_accounts: list[str] = field(default_factory=list[str])
+    #: {benutzer: Grund} — Einträge der Rollenliste, die ausgelassen wurden.
+    skipped_assignments: dict[str, str] = field(default_factory=dict[str, str])
+
+    @property
+    def problems(self) -> list[str]:
+        """Was die Zustandsmeldung als Fehler an die Konsole trägt.
+
+        Ausgelassene Einträge der Rollenliste (ADR-0026) gehören dazu: die
+        Liste steht im Cockpit, und dort wird sie berichtigt.
+        """
+        out = [f"{name}: {why}" for name, why in self.rejected_secrets.items()]
+        out += [
+            f"role_assignments {name}: {why}"
+            for name, why in sorted(self.skipped_assignments.items())
+        ]
+        return out
 
     @property
     def changed_templates(self) -> bool:
@@ -188,6 +216,9 @@ class ReconcileResult:
             or self.changed_templates
             or self.changed_secrets
             or self.maintenance_executed
+            or self.granted_assignments
+            or self.revoked_assignments
+            or self.created_login_accounts
         )
 
 
@@ -326,6 +357,24 @@ class Reconciler:
                 desired.rbac, result, tenant_slug=tenant_slug, dry_run=dry_run
             )
 
+        if desired.role_assignments is not None:
+            roles = await CockpitRoleSync(
+                self.session,
+                self.settings,
+                actor=RECONCILER_ACTOR,
+                request_id=f"reconcile:{tenant_slug}",
+            ).reconcile(desired.role_assignments, tenant_slug=tenant_slug, dry_run=dry_run)
+            result.granted_assignments = roles.granted
+            result.revoked_assignments = roles.revoked
+            result.created_login_accounts = roles.created_accounts
+            result.skipped_assignments = roles.skipped
+            if roles.skipped:
+                logger.warning(
+                    "Rollen aus dem Cockpit für %s teilweise ausgelassen: %s",
+                    tenant_slug,
+                    "; ".join(f"{k}: {v}" for k, v in sorted(roles.skipped.items())),
+                )
+
         if desired.templates is not None:
             await self._reconcile_templates(
                 desired.templates, result, tenant_slug=tenant_slug, dry_run=dry_run
@@ -370,13 +419,16 @@ class Reconciler:
         if result.touched:
             logger.info(
                 "Soll-Zustand für %s materialisiert: %d Einstellung(en), %d Rolle(n), "
-                "%d Vorlage(n)",
+                "%d Vorlage(n), Zuweisungen +%d/-%d, %d Konto/Konten vorab",
                 tenant_slug,
                 len(result.changed_settings),
                 len(result.changed_roles),
                 len(result.added_templates)
                 + len(result.updated_templates)
                 + len(result.removed_templates),
+                len(result.granted_assignments),
+                len(result.revoked_assignments),
+                len(result.created_login_accounts),
             )
         return result
 

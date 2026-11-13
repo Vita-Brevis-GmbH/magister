@@ -10,6 +10,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.auth.roles import GRANTED_BY_COCKPIT
 from magister_api.models.auth import AdUserCache, RoleAssignment
 from magister_api.models.import_job import ImportJob
 from magister_api.models.school import School
@@ -53,15 +54,27 @@ class SchoolRepository(BaseRepository):
         # scope-bypass: admin-only delete guard; refuse deleting a school that
         # still owns domain data (classes, users, role grants or import jobs).
         # Audit events are intentionally excluded — their FK is SET NULL.
+        # Zuweisungen aus dem Cockpit auch (ADR-0026): sie stehen an jeder
+        # Einheit, weil die Rolle für den ganzen Kunden gilt, und gehen mit der
+        # Einheit (SchoolService.delete). Sonst liesse sich keine Einheit mehr
+        # löschen, sobald das Cockpit eine Leitung oder IT-Verantwortliche nennt.
         total = 0
         for model, column in (
             (SchoolClass, SchoolClass.school_id),
             (AdUserCache, AdUserCache.school_id),
-            (RoleAssignment, RoleAssignment.school_id),
             (ImportJob, ImportJob.school_id),
         ):
             stmt = select(func.count()).select_from(model).where(column == school_id)
             total += int((await self.session.execute(stmt)).scalar_one())
+        roles = (
+            select(func.count())
+            .select_from(RoleAssignment)
+            .where(
+                RoleAssignment.school_id == school_id,
+                RoleAssignment.granted_by.is_distinct_from(GRANTED_BY_COCKPIT),
+            )
+        )
+        total += int((await self.session.execute(roles)).scalar_one())
         return total
 
 
