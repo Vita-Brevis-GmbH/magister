@@ -40,7 +40,7 @@ Der Plan ergänzt die bestehenden Prüfungen, er ersetzt sie nicht:
 | Kunde C (nur §6) | Profil **neutral**, wird im Test angelegt und wieder gekündigt |
 | Domänencontroller | Test-DC (Windows Server 2012 R2+), Ausgang TCP 46200 zur Plattform; dort läuft der Agent |
 | Test-AD | eigene OU-Struktur je Kunde; Gruppe `Magister-Connector` mit dem DC-Computerkonto und delegierten Rechten auf den freigegebenen OUs (kein Dienstkonto) |
-| Entra | Test-Tenant mit einer App-Registrierung je Kunde |
+| Keycloak | Realm je Kunde mit `automato-admin` und Testbenutzern; Client `magister` legt das Cockpit an (ADR-0025, Cockpit ADR 0007) |
 | Personen | 2 Operatoren (für Vier-Augen-Schritte), je Kunde: Admin, Schulleitung/Abteilungsleitung, Klassenlehrer, Fachlehrer, 3 Schüler |
 | Browser | zwei getrennte Profile (oder ein privates Fenster), damit Sitzungen von A und B gleichzeitig offen sind |
 
@@ -269,7 +269,7 @@ darf, ist nicht sichtbar **und** per API abgelehnt.
 
 ### 7.1 Schule (Kunde A)
 
-- [ ] **F-01** Anmeldung über Entra (MFA via Conditional Access); Benutzer ohne Gruppe → kein Zugang mit verständlicher Meldung.
+- [ ] **F-01** Anmeldung über den Keycloak-Realm (ADR-0025): `automato-admin` ist Admin; ein neuer Benutzer ohne Rolle kommt hinein und sieht „Noch keine Rechte" statt Menüs; nach Rollenvergabe sieht er seine Bereiche; ein in Keycloak neu angelegter Benutzer mit altem Namen wird abgewiesen, bis die Bindung gelöst ist; Abmelden führt über die Abmeldeseite des Realms zurück.
 - [ ] **F-02** Admin: Schulen, Klassen-CRUD inkl. Soft-Delete, Klassen-Detail und Edit, Zuweisung Schüler/Lehrer mit `valid_from`/`valid_to`, KL-Subrollen (haupt/co/stellvertretung), Fachlehrer mit Fach.
 - [ ] **F-03** Bulk: mehrere Schüler in eine Klasse (Teilerfolg mit Rückmeldung je Zeile), Schuljahres-Übergang 3a → 4a mit 3-Stufen-Dialog, Einzelschüler-Übergang.
 - [ ] **F-04** Schulleitung: Dashboard-Kennzahlen, Off-Boarding-Queue, Stellvertretungen (Tabs, Widerruf), Benutzer aktivieren/deaktivieren.

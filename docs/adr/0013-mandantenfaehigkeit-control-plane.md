@@ -244,3 +244,11 @@ Testabdeckung.
 - **Eine Datenbank pro Kunde von Beginn an.** Härter, aber teurer in Betrieb und
   Migration, ohne dass die meisten Kunden es brauchen. Über D1 jederzeit
   nachträglich erreichbar.
+
+## Nachtrag 2026-11-13 · Anmeldung über Keycloak statt Entra
+
+Abgelöst durch [ADR-0025](0025-anmeldung-ueber-keycloak.md): der Anmeldeweg des
+Kunden (D5, letzter Absatz) ist OIDC gegen den **Keycloak-Realm des Kunden**,
+nicht gegen Entra. Entra kann dort als Identity Provider hängen; Magister sieht
+nur den Realm. Der Redirect-URI je Kunde (D3) gehört jetzt in den Client
+`magister` des Realms, den das Cockpit führt (Cockpit ADR 0007).

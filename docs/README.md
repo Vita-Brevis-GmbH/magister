@@ -26,7 +26,7 @@ Das Schul-Tool. Eine Instanz pro Schulträger. Wird auf einem Linux-Host beim Sc
 
 - Backend: FastAPI + SQLAlchemy + Postgres
 - Frontend: React + Vite + TanStack Router
-- Auth: OIDC (Entra ID) + on-prem AD (LDAPS)
+- Auth: OIDC gegen den Keycloak-Realm des Kunden (ADR-0025) + on-prem AD (LDAPS) für die Verwaltung
 - Deployment: Docker Compose hinter Caddy
 
 **Doku:**

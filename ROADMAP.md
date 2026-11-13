@@ -183,6 +183,31 @@ empfohlenes Start-Set und sperrt nichts. Referenz:
 - ✅ **Schüler-Provisioning per CSV** — Import-Typ `students` legt neue AD-Accounts an (Migration 0015, ADR-0006), generierte lesbare Passwörter, Ziel-OU nach Zyklus, Zugangsdaten-PDFs (Handout + Klassentabelle)
 - ✅ **Test/CI** — Coverage-Gate (75 %), Router-Tests, Rename-Integritätstests, Pre-commit spiegelt Frontend-CI
 
+## Anmeldung über Keycloak (2026-11)
+
+**Ziel:** Alle Benutzer melden sich am Keycloak-Realm des Kunden an (lokal,
+Entra oder LDAP hängen dort); Magister verwaltet nur noch die Autorisierung.
+Grundsetup durch das Cockpit. Referenz:
+[ADR-0025](docs/adr/0025-anmeldung-ueber-keycloak.md), Cockpit ADR 0007.
+
+- ✅ **Anmeldekonten** (`login_accounts`, Migration `0053_anmeldekonten`):
+  Identität `iss` + `sub`, Anzeige `preferred_username`; Zuordnung zur
+  AD-Person über `upn == username`, sonst stabile GUID aus dem Benutzernamen;
+  gleicher Name mit anderem `sub` wird abgewiesen und auditiert. Kein
+  `user_not_synced`, kein `oid`-Zwang mehr.
+- ✅ **Bootstrap-Admins sind Keycloak-Benutzernamen** (`automato-admin`), ohne
+  Zeile in `ad_user_cache`; Regel für Benutzernamen an `AppSettingsUpdate`.
+- ✅ **Rollen an Anmeldekonten:** Rolleneditor nimmt Konten ohne AD-Zeile;
+  `/admin/login-accounts` (vorab anlegen, sperren, Bindung lösen, löschen);
+  Konto ohne Rechte sieht einen Hinweis statt Menüs.
+- ✅ **Abmelden beim Realm** (`end_session_endpoint`, `client_id`,
+  `post_logout_redirect_uri`, ohne `id_token_hint`).
+- ✅ **Neutral statt Entra:** `StandardOidcClient`, Texte der Anmeldeseite in
+  de/fr/it/en.
+- ⏳ **Rollenvergabe aus dem Cockpit** (Wunsch des Produktverantwortlichen):
+  braucht einen neuen Vertrag mit der Konsole; bis dahin vergibt
+  `automato-admin` die Rollen in Magister.
+
 ## Cross-Cutting (laufend)
 
 - Sicherheits-Updates der Dependencies (renovate)

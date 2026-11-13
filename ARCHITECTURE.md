@@ -5,7 +5,7 @@
 
 ## 1. Übersicht
 
-Magister besteht aus einem React-SPA, einem FastAPI-Backend, einer PostgreSQL-Datenbank und einer LDAPS-Verbindung zum on-prem Active Directory des Schulträgers. Authentifizierung erfolgt via OIDC gegen Entra ID; AD-Mutationen (Passwort-Reset, Enable/Disable) gehen via ldap3 ServerPool gegen die explizit konfigurierten Domain Controller des Schulträgers.
+Magister besteht aus einem React-SPA, einem FastAPI-Backend, einer PostgreSQL-Datenbank und einer LDAPS-Verbindung zum on-prem Active Directory des Schulträgers. Authentifizierung erfolgt via OIDC gegen den Keycloak-Realm des Kunden (ADR-0025; Entra oder LDAP hängen dort, nicht in Magister); AD-Mutationen (Passwort-Reset, Enable/Disable) gehen via ldap3 ServerPool gegen die explizit konfigurierten Domain Controller des Schulträgers.
 
 ```mermaid
 flowchart LR
@@ -14,8 +14,8 @@ flowchart LR
   Caddy --> API[magister-api<br/>FastAPI]
   API --> DB[(PostgreSQL 16)]
   API -->|LDAPS 636<br/>ServerPool| AD[on-prem AD<br/>DCs]
-  API -->|OIDC<br/>Authorization Code + PKCE| Entra[Entra ID]
-  Browser -.->|OIDC Redirect| Entra
+  API -->|OIDC<br/>Authorization Code + PKCE| KC[Keycloak-Realm<br/>des Kunden]
+  Browser -.->|OIDC Redirect| KC
 ```
 
 ## 2. Tech-Stack-Begründungen
@@ -31,20 +31,21 @@ flowchart LR
 | DB | PostgreSQL 16 | JSONB für Audit-Payloads, partial indexes, optionales Row-Level-Security |
 | Reverse Proxy | Caddy 2 | Auto-TLS via ACME, minimale Konfig, single-binary |
 | Container-Stack | Docker Compose | reproduzierbar, einfache Update-Mechanik via `compose pull` |
-| Auth | OIDC gegen Entra | Conditional Access bringt MFA mit; Entra ist Sync-Target des on-prem AD |
+| Auth | OIDC gegen den Keycloak-Realm des Kunden (ADR-0025) | Ein Anmeldeweg für alle Werkzeuge des Kunden; MFA und Anbindung an Entra/LDAP liegen im Realm |
 | CI | GitHub Actions | Repo-nativ; ausreichend für Build/Test/Image-Push |
 
 ## 3. Datenflüsse
 
 ### 3.1 Login (Lehrer / Admin)
 
-1. Browser → `/auth/login` → API redirected zu Entra `/authorize?response_type=code&...`
-2. Entra → Browser-Redirect mit `code` zu `/auth/callback`
-3. API tauscht `code` gegen `id_token` + `access_token` (Backchannel)
-4. API matched OIDC `oid` claim gegen `ad_user_cache.ms_ds_consistency_guid`; Fallback bei fehlendem Match: UPN-Gleichheit. Match-Logik ist global, nicht pro Schulträger konfigurierbar.
-5. Bei erstem Login eines `MAGISTER_BOOTSTRAP_ADMINS`-UPN: Eintrag in `role_assignments(role='admin', school_id=NULL)`
+1. Browser → `/auth/login` → API redirected zum `authorization_endpoint` des Realms (aus der Discovery) mit `response_type=code` + PKCE
+2. Realm → Browser-Redirect mit `code` zu `/auth/callback`
+3. API tauscht `code` gegen `id_token` (Backchannel), prüft Signatur, `iss`, `aud`, `nonce`
+4. API ordnet über `iss` + `sub` ein Anmeldekonto (`login_accounts`) zu — sonst ein vorab angelegtes Konto gleichen Benutzernamens, sonst neu; `principal_guid` = objectGUID der AD-Zeile mit `upn == preferred_username`, sonst eine stabile GUID aus dem Benutzernamen (ADR-0025)
+5. Steht der Benutzername in `bootstrap_admins`: Eintrag in `role_assignments(role='admin', school_id=NULL)` an der `principal_guid` (bei jeder Anmeldung)
 6. API setzt HttpOnly+Secure+SameSite=Strict Session-Cookie; Eintrag in `sessions`
-7. Browser holt Profil, RBAC-Permissions, Schul-Scope; UI rendert
+7. Browser holt Profil, RBAC-Permissions, Schul-Scope; UI rendert (ohne Rechte: Hinweis statt Menüs)
+8. Abmelden: lokale Sitzung weg, dann `end_session_endpoint` des Realms mit `client_id` und `post_logout_redirect_uri`
 
 ### 3.2 Listing
 
@@ -161,14 +162,14 @@ schultraeger-server (Ubuntu LTS)
 └── ssh-zugang (Vita Brevis Ops via Ansible — Inventory in deploy/ansible/)
 ```
 
-LDAPS-Verbindung zu Schulträger-DCs (intranet). OIDC-Verbindung zu Entra (HTTPS outbound). Sonst keine externen Datenflüsse.
+LDAPS-Verbindung zu Schulträger-DCs (intranet). OIDC-Verbindung zum Keycloak-Realm (HTTPS outbound). Sonst keine externen Datenflüsse.
 
 ## 7. Bootstrap-Admin-Flow
 
-1. Schulträger-IT installiert Compose-Stack + setzt `MAGISTER_BOOTSTRAP_ADMINS=admin1@schule.ch,admin2@schule.ch` in `.env`
+1. Die Konsole setzt `bootstrap_admins` (Keycloak-Benutzernamen, Vorgabe `automato-admin`); selbst betrieben: `MAGISTER_BOOTSTRAP_ADMINS=automato-admin` in `.env`
 2. Container starten; DB-Migration läuft via Alembic
-3. Erster `admin1@schule.ch` öffnet `/auth/login`, wird zu Entra weitergeleitet, kommt mit gültigem ID-Token zurück
-4. API matcht UPN gegen `MAGISTER_BOOTSTRAP_ADMINS`-Liste → schreibt `role_assignments(role='admin', school_id=NULL)`
+3. `automato-admin` öffnet `/auth/login`, wird zum Realm weitergeleitet, kommt mit gültigem ID-Token zurück
+4. API legt das Anmeldekonto an und matcht den Benutzernamen gegen `bootstrap_admins` → schreibt `role_assignments(role='admin', school_id=NULL)` — ohne `oid`, ohne Zeile in `ad_user_cache` (ADR-0025)
 5. Admin sieht Setup-Wizard: Schulen anlegen, weitere Admin-/Schulleitungs-Rollen vergeben, AD-Sync triggern
 6. Nach Setup kann `MAGISTER_BOOTSTRAP_ADMINS` aus `.env` entfernt werden — Rolle ist persistent in DB
 
@@ -177,5 +178,5 @@ LDAPS-Verbindung zu Schulträger-DCs (intranet). OIDC-Verbindung zu Entra (HTTPS
 | Datum | Thema | Entscheid |
 |-------|-------|-----------|
 | 2026-04-30 | Audit-Encryption | `audit_events.payload` column-level via `pgcrypto` encrypted-at-rest. Bereits in §3.4 / §5 dokumentiert. |
-| 2026-04-30 | OIDC ↔ AD-Match | Globale Match-Logik (nicht pro Schulträger konfigurierbar): `oid` claim → `mS-DS-ConsistencyGuid`, Fallback UPN. |
+| 2026-04-30 | OIDC ↔ AD-Match | Globale Match-Logik (nicht pro Schulträger konfigurierbar): `oid` claim → `mS-DS-ConsistencyGuid`, Fallback UPN. **Abgelöst 2026-11-13 (ADR-0025):** Identität `iss` + `sub` im Anmeldekonto, AD-Zuordnung nur über `upn == preferred_username` beim Anlegen. |
 | 2026-04-30 | Reverse-Proxy | Caddy bleibt einziger Reverse-Proxy im offiziellen Compose-Stack; kein Headless-Mode in M1. |

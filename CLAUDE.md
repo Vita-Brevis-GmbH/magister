@@ -14,7 +14,7 @@ Magister manages users (teachers + students from on-prem AD), classes, class-tea
 | Backend | Python 3.12 + FastAPI + Pydantic v2 |
 | ORM / Migrations | SQLAlchemy 2 (async) + Alembic |
 | AD integration | ldap3 with ServerPool (LDAPS, sealed/signed bind) |
-| Auth (teachers/admin) | OIDC against Entra ID (MFA via Conditional Access) |
+| Auth (teachers/admin) | OIDC against the customer's Keycloak realm (ADR-0025; MFA, Entra/LDAP live in the realm) |
 | Frontend | React + Vite + TanStack Query/Router + shadcn/ui |
 | i18n | i18next (de · fr · it · en) |
 | Database | PostgreSQL 16 (JSONB for audit payloads) |

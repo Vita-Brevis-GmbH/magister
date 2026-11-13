@@ -15,7 +15,7 @@ Magister stellt eine sichere, auditierbare und mehrsprachige Web-Anwendung berei
 - Definition von Schulklassen (Magister-DB als Master)
 - Zuweisung von Klassenlehrer:innen und Schüler:innen zu Klassen
 - Passwort-Reset für Schüler:innen durch deren Klassenlehrer (ldap3 → on-prem AD)
-- OIDC-Login gegen Entra ID inkl. Bootstrap-Admin-Mechanik
+- OIDC-Login gegen den Keycloak-Realm des Kunden inkl. Bootstrap-Admin-Mechanik (ADR-0025; bis 2026-11: Entra ID)
 - RBAC: Admin · Schulleitung · Klassenlehrer
 - Vollständiges CRUD-Audit-Logging in DB
 - Mehrsprachige UI: Deutsch (Default), Französisch, Italienisch, Englisch

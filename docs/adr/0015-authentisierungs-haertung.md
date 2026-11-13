@@ -243,3 +243,11 @@ zuerst auf OIDC — Release-Notes und Runbook müssen das benennen.
   zweiten Faktor und würde D2 aushebeln. Deshalb nur befristet.
 - **WebAuthn statt TOTP für lokale Konten.** Am Notzugang oft nicht verfügbar;
   als zusätzliche Methode später sinnvoll.
+
+## Nachtrag 2026-11-13 · Der reguläre Weg ist Keycloak
+
+Abgelöst durch [ADR-0025](0025-anmeldung-ueber-keycloak.md): „Was bleibt: OIDC
+gegen Entra" (D3) heisst jetzt OIDC gegen den Keycloak-Realm des Kunden; der
+zweite Faktor dieses Wegs liegt im Realm (bzw. beim dort angebundenen Entra).
+Das lokale Notkonto mit TOTP (D2) bleibt unverändert, ebenso die Entfernung des
+AD-Logins (D3).

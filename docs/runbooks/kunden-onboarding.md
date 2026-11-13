@@ -82,15 +82,27 @@ ein öffentlich vertrautes Zertifikat auf den DCs. Ungeprüftes LDAPS ist mögli
 aber dann ist der Kanal verschlüsselt und **nicht** authentisiert — nur als
 Übergang, mit Vermerk.
 
-### 1.6 Entra ID
+### 1.6 Anmeldung (Keycloak-Realm)
 
-- Eigene App-Registrierung im Tenant des Kunden.
-- Redirect-URI: `https://<kunde>.magister.ch/api/auth/callback`
-- Client-ID und Client-Secret an Vita Brevis (über einen sicheren Kanal, nicht
-  per Mail).
-- Conditional Access mit MFA für die Gruppe der Magister-Nutzer — Magister
-  erzwingt MFA nicht selbst, es verlässt sich auf diese Politik.
-- Die UPN der ersten Kunden-Admins.
+Seit [ADR-0025](../adr/0025-anmeldung-ueber-keycloak.md) melden sich alle
+Benutzer am **Keycloak-Realm des Kunden** an; Magister sieht nur den Realm.
+
+- Der Kunde braucht einen Realm und die Verknüpfung im Kundenregister des
+  Cockpits (Werkzeug Magister `um`). Das Cockpit legt im Realm den Client
+  `magister` an (Redirect-URI `https://<kunde>-um.<domain>/api/auth/callback`,
+  Logout-URI `https://<kunde>-um.<domain>/*`), versiegelt sein Geheimnis für
+  den Mandanten und setzt Issuer, Client, Redirect-URI, Scopes und die ersten
+  Administratoren (Cockpit ADR 0007). Keine App-Registrierung von Hand.
+- Wer Entra oder das AD als Anmeldung will, verbindet **den Realm** damit
+  (Identity Provider bzw. User Federation in Keycloak). MFA ebenfalls dort.
+- Erste Administratoren sind **Keycloak-Benutzernamen**, Vorgabe
+  `automato-admin` (der lokale Admin jedes Realms). Er bekommt in Magister bei
+  jeder Anmeldung die Rolle Admin.
+- Alle anderen bekommen bei der ersten Anmeldung ein Anmeldekonto **ohne
+  Rechte**. Rollen vergibt danach der IT-Anbieter (als `automato-admin`) oder
+  ein Admin unter *Rollen & Berechtigungen* — dort lassen sich Konten auch vorab
+  anlegen. Lehrpersonen, deren Keycloak-Benutzername ihrem UPN im AD
+  entspricht, behalten ihre Klassen.
 
 ### 1.7 Stammdaten
 
@@ -110,7 +122,7 @@ In dieser Reihenfolge; jeder Schritt ist auditiert.
    von Rechten und Vorlagen. Bricht ein Schritt ab, bleibt der Kunde auf
    `Bereitstellung` und ist nicht erreichbar — nie halb angelegt.
    Bis die Konsole das übernimmt (Phase 2), ist es der Block in §2.1.
-4. **Systemeinstellungen** eintragen: OIDC (aus 1.6), AD (DCs, Bind-Modus,
+4. **Systemeinstellungen** eintragen: OIDC kommt aus der Verknüpfung (1.6), AD (DCs, Bind-Modus,
    Such-Basis, LDAPS-Vertrauen aus 1.5), Sync-Intervall.
 5. **Agent-Paket** beziehen und mit dem Einmal-Token (24 h) an die Kunden-IT
    übergeben. Das Paket enthält kein Geheimnis. Beides steht in der Konsole
@@ -212,7 +224,9 @@ also keinen wiederkehrenden Besuch beim Kunden. Was zu wissen ist:
 
 Der Kunde ist erst produktiv, wenn alle sechs Punkte grün sind:
 
-- [ ] Anmeldung über Entra funktioniert für einen Kunden-Admin.
+- [ ] Anmeldung über den Keycloak-Realm funktioniert für `automato-admin`
+      (Admin in Magister) und für einen Kunden-Admin, dem eine Rolle gegeben
+      wurde; Abmelden führt über die Abmeldeseite des Realms zurück auf `/login`.
 - [ ] AD-Sync liefert die erwartete Zahl an Benutzern.
 - [ ] Ein Passwort-Reset an einem Testkonto geht durch — der Beweis, dass der
       ganze Weg Konsole → Warteschlange → Agent → LDAPS → AD trägt.

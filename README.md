@@ -15,10 +15,11 @@ Admin-GUI editierbar.
 
 ## Was drin ist
 
-- **OIDC-Login gegen Entra ID** für Lehrpersonen + Admins (PKCE,
-  MFA-fähig über Conditional Access)
+- **OIDC-Login gegen den Keycloak-Realm des Kunden** für Lehrpersonen +
+  Admins (PKCE; MFA, Entra oder LDAP hängen im Realm — ADR-0025). Wer sich
+  anmeldet, bekommt ein Anmeldekonto; Rechte vergibt Magister.
 - **Lokaler Break-Glass-Admin** (argon2id-gehasht) für Day-1-Setup und
-  Recovery, wenn Entra nicht erreichbar ist
+  Recovery, wenn der Realm nicht erreichbar ist
 - **Admin-GUI** für OIDC- + AD-Konfiguration; Secrets pgcrypto-verschlüsselt
   in der DB, Reload ohne Neustart
 - **AD-Sync** aller Schul-User (LDAPS · ServerPool · sealed/signed bind);
@@ -46,7 +47,7 @@ Admin-GUI editierbar.
 | Backend | Python 3.12 · FastAPI · Pydantic v2 |
 | ORM / Migrations | SQLAlchemy 2 (async) + Alembic |
 | AD-Integration | ldap3 mit ServerPool (LDAPS · sealed/signed bind) |
-| Auth | OIDC gegen Entra ID + lokaler Break-Glass-Admin (argon2id) |
+| Auth | OIDC gegen den Keycloak-Realm (ADR-0025) + lokaler Break-Glass-Admin (argon2id) |
 | Frontend | React 18 · Vite 6 · TanStack Router/Query · shadcn-Style UI |
 | i18n | i18next (de/fr/it/en) |
 | Database | PostgreSQL 16 (JSONB + pgcrypto für Audit-Payload + Secrets) |
@@ -189,17 +190,19 @@ Caddy holt im Hintergrund das ACME-Zertifikat; nach 30-60s ist
    Login-Form (OIDC ist noch nicht konfiguriert).
 2. Mit `admin` + dem Klartext-Passwort aus Schritt 3 anmelden.
 3. Im Header **Administration → Systemeinstellungen** öffnen.
-4. Entra ID konfigurieren: Issuer-URL, Client-ID, Client-Secret,
-   Redirect-URI (`https://<hostname>/api/auth/callback`), Scopes,
-   Bootstrap-Admin-UPNs.
+4. Anmeldung konfigurieren (gehostet setzt das Cockpit diese Werte):
+   Issuer-URL des Keycloak-Realms (`https://<keycloak>/realms/<realm>`),
+   Client-ID, Client-Secret, Redirect-URI
+   (`https://<hostname>/api/auth/callback`), Scopes, erste Administratoren
+   (Keycloak-Benutzernamen, z. B. `automato-admin`).
 5. AD eintragen: Domain-Controller (komma-getrennt), Bind-DN,
    Bind-Passwort, Such-Basis (z. B. `OU=Users,DC=schule,DC=local`),
    Sync-Intervall.
 6. Speichern. Der OIDC- + AD-Client wird bei nächsten Request automatisch
    neu instanziiert (App.state-Cache via `version`-Counter).
-7. **Abmelden** und mit dem realen Entra-Account neu einloggen.
-   Bootstrap-Admin-UPNs bekommen beim ersten OIDC-Login automatisch
-   `role=admin`.
+7. **Abmelden** und mit dem Benutzer aus dem Realm neu einloggen. Erste
+   Administratoren bekommen bei jeder OIDC-Anmeldung `role=admin`; alle
+   anderen ein Anmeldekonto ohne Rechte, bis ihnen jemand Rollen gibt.
 8. Optional: unter **Administration → Lokales Admin-Konto** den Local-Admin
    `enabled=false` togglen. Bleibt als Break-Glass-Account in der DB.
 

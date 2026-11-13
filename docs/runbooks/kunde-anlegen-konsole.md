@@ -143,8 +143,8 @@ man ihn ohnehin nicht.
 
 ## 5a · Erster Zugang: lokales Administrationskonto
 
-Ohne Entra ID zeigt das Portal „Kein Anmeldeweg eingerichtet". Der erste
-Zugang ist das lokale Administrationskonto:
+Ohne OIDC (Keycloak-Realm, ADR-0025) zeigt das Portal „Kein Anmeldeweg
+eingerichtet". Der erste Zugang ist das lokale Administrationskonto:
 
 1. Konsole → Kunde → *Einstellungen* → *Lokales Administrationskonto*:
    Benutzername (Vorgabe `admin`) und Passwort (mind. 12 Zeichen) eingeben,
