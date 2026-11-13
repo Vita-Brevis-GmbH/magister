@@ -95,7 +95,8 @@ chmod 400 root.key
 openssl req -new -x509 -sha384 -days 7300 -key root.key -out root.crt \
   -subj "/C=CH/O=Vita Brevis GmbH/CN=Vita Brevis Magister Root CA" \
   -addext "basicConstraints=critical,CA:TRUE,pathlen:1" \
-  -addext "keyUsage=critical,keyCertSign,cRLSign"
+  -addext "keyUsage=critical,keyCertSign,cRLSign" \
+  -addext "subjectKeyIdentifier=hash"
 
 # 2. Fingerprint ins Protokoll
 openssl x509 -in root.crt -noout -fingerprint -sha256
@@ -179,7 +180,7 @@ openssl req -new -sha384 -key connector-int.key -out connector-int.csr \
 # CSR auf einen USB-Stick, damit zum Offline-Rechner; dort:
 openssl x509 -req -in connector-int.csr -CA root.crt -CAkey root.key \
   -CAcreateserial -sha384 -days 1826 -out connector-int.crt \
-  -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n')
+  -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n')
 
 # Nur das Zertifikat zurück auf den Server. Nie der Root-Schlüssel.
 ```

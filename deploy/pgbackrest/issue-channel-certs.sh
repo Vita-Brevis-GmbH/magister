@@ -79,7 +79,7 @@ issue() {  # $1 = CN, $2 = Dateiname
     openssl x509 -req -in "$base.csr" \
         -CA backup-channel-ca.crt -CAkey backup-channel-ca.key -CAcreateserial \
         -"$DIGEST" -days "$LEAF_DAYS" -out "$base.crt" \
-        -extfile <(printf 'keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth,clientAuth\nsubjectAltName=DNS:%s\n' "$cn")
+        -extfile <(printf 'keyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth,clientAuth\nsubjectAltName=DNS:%s\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n' "$cn")
     rm -f "$base.csr"
     chmod 600 "$base.key"
     chmod 644 "$base.crt"
@@ -95,7 +95,8 @@ else
         -key backup-channel-ca.key -out backup-channel-ca.crt \
         -subj "/C=CH/O=Vita Brevis GmbH/CN=Magister Backup Channel CA" \
         -addext "basicConstraints=critical,CA:TRUE,pathlen:0" \
-        -addext "keyUsage=critical,keyCertSign"
+        -addext "keyUsage=critical,keyCertSign" \
+        -addext "subjectKeyIdentifier=hash"
     chmod 600 backup-channel-ca.key
     chmod 644 backup-channel-ca.crt
     note "backup-channel-ca.crt erzeugt."

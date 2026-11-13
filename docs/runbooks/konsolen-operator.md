@@ -73,7 +73,7 @@ openssl req -new -sha256 -key operator-vorname.key -out operator-vorname.csr \
 openssl x509 -req -in operator-vorname.csr \
   -CA operator-int.crt -CAkey operator-int.key -CAcreateserial \
   -sha256 -days 365 -out operator-vorname.crt \
-  -extfile <(printf 'extendedKeyUsage=critical,clientAuth\nkeyUsage=critical,digitalSignature\n')
+  -extfile <(printf 'extendedKeyUsage=critical,clientAuth\nkeyUsage=critical,digitalSignature\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n')
 
 # Zurück auf den Rechner der Person, dort mit dem privaten Schlüssel und der
 # Kette in eine .p12 für den Zertifikatsspeicher des Browsers:
