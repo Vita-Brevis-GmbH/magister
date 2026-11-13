@@ -170,7 +170,7 @@ LDAPS-Verbindung zu Schulträger-DCs (intranet). OIDC-Verbindung zum Keycloak-Re
 2. Container starten; DB-Migration läuft via Alembic
 3. `automato-admin` öffnet `/auth/login`, wird zum Realm weitergeleitet, kommt mit gültigem ID-Token zurück
 4. API legt das Anmeldekonto an und matcht den Benutzernamen gegen `bootstrap_admins` → schreibt `role_assignments(role='admin', school_id=NULL)` — ohne `oid`, ohne Zeile in `ad_user_cache` (ADR-0025)
-5. Admin sieht Setup-Wizard: Schulen anlegen, weitere Admin-/Schulleitungs-Rollen vergeben, AD-Sync triggern
+5. Admin sieht Setup-Wizard: Schulen anlegen, weitere Admin-/Schulleitungs-Rollen vergeben, AD-Sync triggern. Führt das Cockpit die Anmeldung, kommen die Rollen aus seiner Liste (`role_assignments` im Soll-Zustand, Herkunft `granted_by = "cockpit"`; `admin` ohne Einheit, Leitung und IT an jeder Einheit; fehlende Anmeldekonten vorab angelegt — ADR-0026)
 6. Nach Setup kann `MAGISTER_BOOTSTRAP_ADMINS` aus `.env` entfernt werden — Rolle ist persistent in DB
 
 ## 8. Decisions Log

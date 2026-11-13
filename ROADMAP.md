@@ -204,9 +204,15 @@ Grundsetup durch das Cockpit. Referenz:
   `post_logout_redirect_uri`, ohne `id_token_hint`).
 - ✅ **Neutral statt Entra:** `StandardOidcClient`, Texte der Anmeldeseite in
   de/fr/it/en.
-- ⏳ **Rollenvergabe aus dem Cockpit** (Wunsch des Produktverantwortlichen):
-  braucht einen neuen Vertrag mit der Konsole; bis dahin vergibt
-  `automato-admin` die Rollen in Magister.
+- ✅ **Rollen aus dem Cockpit** ([ADR-0026](docs/adr/0026-rollen-aus-dem-cockpit.md)):
+  `role_assignments` im Soll-Zustand (`null` = keine Aussage, Liste =
+  vollständig); `admin` ohne Einheit, Leitung und IT an jeder Einheit (neue
+  Einheit ergänzt der nächste Abgleich); fehlende Konten vorab angelegt,
+  Konflikte ausgelassen und gemeldet; Herkunft `granted_by = "cockpit"`, nur
+  diese wird zurückgenommen, Hand- und Bootstrap-Zuweisungen bleiben. In der
+  Oberfläche „aus dem Cockpit", Entziehen mit Hinweis. Nebenbei behoben: eine
+  entzogene Rolle liess sich nicht wieder vergeben (`UniqueViolation`);
+  Zuweisungen aus dem Cockpit halten das Löschen einer Einheit nicht auf.
 
 ## Cross-Cutting (laufend)
 

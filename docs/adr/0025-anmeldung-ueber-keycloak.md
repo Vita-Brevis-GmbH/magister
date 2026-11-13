@@ -172,10 +172,11 @@ bekommen kein `redirect`.
 - **Spätere AD-Zeile.** Meldet sich jemand an, bevor der Abgleich ihn kennt,
   bekommt das Konto die synthetische GUID und behält sie; Klassen aus dem AD
   hängen dann nicht daran. Abhilfe: Konto löschen, neu anmelden.
-- **Rollen aus dem Cockpit** („Rollenverteilung im Cockpit") gibt es noch
-  nicht; heute vergibt sie `automato-admin` bzw. ein Admin in Magister. Ein
-  späterer Vertrag kann die synthetische GUID aus Namensraum und Präfix oben
-  selbst berechnen.
+- **Rollen aus dem Cockpit** („Rollenverteilung im Cockpit"): seit
+  [ADR-0026](0026-rollen-aus-dem-cockpit.md) liefert das Cockpit je Kunde eine
+  Liste Keycloak-Benutzer → Rolle im Soll-Zustand (`role_assignments`); Magister
+  legt fehlende Konten vorab an und berechnet die GUID selbst. Von Hand bleibt
+  die Vergabe in Magister möglich.
 
 ## Abgelöst
 

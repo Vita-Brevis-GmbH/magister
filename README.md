@@ -17,7 +17,9 @@ Admin-GUI editierbar.
 
 - **OIDC-Login gegen den Keycloak-Realm des Kunden** für Lehrpersonen +
   Admins (PKCE; MFA, Entra oder LDAP hängen im Realm — ADR-0025). Wer sich
-  anmeldet, bekommt ein Anmeldekonto; Rechte vergibt Magister.
+  anmeldet, bekommt ein Anmeldekonto; Rechte vergibt Magister — die Rollen
+  Administrator, Leitung und IT-Verantwortliche auch der IT-Anbieter im
+  Cockpit (ADR-0026).
 - **Lokaler Break-Glass-Admin** (argon2id-gehasht) für Day-1-Setup und
   Recovery, wenn der Realm nicht erreichbar ist
 - **Admin-GUI** für OIDC- + AD-Konfiguration; Secrets pgcrypto-verschlüsselt

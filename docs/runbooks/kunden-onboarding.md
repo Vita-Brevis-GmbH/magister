@@ -98,11 +98,16 @@ Benutzer am **Keycloak-Realm des Kunden** an; Magister sieht nur den Realm.
 - Erste Administratoren sind **Keycloak-Benutzernamen**, Vorgabe
   `automato-admin` (der lokale Admin jedes Realms). Er bekommt in Magister bei
   jeder Anmeldung die Rolle Admin.
+- Rollen vergibt der IT-Anbieter im Cockpit: je Kunde eine Liste
+  Keycloak-Benutzer → Administrator, Leitung oder IT-Verantwortliche; die
+  Rolle gilt für den ganzen Kunden, Leitung und IT also an jeder Einheit
+  ([ADR-0026](../adr/0026-rollen-aus-dem-cockpit.md)). Fehlende Anmeldekonten
+  legt Magister vorab an. In Magister stehen diese Rollen als „aus dem
+  Cockpit"; dauerhaft ändern lassen sie sich nur dort.
 - Alle anderen bekommen bei der ersten Anmeldung ein Anmeldekonto **ohne
-  Rechte**. Rollen vergibt danach der IT-Anbieter (als `automato-admin`) oder
-  ein Admin unter *Rollen & Berechtigungen* — dort lassen sich Konten auch vorab
-  anlegen. Lehrpersonen, deren Keycloak-Benutzername ihrem UPN im AD
-  entspricht, behalten ihre Klassen.
+  Rechte**. Weitere Rollen vergibt ein Admin unter *Rollen & Berechtigungen* —
+  dort lassen sich Konten auch vorab anlegen. Lehrpersonen, deren
+  Keycloak-Benutzername ihrem UPN im AD entspricht, behalten ihre Klassen.
 
 ### 1.7 Stammdaten
 
