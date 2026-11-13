@@ -34,6 +34,13 @@
 #   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
 #   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
 #   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
+#                                     # (reicht weiter an scripts/cockpit.sh der Konsole)
+#
+# Die Konsole baut ihr eigenes Skript auf (vitabrevis-cockpit:
+# scripts/cockpit.sh, ADR 0009 dort): .env, Zertifikat der Konsole,
+# Oberfläche, Start, Migration, Operatoren, Sicherung. Dieses Skript ruft es
+# nur auf und übergibt, was beide brauchen – Plattform-CA, Netz, Zugang zur
+# Datenebene (Schnittstelle: konsole_aufbauen unten, Kopf von cockpit.sh).
 #
 #   ./scripts/plattform-aufbau.sh ops-agent      # Neustart/Update aus der Konsole (root)
 #   ./scripts/plattform-aufbau.sh backup-pruefer # Prüfer für Sicherungen (root)
@@ -58,7 +65,7 @@
 #
 # Voraussetzungen: docker mit compose-Plugin, openssl, curl, python3 und
 # age (für die Sicherungen). Node/pnpm braucht es NICHT: die Oberfläche der
-# Konsole wird, wenn kein pnpm da ist, in einem Node-Container gebaut.
+# Konsole baut scripts/cockpit.sh, ohne pnpm in einem Node-Container.
 
 set -euo pipefail
 
@@ -156,18 +163,32 @@ die()  { printf '\033[31m !! %s\033[0m\n' "$*" >&2; DIE_GERUFEN=1; exit 1; }
 # Konsolen-Aufruf wortlos — und sah aus wie fertig.
 trap 'rc=$?; if [ "$rc" -ne 0 ] && [ -z "${DIE_GERUFEN:-}" ]; then printf "\033[31m !! Abbruch (Code %s) bei: %s\033[0m\n" "$rc" "$BASH_COMMAND" >&2; fi' EXIT
 
-dc_konsole() {
-  # MAGISTER_DIR: die Plattform-Überlagerung der Konsole hängt die
-  # Datenebene (apps/api, für die Migrationen der Kunden) von dort ein.
-  MAGISTER_DIR="$REPO" docker compose --project-directory "$KONSOLE_PFAD/deploy" \
-    -f "$KONSOLE_PFAD/deploy/docker-compose.yml" \
-    -f "$KONSOLE_PFAD/deploy/docker-compose.plattform.yml" "$@"
+# Die Fassung der Schnittstelle zu scripts/cockpit.sh, die dieses Skript
+# spricht (vitabrevis-cockpit ADR 0009). `cockpit.sh schnittstelle` nennt die
+# Fassungen, die die Konsole versteht.
+KONSOLE_SCHNITTSTELLE=1
+
+#: scripts/cockpit.sh im Checkout der Konsole. MAGISTER_DIR: die
+#: Plattform-Überlagerung der Konsole hängt die Datenebene (apps/api, für die
+#: Migrationen der Kunden) von dort ein. Mit `bash`, damit ein Checkout ohne
+#: Ausführungsrecht (kopiert statt geklont) nicht scheitert.
+konsole() {  # $@ = Befehl und Argumente für scripts/cockpit.sh
+  MAGISTER_DIR="$REPO" bash "$KONSOLE_PFAD/scripts/cockpit.sh" "$@"
+}
+
+#: Ein Wert aus der .env der Konsole, leer wenn es ihn nicht gibt.
+konsole_wert() {  # $1 = Schlüssel
+  konsole wert "$1" 2>/dev/null || true
 }
 
 # Die Befehle, die die Konsole anfassen, brechen hier ab, wenn ihr Checkout
-# fehlt — mit dem Grund, statt später mit „no such file" von Compose.
+# fehlt oder zu alt ist — mit dem Grund, statt später mit „no such file".
 konsole_noetig() {
   [ -z "$KONSOLE_FEHLER" ] || die "$KONSOLE_FEHLER"
+  [ -f "$KONSOLE_PFAD/scripts/cockpit.sh" ] \
+    || die "Die Konsole in $KONSOLE_PFAD ist älter als dieser Stand von Magister: scripts/cockpit.sh fehlt (Aufbau aus dem eigenen Repo, vitabrevis-cockpit ADR 0009). Aktualisieren: git -C $KONSOLE_PFAD pull — dann erneut aufrufen."
+  konsole schnittstelle 2>/dev/null | grep -qx "$KONSOLE_SCHNITTSTELLE" \
+    || die "Die Konsole in $KONSOLE_PFAD spricht die Schnittstelle $KONSOLE_SCHNITTSTELLE nicht (sie kann: $(konsole schnittstelle 2>/dev/null | paste -sd' ' - || true)). Beide Checkouts auf einen passenden Stand bringen: git -C $REPO pull; git -C $KONSOLE_PFAD pull."
 }
 
 dc_daten() {
@@ -373,8 +394,8 @@ preflight() {
   docker compose version >/dev/null 2>&1 || die "Das compose-Plugin von Docker fehlt (docker-compose-plugin)."
   docker info >/dev/null 2>&1 || die "Der Docker-Dienst antwortet nicht (systemctl start docker)."
   command -v age >/dev/null || warn "age fehlt — Sicherungen lassen sich nicht prüfen."
-  # Kein Hinweis mehr auf fehlendes pnpm: gibt es keines, baut `build_ui`
-  # die Oberfläche in einem Node-Container. Auf einem Server, der Container
+  # Kein Hinweis mehr auf fehlendes pnpm: gibt es keines, baut
+  # scripts/cockpit.sh die Oberfläche in einem Node-Container. Auf einem Server, der Container
   # fährt, ist das der passendere Weg — und eine Voraussetzung weniger.
   # 443 und 80 gehören dem Kunden-Listener. Belegt heisst: ein anderer
   # Webserver steht im Weg, und Caddy bekäme den Port nicht.
@@ -469,17 +490,9 @@ make_ca() {
     # Nachtragen, was eine frühere Fassung dieses Skripts noch nicht schrieb:
     # der Trust Pool für Client-Zertifikate ist eine eigene Datei geworden.
     [ -f "$CERTS/operator-ca.pem" ] || cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
-    # Und prüfen, ob das Konsolenzertifikat die verlangten Namen überhaupt
-    # trägt. Ein Name, der fehlt, lässt sich nicht nachtragen — nur das
-    # Zertifikat neu ausstellen. Genau das blieb bisher aus, und der Aufruf
-    # unter dem neuen Namen scheiterte an einem Zertifikat, das ihn nicht
-    # kennt.
-    if ! zertifikat_deckt_ab; then
-      say "Konsolenzertifikat neu ausstellen (Adressen haben sich geändert)"
-      konsolen_zertifikat
-    else
-      say "Plattform-CA steht bereits"
-    fi
+    # Das Zertifikat der Konsole (Namen geändert?) stellt scripts/cockpit.sh
+    # aus derselben Wurzel aus – hier nur die Plattform-CA selbst.
+    say "Plattform-CA steht bereits"
     return
   fi
   say "Plattform-CA erzeugen (Test-CA für $DOMAIN)"
@@ -516,9 +529,8 @@ make_ca() {
   cat "$CERTS/root.pem" "$CERTS/operator-int.pem" > "$CERTS/platform-ca.pem"
   cp "$CERTS/operator-int.pem" "$CERTS/operator-ca.pem"
 
-  # Serverzertifikat der Konsole — mit allen Adressen, unter denen sie
-  # gerufen wird.
-  konsolen_zertifikat
+  # Das Serverzertifikat der Konsole stellt scripts/cockpit.sh aus (mit allen
+  # Adressen, unter denen sie gerufen wird), gleich beim ersten `up`.
   # Serverzertifikat für ALLE Kundennamen. Der Platzhalter gilt für genau
   # eine Ebene — deshalb steht die Kundenebene hier ausdrücklich.
   zertifikat "tenants" "*.$DOMAIN" "DNS:*.$DOMAIN,DNS:$DOMAIN"
@@ -552,40 +564,6 @@ make_ca() {
     warn "backup-age.key in die Ablage (Passwortspeicher/Tresor) und hier löschen — siehe"
     warn "docs/runbooks/prod-installation.md §7."
   fi
-}
-
-konsolen_san() {
-  local san="DNS:$KONSOLE_HOST,DNS:localhost,IP:127.0.0.1"
-  [ "$BIND" != "127.0.0.1" ] && san="$san,IP:$BIND"
-  if [ -n "$ZUSATZNAME" ]; then
-    # IP oder Name? Das sind verschiedene SAN-Typen, und ein Name im IP-Feld
-    # macht das Zertifikat still unbrauchbar.
-    if printf '%s' "$ZUSATZNAME" | grep -qE '^[0-9]+(\.[0-9]+){3}$'; then
-      san="$san,IP:$ZUSATZNAME"
-    else
-      san="$san,DNS:$ZUSATZNAME"
-    fi
-  fi
-  echo "$san"
-}
-
-konsolen_zertifikat() {
-  zertifikat "console" "$KONSOLE_HOST" "$(konsolen_san)"
-  cp -f "$CERTS/console.pem" "$CERTS/console-key.pem" "$KONSOLE_PFAD/deploy/certs/" 2>/dev/null || true
-}
-
-zertifikat_deckt_ab() {  # Trägt das Konsolenzertifikat alle verlangten Namen?
-  [ -f "$CERTS/console.pem" ] || return 1
-  local vorhanden fehlt=0
-  vorhanden="$(openssl x509 -in "$CERTS/console.pem" -noout -ext subjectAltName 2>/dev/null)"
-  local eintrag
-  for eintrag in $(konsolen_san | tr ',' ' '); do
-    case "$eintrag" in
-      DNS:*) echo "$vorhanden" | grep -q "DNS:${eintrag#DNS:}\b" || fehlt=1 ;;
-      IP:*)  echo "$vorhanden" | grep -q "IP Address:${eintrag#IP:}\b" || fehlt=1 ;;
-    esac
-  done
-  [ "$fehlt" -eq 0 ]
 }
 
 zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
@@ -703,100 +681,30 @@ daten_env_tls() {  # $1 = Datei
 }
 
 # --- Umgebung ----------------------------------------------------------------
-# Die beiden `.env`-Dateien sind dieselben wie in Produktion — nur die Werte
-# entstehen hier per Zufall statt aus dem Passwortspeicher.
-write_env() {
+# Die Ordner, die beide Stacks einhängen. Vor dem Start der Konsole: fehlt ein
+# Ordner, legte Docker ihn beim Einhängen an – als root und leer.
+verzeichnisse() {
   mkdir -p "$ZIEL" "$PAKETE" "$ZIEL/ops/requests"
-  local konsole_env="$KONSOLE_PFAD/deploy/.env" daten_env="$REPO/deploy/compose/.env"
+}
 
-  if [ ! -f "$konsole_env" ]; then
-    say "Umgebung der Konsole schreiben ($konsole_env)"
-    cat > "$konsole_env" <<EOF
-# --- erzeugt von plattform-aufbau.sh ---
-COCKPIT_BIND_ADDRESS=$BIND
-COCKPIT_HOSTNAME=$KONSOLE_HOST
-COCKPIT_CONNECTOR_HOSTNAME=connect.$DOMAIN
-# Unter dieser Domäne liegen die Kunden (<kunde>.<domäne>). Die Konsole
-# weist beim Anlegen jeden anderen Hostnamen ab — und die zwei Namen oben.
-COCKPIT_TENANT_DOMAIN=$DOMAIN
-# Die zweite Adresse desselben Listeners (IP oder FQDN der Maschine).
-# Leer heisst 'localhost' — dann ist die Konsole nur über ihren Namen
-# erreichbar, und ein Aufruf per IP endet in 421.
-COCKPIT_EXTRA_HOST=${ZUSATZNAME:-$( [ "$BIND" != "127.0.0.1" ] && echo "$BIND" || echo "localhost" )}
-COCKPIT_BOOTSTRAP_TOKEN=$(secret)
-COCKPIT_SECRET_KEY=$(openssl rand -base64 48 | tr -d '\n')
-# Zwei Marker, zwingend verschieden: sonst öffnete jeder von beiden jeden
-# Listener, und die Konsole verweigert den Start (ADR-0015 D1).
-COCKPIT_MANAGEMENT_MARKER=$(secret)
-COCKPIT_CONNECTOR_MARKER=$(secret)
-# Verwaltungszugang in den Magister-Cluster. 'magister-db' ist der Name, den
-# die Datenebene ihrer Postgres-Instanz im gemeinsamen Netz gibt — NICHT
-# 'postgres': so heisst auch die Datenbank der Konsole selbst, und unter dem
-# Namen legte sie die Kundenschemas bei sich an.
-COCKPIT_TENANT_ADMIN_DSN=postgresql+asyncpg://magister:$(secret)@magister-db:5432/magister
-COCKPIT_TENANT_EXTENSION_SCHEMA=public
-COCKPIT_EXPECTED_SCHEMA_VERSION=$(grep -oE '"[0-9]{4}_[a-z_]+"' "$REPO/apps/api/magister_api/tenancy/version.py" | head -1 | tr -d '"')
-COCKPIT_BACKUP_SHARE_ROOT=/var/backups/magister
-COCKPIT_EXPORT_ROOT=/var/lib/magister/exports
-COCKPIT_BACKUP_AGE_RECIPIENT=$( [ -f "$CERTS/backup-age.pub" ] && cat "$CERTS/backup-age.pub" || echo "" )
-# Verzeichnis mit den gebauten Agentenpaketen (ADR-0014). Es wird unter
-# demselben Pfad schreibgeschützt in die Konsole eingehängt; wer ein neues
-# Paket ausliefern will, legt es hier ab. Leer bleibt es, bis die CI etwas
-# hineinlegt — die Oberfläche sagt dann „nicht eingerichtet".
-COCKPIT_AGENT_PACKAGE_DIR=$PAKETE
-# Austausch mit dem Host-Agenten für Neustart und Update aus der Konsole
-# (ADR-0024 D5). Der Agent selbst wird mit 'plattform-aufbau.sh ops-agent'
-# eingerichtet; ohne ihn bleiben die Aufträge liegen, und die Konsole sagt das.
-COCKPIT_OPS_DIR=$ZIEL/ops
-PLATTFORM_NETZ=$NETZ
-EOF
-    chmod 600 "$konsole_env"
-  else
-    # Bestehende Umgebung: Geheimnisse bleiben, Adressen werden nachgeführt.
-    #
-    # Der Fehler, den das hier behebt, kostete drei Anläufe: `up --bind …
-    # --zusatzname …` auf eine vorhandene `.env` liess beide Optionen
-    # stillschweigend fallen. Das Skript sagte „besteht bereits", der Kunde
-    # las „alles gut", und der Listener hing weiter auf 127.0.0.1. Eine
-    # Option, die nichts tut, ist schlimmer als eine, die es nicht gibt.
-    local gewuenscht_extra
-    gewuenscht_extra="${ZUSATZNAME:-$( [ "$BIND" != "127.0.0.1" ] && echo "$BIND" || echo "localhost" )}"
-    # Alle drei prüfen, dann entscheiden. Mit `a || b || c` hört die Kette
-    # nach der ersten Änderung auf — die Bindung wurde nachgeführt, der
-    # zweite Name nicht, und der Aufruf scheiterte weiter. Beim ersten Test
-    # dieses Fixes genau so passiert.
-    local geaendert=0
-    setze_wert "$konsole_env" COCKPIT_BIND_ADDRESS "$BIND" && geaendert=1
-    setze_wert "$konsole_env" COCKPIT_EXTRA_HOST "$gewuenscht_extra" && geaendert=1
-    setze_wert "$konsole_env" COCKPIT_HOSTNAME "$KONSOLE_HOST" && geaendert=1
-    setze_wert "$konsole_env" COCKPIT_CONNECTOR_HOSTNAME "connect.$DOMAIN" && geaendert=1
-    # Nachgereicht: ohne den Wert prüft die Konsole beim Anlegen eines Kunden
-    # nur die Form des Hostnamens, nicht die Domäne.
-    setze_wert "$konsole_env" COCKPIT_TENANT_DOMAIN "$DOMAIN" && geaendert=1
-    # Nachgereicht für Installationen, die vor den Agentenpaketen entstanden
-    # sind: ohne den Wert hängt Compose den Vorgabepfad ein, und der liegt
-    # bei einem eigenen PLATTFORM_ROOT woanders.
-    setze_wert "$konsole_env" COCKPIT_AGENT_PACKAGE_DIR "$PAKETE" && geaendert=1
-    # Nachgereicht für Installationen vor ADR-0024: ohne den Wert gibt es
-    # in der Konsole keinen Neustart und kein Update.
-    setze_wert "$konsole_env" COCKPIT_OPS_DIR "$ZIEL/ops" && geaendert=1
-    if [ "$geaendert" -eq 1 ]; then
-      say "Umgebung der Konsole nachgeführt (Adressen geändert)"
-    else
-      say "Umgebung der Konsole besteht bereits"
-    fi
-  fi
-
-  # Das Passwort der Cluster-Rolle steht in BEIDEN Dateien und muss dasselbe
-  # sein: die Konsole meldet sich damit an, die Datenebene legt die Rolle an.
-  local pg_pw
-  pg_pw="$(grep -oP '(?<=://magister:)[^@]+' "$konsole_env")"
+# Die `.env` der Datenebene ist dieselbe wie in Produktion – nur die Werte
+# entstehen hier per Zufall statt aus dem Passwortspeicher. Die der Konsole
+# legt scripts/cockpit.sh an (konsole_aufbauen), und zwar VOR dieser: drei
+# Werte teilen sich beide, und die stehen dann schon in der Konsole.
+write_env() {
+  local daten_env="$REPO/deploy/compose/.env"
 
   if [ ! -f "$daten_env" ]; then
     say "Umgebung der Datenebene schreiben ($daten_env)"
-    local marker token
-    marker="$(grep -oP '(?<=^COCKPIT_MANAGEMENT_MARKER=).*' "$konsole_env")"
-    token="$(grep -oP '(?<=^COCKPIT_BOOTSTRAP_TOKEN=).*' "$konsole_env")"
+    # Das Passwort der Cluster-Rolle steht in BEIDEN Dateien und muss dasselbe
+    # sein: die Konsole meldet sich damit an, die Datenebene legt die Rolle an.
+    # Token und Marker: damit holt die Datenebene die Kundenliste der Konsole.
+    local pg_pw marker token
+    pg_pw="$(konsole_wert COCKPIT_TENANT_ADMIN_DSN | { grep -oP '(?<=://magister:)[^@]+' || true; })"
+    marker="$(konsole_wert COCKPIT_MANAGEMENT_MARKER)"
+    token="$(konsole_wert COCKPIT_BOOTSTRAP_TOKEN)"
+    [ -n "$pg_pw" ] && [ -n "$marker" ] && [ -n "$token" ] \
+      || die "In der Umgebung der Konsole ($KONSOLE_PFAD/deploy/.env) fehlt, was die Datenebene von ihr übernimmt: COCKPIT_TENANT_ADMIN_DSN mit dem Passwort der Rolle magister, COCKPIT_MANAGEMENT_MARKER, COCKPIT_BOOTSTRAP_TOKEN."
     cat > "$daten_env" <<EOF
 # --- erzeugt von plattform-aufbau.sh ---
 POSTGRES_USER=magister
@@ -835,7 +743,7 @@ EOF
     daten_env_tls "$daten_env" || true
     chmod 600 "$daten_env"
   else
-    # Dieselbe Nachführung wie oben, und aus demselben Grund: ändert sich
+    # Nachführen wie bei der Konsole (scripts/cockpit.sh): ändert sich
     # die Domäne, muss die Datenebene mitkommen. Sonst bedient Caddy
     # weiter die alten Kundennamen, während die Konsole die neuen kennt —
     # und niemand sieht, warum die Seite 421 sagt. Geheimnisse und
@@ -864,83 +772,6 @@ EOF
   fi
 }
 
-# --- Oberflächen -------------------------------------------------------------
-build_ui() {
-  # Die gebaute Oberfläche ist keine Kür: Caddy hängt `web/dist` der Konsole
-  # ein und liefert daraus alles aus, was nicht `/api/*` ist. Fehlt sie,
-  # antwortet die Konsole im Browser mit **404** — die API läuft, die Seite
-  # gibt es nicht. Genau so auf dev01 passiert.
-  #
-  # Und zwar die AKTUELLE. Die frühere Fassung dieser Zeilen stieg aus,
-  # sobald `dist/index.html` überhaupt existierte — mit dem Satz
-  # „Konsolen-Oberfläche steht bereits". Nach einem `git pull` mit einer
-  # neuen Ansicht meldete `up` also Vollzug, und im Browser fehlte sie.
-  # Dieselbe Falle wie beim Werkzeug im Container: ausgeliefert wird, was
-  # beim letzten Bauen entstand, nicht was im Arbeitsbaum liegt.
-  #
-  # `find -newer` statt eines Zeitstempels im Skript: ein `git checkout`
-  # setzt die mtime der geänderten Dateien auf jetzt, und genau danach wird
-  # hier gefragt.
-  local web="$KONSOLE_PFAD/web"
-  if [ -f "$web/dist/index.html" ] && [ "$UI_NEU" -eq 0 ]; then
-    local neuer=""
-    for quelle in src package.json pnpm-lock.yaml index.html vite.config.ts \
-                  tailwind.config.js postcss.config.js tsconfig.json; do
-      [ -e "$web/$quelle" ] || continue
-      neuer="$(find "$web/$quelle" \
-                 -newer "$web/dist/index.html" -print -quit 2>/dev/null)"
-      # Kein `[ -n … ] && break`: schlägt der Test in der letzten Runde fehl,
-      # endet die Schleife mit Status 1 und `set -e` bricht das Skript ab.
-      if [ -n "$neuer" ]; then break; fi
-    done
-    if [ -z "$neuer" ]; then
-      say "Konsolen-Oberfläche steht bereits und ist aktuell ($web/dist)"
-      return 0
-    fi
-    say "Quellstand ist neuer als der Bau (${neuer#"$web"/}) — neu bauen"
-  fi
-
-  if command -v pnpm >/dev/null; then
-    say "Konsolen-Oberfläche bauen"
-    (cd "$web" && pnpm install --silent && pnpm build >/dev/null)
-    return 0
-  fi
-
-  # Kein pnpm auf dem Host — und das soll auch nicht nötig sein. Node
-  # gehört nicht auf einen Server, der Container fährt; die Werkzeugkette
-  # kommt aus einem Abbild und verschwindet danach wieder. Derselbe
-  # Gedanke wie bei allem anderen hier.
-  say "Konsolen-Oberfläche im Container bauen (kein pnpm auf dem Host)"
-  local protokoll="$ZIEL/ui-bau.log"
-  mkdir -p "$ZIEL"
-  # Zwei Eigenheiten, beide teuer bezahlt:
-  #
-  # COREPACK_ENABLE_DOWNLOAD_PROMPT=0 — Corepack lädt pnpm in der im Projekt
-  # festgelegten Fassung nach und FRAGT vorher. An einem Terminal eine
-  # Rückfrage, in einem Skript ohne TTY ein Abbruch. Von Hand lief derselbe
-  # Befehl deshalb durch und im Skript nicht.
-  #
-  # --ignore-workspace — neuere pnpm-Fassungen legen eine
-  # `pnpm-workspace.yaml` an, um Einstellungen abzulegen. Enthält die kein
-  # `packages:`, bricht pnpm 10 beim nächsten Lauf ab: „packages field
-  # missing or empty". Ein einziger Fehlversuch mit einer neueren Fassung
-  # hinterlässt also eine Datei, die jeden folgenden Lauf verhindert. Hier
-  # gibt es keinen Workspace, also geht die Datei uns nichts an.
-  if ! docker run --rm -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-       -v "$web:/arbeit" -w /arbeit node:22-alpine \
-       sh -c 'corepack enable pnpm && pnpm install --ignore-workspace && pnpm build' \
-       > "$protokoll" 2>&1; then
-    warn "Der Bau der Oberfläche ist gescheitert. Die Konsole antwortet dann nur auf /api/*."
-    # Die Ausgabe zeigen und nicht verstecken. Ein Skript, das den Grund
-    # wegwirft, macht aus einem benennbaren Fehler eine Suche.
-    printf '\033[33m    Letzte Zeilen aus %s:\033[0m\n' "$protokoll" >&2
-    tail -15 "$protokoll" >&2
-    return 0
-  fi
-  [ -f "$web/dist/index.html" ] \
-    || warn "Der Bau lief durch, aber dist/index.html fehlt — bitte die Ausgabe von Hand ansehen."
-}
-
 # --- Stacks ------------------------------------------------------------------
 netz() {
   docker network inspect "$NETZ" >/dev/null 2>&1 && return 0
@@ -948,34 +779,60 @@ netz() {
   docker network create "$NETZ" >/dev/null
 }
 
-start_konsole() {
-  # Die Zertifikate liegen dort, wo die Compose-Datei sie erwartet.
-  mkdir -p "$KONSOLE_PFAD/deploy/certs"
-  # root.pem: nur das öffentliche Stammzertifikat — die Konsole bietet es
-  # zum Herunterladen an (`enroll --ca` auf dem DC). Der Schlüssel bleibt hier.
-  for datei in root.pem platform-ca.pem operator-ca.pem console.pem console-key.pem \
-               connector.pem connector-key.pem \
-               connector-int.pem connector-int-key.pem operator-signing.pem; do
-    cp -f "$CERTS/$datei" "$KONSOLE_PFAD/deploy/certs/$datei"
-  done
-  say "Konsole starten (Container, Listener auf $BIND:4444)"
-  # `--build`, weil das Abbild der Konsole aus dem Arbeitsstand entsteht:
-  # ohne das startet `up` das Abbild von gestern weiter, und eine Korrektur
-  # am Code wirkt erst nach einem Handgriff, den niemand dokumentiert hat.
-  dc_konsole up -d --build
-  # Caddy IMMER neu erzeugen, nicht nur bei geänderten Adressen.
-  #
-  # Compose erkennt Änderungen an Abbild, Umgebung und Mounts — aber nicht
-  # am INHALT einer eingehängten Datei. Die Caddy-Konfiguration ist genau so
-  # eine Datei, und sie ändert sich öfter als alles andere hier. Gemessen:
-  # nach einem `git pull`, der das Client-Zertifikat optional machte, lief
-  # Caddy weiter mit der alten Regel und wies den Browser ab
-  # (ERR_BAD_SSL_CLIENT_AUTH_CERT) — während die Datei auf der Platte schon
-  # das Richtige sagte. Ein Neustart kostet eine Sekunde.
-  say "Caddy neu starten (die Konfiguration ist eine eingehängte Datei)"
-  dc_konsole up -d --force-recreate caddy
-  dc_konsole exec -T api alembic upgrade head >/dev/null
-  warte "Konsole" "https://$KONSOLE_HOST:4444/api/health" --cert
+# --- Die Konsole: scripts/cockpit.sh in ihrem Checkout ---------------------
+# Schnittstelle Fassung 1 (vitabrevis-cockpit ADR 0009): was in der .env der
+# Konsole gelten soll, als Zeilen SCHLÜSSEL=WERT in der Umgebung, nicht als
+# Argumente – ein Startwert enthält das Passwort der Datenebene, und was in
+# der Kommandozeile steht, steht in der Prozessliste.
+
+#: Bei jedem `up` nachgeführt: Adressen und Orte. Keine Geheimnisse – die
+#: lehnt cockpit.sh hier ab.
+konsole_setzen() {
+  local extra="${ZUSATZNAME:-}"
+  if [ -z "$extra" ]; then
+    if [ "$BIND" != "127.0.0.1" ]; then extra="$BIND"; else extra="localhost"; fi
+  fi
+  cat <<EOF
+COCKPIT_BIND_ADDRESS=$BIND
+COCKPIT_HOSTNAME=$KONSOLE_HOST
+COCKPIT_CONNECTOR_HOSTNAME=connect.$DOMAIN
+COCKPIT_TENANT_DOMAIN=$DOMAIN
+COCKPIT_EXTRA_HOST=$extra
+COCKPIT_AGENT_PACKAGE_DIR=$PAKETE
+COCKPIT_OPS_DIR=$ZIEL/ops
+PLATTFORM_NETZ=$NETZ
+MAGISTER_DIR=$REPO
+COCKPIT_PLATTFORM_CERTS=$CERTS
+EOF
+}
+
+#: Nur für eine NEUE .env der Konsole. Das Rollenpasswort der Datenebene
+#: gehört Magister: gibt es die Datenebene schon, ihres – sonst ein neues,
+#: das write_env danach aus der Konsole übernimmt.
+#: 'magister-db' ist der Name, den die Datenebene ihrer Postgres-Instanz im
+#: gemeinsamen Netz gibt — NICHT 'postgres': so heisst auch die Datenbank der
+#: Konsole selbst, und unter dem Namen legte sie die Kundenschemas bei sich an.
+konsole_startwerte() {
+  local pg_pw
+  pg_pw="$(grep -oP '(?<=^POSTGRES_PASSWORD=).*' "$REPO/deploy/compose/.env" 2>/dev/null || true)"
+  [ -n "$pg_pw" ] || pg_pw="$(secret)"
+  cat <<EOF
+COCKPIT_TENANT_ADMIN_DSN=postgresql+asyncpg://magister:$pg_pw@magister-db:5432/magister
+COCKPIT_TENANT_EXTENSION_SCHEMA=public
+COCKPIT_EXPECTED_SCHEMA_VERSION=$(grep -oE '"[0-9]{4}_[a-z_]+"' "$REPO/apps/api/magister_api/tenancy/version.py" | head -1 | tr -d '"')
+COCKPIT_BACKUP_SHARE_ROOT=/var/backups/magister
+COCKPIT_EXPORT_ROOT=/var/lib/magister/exports
+COCKPIT_BACKUP_AGE_RECIPIENT=$( [ -f "$CERTS/backup-age.pub" ] && cat "$CERTS/backup-age.pub" || echo "" )
+EOF
+}
+
+#: Die Konsole aufbauen bzw. aktualisieren: .env, Zertifikat der Konsole,
+#: Oberfläche, Container, Migration, Warten – alles in cockpit.sh.
+konsole_aufbauen() {
+  local -a optionen=()
+  if [ "$UI_NEU" -eq 1 ]; then optionen+=(--ui-neu); fi
+  KONSOLE_SETZEN="$(konsole_setzen)" KONSOLE_STARTWERTE="$(konsole_startwerte)" \
+    konsole up "${optionen[@]}" || { DIE_GERUFEN=1; exit 1; }
 }
 
 start_daten() {
@@ -990,26 +847,6 @@ start_daten() {
   fi
 }
 
-warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
-  # Auf $BIND und nicht auf 127.0.0.1: mit `--bind 10.x.y.z` ist der Port
-  # genau dort veröffentlicht und sonst nirgends. Die feste Loopback-Zeile
-  # war der Grund, warum `up` „Konsole antwortet nicht" meldete, während
-  # die Konsole im Log fröhlich `GET /api/health 200 OK` schrieb.
-  local i=0 args=(-sS -o /dev/null --noproxy '*' -k
-                  --resolve "$KONSOLE_HOST:4444:$BIND")
-  [ "${3:-}" = "--cert" ] && args+=(--cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem")
-  while [ "$i" -lt 60 ]; do
-    curl "${args[@]}" "$2" 2>/dev/null && { say "$1 antwortet"; return 0; }
-    sleep 2; i=$((i+1))
-  done
-  # Den Grund gleich mitliefern statt auf das Log zu verweisen: das Skript
-  # hat es vor sich, der Bediener müsste erst einen zweiten Befehl mit drei
-  # Pfaden tippen.
-  printf '\033[31m !! %s antwortet nicht. Letzte Zeilen der Container:\033[0m\n' "$1" >&2
-  dc_konsole logs --tail 20 api caddy 2>&1 | tail -30 >&2
-  exit 1
-}
-
 # --- Kunden ------------------------------------------------------------------
 # Über die API der Konsole, durch den Verwaltungs-Listener, mit Client-
 # Zertifikat und Marker — also genau auf dem Weg, den auch ein Operator geht.
@@ -1017,7 +854,7 @@ warte() {  # $1 = Name, $2 = URL, $3 = --cert wenn Client-Zertifikat nötig
 # Datenebene, nicht in die Konsole (ADR-0013 D4).
 konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
   local token args
-  token="$(grep -oP '(?<=^COCKPIT_BOOTSTRAP_TOKEN=).*' "$KONSOLE_PFAD/deploy/.env")"
+  token="$(konsole_wert COCKPIT_BOOTSTRAP_TOKEN)"
   args=(-sS --noproxy '*' -k -o /dev/stdout -w "\n%{http_code}"
         --resolve "$KONSOLE_HOST:4444:$BIND"
         --cert "$CERTS/operator.pem" --key "$CERTS/operator-key.pem"
@@ -1332,16 +1169,16 @@ cmd_up() {
   # halbe Plattform (scripts/tests/plattform-konfig.test.sh).
   if [ -n "${PLATTFORM_NUR_KONFIG:-}" ]; then cmd_konfig; return 0; fi
   preflight
-  # Vor allem anderen: write_env legte im neuen Checkout sonst eine frische
-  # `.env` mit neuen Geheimnissen an, und Compose ein leeres Volume.
+  # Vor allem anderen: der Aufbau der Konsole legte im neuen Checkout sonst
+  # eine frische `.env` mit neuen Geheimnissen an, und Compose ein leeres Volume.
   konsole_umzug_pruefen
   neustartfest
   eigenes_zertifikat_pruefen
   make_ca
-  write_env
-  build_ui
+  verzeichnisse
   netz
-  start_konsole
+  konsole_aufbauen
+  write_env
   start_daten
   make_kunden
   kunden_anbinden
@@ -1398,8 +1235,7 @@ schritt_namen_offen() {  # gibt die nicht auflösbaren Namen aus; leer = erledig
 
 schritt_operator_offen() {  # 0 = offen (noch kein Operator), 1 = erledigt
   local anzahl
-  anzahl="$(dc_konsole exec -T postgres psql -U cockpit -d cockpit -tAc \
-    'SELECT count(*) FROM console_operators' 2>/dev/null | tr -d '[:space:]')"
+  anzahl="$(konsole operatoren-zahl 2>/dev/null || true)"
   # Nicht feststellbar (Konsole aus, Tabelle fehlt) zählt als offen: lieber
   # einmal zu viel erinnert als einen fehlenden Zugang verschwiegen.
   [ -z "$anzahl" ] || [ "$anzahl" = "0" ]
@@ -1501,7 +1337,7 @@ EOF
 
 cmd_status() {
   say "Zustand"
-  dc_konsole ps --format '  konsole  {{.Service}}  {{.Status}}' 2>/dev/null || true
+  konsole status --kurz 2>/dev/null || true
   dc_daten ps --format '  daten    {{.Service}}  {{.Status}}' 2>/dev/null || true
   local token liste
   local -a slugs=() hosts=()
@@ -1546,14 +1382,14 @@ PY
 cmd_down() {
   say "Beide Stacks anhalten"
   dc_daten down 2>/dev/null || true
-  dc_konsole down 2>/dev/null || true
+  konsole down 2>/dev/null || true
 }
 
 cmd_restart() {
   konsole_umzug_pruefen
   say "Beide Stacks neu starten"
   dc_daten restart
-  dc_konsole restart
+  konsole restart || { DIE_GERUFEN=1; exit 1; }
 }
 
 # Ein systemd-Dienst mit Timer, der alle 20 Sekunden einen Blick in das
@@ -1609,10 +1445,10 @@ cmd_purge() {
   cmd_down
   say "Daten, Netze und Geheimnisse löschen"
   dc_daten down -v 2>/dev/null || true
-  dc_konsole down -v 2>/dev/null || true
+  # Datenbank, .env und Zertifikate der Konsole (Sicherungen bleiben).
+  konsole purge --ja 2>/dev/null || true
   docker network rm "$NETZ" >/dev/null 2>&1 || true
-  rm -rf "$KONSOLE_PFAD/deploy/certs" \
-         "$KONSOLE_PFAD/deploy/.env" "$REPO/deploy/compose/.env"
+  rm -rf "$REPO/deploy/compose/.env"
   # Alles unter $ZIEL — aber die Konfiguration bleibt, sofern sie dort liegt.
   # Sie enthält keine Geheimnisse und keine Kundendaten, nur die Antworten
   # aus der Erstinstallation. Wer sie mitlöscht, tippt sie beim
@@ -1679,15 +1515,12 @@ konsole_umzug_pruefen() {
   if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] && [ -f "$REPO/cockpit/deploy/.env" ]; then
     die "Die Konsole soll jetzt aus $KONSOLE_PFAD laufen, ihre Umgebung (.env mit den Geheimnissen) liegt aber noch am alten Ort $REPO/cockpit/deploy. Ein Start legte eine neue an, deren Geheimnisse nicht zur Datenebene passen. Erst umziehen: $0 konsole-umziehen $KONSOLE_PFAD"
   fi
-  # Die Datenbank der Konsole gibt es, ihre Umgebung nicht: der Checkout wurde
-  # neu geklont oder weggeräumt (so auf dem Dev-Host am 2026-11-12). write_env
-  # legte sonst eine neue .env an – mit neuem Schlüssel für die
-  # TOTP-Geheimnisse und neuem Rollenpasswort zur Datenebene. Danach meldet
-  # sich kein Operator mehr mit TOTP an, und keine Bereitstellung passt.
-  if [ ! -f "$KONSOLE_PFAD/deploy/.env" ] \
-     && docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1; then
-    die "Die Datenbank der Konsole besteht (Volume ${KONSOLE_PROJEKT}_cockpit-pg), ihre Umgebung fehlt: $KONSOLE_PFAD/deploy/.env. Ein Start legte eine neue an, deren Geheimnisse weder zur Datenbank noch zur Datenebene passen. Die bisherige .env zurücklegen – aus der Sicherung oder, solange die Konsole läuft, aus ihren Containern (vitabrevis-cockpit: docs/runbooks/checkout-wiederherstellen.md). Nichts geändert."
-  fi
+  # Die Datenbank der Konsole gibt es, ihre Umgebung nicht (Checkout neu
+  # geklont oder weggeräumt, so auf dem Dev-Host am 2026-11-12): eine neue .env
+  # hätte neue Geheimnisse. Diesen Schutz hält die Konsole selbst
+  # (`cockpit.sh pruefen`, auch in ihrem `up` und `restart`); er meldet den
+  # Grund und den Weg zurück.
+  konsole pruefen || { DIE_GERUFEN=1; exit 1; }
   docker volume inspect "${KONSOLE_PROJEKT}_cockpit-pg" >/dev/null 2>&1 && return 0
   local alte
   alte="$(alte_konsolen_volumes "$KONSOLE_PROJEKT" | paste -sd ' ' -)"
@@ -1719,6 +1552,8 @@ cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
   # --- Erst alles prüfen ---
   [ -f "$neu/deploy/docker-compose.yml" ] \
     || die "$neu/deploy/docker-compose.yml fehlt — kein Checkout von vitabrevis-cockpit (git clone $KONSOLE_REPO_URL $neu)."
+  [ -f "$neu/scripts/cockpit.sh" ] \
+    || die "$neu ist ein zu alter Stand von vitabrevis-cockpit: scripts/cockpit.sh fehlt (git -C $neu pull)."
   if [ -d "$alt" ] && [ "$neu" -ef "$alt" ]; then
     die "$neu ist der bisherige Ort der Konsole. Umziehen heisst: in den eigenen Checkout (z. B. $KONSOLE_KLON)."
   fi
@@ -1733,7 +1568,7 @@ cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
 
   say "Konsole umziehen: $alt → $neu (Projekt $projekt)"
   ziel="${projekt}_cockpit-pg"
-  # Ab hier gilt der neue Checkout: dc_konsole arbeitet damit.
+  # Ab hier gilt der neue Checkout: `konsole` arbeitet damit.
   KONSOLE_PFAD="$neu"; KONSOLE_PROJEKT="$projekt"; KONSOLE_FEHLER=""
 
   if docker volume inspect "$ziel" >/dev/null 2>&1; then
@@ -1814,7 +1649,7 @@ cmd_konsole_umziehen() {  # $1 = Checkout von vitabrevis-cockpit
   # 3. Das Ziel-Volume legt Compose selbst an — mit seinen Labels, damit es
   #    beim nächsten `up` als das eigene gilt. Gestartet wird nichts.
   netz
-  dc_konsole up --no-start postgres \
+  konsole anlegen \
     || die "Compose konnte das neue Projekt nicht anlegen (Meldung oben). Das alte Volume ist unverändert."
   docker volume inspect "$ziel" >/dev/null 2>&1 \
     || die "Compose hat $ziel nicht angelegt — heisst das Projekt anders als '$projekt'? (docker volume ls)"
@@ -1870,7 +1705,9 @@ von dort starten:
 Was die neue Konsole bis dahin geschrieben hat, fehlt dort. Das alte Volume
 bleibt als Reserve stehen, ebenso der Rest in $alt (.env,
 certs/); beides erst entfernen, wenn die neue Konsole eine Weile läuft
-(docker volume rm <name>, rm -r $alt).
+(docker volume rm <name>, rm -r $alt). Der alte Ort hat kein
+scripts/cockpit.sh: für den Weg zurück auch Magister auf den Stand vor dem
+Aufbau aus vitabrevis-cockpit bringen (git -C $REPO checkout <stand>).
 EOF
 }
 
@@ -1940,24 +1777,14 @@ cmd_konfig() {
 }
 
 # --- Werkzeuge in der Konsole ------------------------------------------------
-# `exec api python -m …` führt den Code aus, der beim BAUEN in das Abbild
-# kopiert wurde. Ein `git pull` ändert daran nichts — das Werkzeug im
-# Container ist dann älter als das Repository, und ein neues Argument
-# existiert dort noch nicht („unrecognized arguments: --reset-mfa"). Genau
-# so passiert.
-#
-# Diese zwei Befehle bauen das Abbild deshalb vorher neu und reichen alles
-# Weitere unverändert durch:
+# `operator` und `totp` reicht dieses Skript an scripts/cockpit.sh weiter. Das
+# baut das Abbild vorher neu: `exec api python -m …` führt sonst den Code aus,
+# der beim BAUEN in das Abbild kam, und ein neues Argument gab es dort noch
+# nicht („unrecognized arguments: --reset-mfa"). Genau so passiert.
 #
 #   ./scripts/plattform-aufbau.sh operator --upn … --name … --set-password
 #   ./scripts/plattform-aufbau.sh operator --upn … --reset-mfa
 #   ./scripts/plattform-aufbau.sh totp --upn … --code 123456
-cmd_werkzeug() {  # $1 = Modul, Rest = Argumente
-  local modul="$1"; shift
-  say "Abbild der Konsole aktualisieren (damit das Werkzeug dem Repository entspricht)"
-  dc_konsole up -d --build api >/dev/null
-  dc_konsole exec api python -m "$modul" "$@"
-}
 
 BEFEHL="${1:-up}"; shift || true
 
@@ -1969,8 +1796,7 @@ konf_laden
 # `operator` und `totp` nehmen die Argumente ihres Werkzeugs, nicht die
 # dieses Skripts — deshalb vor der Optionsschleife.
 case "$BEFEHL" in
-  operator) konf_anwenden; konsole_noetig; cmd_werkzeug cockpit_api.cli.add_operator "$@"; exit $? ;;
-  totp)     konf_anwenden; konsole_noetig; cmd_werkzeug cockpit_api.cli.totp_probe "$@"; exit $? ;;
+  operator|totp) konf_anwenden; konsole_noetig; konsole "$BEFEHL" "$@"; exit $? ;;
 esac
 
 # `kunde-anbinden` nimmt optional ein Kürzel — ohne alle Kunden der Konsole.

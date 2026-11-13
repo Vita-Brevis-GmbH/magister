@@ -44,9 +44,24 @@ pruefe() {  # $1 = Beschreibung, $2 = erwartet, $3 = tatsächlich
 ja_wenn() { if "$@"; then echo ja; else echo nein; fi; }
 
 konsole() {  # $1 = Pfad, $2 = Zeile mit name: (leer = keine) — ein Checkout
-  mkdir -p "$1/deploy"
+  mkdir -p "$1/deploy" "$1/scripts"
   { [ -n "${2:-}" ] && printf '%s\n' "$2"; printf 'services: {}\n'; } > "$1/deploy/docker-compose.yml"
   printf 'services: {}\n' > "$1/deploy/docker-compose.plattform.yml"
+  # scripts/cockpit.sh als Attrappe (vitabrevis-cockpit ADR 0009): schreibt
+  # jeden Aufruf mit, kennt die Schnittstelle 1. `pruefen` scheitert, solange
+  # $DZ/pruefen-scheitert da ist; `anlegen` legt das Volume an wie Compose.
+  # Was das echte Skript tut, prüft vitabrevis-cockpit (scripts/tests/) und
+  # hier plattform-konsole.test.sh.
+  cat > "$1/scripts/cockpit.sh" <<'ATTRAPPE'
+#!/usr/bin/env bash
+echo "MAGISTER_DIR=${MAGISTER_DIR:-} $0 $*" >> "$DZ/aufrufe"
+case "${1:-}" in
+  schnittstelle) echo 1 ;;
+  pruefen) if [ -f "$DZ/pruefen-scheitert" ]; then cat "$DZ/pruefen-scheitert" >&2; exit 1; fi ;;
+  anlegen) [ -f "$DZ/vol/cockpit_cockpit-pg" ] || echo "cockpit leer" > "$DZ/vol/cockpit_cockpit-pg" ;;
+esac
+exit 0
+ATTRAPPE
 }
 
 # --- Arbeitsplatz: Magister, ein Checkout daneben, der Klon unter „/opt" ----
@@ -350,12 +365,17 @@ pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' res
 mv "$ALT/.env" "$T/alt.env.weg"
 konsole "$T/neu-geklont" "name: cockpit"
 printf 'PLATTFORM_KONSOLE=%s\n' "$T/neu-geklont" > "$KONF"
+# Den Schutz hält die Konsole selbst (cockpit.sh pruefen); hier zählt, dass
+# Magister ihn vor jedem Start fragt und dann nichts anfasst.
 echo "cockpit postgres" > "$T/dz/vol/cockpit_cockpit-pg"
+echo " !! Die Datenbank der Konsole besteht, ihre Umgebung fehlt (Attrappe)" > "$T/dz/pruefen-scheitert"
 neu_aufrufe
 A="$(lauf restart)"
-pruefe "Datenbank da, .env fehlt: Abbruch"     "ja" "$(ja_wenn grep -qF "ihre Umgebung fehlt: $T/neu-geklont/deploy/.env" <<<"$A")"
-pruefe "…mit dem Weg zurück"                   "ja" "$(ja_wenn grep -q "checkout-wiederherstellen.md" <<<"$A")"
+pruefe "Konsole meldet: .env fehlt – Abbruch"  "ja" "$(ja_wenn grep -qF "ihre Umgebung fehlt (Attrappe)" <<<"$A")"
+pruefe "…gefragt im neuen Checkout"            "ja" "$(ja_wenn grep -qF "$T/neu-geklont/scripts/cockpit.sh pruefen" <(aufrufe))"
+pruefe "…nur eine Meldung"                     "nein" "$(ja_wenn grep -q "Abbruch (Code" <<<"$A")"
 pruefe "…und nichts neu gestartet"             "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+rm -f "$T/dz/pruefen-scheitert"
 printf 'COCKPIT_BOOTSTRAP_TOKEN=x\n' > "$T/neu-geklont/deploy/.env"
 neu_aufrufe
 A="$(lauf restart)"
@@ -394,8 +414,8 @@ pruefe ".env aus dem Rest übernommen"          "COCKPIT_BOOTSTRAP_TOKEN=alt" "$
 pruefe "…mit ihren Rechten"                    "600" "$(stat -c %a "$KLON/deploy/.env")"
 pruefe "fehlendes Zertifikat übernommen"       "alt" "$(cat "$KLON/deploy/certs/root.pem")"
 pruefe "vorhandenes nicht überschrieben"       "neu" "$(cat "$KLON/deploy/certs/console.pem")"
-pruefe "Ziel-Volume über Compose angelegt"     "ja" \
-  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $KLON/deploy .* up --no-start postgres" <(aufrufe))"
+pruefe "Ziel-Volume über die Konsole angelegt (cockpit.sh anlegen)" "ja" \
+  "$(ja_wenn grep -qx "MAGISTER_DIR=$REPO_T $KLON/scripts/cockpit.sh anlegen" <(aufrufe))"
 pruefe "Datenbank kopiert, Quelle nur lesend"  "ja" \
   "$(ja_wenn grep -q 'run --rm -v deploy_cockpit-pg:/quelle:ro -v cockpit_cockpit-pg:/ziel postgres:16 cp -a /quelle/. /ziel/' <(aufrufe))"
 pruefe "…und im Ziel angekommen"               "cockpit postgres" "$(cat "$T/dz/vol/cockpit_cockpit-pg")"
@@ -418,7 +438,7 @@ pruefe "…kopiert nichts mehr"                  "nein" "$(ja_wenn grep -q 'cp -
 neu_aufrufe
 A="$(lauf restart)"
 pruefe "danach startet die Konsole aus dem Klon" "ja" \
-  "$(ja_wenn grep -q "^MAGISTER_DIR=$REPO_T docker compose --project-directory $KLON/deploy .* restart" <(aufrufe))"
+  "$(ja_wenn grep -qx "MAGISTER_DIR=$REPO_T $KLON/scripts/cockpit.sh restart" <(aufrufe))"
 
 printf '\n\033[1m9 · Was nicht sicher zur alten Konsole gehört, fasst konsole-umziehen nicht an\033[0m\n'
 rm -f "$T/dz/vol/"* "$T/dz/laeuft/"*
@@ -430,7 +450,7 @@ A="$(lauf konsole-umziehen "$T/fremd-ziel")"
 pruefe "fremder Dienst im alten Projekt: Abbruch" "ja" "$(ja_wenn grep -q 'noch anderes (webshop)' <<<"$A")"
 pruefe "…kein Stack angehalten"                "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
 pruefe "…nichts kopiert"                       "nein" "$(ja_wenn test -e "$T/fremd-ziel/deploy/.env")"
-pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'up --no-start' <(aufrufe))"
+pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'cockpit.sh anlegen' <(aufrufe))"
 
 # Der Rest am alten Ort ist weggeräumt, und im Ziel liegt keine .env.
 alte_konsole_laeuft
@@ -439,7 +459,7 @@ neu_aufrufe
 A="$(lauf konsole-umziehen "$T/fremd-ziel")"
 pruefe "keine .env, weder alt noch neu: Abbruch" "ja" "$(ja_wenn grep -q 'Die Umgebung der Konsole fehlt' <<<"$A")"
 pruefe "…kein Stack angehalten"                "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
-pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'up --no-start' <(aufrufe))"
+pruefe "…kein Volume angelegt"                 "nein" "$(ja_wenn grep -q 'cockpit.sh anlegen' <(aufrufe))"
 # Liegt die .env schon im Ziel, geht es auch ohne den Rest.
 printf 'COCKPIT_BOOTSTRAP_TOKEN=gerettet\n' > "$T/fremd-ziel/deploy/.env"
 neu_aufrufe
@@ -466,6 +486,25 @@ A="$(lauf konsole-umziehen "$T/frisch")"
 pruefe "mehrere alte Volumes: Abbruch"         "ja" "$(ja_wenn grep -q 'Mehrere alte Volumes' <<<"$A")"
 pruefe "…kein Stack angehalten"                "nein" "$(ja_wenn grep -q ' down' <(aufrufe))"
 pruefe "…nichts kopiert"                       "nein" "$(ja_wenn test -e "$T/frisch/deploy/.env")"
+
+printf '\n\033[1m11 · Checkout der Konsole zu alt für diesen Stand von Magister\033[0m\n'
+rm -f "$T/dz/vol/"* "$T/dz/laeuft/"*
+konsole "$T/alt-stand" "name: cockpit"
+rm "$T/alt-stand/scripts/cockpit.sh"
+printf 'PLATTFORM_DOMAIN=example.ch\nPLATTFORM_BIND=10.0.0.5\nPLATTFORM_KONSOLE=%s\n' "$T/alt-stand" > "$KONF"
+neu_aufrufe
+A="$(lauf restart)"
+pruefe "ohne scripts/cockpit.sh: Abbruch"      "ja" "$(ja_wenn grep -qF "ist älter als dieser Stand von Magister: scripts/cockpit.sh fehlt" <<<"$A")"
+pruefe "…mit dem Befehl zum Aktualisieren"     "ja" "$(ja_wenn grep -qF "git -C $T/alt-stand pull" <<<"$A")"
+pruefe "…bevor Docker gefragt wird"            "nein" "$(ja_wenn test -s "$T/dz/aufrufe")"
+konsole "$T/alt-stand" "name: cockpit"
+sed -i 's/schnittstelle) echo 1/schnittstelle) echo 7/' "$T/alt-stand/scripts/cockpit.sh"
+A="$(lauf restart)"
+pruefe "andere Fassung der Schnittstelle: Abbruch" "ja" "$(ja_wenn grep -qF "spricht die Schnittstelle 1 nicht (sie kann: 7)" <<<"$A")"
+pruefe "…nichts neu gestartet"                 "nein" "$(ja_wenn grep -q ' restart' <(aufrufe))"
+rm "$T/alt-stand/scripts/cockpit.sh"
+A="$(lauf konsole-umziehen "$T/alt-stand")"
+pruefe "konsole-umziehen in einen zu alten Stand: Abbruch" "ja" "$(ja_wenn grep -q "zu alter Stand von vitabrevis-cockpit" <<<"$A")"
 
 printf '\n'
 if [ "$ROT" -eq 0 ]; then

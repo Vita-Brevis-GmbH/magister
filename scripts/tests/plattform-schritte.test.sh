@@ -23,7 +23,9 @@ KONSOLE_HOST=konsole.dev.test; DOMAIN=dev.test; BIND=172.25.12.10; CERTS=/x/cert
 PAKETE="$PAKETE_DIR"
 konsole_kunden() { printf 'gmp id ref role schema key active 42\n'; }
 getent() { [ "${AUFGELOEST:-0}" = 1 ]; }
-dc_konsole() { echo "${OPS:-0}"; }
+# Die Zahl der Operatoren gibt die Konsole (cockpit.sh operatoren-zahl); leer
+# heisst „nicht feststellbar".
+konsole() { [ "$1" = operatoren-zahl ] && [ -n "${OPS:-}" ] && echo "$OPS"; }
 systemctl() { [ "${AGENT:-0}" = 1 ]; }
 source "$1"
 naechste_schritte "${2:-}"
