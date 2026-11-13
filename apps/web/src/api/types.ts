@@ -86,6 +86,9 @@ export interface RoleAssignmentOut {
   school_name: string | null;
   granted_by: string | null;
   granted_at: string;
+  /** Vergeben vom Cockpit (ADR-0026): der nächste Abgleich setzt die Rolle
+   *  wieder, solange die Person dort mit dieser Rolle steht. */
+  from_cockpit: boolean;
   display_name: string | null;
   given_name: string | null;
   surname: string | null;

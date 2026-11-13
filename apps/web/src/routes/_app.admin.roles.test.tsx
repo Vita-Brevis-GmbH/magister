@@ -5,10 +5,10 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import i18n from "@/i18n";
-import type { LoginAccountOut } from "@/api/types";
+import type { LoginAccountOut, RoleAssignmentOut } from "@/api/types";
 import { DEFAULT_PREFS } from "@/lib/format";
 import { NoPermissions } from "./_app.index";
-import { LoginAccountsCard } from "./_app.admin.roles";
+import { LoginAccountsCard, RoleRow } from "./_app.admin.roles";
 
 beforeAll(async () => {
   await i18n.changeLanguage("de");
@@ -115,6 +115,67 @@ describe("LoginAccountsCard (ADR-0025)", () => {
     await user.type(screen.getByLabelText(/benutzername in keycloak/i), "doppelt");
     await user.click(screen.getByRole("button", { name: /vorab anlegen/i }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/gibt es schon/i);
+  });
+});
+
+const GRANT: RoleAssignmentOut = {
+  ad_object_guid: "8a1f0a52-5c1d-5d7e-9a7f-000000000003",
+  role: "smi",
+  school_id: 1,
+  school_name: "Einheit A",
+  granted_by: "cockpit",
+  granted_at: "2026-11-13T08:00:00Z",
+  from_cockpit: true,
+  display_name: null,
+  given_name: null,
+  surname: null,
+  upn: "it@example.ch",
+};
+
+function renderRow(a: RoleAssignmentOut): void {
+  renderWithQuery(
+    <table>
+      <tbody>
+        <RoleRow a={a} />
+      </tbody>
+    </table>,
+  );
+}
+
+function deletes(): unknown[][] {
+  return fetchMock.mock.calls.filter((c) => (c[1] as RequestInit)?.method === "DELETE");
+}
+
+describe("RoleRow (ADR-0026)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("marks a grant from the cockpit and asks before revoking it", async () => {
+    routed(() => new Response(null, { status: 204 }));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    renderRow(GRANT);
+    expect(screen.getByText("aus dem Cockpit")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Entziehen" }));
+    expect(confirm).toHaveBeenCalledWith(expect.stringMatching(/nächste Abgleich/));
+    expect(deletes()).toHaveLength(0);
+
+    confirm.mockReturnValue(true);
+    await user.click(screen.getByRole("button", { name: "Entziehen" }));
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    expect(String(deletes()[0]![0])).toContain("role=smi");
+  });
+
+  it("revokes a hand grant without asking and names who granted it", async () => {
+    routed(() => new Response(null, { status: 204 }));
+    const confirm = vi.spyOn(window, "confirm");
+    renderRow({ ...GRANT, granted_by: "admin@example.ch", from_cockpit: false });
+    expect(screen.getByText("admin@example.ch")).toBeInTheDocument();
+    expect(screen.queryByText("aus dem Cockpit")).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Entziehen" }));
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    expect(confirm).not.toHaveBeenCalled();
   });
 });
 

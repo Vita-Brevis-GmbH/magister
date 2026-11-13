@@ -309,7 +309,20 @@ function CreateRoleForm(): JSX.Element {
   );
 }
 
-function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
+/** Badge for a grant that comes from the cockpit (ADR-0026). */
+function CockpitBadge(): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <span
+      className="rounded border px-1 text-xs text-muted-foreground"
+      title={t("admin.roles.cockpit_hint")}
+    >
+      {t("admin.roles.from_cockpit")}
+    </span>
+  );
+}
+
+export function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
   const { t } = useTranslation();
   const revoke = useRevokeRole();
   return (
@@ -320,16 +333,23 @@ function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
       </td>
       <td className="py-2 pr-4">{t(`admin.roles.role_${a.role}`, { defaultValue: a.role })}</td>
       <td className="py-2 pr-4">{a.school_name ?? "—"}</td>
-      <td className="py-2 pr-4 text-xs text-muted-foreground">{a.granted_by ?? "—"}</td>
+      <td className="py-2 pr-4 text-xs text-muted-foreground">
+        {a.from_cockpit ? <CockpitBadge /> : (a.granted_by ?? "—")}
+      </td>
       <td className="py-2 pr-4 text-right">
         <Button
           type="button"
           variant="outline"
           size="sm"
           disabled={revoke.isPending}
-          onClick={() =>
-            revoke.mutate({ guid: a.ad_object_guid, role: a.role, school_id: a.school_id })
-          }
+          onClick={() => {
+            // Entziehen geht, wirkt aber nur bis zum nächsten Abgleich — das
+            // soll niemand erst merken, wenn die Rolle wieder da ist.
+            if (a.from_cockpit && !window.confirm(t("admin.roles.revoke_cockpit_confirm"))) {
+              return;
+            }
+            revoke.mutate({ guid: a.ad_object_guid, role: a.role, school_id: a.school_id });
+          }}
         >
           {t("admin.roles.revoke")}
         </Button>
@@ -388,6 +408,19 @@ function AssignCard(): JSX.Element {
     }
     return keys;
   }, [selected, roles.data, assignable]);
+
+  // Grants of this person that come from the cockpit (ADR-0026): marked, and
+  // a hint that the next reconcile sets them again.
+  const fromCockpit = useMemo(() => {
+    const keys = new Set<string>();
+    if (!selected) return keys;
+    for (const a of roles.data ?? []) {
+      if (a.ad_object_guid === selected.guid && a.from_cockpit) {
+        keys.add(scopeKey(a.role, a.school_id));
+      }
+    }
+    return keys;
+  }, [selected, roles.data]);
 
   const shown = draft ?? current;
   const ready = roles.isSuccess && !!cfg.data;
@@ -518,6 +551,9 @@ function AssignCard(): JSX.Element {
               <p className="text-xs text-muted-foreground">
                 {t("admin.roles.assign_hint", unitVars)}
               </p>
+              {fromCockpit.size > 0 ? (
+                <p className="text-xs text-muted-foreground">{t("admin.roles.cockpit_hint")}</p>
+              ) : null}
               <div className="overflow-x-auto rounded-md border">
                 <table className="w-full text-sm">
                   <thead>
@@ -540,6 +576,7 @@ function AssignCard(): JSX.Element {
                                 onChange={(e) => toggle(r.key, null, e.target.checked)}
                               />
                               <span>{t("admin.roles.cross_school", unitVars)}</span>
+                              {fromCockpit.has(scopeKey(r.key, null)) ? <CockpitBadge /> : null}
                             </label>
                           ) : schoolList.length === 0 ? (
                             <span className="text-xs text-muted-foreground">
@@ -556,6 +593,7 @@ function AssignCard(): JSX.Element {
                                     onChange={(e) => toggle(r.key, s.id, e.target.checked)}
                                   />
                                   <span>{s.name}</span>
+                                  {fromCockpit.has(scopeKey(r.key, s.id)) ? <CockpitBadge /> : null}
                                 </label>
                               ))}
                             </div>
