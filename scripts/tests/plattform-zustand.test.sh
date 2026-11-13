@@ -12,7 +12,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/bin" "$T/plattform/ops" "$T/plattform/certs"
-printf 'PLATTFORM_DOMAIN=beispiel.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$T/plattform/plattform.conf"
+printf 'PLATTFORM_DOMAIN=example.ch\nPLATTFORM_BIND=10.0.0.5\n' > "$T/plattform/plattform.conf"
 
 cat > "$T/bin/docker" <<'X'
 #!/usr/bin/env bash
@@ -40,8 +40,8 @@ case "$url" in
   http://*) printf '200' ;;                       # fremder Caddy: Begrüssungsseite statt Umleitung
   *:4444/api/health) printf '200' ;;
   *:46200/*) printf '401' ;;
-  https://hwb.beispiel.ch/*) printf '503' ;;
-  https://gmp.beispiel.ch/*) printf '401' ;;
+  https://kunde-b.example.ch/*) printf '503' ;;
+  https://kunde-a.example.ch/*) printf '401' ;;
   *) printf '000'; exit 7 ;;
 esac
 X
@@ -52,8 +52,8 @@ X
 chmod +x "$T/bin/"*
 touch "$T/plattform/certs/tenants.pem"
 cat > "$T/plattform/ops/probe-targets.json" <<'X'
-[{"slug": "gmp", "hostname": "gmp.beispiel.ch"},
- {"slug": "hwb", "hostname": "hwb.beispiel.ch"},
+[{"slug": "kunde_a", "hostname": "kunde-a.example.ch"},
+ {"slug": "kunde_b", "hostname": "kunde-b.example.ch"},
  {"slug": "boese", "hostname": "x;touch /tmp/gehackt"}]
 X
 
@@ -82,10 +82,10 @@ soll(not ports[443]["ok"] and ports[443]["detail"] == "niemand lauscht", "leerer
 proben = {p["name"]: p for p in r["probes"]}
 soll(not proben["Port 80 leitet auf HTTPS um"]["ok"], "200 statt Umleitung auf :80 ist eine Störung")
 soll(proben["Connector-Kanal antwortet (46200)"]["ok"], "401 auf dem Connector-Kanal ist in Ordnung")
-gmp = [p for n, p in proben.items() if n.startswith("Kunde gmp")][0]
-hwb = [p for n, p in proben.items() if n.startswith("Kunde hwb")][0]
-soll(gmp["ok"] and gmp["detail"] == "bedient", "Kunde mit 401 gilt als bedient")
-soll(not hwb["ok"] and "Wartung" in hwb["detail"], "Kunde mit 503 gilt als Wartung")
+kunde_a = [p for n, p in proben.items() if n.startswith("Kunde kunde_a")][0]
+kunde_b = [p for n, p in proben.items() if n.startswith("Kunde kunde_b")][0]
+soll(kunde_a["ok"] and kunde_a["detail"] == "bedient", "Kunde mit 401 gilt als bedient")
+soll(not kunde_b["ok"] and "Wartung" in kunde_b["detail"], "Kunde mit 503 gilt als Wartung")
 soll(not any("boese" in n for n in proben), "untergeschobener Hostname wird nicht geprobt")
 
 soll(r["certificates"][0]["ok"], "Zertifikat mit langer Laufzeit ist in Ordnung")

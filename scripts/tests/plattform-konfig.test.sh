@@ -54,27 +54,27 @@ pruefe "Bindung ist die Vorgabe"        "127.0.0.1"                    "$(wert P
 pruefe "Konfiguration wurde angelegt"   "ja"                           "$([ -f "$ARBEIT/plattform.conf" ] && echo ja || echo nein)"
 
 printf '\n\033[1m2 · Angaben auf der Kommandozeile — sie gelten und werden gespeichert\033[0m\n'
-A="$(lauf up --bind 172.25.12.10 --zusatzname dev01-000-vb.int.vitabrevis.ch --domaene mgmt.example.ch)"
-pruefe "Bindung übernommen"             "172.25.12.10"                 "$(wert PLATTFORM_BIND "$A")"
-pruefe "Zweiter Name übernommen"        "dev01-000-vb.int.vitabrevis.ch" "$(wert PLATTFORM_ZUSATZNAME "$A")"
+A="$(lauf up --bind 192.0.2.10 --zusatzname srv01.int.example.ch --domaene mgmt.example.ch)"
+pruefe "Bindung übernommen"             "192.0.2.10"                   "$(wert PLATTFORM_BIND "$A")"
+pruefe "Zweiter Name übernommen"        "srv01.int.example.ch"         "$(wert PLATTFORM_ZUSATZNAME "$A")"
 pruefe "Domäne übernommen"              "mgmt.example.ch"              "$(wert PLATTFORM_DOMAIN "$A")"
-pruefe "in der Datei angekommen"        "PLATTFORM_BIND=172.25.12.10"  "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
+pruefe "in der Datei angekommen"        "PLATTFORM_BIND=192.0.2.10"    "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
 
 printf '\n\033[1m3 · Das Update: `up` OHNE Optionen darf nichts vergessen\033[0m\n'
 # Der eigentliche Grund für diese Datei. Vorher stand hier 127.0.0.1.
 A="$(lauf up)"
-pruefe "Bindung bleibt"                 "172.25.12.10"                 "$(wert PLATTFORM_BIND "$A")"
-pruefe "Zweiter Name bleibt"            "dev01-000-vb.int.vitabrevis.ch" "$(wert PLATTFORM_ZUSATZNAME "$A")"
+pruefe "Bindung bleibt"                 "192.0.2.10"                   "$(wert PLATTFORM_BIND "$A")"
+pruefe "Zweiter Name bleibt"            "srv01.int.example.ch"         "$(wert PLATTFORM_ZUSATZNAME "$A")"
 pruefe "Domäne bleibt"                  "mgmt.example.ch"              "$(wert PLATTFORM_DOMAIN "$A")"
 pruefe "Konsolen-URL folgt der Domäne"  "https://konsole.mgmt.example.ch:4444" "$(wert KONSOLE_URL "$A")"
 
 printf '\n\033[1m4 · Auch die lesenden Befehle sehen die Angaben\033[0m\n'
 A="$(lauf konfig)"
-pruefe "konfig zeigt die Bindung"       "172.25.12.10"                 "$(wert PLATTFORM_BIND "$A")"
-pruefe "konfig speichert nicht um"      "PLATTFORM_BIND=172.25.12.10"  "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
+pruefe "konfig zeigt die Bindung"       "192.0.2.10"                   "$(wert PLATTFORM_BIND "$A")"
+pruefe "konfig speichert nicht um"      "PLATTFORM_BIND=192.0.2.10"    "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
 A="$(lauf konfig --bind 10.9.9.9)"
 pruefe "konfig --bind gilt nur jetzt"   "10.9.9.9"                     "$(wert PLATTFORM_BIND "$A")"
-pruefe "…und schreibt nichts fort"      "PLATTFORM_BIND=172.25.12.10"  "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
+pruefe "…und schreibt nichts fort"      "PLATTFORM_BIND=192.0.2.10"    "$(grep '^PLATTFORM_BIND=' "$ARBEIT/plattform.conf")"
 
 printf '\n\033[1m5 · Umgebungsvariable schlägt die Datei, Option schlägt die Umgebung\033[0m\n'
 UMGEBUNG=(PLATTFORM_BIND=10.0.0.5)
@@ -89,7 +89,7 @@ A="$(lauf up --zusatzname "")"
 pruefe "leer übernommen"                ""                             "$(wert PLATTFORM_ZUSATZNAME "$A")"
 A="$(lauf up)"
 pruefe "und bleibt nach dem Update leer" ""                            "$(wert PLATTFORM_ZUSATZNAME "$A")"
-pruefe "Bindung dabei unangetastet"     "172.25.12.10"                 "$(wert PLATTFORM_BIND "$A")"
+pruefe "Bindung dabei unangetastet"     "192.0.2.10"                   "$(wert PLATTFORM_BIND "$A")"
 
 printf '\n\033[1m7 · 0.0.0.0 wird abgewiesen, egal woher es kommt\033[0m\n'
 A="$(lauf konfig --bind 0.0.0.0)"
@@ -115,14 +115,14 @@ prod_lauf() {
       PLATTFORM_ROOT="$PROD_ROOT" PLATTFORM_NUR_KONFIG=1 PLATTFORM_NICHT_FRAGEN=1 \
       bash "$SKRIPT" "$@" 2>&1
 }
-A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 127.0.0.1 --acme-mail it@example.ch)"
+A="$(prod_lauf up --art prod --domaene mgmt.example.ch --bind 127.0.0.1 --acme-mail it@example.ch)"
 pruefe "prod auf 127.0.0.1 wird abgewiesen" "ja" \
   "$(printf '%s' "$A" | grep -q 'Verwaltungsadresse' && echo ja || echo nein)"
-A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 172.25.40.10)"
+A="$(prod_lauf up --art prod --domaene mgmt.example.ch --bind 192.0.2.40)"
 pruefe "prod ohne Kontakt-Mail wird abgewiesen" "ja" \
   "$(printf '%s' "$A" | grep -q 'Kontakt-Mail' && echo ja || echo nein)"
-A="$(prod_lauf up --art prod --domaene mgmt.vitabrevis.ch --bind 172.25.40.10 \
-      --zusatzname mgmt.int.vitabrevis.ch --acme-mail it@example.ch)"
+A="$(prod_lauf up --art prod --domaene mgmt.example.ch --bind 192.0.2.40 \
+      --zusatzname mgmt.int.example.ch --acme-mail it@example.ch)"
 pruefe "prod: Zertifikate von Let's Encrypt"  "letsencrypt"              "$(wert PLATTFORM_TLS "$A")"
 pruefe "prod: Caddy mit ACME-Fassung"        "Caddyfile.mandanten-acme" "$(wert KUNDEN_CADDYFILE "$A")"
 pruefe "prod: Kontakt gespeichert"           "PLATTFORM_ACME_MAIL=it@example.ch" \
@@ -154,8 +154,8 @@ A="$(prod_lauf csr)"
 KZ="$PROD_ROOT/kundenzertifikat"
 pruefe "csr legt Schlüssel und Antrag an"    "ja" \
   "$([ -s "$KZ/tenants-key.pem" ] && [ -s "$KZ/tenants.csr" ] && echo ja || echo nein)"
-pruefe "Antrag lautet auf *.mgmt.vitabrevis.ch" "ja" \
-  "$(openssl req -in "$KZ/tenants.csr" -noout -text 2>/dev/null | grep -q 'DNS:\*\.mgmt\.vitabrevis\.ch' && echo ja || echo nein)"
+pruefe "Antrag lautet auf *.mgmt.example.ch" "ja" \
+  "$(openssl req -in "$KZ/tenants.csr" -noout -text 2>/dev/null | grep -q 'DNS:\*\.mgmt\.example\.ch' && echo ja || echo nein)"
 pruefe "Schlüssel nur für den Besitzer"      "600" "$(stat -c %a "$KZ/tenants-key.pem")"
 VORHER="$(sha256sum "$KZ/tenants-key.pem")"
 prod_lauf csr >/dev/null
@@ -168,20 +168,20 @@ kz_pruefen() {  # $1 = SAN, $2 = Tage gültig -> Ausgabe (immer Status 0: pipefa
   openssl req -x509 -newkey rsa:2048 -nodes -days "${2:-90}" -subj "/CN=t" -addext "subjectAltName=$1" \
     -keyout "$d/kundenzertifikat/tenants-key.pem" -out "$d/kundenzertifikat/tenants.pem" 2>/dev/null
   bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
-           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           ZIEL="$1"; DOMAIN=mgmt.example.ch; TLS_MODUS=eigen; source "$2"
            eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
 }
 pruefe "Wildcard *.mgmt… wird genommen"      "ja" \
-  "$(kz_pruefen 'DNS:*.mgmt.vitabrevis.ch' | grep -q '^OK' && echo ja || echo nein)"
-pruefe "*.vitabrevis.ch wird abgewiesen"     "ja" \
-  "$(kz_pruefen 'DNS:*.vitabrevis.ch' | grep -q 'deckt \*.mgmt.vitabrevis.ch nicht ab' && echo ja || echo nein)"
+  "$(kz_pruefen 'DNS:*.mgmt.example.ch' | grep -q '^OK' && echo ja || echo nein)"
+pruefe "*.example.ch wird abgewiesen"        "ja" \
+  "$(kz_pruefen 'DNS:*.example.ch' | grep -q 'deckt \*.mgmt.example.ch nicht ab' && echo ja || echo nein)"
 pruefe "kurz vor Ablauf gibt einen Hinweis"  "ja" \
-  "$(kz_pruefen 'DNS:*.mgmt.vitabrevis.ch' 7 | grep -q '^WARN: .*14 Tagen' && echo ja || echo nein)"
+  "$(kz_pruefen 'DNS:*.mgmt.example.ch' 7 | grep -q '^WARN: .*14 Tagen' && echo ja || echo nein)"
 # Schlüssel mit Passwort, fremder Schlüssel, fehlende Kette.
 kz_mit() {  # $1 = Fall -> Ausgabe
   local d="$ARBEIT/kz-$RANDOM"; mkdir -p "$d/kundenzertifikat"; local k="$d/kundenzertifikat"
   openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=t" \
-    -addext "subjectAltName=DNS:*.mgmt.vitabrevis.ch" -keyout "$k/tenants-key.pem" -out "$k/tenants.pem" 2>/dev/null
+    -addext "subjectAltName=DNS:*.mgmt.example.ch" -keyout "$k/tenants-key.pem" -out "$k/tenants.pem" 2>/dev/null
   case "$1" in
     passwort) openssl pkey -in "$k/tenants-key.pem" -aes256 -passout pass:geheim -out "$k/x" 2>/dev/null
               mv "$k/x" "$k/tenants-key.pem" ;;
@@ -189,7 +189,7 @@ kz_mit() {  # $1 = Fall -> Ausgabe
     kette)    cat "$k/tenants.pem" "$k/tenants.pem" > "$k/x" && mv "$k/x" "$k/tenants.pem" ;;
   esac
   bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
-           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           ZIEL="$1"; DOMAIN=mgmt.example.ch; TLS_MODUS=eigen; source "$2"
            eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
 }
 pruefe "Schlüssel mit Passwort wird abgewiesen" "ja" \
@@ -206,12 +206,12 @@ kz_pfx_reihenfolge() {
   local d="$ARBEIT/kz-$RANDOM"; local k="$d/kundenzertifikat"; mkdir -p "$k"
   openssl req -x509 -newkey rsa:2048 -nodes -days 90 -subj "/CN=Test CA" \
     -addext "basicConstraints=critical,CA:TRUE" -keyout "$d/ca-key.pem" -out "$d/ca.pem" 2>/dev/null
-  openssl req -newkey rsa:2048 -nodes -subj "/CN=*.mgmt.vitabrevis.ch" -keyout "$k/tenants-key.pem" -out "$d/r.csr" 2>/dev/null
+  openssl req -newkey rsa:2048 -nodes -subj "/CN=*.mgmt.example.ch" -keyout "$k/tenants-key.pem" -out "$d/r.csr" 2>/dev/null
   openssl x509 -req -in "$d/r.csr" -CA "$d/ca.pem" -CAkey "$d/ca-key.pem" -CAcreateserial -days 90 \
-    -extfile <(printf 'subjectAltName=DNS:*.mgmt.vitabrevis.ch,DNS:mgmt.vitabrevis.ch\n') -out "$d/blatt.pem" 2>/dev/null
+    -extfile <(printf 'subjectAltName=DNS:*.mgmt.example.ch,DNS:mgmt.example.ch\n') -out "$d/blatt.pem" 2>/dev/null
   { printf 'Bag Attributes\n    friendlyName: CA\n'; cat "$d/ca.pem"; printf 'Bag Attributes\n    localKeyID: 01\n'; cat "$d/blatt.pem"; } > "$k/tenants.pem"
   bash -c 'die() { echo "DIE: $*"; exit 1; }; warn() { echo "WARN: $*"; }; say() { echo "SAY: $*"; }
-           ZIEL="$1"; DOMAIN=mgmt.vitabrevis.ch; TLS_MODUS=eigen; source "$2"
+           ZIEL="$1"; DOMAIN=mgmt.example.ch; TLS_MODUS=eigen; source "$2"
            eigenes_zertifikat_pruefen && echo OK' _ "$d" "$ARBEIT/kz.sh" 2>&1 || true
   echo "ERSTES=$(openssl x509 -in "$k/tenants.pem" -noout -subject 2>/dev/null)"
   [ -f "$k/tenants.pem.orig" ] && echo "ORIGINAL=ja"
@@ -222,7 +222,7 @@ pruefe "Windows-PFX-Reihenfolge wird geordnet"  "ja" \
 pruefe "…danach gültig"                         "ja" \
   "$(printf '%s' "$A" | grep -q '^OK' && echo ja || echo nein)"
 pruefe "…eigenes Zertifikat steht vorne"        "ja" \
-  "$(printf '%s' "$A" | grep -q 'ERSTES=.*mgmt.vitabrevis.ch' && echo ja || echo nein)"
+  "$(printf '%s' "$A" | grep -q 'ERSTES=.*mgmt.example.ch' && echo ja || echo nein)"
 pruefe "…Original bleibt daneben"               "ja" \
   "$(printf '%s' "$A" | grep -q 'ORIGINAL=ja' && echo ja || echo nein)"
 

@@ -34,24 +34,24 @@ lauf() {
   OPS_DIR="$T/ops" REPO="$T/repo" bash "$T/repo/scripts/plattform-ops-agent.sh"
 }
 
-auftrag a '{"id":"a","action":"rotate-role","slug":"schusef","requested_by":"op@vb.ch"}'
+auftrag a '{"id":"a","action":"rotate-role","slug":"kunde_b","requested_by":"op@vb.ch"}'
 lauf
-soll 'grep -qx "rollenpasswort-neu schusef" "$T/aufrufe"' "rotate-role ruft rollenpasswort-neu <kürzel>"
+soll 'grep -qx "rollenpasswort-neu kunde_b" "$T/aufrufe"' "rotate-role ruft rollenpasswort-neu <kürzel>"
 soll 'grep -q "\"action\":\"rotate-role\"" "$T/ops/status.json"' "Zustand nennt den Auftrag"
 soll 'grep -q "\"state\":\"success\"" "$T/ops/status.json"' "Zustand ist erledigt"
-soll 'grep -q "\"slug\":\"schusef\"" "$T/ops/status.json"' "Zustand nennt den Kunden"
+soll 'grep -q "\"slug\":\"kunde_b\"" "$T/ops/status.json"' "Zustand nennt den Kunden"
 soll '[ -z "$(ls -A "$T/ops/requests")" ]' "Auftrag ist abgearbeitet"
 
-auftrag b '{"id":"b","action":"attach","slug":"gmp","requested_by":"op@vb.ch"}'
+auftrag b '{"id":"b","action":"attach","slug":"kunde_a","requested_by":"op@vb.ch"}'
 lauf
-soll 'grep -qx "kunde-anbinden gmp" "$T/aufrufe"' "attach ruft kunde-anbinden <kürzel>"
+soll 'grep -qx "kunde-anbinden kunde_a" "$T/aufrufe"' "attach ruft kunde-anbinden <kürzel>"
 
 auftrag c '{"id":"c","action":"rotate-role","slug":"x;touch /tmp/gehackt","requested_by":"op@vb.ch"}'
 lauf
 soll '[ ! -s "$T/aufrufe" ]' "manipuliertes Kürzel löst keinen Befehl aus"
 soll 'grep -q "\"state\":\"error\"" "$T/ops/status.json"' "manipuliertes Kürzel endet als Fehler"
 
-auftrag d '{"id":"d","action":"rm-rf","slug":"gmp","requested_by":"op@vb.ch"}'
+auftrag d '{"id":"d","action":"rm-rf","slug":"kunde_a","requested_by":"op@vb.ch"}'
 lauf
 soll '[ ! -s "$T/aufrufe" ]' "unbekannter Auftrag löst keinen Befehl aus"
 

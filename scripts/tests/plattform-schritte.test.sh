@@ -19,9 +19,9 @@ grep -q '^naechste_schritte()' "$T/schritte.sh" \
 
 cat > "$T/harness.sh" <<'X'
 say()  { printf '==> %s\n' "$*"; }
-KONSOLE_HOST=konsole.dev.test; DOMAIN=dev.test; BIND=172.25.12.10; CERTS=/x/certs; ZUSATZNAME="${ZUSATZ:-}"
+KONSOLE_HOST=konsole.dev.test; DOMAIN=dev.test; BIND=192.0.2.10; CERTS=/x/certs; ZUSATZNAME="${ZUSATZ:-}"
 PAKETE="$PAKETE_DIR"
-konsole_kunden() { printf 'gmp id ref role schema key active 42\n'; }
+konsole_kunden() { printf 'kundea id ref role schema key active 42\n'; }
 getent() { [ "${AUFGELOEST:-0}" = 1 ]; }
 # Die Zahl der Operatoren gibt die Konsole (cockpit.sh operatoren-zahl); leer
 # heisst „nicht feststellbar".
@@ -44,8 +44,8 @@ mkdir -p "$T/pakete"
 # 1) Alles offen: drei Schritte, mit den fehlenden Namen und dem Befehl.
 laeuft "alles offen" AUFGELOEST=0 OPS=0
 enthaelt "Nächste Schritte"
-enthaelt "es fehlen: konsole.dev.test connect.dev.test gmp.dev.test"
-enthaelt 'echo "172.25.12.10 konsole.dev.test connect.dev.test gmp.dev.test" >> /etc/hosts'
+enthaelt "es fehlen: konsole.dev.test connect.dev.test kundea.dev.test"
+enthaelt 'echo "192.0.2.10 konsole.dev.test connect.dev.test kundea.dev.test" >> /etc/hosts'
 enthaelt "operator --upn"
 enthaelt "agentenpakete.sh holen"
 
@@ -78,10 +78,10 @@ enthaelt_nicht ".deb"
 # 7) Produktion: DNS statt /etc/hosts — öffentlich der Platzhalter, intern die Konsole.
 laeuft "prod: Namen fehlen" AUFGELOEST=0 OPS=1 ART=prod
 enthaelt "*.dev.test  → öffentliche IP der Firewall"
-enthaelt "konsole.dev.test  → 172.25.12.10"
+enthaelt "konsole.dev.test  → 192.0.2.10"
 # Mit zweitem Namen nennt der Hinweis den, unter dem man die Konsole aufruft.
-laeuft "prod: interner Name" AUFGELOEST=0 OPS=1 ART=prod ZUSATZ=konsole.int.vitabrevis.ch
-enthaelt "konsole.int.vitabrevis.ch  → 172.25.12.10 (Konsole, Port 4444)"
+laeuft "prod: interner Name" AUFGELOEST=0 OPS=1 ART=prod ZUSATZ=konsole.int.example.ch
+enthaelt "konsole.int.example.ch  → 192.0.2.10 (Konsole, Port 4444)"
 enthaelt "prod-installation.md §2"
 enthaelt_nicht "/etc/hosts"
 

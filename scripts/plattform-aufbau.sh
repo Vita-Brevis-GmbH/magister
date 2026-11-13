@@ -880,7 +880,7 @@ konsole_api() {  # $1 = Methode, $2 = Pfad, $3 = Rumpf
 # Die Kunden der Konsole, eine Zeile je Kunde:
 #   slug id dsn_ref db_role schema key_id status schema_version hostname
 # Der Hostname steht als letztes Feld: er ist frei wählbar und muss nicht
-# <slug>.<domäne> lauten (hwb unter gmp.…). Wer prüft, ob ein Kunde
+# <slug>.<domäne> lauten (kunde_b unter kunde-a.…). Wer prüft, ob ein Kunde
 # antwortet, fragt diesen Namen — sonst prüft er den falschen Kunden.
 # Scheitert laut (HTTP-Code und Anfang der Antwort), statt eine leere Liste
 # zu liefern. EIN Ort, der die Antwort zerlegt: vorher taten es drei, und

@@ -225,7 +225,7 @@ ensure_docker
 DEF_HOST="$(read_env_value MAGISTER_PUBLIC_HOSTNAME "$ENV_FILE" 2>/dev/null || true)"
 [[ -z "$DEF_HOST" || "$DEF_HOST" == magister.example.ch ]] && DEF_HOST=""
 if [[ "$MODE" == "dev" && -z "$DEF_HOST" ]]; then DEF_HOST="localhost"; fi
-HOSTNAME_VALUE="$(prompt_default "Host ODER IP, über die der Server erreicht wird (z.B. magister.schule.ch oder 172.25.8.27)" "$DEF_HOST")"
+HOSTNAME_VALUE="$(prompt_default "Host ODER IP, über die der Server erreicht wird (z.B. magister.schule.ch oder 192.0.2.27)" "$DEF_HOST")"
 [[ -n "$HOSTNAME_VALUE" ]] || die "Hostname/IP ist erforderlich."
 # TLS ist immer selbstsigniert (kein ACME) — eine IP ist also völlig ok. Der
 # Wert muss exakt der Adresse entsprechen, über die zugegriffen wird, damit

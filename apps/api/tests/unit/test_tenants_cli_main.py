@@ -20,11 +20,11 @@ def test_main_dispatches_migrate_with_its_flags(monkeypatch: pytest.MonkeyPatch)
         return 0
 
     monkeypatch.setattr(tenants, "cmd_migrate", fake)
-    rc = tenants.main(["migrate", "--no-dump", "--keep-going", "--only", "hwb", "gmp"])
+    rc = tenants.main(["migrate", "--no-dump", "--keep-going", "--only", "kunde_a", "kunde_b"])
     assert rc == 0
     assert seen[0].no_dump is True
     assert seen[0].keep_going is True
-    assert seen[0].only == ["hwb", "gmp"]
+    assert seen[0].only == ["kunde_a", "kunde_b"]
 
 
 def test_main_passes_the_exit_code_through(monkeypatch: pytest.MonkeyPatch) -> None:
