@@ -37,7 +37,7 @@ Das Schul-Tool. Eine Instanz pro Schulträger. Wird auf einem Linux-Host beim Sc
 
 ### 2. Cockpit (eigenes Repo `vitabrevis-cockpit`)
 
-Seit 2026-11 im eigenen Repo `vitabrevis-cockpit` (`api/`, `web/`, `runner/`, `deploy/`), auf den Hosts geklont nach `/opt/cockpit/src`. Hier bleiben die Runbooks für den Betrieb zusammen mit Magister.
+Seit 2026-11 im eigenen Repo `vitabrevis-cockpit` (`api/`, `web/`, `runner/`, `deploy/`, `scripts/`), auf den Hosts geklont nach `/opt/cockpit/src`. Aufbau, Update und Sicherung der Konsole mit `scripts/cockpit.sh` dort; `plattform-aufbau.sh` ruft es auf. Die Runbooks der Konsole liegen ebenfalls dort, hier je ein Verweis.
 
 Internes Ops-Tool von Vita Brevis. Verwaltet alle Magister-Instanzen zentral: Health-Polling, Versions-Tracking, Update-Scheduling.
 
@@ -46,9 +46,9 @@ Internes Ops-Tool von Vita Brevis. Verwaltet alle Magister-Instanzen zentral: He
 - Auth: Bootstrap-Token + rotierbare Service-Tokens
 - Läuft hinter VPN/Tailscale, nicht öffentlich erreichbar
 
-**Doku:**
-- Installation: [`runbooks/install-cockpit.md`](runbooks/install-cockpit.md)
-- Architektur: [`adr/0003-vita-brevis-cockpit.md`](adr/0003-vita-brevis-cockpit.md)
+**Doku** (in `vitabrevis-cockpit`, hier Verweise):
+- Installation und Update: [`runbooks/install-cockpit.md`](runbooks/install-cockpit.md)
+- Architektur: [`adr/0003-vita-brevis-cockpit.md`](adr/0003-vita-brevis-cockpit.md) (Nachtrag: Aufbau aus dem eigenen Repo)
 - Update-Runner: [`runbooks/cockpit-update-runner.md`](runbooks/cockpit-update-runner.md)
 
 ### 3. Cockpit Update-Runner (`runner/` im Repo `vitabrevis-cockpit`)
@@ -115,5 +115,5 @@ Drainer für `pending` Update-Requests. Läuft als systemd-Service auf einem Ops
 | Script | Was tut es? |
 |---|---|
 | [`scripts/install-magister.sh`](../scripts/install-magister.sh) | Interaktiver End-to-End-Installer (Ubuntu/Debian): erzeugt Secrets + argon2-Hash, schreibt `.env`, startet den Stack. `--mode prod` (HTTPS/FQDN) oder `--mode dev` (HTTP/IP). Idempotent (bewahrt Secrets). |
-| [`scripts/bootstrap-cockpit-token.sh`](../scripts/bootstrap-cockpit-token.sh) | Ersten Service-Token via Bootstrap-Token erzeugen |
+| [`scripts/bootstrap-cockpit-token.sh`](../scripts/bootstrap-cockpit-token.sh) | Service-Token der Konsole via Bootstrap-Token erzeugen (reicht weiter an `vitabrevis-cockpit/scripts/bootstrap-cockpit-token.sh`) |
 | [`scripts/magister-cli`](../scripts/magister-cli) | Kleine Ops-CLI (z.B. Password-Hashing) |
