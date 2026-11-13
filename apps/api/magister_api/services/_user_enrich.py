@@ -14,7 +14,8 @@ from typing import TypedDict, TypeVar
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from magister_api.models.auth import AdUserCache
+from magister_api.models.auth import AdUserCache, LoginAccount
+from magister_api.repositories.auth import LoginAccountRepository
 
 T = TypeVar("T")
 
@@ -60,4 +61,39 @@ async def fetch_user_labels(
     return {row.ad_object_guid: row for row in result.scalars().all()}
 
 
-__all__ = ["UserLabelFields", "fetch_user_labels", "user_label_fields"]
+def login_account_label_fields(account: LoginAccount) -> UserLabelFields:
+    """Label fields for a Keycloak login account without an AD row (ADR-0025)."""
+    return UserLabelFields(
+        display_name=account.display_name,
+        given_name=None,
+        surname=None,
+        upn=account.username,
+    )
+
+
+async def fetch_principal_labels(
+    session: AsyncSession,
+    guids: Iterable[str],
+) -> dict[str, UserLabelFields]:
+    """Labels for role holders: the AD row first, else the login account.
+
+    Seit ADR-0025 kann eine Rolle an einem Konto hängen, das nur in Keycloak
+    steht (etwa ``automato-admin``). Ohne den zweiten Blick stünde es in der
+    Rollenliste als „?".
+    """
+    guid_list = list({g for g in guids if g})
+    ad_rows = await fetch_user_labels(session, guid_list)
+    out: dict[str, UserLabelFields] = {g: user_label_fields(r) for g, r in ad_rows.items()}
+    missing = [g for g in guid_list if g not in out]
+    for account in await LoginAccountRepository(session).list_by_principals(missing):
+        out[account.principal_guid] = login_account_label_fields(account)
+    return out
+
+
+__all__ = [
+    "UserLabelFields",
+    "fetch_principal_labels",
+    "fetch_user_labels",
+    "login_account_label_fields",
+    "user_label_fields",
+]

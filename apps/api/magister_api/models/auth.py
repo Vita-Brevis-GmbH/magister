@@ -1,4 +1,4 @@
-"""Auth-related models: AD user cache, sessions, role assignments."""
+"""Auth-related models: AD user cache, login accounts, sessions, role assignments."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Index,
@@ -142,7 +143,9 @@ class Session(Base):
     Sessions can be issued by either the OIDC flow (``auth_kind='oidc'``,
     ``oidc_subject`` set) or by the local-admin login (``auth_kind='local'``,
     ``oidc_subject=''``). The ``ad_object_guid`` is always populated — local
-    admin sessions point at a stable sentinel guid.
+    admin sessions point at a stable sentinel guid, OIDC sessions at the
+    ``principal_guid`` of the login account (ADR-0025), which is an AD
+    objectGUID only when the account was matched to an AD user.
     """
 
     __tablename__ = "sessions"
@@ -173,6 +176,47 @@ class Session(Base):
     #: Deshalb steht seine Identität hier und nicht dort.
     operator_upn: Mapped[str | None] = mapped_column(String(320), nullable=True)
     operator_jti: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+
+
+class LoginAccount(Base):
+    """Ein Anmeldekonto aus dem Keycloak-Realm des Kunden (ADR-0025).
+
+    Keycloak verwaltet die Benutzer und ihre Anmeldung (lokal, Entra oder LDAP
+    als Identity Provider dort), Magister nur die Autorisierung. Die Identität
+    ist ``issuer`` + ``subject``; ``username`` (``preferred_username``) ist die
+    Anzeige und der Schlüssel, unter dem ein Konto vorab angelegt werden kann.
+
+    ``principal_guid`` ist der Schlüssel, an dem ``role_assignments``, die
+    Klassen- und Fachlehrer-Zuordnungen und die Sitzungen hängen. Gibt es beim
+    Anlegen eine Zeile in ``ad_user_cache`` mit ``upn == username``, ist es
+    deren objectGUID (die Lehrperson behält ihre Klassen und Rollen); sonst eine
+    stabile GUID aus dem Benutzernamen (``services.login_accounts``). Einmal
+    gesetzt, ändert er sich nicht mehr.
+    """
+
+    __tablename__ = "login_accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    #: Beide leer, solange ein vorab angelegtes Konto noch nie angemeldet war.
+    issuer: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    username: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    principal_guid: Mapped[str] = mapped_column(String(36), nullable=False, unique=True)
+    enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("issuer", "subject", name="uq_login_accounts_issuer_subject"),
+        CheckConstraint("username = lower(username)", name="username_lower"),
+        CheckConstraint("(issuer IS NULL) = (subject IS NULL)", name="binding_complete"),
+    )
 
 
 class RoleAssignment(Base):

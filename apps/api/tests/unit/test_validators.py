@@ -1,10 +1,15 @@
-"""UPN and objectGUID validators."""
+"""UPN, login-name and objectGUID validators."""
 
 from __future__ import annotations
 
 import pytest
 
-from magister_api.schemas.common import validate_object_guid, validate_upn
+from magister_api.schemas.common import (
+    validate_login_name,
+    validate_object_guid,
+    validate_upn,
+    validate_upn_or_login_name,
+)
 
 
 class TestUpn:
@@ -61,3 +66,32 @@ class TestObjectGuid:
     def test_rejects(self, value: str) -> None:
         with pytest.raises(ValueError):
             validate_object_guid(value)
+
+
+class TestLoginName:
+    """Keycloak-Benutzername (ADR-0025): klein, 1–255, druckbar, ohne Leerraum."""
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("automato-admin", "automato-admin"),
+            ("Automato-Admin", "automato-admin"),
+            ("  lehrer.a@example.ch ", "lehrer.a@example.ch"),
+            ("a", "a"),
+            ("x" * 255, "x" * 255),
+            ("müller", "müller"),
+        ],
+    )
+    def test_accepts(self, value: str, expected: str) -> None:
+        assert validate_login_name(value) == expected
+
+    @pytest.mark.parametrize("value", ["", "   ", "x" * 256, "mit leer", "tab\there", "nul\x00"])
+    def test_rejects(self, value: str) -> None:
+        with pytest.raises(ValueError):
+            validate_login_name(value)
+
+    def test_upn_or_login_name(self) -> None:
+        assert validate_upn_or_login_name("Admin@Example.ch") == "admin@example.ch"
+        assert validate_upn_or_login_name("automato-admin") == "automato-admin"
+        with pytest.raises(ValueError):
+            validate_upn_or_login_name("mit leer")

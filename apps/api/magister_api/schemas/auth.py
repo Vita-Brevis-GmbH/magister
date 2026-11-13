@@ -6,7 +6,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from magister_api.schemas.common import ObjectGuidOrEmpty, Upn
+from magister_api.schemas.common import ObjectGuidOrEmpty, UpnOrLoginName
 
 
 class OperatorBannerOut(BaseModel):
@@ -27,9 +27,13 @@ class CurrentUserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     #: Leer bei einer Operator-Sitzung: sie gehört zu keinem AD-Objekt
-    #: (ADR-0019 D5).
+    #: (ADR-0019 D5). Bei einer Keycloak-Sitzung die ``principal_guid`` des
+    #: Anmeldekontos (ADR-0025) — eine objectGUID nur, wenn das Konto einer
+    #: AD-Person zugeordnet ist.
     ad_object_guid: ObjectGuidOrEmpty
-    upn: Upn
+    #: Der Name, unter dem die Sitzung läuft: Keycloak-Benutzername (auch ohne
+    #: ``@``, etwa ``automato-admin``), UPN aus dem AD oder der des Notkontos.
+    upn: UpnOrLoginName
     given_name: str | None = None
     surname: str | None = None
     display_name: str | None = None
@@ -43,6 +47,10 @@ class CurrentUserOut(BaseModel):
         description="School IDs the user has Schulleitung-or-above scope on. Empty for KL-only.",
     )
     roles: list[str] = Field(default_factory=list)
+    #: Darf das Konto überhaupt etwas sehen — eine Rolle, eine Klasse, ein
+    #: Fach oder eine Leitung? Ein neues Anmeldekonto ohne all das meldet sich
+    #: an und bekommt einen Hinweis statt leerer Seiten (ADR-0025).
+    has_permissions: bool = True
     expires_at: datetime
     #: Diese Sitzung **ist** ein Operator-Zugriff (ADR-0019). Das Frontend
     #: zeigt dann eine andere Fassung des Balkens: „Sie sehen die Installation

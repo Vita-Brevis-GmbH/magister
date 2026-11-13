@@ -8,7 +8,7 @@ from magister_api.models.ad_group import AdGroupCache
 from magister_api.models.ad_sync_state import AdSyncState
 from magister_api.models.app_settings import AppSettings
 from magister_api.models.audit import AuditEvent
-from magister_api.models.auth import AdUserCache, RoleAssignment, Session
+from magister_api.models.auth import AdUserCache, LoginAccount, RoleAssignment, Session
 from magister_api.models.base import Base
 from magister_api.models.class_membership import ClassMembership
 from magister_api.models.class_teacher_role import ClassTeacherRole
@@ -47,6 +47,7 @@ __all__ = [
     "ImportJob",
     "ImportStagedRow",
     "LocalAdmin",
+    "LoginAccount",
     "ManagerRole",
     "OperatorAccess",
     "PasswordExpiryNotice",

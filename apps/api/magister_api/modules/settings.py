@@ -1,8 +1,9 @@
 """Settings module — the administration/configuration surface (M6, ADR-0008).
 
-App settings, local-admin fallback, roles + RBAC matrix, AD group templates
-(Zielrollen), module toggles, maintenance and system (cert/restart/update). The
-always-on ``/admin`` configuration base; toggling it off is not offered.
+App settings, local-admin fallback, roles + RBAC matrix, login accounts, AD group
+templates (Zielrollen), module toggles, maintenance and system (cert/restart/
+update). The always-on ``/admin`` configuration base; toggling it off is not
+offered.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from magister_api.modules.manifest import ModuleManifest
 from magister_api.routers.admin_domains import router as admin_domains_router
 from magister_api.routers.admin_local_admin import router as admin_local_admin_router
+from magister_api.routers.admin_login_accounts import router as admin_login_accounts_router
 from magister_api.routers.admin_mail import router as admin_mail_router
 from magister_api.routers.admin_maintenance import router as admin_maintenance_router
 from magister_api.routers.admin_modules import router as admin_modules_router
@@ -29,6 +31,7 @@ SETTINGS_MODULE = ModuleManifest(
         admin_domains_router,
         group_templates_router,
         admin_roles_router,
+        admin_login_accounts_router,
         admin_rbac_router,
         admin_maintenance_router,
         admin_system_router,
@@ -52,7 +55,9 @@ SETTINGS_MODULE = ModuleManifest(
 #:
 #: `admin_roles_router` steht ausdrücklich NICHT hier: das ist die
 #: Rollen*zuweisung* an Personen und bleibt beim Kunden (Entscheid E2). Nur
-#: die Rechte-*Matrix* — was eine Rolle darf — gehört dem Betreiber.
+#: die Rechte-*Matrix* — was eine Rolle darf — gehört dem Betreiber. Dasselbe
+#: gilt für `admin_login_accounts_router` (ADR-0025): die Anmeldekonten sind
+#: die Personen, denen der Rolleneditor Rollen gibt.
 #:
 #: `admin_modules_write_router` ist der Schreibweg für Profil und Module. Der
 #: Lesweg bleibt: der Kunden-Admin soll sehen, was freigeschaltet ist und

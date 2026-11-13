@@ -89,16 +89,17 @@ def test_the_conditional_surface_appears_with_a_key() -> None:
 
 
 def test_router_count() -> None:
-    # 35 routers total. M6 #5 + the platform carve (10-container split) were pure
+    # 39 routers total. M6 #5 + the platform carve (10-container split) were pure
     # redistribution at 32; the generic /users/{guid}/password-reset router
     # (company-user password reset) took it to 33, the operator surface
     # (ADR-0019) to 34, and splitting the write path of /admin/modules into its
     # own router (ADR-0017 Nachtrag 2026-10-05: not mounted when hosted) to 35.
     # Ablauf-Erinnerung (2026-10-22): /admin/mail (Status + Testmail, auch
     # gehostet gemountet) and /password-expiry (Übersicht) took it to 37;
-    # /admin/domains (Mail-/UPN-Domains, gehört dem Kunden) to 38.
+    # /admin/domains (Mail-/UPN-Domains, gehört dem Kunden) to 38;
+    # /admin/login-accounts (Anmeldekonten aus Keycloak, ADR-0025) to 39.
     total = sum(len(m.routers) for m in ALL_MODULES)
-    assert total == 38
+    assert total == 39
 
 
 def test_module_ids_unique_and_expected() -> None:

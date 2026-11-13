@@ -12,7 +12,11 @@ from magister_api.auth.operator_guard import deny_unsafe_for_operator
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import RoleAssignment
-from magister_api.repositories.auth import RoleAssignmentRepository, SessionRepository
+from magister_api.repositories.auth import (
+    LoginAccountRepository,
+    RoleAssignmentRepository,
+    SessionRepository,
+)
 from magister_api.repositories.base import ScopeContext
 
 
@@ -100,6 +104,24 @@ def _roles_to_user(
     )
 
 
+async def _principal_name(session: AsyncSession, principal_guid: str) -> str:
+    """Anzeigename der Sitzung: Keycloak-Benutzername, sonst der UPN aus dem AD.
+
+    Seit ADR-0025 hat ein angemeldeter Benutzer nicht zwingend eine Zeile in
+    ``ad_user_cache`` — wer nur in Keycloak steht (etwa ``automato-admin``),
+    hat dort keine. Das lokale Notkonto hat keine Anmeldekonto-Zeile und
+    behält seine Zeile im Cache.
+    """
+    from magister_api.models.auth import AdUserCache
+
+    account = await LoginAccountRepository(session).get_by_principal(principal_guid)
+    if account is not None:
+        return account.username
+    # scope-bypass: the session owner's own row, by primary key.
+    cache_row = await session.get(AdUserCache, principal_guid)
+    return cache_row.upn if cache_row is not None else ""
+
+
 async def get_optional_user(
     request: Request,
     session: AsyncSession = Depends(get_session),
@@ -142,11 +164,7 @@ async def get_optional_user(
     await sessions_repo.touch(cookie, timedelta(minutes=settings.session_lifetime_minutes))
 
     role_rows = await RoleAssignmentRepository(session).list_active_for(sess.ad_object_guid)
-    # Resolve the user's UPN from ad_user_cache (always present once a session exists).
-    from magister_api.models.auth import AdUserCache
-
-    cache_row = await session.get(AdUserCache, sess.ad_object_guid)
-    upn = cache_row.upn if cache_row is not None else ""
+    upn = await _principal_name(session, sess.ad_object_guid)
     return _roles_to_user(
         ad_object_guid=sess.ad_object_guid,
         upn=upn,

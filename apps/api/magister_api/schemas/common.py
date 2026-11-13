@@ -1,4 +1,4 @@
-"""Shared validators for system-boundary types (UPN, AD objectGUID).
+"""Shared validators for system-boundary types (UPN, login name, AD objectGUID).
 
 Per CLAUDE.md "Immer"-Regel: validate UPN and objectGUID at the system boundary.
 """
@@ -25,6 +25,34 @@ def validate_upn(value: str) -> str:
     return v
 
 
+#: Längste Form eines Keycloak-Benutzernamens (ADR-0025).
+LOGIN_NAME_MAX = 255
+
+
+def validate_login_name(value: str) -> str:
+    """Benutzername aus dem Keycloak-Realm (``preferred_username``, ADR-0025).
+
+    Keycloak schreibt Benutzernamen klein und erlaubt mehr als ein UPN: auch
+    ``automato-admin`` ohne ``@``. Die Regel hier ist bewusst die einfache, die
+    beide Seiten (Magister und Cockpit) gleich prüfen können: klein, 1–255
+    Zeichen, druckbar, ohne Leerraum.
+    """
+    v = value.strip().lower()
+    if not v or len(v) > LOGIN_NAME_MAX:
+        raise ValueError("invalid login name: length must be 1-255")
+    if not v.isprintable() or any(ch.isspace() for ch in v):
+        raise ValueError("invalid login name: must be printable without whitespace")
+    return v
+
+
+def validate_upn_or_login_name(value: str) -> str:
+    """Ein UPN (AD, lokales Notkonto, Operator) oder ein Keycloak-Benutzername."""
+    try:
+        return validate_upn(value)
+    except ValueError:
+        return validate_login_name(value)
+
+
 def validate_object_guid(value: str) -> str:
     v = value.strip().lower()
     # Strip braces if present, e.g. "{...}".
@@ -48,5 +76,7 @@ def validate_object_guid_or_empty(value: str) -> str:
 
 
 Upn = Annotated[str, AfterValidator(validate_upn)]
+LoginName = Annotated[str, AfterValidator(validate_login_name)]
+UpnOrLoginName = Annotated[str, AfterValidator(validate_upn_or_login_name)]
 ObjectGuid = Annotated[str, AfterValidator(validate_object_guid)]
 ObjectGuidOrEmpty = Annotated[str, AfterValidator(validate_object_guid_or_empty)]

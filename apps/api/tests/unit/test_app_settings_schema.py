@@ -27,3 +27,22 @@ class TestNinjaRegion:
         assert u.ninja_enabled is True
         assert u.ninja_client_id == "abc"
         assert u.ninja_client_secret == "s"
+
+
+class TestBootstrapAdmins:
+    """Keycloak-Benutzernamen, auch ohne `@` (ADR-0025)."""
+
+    def test_user_names_without_at_are_accepted(self) -> None:
+        upd = AppSettingsUpdate(bootstrap_admins=["automato-admin", "Admin@Example.ch"])
+        # Geprüft, nicht umgeschrieben: der Abgleich vergleicht mit dem
+        # gelieferten Wert und schriebe sonst bei jedem Lauf.
+        assert upd.bootstrap_admins == ["automato-admin", "Admin@Example.ch"]
+
+    def test_none_and_empty_pass(self) -> None:
+        assert AppSettingsUpdate(bootstrap_admins=None).bootstrap_admins is None
+        assert AppSettingsUpdate(bootstrap_admins=[]).bootstrap_admins == []
+
+    @pytest.mark.parametrize("bad", ["mit leer", "x" * 256])
+    def test_names_breaking_the_rule_are_refused(self, bad: str) -> None:
+        with pytest.raises(ValidationError):
+            AppSettingsUpdate(bootstrap_admins=["automato-admin", bad])

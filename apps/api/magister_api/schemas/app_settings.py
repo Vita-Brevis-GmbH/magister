@@ -15,6 +15,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from magister_api.schemas.common import validate_login_name
+
 
 class AppSettingsOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -115,7 +117,13 @@ class AppSettingsUpdate(BaseModel):
     )
     oidc_redirect_uri: str | None = None
     oidc_scopes: list[str] | None = None
-    bootstrap_admins: list[str] | None = None
+    bootstrap_admins: list[str] | None = Field(
+        default=None,
+        description=(
+            "Keycloak user names (ADR-0025) that get the admin role on every "
+            "login, e.g. 'automato-admin'. UPN-shaped names are user names too."
+        ),
+    )
     mail_domains: list[str] | None = Field(
         default=None,
         description=(
@@ -127,6 +135,26 @@ class AppSettingsUpdate(BaseModel):
         default=None,
         description="Zusätzliche UPN-Suffixe für die Auswahl. Leere Liste leert.",
     )
+
+    @field_validator("bootstrap_admins")
+    @classmethod
+    def _check_bootstrap_admins(cls, v: list[str] | None) -> list[str] | None:
+        """Jeder Eintrag ein Keycloak-Benutzername (ADR-0025), sonst abweisen.
+
+        Geprüft wird, nicht umgeschrieben: der Abgleich aus der Konsole
+        vergleicht den gespeicherten Wert mit dem gelieferten, und eine hier
+        normalisierte Liste schriebe bei jedem Lauf neu. Verglichen wird beim
+        Anmelden ohnehin klein und ohne Rand (``auth.bootstrap``). Das Cockpit
+        prüft dieselbe Regel (Gleichlauf).
+        """
+        if v is None:
+            return None
+        for raw in v:
+            if raw.strip():
+                validate_login_name(raw)
+        if len(v) > 50:
+            raise ValueError("at most 50 bootstrap admins")
+        return v
 
     @field_validator("mail_domains", "upn_domains")
     @classmethod

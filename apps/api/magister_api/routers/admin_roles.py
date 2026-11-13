@@ -4,6 +4,9 @@ Gives an admin a single place to see who holds which elevated role and to
 grant/revoke them — the piece that previously only existed via env-bootstrap
 (admin) or direct SQL (schulleitung/smi). ``kl`` is out of scope here: it is
 derived from class-teacher assignments (see class_teachers router).
+
+A role holder is an AD user **or** a Keycloak login account without an AD row
+(ADR-0025): the path parameter is the ``principal_guid`` either way.
 """
 
 from __future__ import annotations
@@ -19,13 +22,33 @@ from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
-from magister_api.repositories.auth import RoleAssignmentRepository
+from magister_api.repositories.auth import LoginAccountRepository, RoleAssignmentRepository
 from magister_api.routers._helpers import _ip_request_id
 from magister_api.schemas.roles import RoleAssignmentOut, RoleGrantRequest, RoleSetRequest
-from magister_api.services._user_enrich import fetch_user_labels, user_label_fields
+from magister_api.services._user_enrich import (
+    UserLabelFields,
+    fetch_principal_labels,
+    login_account_label_fields,
+    user_label_fields,
+)
 from magister_api.services.rbac import RbacService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+async def _role_holder(session: AsyncSession, ad_object_guid: str) -> UserLabelFields:
+    """The labels of the person a role goes to — AD row or login account, else 404.
+
+    # scope-bypass: admin-only (require_admin), cross-school by design; the
+    # lookup is by primary/unique key of the one target.
+    """
+    target = await session.get(AdUserCache, ad_object_guid)
+    if target is not None:
+        return user_label_fields(target)
+    account = await LoginAccountRepository(session).get_by_principal(ad_object_guid)
+    if account is not None:
+        return login_account_label_fields(account)
+    raise HTTPException(status_code=404, detail="user_not_found")
 
 
 async def _school_names(session: AsyncSession) -> dict[int, str]:
@@ -61,7 +84,7 @@ async def list_roles(
 ) -> list[RoleAssignmentOut]:
     """Every active admin/schulleitung/smi grant, with holder + school labels."""
     rows = await RoleAssignmentRepository(session).list_all_active()
-    labels = await fetch_user_labels(session, (r.ad_object_guid for r in rows))
+    labels = await fetch_principal_labels(session, (r.ad_object_guid for r in rows))
     schools = await _school_names(session)
     return [
         RoleAssignmentOut(
@@ -71,7 +94,7 @@ async def list_roles(
             school_name=schools.get(r.school_id) if r.school_id is not None else None,
             granted_by=r.granted_by,
             granted_at=r.granted_at,
-            **user_label_fields(labels.get(r.ad_object_guid)),
+            **(labels.get(r.ad_object_guid) or user_label_fields(None)),
         )
         for r in rows
     ]
@@ -90,9 +113,7 @@ async def grant_role(
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
 ) -> RoleAssignmentOut:
-    target = await session.get(AdUserCache, ad_object_guid)
-    if target is None:
-        raise HTTPException(status_code=404, detail="user_not_found")
+    target = await _role_holder(session, ad_object_guid)
 
     # ADR-0010: validate the role against the DB role catalog (built-in OR
     # custom) and apply the flag-dependent scope rule.
@@ -125,7 +146,7 @@ async def grant_role(
         school_name=schools.get(payload.school_id) if payload.school_id is not None else None,
         granted_by=assignment.granted_by,
         granted_at=assignment.granted_at,
-        **user_label_fields(target),
+        **target,
     )
 
 
@@ -147,9 +168,7 @@ async def set_roles(
     every item is validated before a single change is written, so an invalid
     item rolls the whole request back.
     """
-    target = await session.get(AdUserCache, ad_object_guid)
-    if target is None:
-        raise HTTPException(status_code=404, detail="user_not_found")
+    target = await _role_holder(session, ad_object_guid)
 
     # Validate every item up front (fail-fast, transactional), de-duplicating.
     desired: set[tuple[str, int | None]] = set()
@@ -215,7 +234,7 @@ async def set_roles(
             school_name=schools.get(r.school_id) if r.school_id is not None else None,
             granted_by=r.granted_by,
             granted_at=r.granted_at,
-            **user_label_fields(target),
+            **target,
         )
         for r in rows
     ]

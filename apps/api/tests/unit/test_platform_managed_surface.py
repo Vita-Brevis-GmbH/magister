@@ -48,6 +48,9 @@ FORBIDDEN_WHEN_HOSTED = (
 #: darf) zieht in die Konsole.
 REQUIRED_ALWAYS = (
     "/admin/users/{ad_object_guid}/roles",
+    # Die Anmeldekonten (ADR-0025) sind die Personen, denen der Rolleneditor
+    # Rollen gibt — sie bleiben beim Kunden wie die Zuweisung selbst.
+    "/admin/login-accounts",
     "/admin/modules",
     "/me/modules",
     "/audit/events",

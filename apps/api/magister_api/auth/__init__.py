@@ -1,10 +1,10 @@
 """Authentication & authorization layer.
 
-- OIDC against Entra ID (Authorization Code + PKCE)
+- OIDC against the customer's Keycloak realm (Authorization Code + PKCE, ADR-0025)
 - Server-side opaque sessions (SHA-256 of random bytes; cookie carries id only)
 - RBAC dependencies (`require_role`)
 - CSRF double-submit cookie
-- Bootstrap-admin grant on first OIDC login
+- Login accounts + bootstrap-admin grant on OIDC login
 """
 
 from magister_api.auth.csrf import CsrfMiddleware, issue_csrf_token, verify_csrf_token

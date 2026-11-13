@@ -1,8 +1,10 @@
 """Auth router: OIDC login/callback/logout + ``/auth/me``.
 
-The OIDC client is injected via a FastAPI dependency so tests can swap in a
-mock. The router shape is intentionally small — anything beyond cookie wiring
-lives in :mod:`magister_api.services.auth`.
+End users sign in at the customer's Keycloak realm (ADR-0025); the local
+break-glass account keeps its own path below. The OIDC client is injected via a
+FastAPI dependency so tests can swap in a mock. The router shape is
+intentionally small — anything beyond cookie wiring lives in
+:mod:`magister_api.services.auth`.
 """
 
 from __future__ import annotations
@@ -25,12 +27,12 @@ from magister_api.auth import login_challenge
 from magister_api.auth.csrf import issue_csrf_token
 from magister_api.auth.current_user import AuthenticatedUser, get_current_user
 from magister_api.auth.effective_settings import get_effective_settings
-from magister_api.auth.oidc import EntraOidcClient, OidcClient
+from magister_api.auth.oidc import OidcClient, StandardOidcClient
 from magister_api.auth.sessions import new_session_id
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
 from magister_api.models.base import utcnow
-from magister_api.repositories.auth import SessionRepository
+from magister_api.repositories.auth import LoginAccountRepository, SessionRepository
 from magister_api.repositories.local_admin import LocalAdminRepository
 from magister_api.schemas.auth import CurrentUserOut, OperatorBannerOut
 from magister_api.schemas.local_admin import (
@@ -67,13 +69,13 @@ def get_oidc_client(
     """OIDC client built from the effective (DB-overlaid) settings.
 
     Cached on ``app.state`` keyed by ``effective_settings`` identity so we
-    don't construct a new ``EntraOidcClient`` per request — the dep above
+    don't construct a new ``StandardOidcClient`` per request — the dep above
     already returns the same Settings instance until the version bumps.
     """
     cached: tuple[int, OidcClient] | None = getattr(request.app.state, "_oidc_client_cache", None)
     if cached is not None and cached[0] == id(eff):
         return cached[1]
-    client = EntraOidcClient(eff)
+    client = StandardOidcClient(eff)
     request.app.state._oidc_client_cache = (id(eff), client)
     return client
 
@@ -110,17 +112,21 @@ def _set_csrf_cookie(response: Response, value: str, settings: Settings) -> None
 
 
 #: Form eines Fehlercodes, der in die Adresse der Anmeldeseite darf. Fremder
-#: Text (etwa eine Entra-Beschreibung) kommt dort nicht hinein.
+#: Text (etwa die Fehlerbeschreibung des Anbieters) kommt dort nicht hinein.
 _CODE = re.compile(r"[a-z][a-z0-9_]{1,63}")
 
 
-def _back_to_login(code: str, *, entra: str | None = None) -> RedirectResponse:
-    """Zurück auf die Anmeldeseite, mit dem Grund als Code in der Adresse."""
+def _back_to_login(code: str, *, idp: str | None = None) -> RedirectResponse:
+    """Zurück auf die Anmeldeseite, mit dem Grund als Code in der Adresse.
+
+    ``idp`` ist der Fehlercode, den der Anbieter selbst nannte (OIDC
+    ``error``, etwa ``access_denied``) — nur in fester Form.
+    """
     safe = code if _CODE.fullmatch(code) else "oidc_failed"
-    logger.warning("Anmeldung über Entra abgewiesen: %s%s", safe, f" ({entra})" if entra else "")
+    logger.warning("Anmeldung abgewiesen: %s%s", safe, f" ({idp})" if idp else "")
     params = {"error": safe}
-    if entra and _CODE.fullmatch(entra):
-        params["entra"] = entra
+    if idp and _CODE.fullmatch(idp):
+        params["idp"] = idp
     response = RedirectResponse(
         url=f"/login?{urlencode(params)}", status_code=status.HTTP_303_SEE_OTHER
     )
@@ -174,11 +180,11 @@ async def callback(
     oidc: OidcClient = Depends(get_oidc_client),
     session: AsyncSession = Depends(get_session),
 ) -> Response:
-    # Der Rückweg von Entra ist eine Navigation des Browsers, kein API-Aufruf:
-    # ein Fehler als JSON stand roh im Fenster. Jetzt geht es zurück auf die
-    # Anmeldeseite, die den Code übersetzt (`auth.oidc_errors.*`).
+    # Der Rückweg vom Anbieter ist eine Navigation des Browsers, kein
+    # API-Aufruf: ein Fehler als JSON stand roh im Fenster. Jetzt geht es
+    # zurück auf die Anmeldeseite, die den Code übersetzt (`auth.oidc_errors.*`).
     if error:
-        return _back_to_login("oidc_error", entra=error)
+        return _back_to_login("oidc_error", idp=error)
     if not code or not state or not flow_cookie:
         return _back_to_login("oidc_callback_invalid")
     try:
@@ -224,7 +230,16 @@ async def logout(
     user: AuthenticatedUser = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
     session: AsyncSession = Depends(get_session),
+    oidc: OidcClient = Depends(get_oidc_client),
 ) -> dict[str, Any]:
+    """End the local session; for a Keycloak session also name the way out there.
+
+    The response carries ``redirect`` — the ``end_session_endpoint`` of the
+    realm with ``client_id`` and ``post_logout_redirect_uri`` (ADR-0025) — and
+    the SPA navigates there. Without it the Keycloak session would sign the
+    user straight back in on the next click on "Anmelden". Local and operator
+    sessions never went through Keycloak and get no ``redirect``.
+    """
     cookie = request.cookies.get(settings.session_cookie_name)
     if not cookie:
         raise HTTPException(status_code=400, detail="no_session_cookie")
@@ -253,7 +268,12 @@ async def logout(
     )
     response.delete_cookie(settings.session_cookie_name, path="/")
     response.delete_cookie(settings.csrf_cookie_name, path="/")
-    return {"ok": True}
+    body: dict[str, Any] = {"ok": True}
+    if user.auth_kind == "oidc":
+        redirect = await oidc.end_session_url()
+        if redirect is not None:
+            body["redirect"] = redirect
+    return body
 
 
 @router.get("/me", response_model=CurrentUserOut)
@@ -263,11 +283,21 @@ async def me(
     session: AsyncSession = Depends(get_session),
 ) -> CurrentUserOut:
     # Enrich with the cached name fields so the UI can greet by display name
-    # (or full name) instead of the raw UPN. scope-bypass: this is the
-    # authenticated user looking up their own row.
+    # (or full name) instead of the raw user name. scope-bypass: this is the
+    # authenticated user looking up their own rows.
     from magister_api.models.auth import AdUserCache
 
     cache = await session.get(AdUserCache, user.ad_object_guid) if user.ad_object_guid else None
+    accounts = LoginAccountRepository(session)
+    account = await accounts.get_by_principal(user.ad_object_guid) if user.ad_object_guid else None
+    # Ob das Konto überhaupt etwas sehen darf (ADR-0025): ein neues Konto ohne
+    # Rollen meldet sich an und bekommt statt leerer Seiten einen Hinweis.
+    has_permissions = (
+        user.is_admin
+        or bool(user.roles)
+        or user.operator is not None
+        or (bool(user.ad_object_guid) and await accounts.has_assignments(user.ad_object_guid))
+    )
     # Der laufende Operator-Zugriff, für den Hinweisbalken (ADR-0019 D6). Eine
     # Abfrage für jeden Benutzer, nicht nur für Admins: eine Transparenz, die
     # nur derjenige sieht, der den Zugriff ohnehin bewilligt hätte, ist keine.
@@ -279,11 +309,13 @@ async def me(
         upn=user.upn,
         given_name=cache.given_name if cache else None,
         surname=cache.surname if cache else None,
-        display_name=cache.display_name if cache else None,
+        display_name=(cache.display_name if cache else None)
+        or (account.display_name if account else None),
         is_admin=user.is_admin,
         kind=cache.kind if cache else None,
         school_scope=list(user.school_scope),
         roles=list(user.roles),
+        has_permissions=has_permissions,
         # expires_at is Optional on the session model but always set for an
         # authenticated user by the time this response is built.
         expires_at=user.expires_at,  # type: ignore[arg-type]

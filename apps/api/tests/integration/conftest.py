@@ -97,7 +97,8 @@ def app_settings(database_url: str) -> Settings:
         oidc_client_id="client-id",
         oidc_client_secret="client-secret",  # type: ignore[arg-type]
         oidc_redirect_uri="http://testserver/auth/callback",
-        bootstrap_admins=["admin@example.ch"],
+        # Keycloak-Benutzernamen (ADR-0025): einer in UPN-Form, einer ohne `@`.
+        bootstrap_admins=["admin@example.ch", "automato-admin"],
         session_cookie_secure=False,
     )
 
@@ -132,7 +133,7 @@ async def _truncate_tables(engine: AsyncEngine) -> AsyncIterator[None]:
             "class_teacher_roles, subject_teacher_roles, classes, "
             "department_memberships, manager_roles, departments, document_templates, "
             "platform_document_templates, operator_accesses, "
-            "audit_events, sessions, role_assignments, role_capabilities, roles, "
+            "audit_events, sessions, login_accounts, role_assignments, role_capabilities, roles, "
             # `ad_sync_state` gehört dazu, seit der wiederkehrende Lauf
             # inkrementell ist (ADR-0022 D3): ein liegengebliebener Cursor
             # lässt den nächsten Test nur die Änderungen holen — also nichts —

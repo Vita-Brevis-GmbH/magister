@@ -1,4 +1,9 @@
-"""OIDC client wrapper for Entra ID (Authorization Code + PKCE).
+"""OIDC client (Authorization Code + PKCE) for the customer's Keycloak realm.
+
+Since ADR-0025 every end user signs in at the customer's Keycloak realm; which
+directory stands behind it (local users, Entra, LDAP) is configured there and
+is invisible here. The client is plain OIDC: discovery, PKCE, JWKS, and the
+checks on ``iss``/``aud``/``nonce`` — nothing provider-specific.
 
 Heavy lifting is done by ``authlib``. This module exposes a small surface that
 the auth router uses, plus a Protocol so tests can inject a mocked client.
@@ -12,11 +17,12 @@ import logging
 import secrets
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
 from magister_api.config import Settings
+from magister_api.schemas.common import validate_login_name
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +37,17 @@ class OidcAuthorizeRequest:
 
 @dataclass(frozen=True)
 class OidcUserInfo:
-    """Subset of id-token claims Magister needs."""
+    """Subset of id-token claims Magister needs (ADR-0025).
 
+    The identity is ``issuer`` + ``subject``; ``username`` is the
+    ``preferred_username`` of the realm, already lower-cased and checked
+    against the login-name rule.
+    """
+
+    issuer: str
     subject: str
-    upn: str
-    oid: str | None
+    username: str
+    display_name: str | None
     given_name: str | None
     surname: str | None
     email: str | None
@@ -48,9 +60,24 @@ class OidcClient(Protocol):
         self, *, code: str, state: str, expected_state: str, code_verifier: str, nonce: str
     ) -> OidcUserInfo: ...
 
+    async def end_session_url(self) -> str | None: ...
 
-class EntraOidcClient:
-    """Minimal OIDC client tailored for Entra ID."""
+
+def post_logout_redirect_uri(redirect_uri: str) -> str | None:
+    """``https://<host>/login`` — the origin of the configured callback.
+
+    Taken from ``oidc_redirect_uri`` (set by the console) and not from the
+    request's ``Host`` header: a header the client controls must not decide
+    where the identity provider sends the browser next.
+    """
+    parts = urlsplit(redirect_uri)
+    if parts.scheme not in {"http", "https"} or not parts.netloc:
+        return None
+    return f"{parts.scheme}://{parts.netloc}/login"
+
+
+class StandardOidcClient:
+    """Minimal standards-based OIDC client (discovery, PKCE, JWKS)."""
 
     def __init__(self, settings: Settings, http: httpx.AsyncClient | None = None) -> None:
         self._settings = settings
@@ -69,8 +96,8 @@ class EntraOidcClient:
             resp.raise_for_status()
             meta: Any = resp.json()
         except (httpx.HTTPError, ValueError) as exc:
-            # Falsche Tenant-Id, kein Netz zu login.microsoftonline.com: ein
-            # Code, den die Anmeldeseite übersetzt — kein 500.
+            # Falscher Realm im Issuer, kein Netz zum Anbieter: ein Code, den
+            # die Anmeldeseite übersetzt — kein 500.
             raise ValueError("oidc_discovery_failed") from exc
         if not isinstance(meta, dict):
             raise ValueError("oidc_discovery_failed")
@@ -96,8 +123,8 @@ class EntraOidcClient:
             "code_challenge_method": "S256",
         }
         # Der Endpunkt kommt aus dem Discovery-Dokument, nicht aus dem Issuer:
-        # bei Entra ist der Issuer `…/<tenant>/v2.0`, der Endpunkt aber
-        # `…/<tenant>/oauth2/v2.0/authorize`. Aus dem Issuer zusammengesetzt
+        # bei Keycloak ist er `…/realms/<realm>/protocol/openid-connect/auth`,
+        # bei anderen Anbietern wieder anders. Aus dem Issuer zusammengesetzt
         # landete der Browser auf einer Seite, die es nicht gibt.
         meta = await self._discover()
         endpoint = str(
@@ -137,20 +164,19 @@ class EntraOidcClient:
         except httpx.HTTPError as exc:
             raise ValueError("oidc_token_exchange_failed") from exc
         if resp.status_code != 200:
-            # Entra nennt den Grund als AADSTS-Code (z. B. 7000215: falsches
-            # Client-Secret, 50011: Umleitungs-URI passt nicht). Ins Protokoll
-            # nur Code und Fehlerart — die Beschreibung kann Kennungen tragen.
+            # Ins Protokoll nur HTTP-Status und Fehlerart nach RFC 6749
+            # (`invalid_client`, `invalid_grant` …) — die Beschreibung kann
+            # Kennungen tragen und bleibt draussen.
             body: Any = {}
             try:
                 body = resp.json()
             except ValueError:
                 body = {}
-            codes = body.get("error_codes") if isinstance(body, dict) else None
+            error = body.get("error") if isinstance(body, dict) else None
             logger.warning(
-                "Entra hat den Code-Tausch abgewiesen: HTTP %s, %s, AADSTS %s",
+                "Der Anbieter hat den Code-Tausch abgewiesen: HTTP %s, %s",
                 resp.status_code,
-                body.get("error") if isinstance(body, dict) else "-",
-                codes,
+                error if isinstance(error, str) and error.isidentifier() else "-",
             )
             raise ValueError("oidc_token_exchange_failed")
         token = resp.json()
@@ -180,17 +206,55 @@ class EntraOidcClient:
             )
             claims.validate()
         except (httpx.HTTPError, JoseError) as exc:
-            logger.warning("ID-Token von Entra nicht gültig: %s", type(exc).__name__)
+            logger.warning("ID-Token des Anbieters nicht gültig: %s", type(exc).__name__)
             raise ValueError("oidc_token_invalid") from exc
 
-        upn = (claims.get("preferred_username") or claims.get("upn") or "").strip().lower()
-        if not upn:
-            raise ValueError("oidc_missing_upn")
+        raw_username = claims.get("preferred_username")
+        try:
+            username = validate_login_name(raw_username if isinstance(raw_username, str) else "")
+        except ValueError as exc:
+            raise ValueError("oidc_missing_username") from exc
+        subject = claims.get("sub")
+        if not isinstance(subject, str) or not subject:
+            raise ValueError("oidc_token_invalid")
         return OidcUserInfo(
-            subject=claims["sub"],
-            upn=upn,
-            oid=(claims.get("oid") or "").lower() or None,
-            given_name=claims.get("given_name"),
-            surname=claims.get("family_name"),
-            email=claims.get("email"),
+            issuer=str(claims.get("iss") or meta.get("issuer") or self._settings.oidc_issuer),
+            subject=subject,
+            username=username,
+            display_name=_text(claims.get("name")),
+            given_name=_text(claims.get("given_name")),
+            surname=_text(claims.get("family_name")),
+            email=_text(claims.get("email"), limit=320),
         )
+
+    async def end_session_url(self) -> str | None:
+        """Where the browser goes after the local session is gone (ADR-0025).
+
+        The ``end_session_endpoint`` of the discovery document, with
+        ``client_id`` and ``post_logout_redirect_uri`` — without
+        ``id_token_hint``: Magister keeps no token after the login. Keycloak
+        then asks once whether to sign out, and that is acceptable. ``None``
+        when the provider names no such endpoint or is unreachable; the local
+        logout has already happened and must not fail on this.
+        """
+        try:
+            meta = await self._discover()
+        except ValueError:
+            logger.warning("Abmelden beim Anbieter: Discovery nicht erreichbar")
+            return None
+        endpoint = meta.get("end_session_endpoint")
+        if not isinstance(endpoint, str) or not endpoint.startswith(("https://", "http://")):
+            return None
+        params = {"client_id": self._settings.oidc_client_id}
+        back = post_logout_redirect_uri(self._settings.oidc_redirect_uri)
+        if back is not None:
+            params["post_logout_redirect_uri"] = back
+        return f"{endpoint}?{urlencode(params)}"
+
+
+def _text(value: Any, *, limit: int = 200) -> str | None:
+    """A claim as trimmed text, or ``None`` (claims are untrusted input)."""
+    if not isinstance(value, str):
+        return None
+    v = value.strip()
+    return v[:limit] or None

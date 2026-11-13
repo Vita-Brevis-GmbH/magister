@@ -10,4 +10,4 @@ Alembic-Kopf; Abweichung fällt damit in CI auf und nicht im Betrieb.
 from __future__ import annotations
 
 #: Alembic-Revision, die zum aktuellen Modellstand gehört.
-HEAD_REVISION = "0052_upn_domains"
+HEAD_REVISION = "0053_anmeldekonten"

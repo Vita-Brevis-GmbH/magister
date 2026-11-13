@@ -1,16 +1,23 @@
-"""Repositories for sessions, role assignments, AD-user-cache lookups."""
+"""Repositories for sessions, role assignments, login accounts, AD-user-cache lookups."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, delete, exists, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.expression import Exists
 
-from magister_api.models.auth import AdUserCache, RoleAssignment, Session
+from magister_api.models.auth import AdUserCache, LoginAccount, RoleAssignment, Session
 from magister_api.models.base import utcnow
+from magister_api.models.class_teacher_role import ClassTeacherRole
+from magister_api.models.manager_role import ManagerRole
+from magister_api.models.subject_teacher_role import SubjectTeacherRole
+
+#: Tabellen mit abgeleiteten Zuordnungen und Gültigkeitsfenster.
+_Assignment = type[ClassTeacherRole] | type[SubjectTeacherRole] | type[ManagerRole]
 
 
 class SessionRepository:
@@ -67,6 +74,17 @@ class SessionRepository:
         if row is not None:
             await self.session.delete(row)
             await self.session.flush()
+
+    async def delete_oidc_for(self, ad_object_guid: str) -> int:
+        """End every OIDC session of one principal (account locked or unbound)."""
+        stmt = (
+            delete(Session)
+            .where(Session.ad_object_guid == ad_object_guid, Session.auth_kind == "oidc")
+            .returning(Session.id)
+        )
+        ended = (await self.session.execute(stmt)).scalars().all()
+        await self.session.flush()
+        return len(ended)
 
 
 class RoleAssignmentRepository:
@@ -150,13 +168,14 @@ class AdUserCacheRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def find_by_oidc_subject(self, *, oid: str | None, upn: str) -> AdUserCache | None:
-        """Match OIDC `oid` against ms-DS-ConsistencyGuid; UPN fallback."""
-        conditions = []
-        if oid:
-            conditions.append(AdUserCache.ms_ds_consistency_guid == oid.lower())
-        conditions.append(AdUserCache.upn == upn.lower())
-        stmt = select(AdUserCache).where(or_(*conditions))
+    async def find_by_upn(self, upn: str) -> AdUserCache | None:
+        """The AD user whose UPN equals ``upn`` (case-insensitive).
+
+        # scope-bypass: used only at sign-in to map a Keycloak user name onto
+        # the AD object of the same person (ADR-0025); the caller learns the
+        # GUID of exactly that one row and never lists anything.
+        """
+        stmt = select(AdUserCache).where(func.lower(AdUserCache.upn) == upn.strip().lower())
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
@@ -197,3 +216,83 @@ class AdUserCacheRepository:
         row = result.scalar_one()
         await self.session.flush()
         return row
+
+
+class LoginAccountRepository:
+    """Anmeldekonten aus dem Keycloak-Realm (ADR-0025).
+
+    # scope-bypass: Anmeldekonten tragen keinen Standort. Sie sind die
+    # Identität für die Anmeldung, nicht Personendaten einer Schule; gelesen
+    # werden sie bei der Anmeldung (das eigene Konto) und in der
+    # Admin-Oberfläche (require_admin, standortübergreifend wie die Rollen).
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, account_id: int) -> LoginAccount | None:
+        return await self.session.get(LoginAccount, account_id)
+
+    async def get_by_subject(self, *, issuer: str, subject: str) -> LoginAccount | None:
+        stmt = select(LoginAccount).where(
+            LoginAccount.issuer == issuer, LoginAccount.subject == subject
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_username(self, username: str) -> LoginAccount | None:
+        stmt = select(LoginAccount).where(LoginAccount.username == username.strip().lower())
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_principal(self, principal_guid: str) -> LoginAccount | None:
+        stmt = select(LoginAccount).where(LoginAccount.principal_guid == principal_guid)
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
+    async def list_by_principals(self, guids: list[str]) -> list[LoginAccount]:
+        if not guids:
+            return []
+        stmt = select(LoginAccount).where(LoginAccount.principal_guid.in_(guids))
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def search(self, *, search: str | None, limit: int) -> list[LoginAccount]:
+        stmt = select(LoginAccount)
+        if search:
+            needle = f"%{search.strip().lower()}%"
+            stmt = stmt.where(
+                or_(
+                    LoginAccount.username.like(needle),
+                    func.lower(LoginAccount.display_name).like(needle),
+                    func.lower(LoginAccount.email).like(needle),
+                )
+            )
+        stmt = stmt.order_by(LoginAccount.username).limit(limit)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+    async def add(self, row: LoginAccount) -> LoginAccount:
+        self.session.add(row)
+        await self.session.flush()
+        return row
+
+    async def has_assignments(self, principal_guid: str) -> bool:
+        """Does anything grant this principal access — role, class, subject, unit?
+
+        Rollen aus ``role_assignments`` stehen schon im Benutzer; hier zählen
+        die abgeleiteten Zuordnungen (Klassen- und Fachlehrer, Leitung einer
+        Abteilung), die nur in ihren eigenen Tabellen stehen.
+        """
+        now = utcnow()
+
+        def _active(model: _Assignment) -> Exists:
+            return exists().where(
+                model.ad_object_guid == principal_guid,
+                model.valid_from <= now,
+                or_(model.valid_to.is_(None), model.valid_to >= now),
+            )
+
+        stmt = select(
+            or_(
+                _active(ClassTeacherRole),
+                _active(SubjectTeacherRole),
+                _active(ManagerRole),
+            )
+        )
+        return bool((await self.session.execute(stmt)).scalar())

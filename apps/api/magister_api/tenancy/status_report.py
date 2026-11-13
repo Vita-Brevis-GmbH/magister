@@ -65,7 +65,7 @@ async def _last_event(session: AsyncSession, action: str) -> datetime | None:
 async def _local_admin(session: AsyncSession, base: Settings) -> dict[str, Any]:
     """Gibt es das lokale Admin-Konto, und hat es einen zweiten Faktor?
 
-    Ohne Konto und ohne Entra kommt niemand ins Portal ("Kein Anmeldeweg
+    Ohne Konto und ohne OIDC kommt niemand ins Portal ("Kein Anmeldeweg
     eingerichtet") — das soll die Konsole sehen, bevor der Kunde anruft.
     Nur Name und Zustand; kein Hash, kein TOTP-Geheimnis.
     """

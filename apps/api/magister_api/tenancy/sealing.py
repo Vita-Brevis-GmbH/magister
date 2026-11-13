@@ -1,6 +1,6 @@
 """Versiegelte Geheimnisse aus der Konsole öffnen (ADR-0024 D3).
 
-Die Konsole versiegelt ein Geheimnis (Entra-Client-Secret) mit dem
+Die Konsole versiegelt ein Geheimnis (OIDC-Client-Secret) mit dem
 öffentlichen Schlüssel dieser Datenebene und hält nur das Chiffrat. Hier wird
 es geöffnet und, mit dem Kundenschlüssel verschlüsselt, ins Kundenschema
 geschrieben — dort, wo es nach ADR-0017 D2 hingehört.

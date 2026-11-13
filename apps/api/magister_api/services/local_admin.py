@@ -2,7 +2,7 @@
 
 The local admin is a single break-glass account used for:
 - Day-1 deployments before OIDC is configured
-- Recovery when OIDC/Entra is unavailable
+- Recovery when OIDC (the Keycloak realm) is unavailable
 
 It maps onto Magister's existing auth model via three rows that are seeded
 together on first run:

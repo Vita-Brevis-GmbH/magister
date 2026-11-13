@@ -24,7 +24,7 @@ REMOVED_ENV_VARS: dict[str, str] = {
     "MAGISTER_AD_LOGIN_ENABLED": (
         "Der direkte AD-Login wurde entfernt, nicht abgeschaltet (ADR-0015 D3): "
         "kein Endpunkt nimmt mehr das Passwort eines Verzeichnisbenutzers an. "
-        "Es bleiben Entra ID (OIDC) und das lokale Notkonto mit zweitem Faktor."
+        "Es bleiben OIDC (Keycloak, ADR-0025) und das lokale Notkonto mit zweitem Faktor."
     ),
     "MAGISTER_AD_LOGIN_GROUP": (
         "Gehört zum entfernten AD-Login (ADR-0015 D3) und hat keine Wirkung mehr."
