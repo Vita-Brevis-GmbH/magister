@@ -123,6 +123,12 @@ Was ein Update anfasst:
 | Zertifikate | neu ausgestellt, wenn ein Name fehlt; sonst unangetastet |
 | Datenbank | `alembic upgrade head` in der Konsole |
 
+Den Teil der Konsole (ihre `.env`, ihr Zertifikat, Oberfläche, Container, Migration) erledigt
+seit 2026-11 `scripts/cockpit.sh` im Checkout der Konsole (vitabrevis-cockpit, ADR 0009 dort);
+dieses Skript ruft es auf und übergibt Plattform-CA, Netz und Zugang zur Datenebene. Nur die
+Konsole aktualisieren geht auch direkt: `cd /opt/cockpit/src && git pull && scripts/cockpit.sh
+update`.
+
 Das war eine Zeitlang nicht so: `up` stieg aus, sobald `dist/index.html`
 überhaupt existierte, und meldete „steht bereits". Eine neu gebaute Ansicht
 war nach dem Update im Browser nicht da, obwohl das Skript Vollzug meldete.
@@ -150,6 +156,9 @@ Stelle (`scripts/lib/konsole-pfad.sh`): `--konsole` bzw. `PLATTFORM_KONSOLE`
 Entwicklerrechner davor noch `vitabrevis-cockpit` neben dem Magister-Repo).
 Eine Angabe, die ins Leere zeigt, bricht ab, statt still auf einen anderen
 Checkout zu fallen. Welcher gilt, zeigt `konfig` (`KONSOLE_PFAD`).
+Der Checkout braucht `scripts/cockpit.sh` (Aufbau aus dem eigenen Repo,
+vitabrevis-cockpit ADR 0009); fehlt es, bricht `up` mit dem Befehl zum
+Aktualisieren ab (`git -C /opt/cockpit/src pull`).
 
 **Umziehen**, einmal je Host, auf dem die Konsole noch aus `cockpit/` lief
 (als Betriebsbenutzer, wie `/opt/magister`). Ausführlich, mit Prüfungen und

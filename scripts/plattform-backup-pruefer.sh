@@ -3,7 +3,10 @@
 #
 # Startet einen kurzlebigen Container aus dem Abbild der Konsole und führt
 # darin `cockpit_api.cli.backup_worker` aus: geschriebene Sicherungen prüfen,
-# erfasste Wiederherstellungen einspielen, Ergebnisse melden.
+# erfasste Wiederherstellungen einspielen, Ergebnisse melden. Den Container
+# startet die Konsole selbst (vitabrevis-cockpit: scripts/cockpit.sh
+# kunden-sicherungen-pruefen, ADR 0009 dort) – Compose der Konsole steht nur
+# dort.
 #
 # Der private Backup-Schlüssel wird NUR in diesen Container eingehängt, nicht
 # in den laufenden Konsolen-Container (ADR-0016 D2). Auf einem echten
@@ -23,13 +26,9 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib/konsole-pfad.sh"
 [ -f "$KEY" ] || { echo "Privater Backup-Schlüssel $KEY fehlt." >&2; exit 2; }
 konsole_waehlen "${PLATTFORM_KONF:-$ZIEL/plattform.conf}" \
   || { echo "$KONSOLE_FEHLER" >&2; exit 2; }
+[ -f "$KONSOLE_PFAD/scripts/cockpit.sh" ] \
+  || { echo "Die Konsole in $KONSOLE_PFAD ist zu alt: scripts/cockpit.sh fehlt (git -C $KONSOLE_PFAD pull)." >&2; exit 2; }
 
-# Die Plattform-Überlagerung im eigenen Checkout hängt die Datenebene von
-# dort ein (wie dc_konsole in plattform-aufbau.sh).
+# Die Plattform-Überlagerung der Konsole hängt die Datenebene von hier ein.
 export MAGISTER_DIR="$REPO"
-exec docker compose --project-directory "$KONSOLE_PFAD/deploy" \
-  -f "$KONSOLE_PFAD/deploy/docker-compose.yml" \
-  -f "$KONSOLE_PFAD/deploy/docker-compose.plattform.yml" \
-  run --rm --no-deps -T \
-  -v "$KEY:/run/backup-age.key:ro" \
-  api python -m cockpit_api.cli.backup_worker --identity /run/backup-age.key
+exec bash "$KONSOLE_PFAD/scripts/cockpit.sh" kunden-sicherungen-pruefen --identity "$KEY"

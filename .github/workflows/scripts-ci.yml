@@ -25,8 +25,32 @@ permissions:
 jobs:
   pruefen:
     runs-on: ubuntu-latest
+    env:
+      HAT_KONSOLE_KEY: ${{ secrets.COCKPIT_DEPLOY_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
+
+      # Die Konsole baut sich selbst auf (vitabrevis-cockpit: scripts/cockpit.sh,
+      # ADR 0009 dort); plattform-aufbau.sh ruft es auf. Mit ihrem Checkout prüft
+      # plattform-konsole.test.sh die Schnittstelle auch gegen das echte Skript,
+      # nicht nur gegen eine Attrappe (docs/runbooks/ci-cockpit.md).
+      - name: Konsole holen (vitabrevis-cockpit, für die Schnittstelle)
+        if: env.HAT_KONSOLE_KEY == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: Vita-Brevis-GmbH/vitabrevis-cockpit
+          ssh-key: ${{ secrets.COCKPIT_DEPLOY_KEY }}
+          path: vitabrevis-cockpit
+          persist-credentials: false
+
+      - name: Pfad der Konsole setzen
+        run: |
+          if [ -f vitabrevis-cockpit/scripts/cockpit.sh ]; then
+            echo "MAGISTER_TEST_KONSOLE_DIR=$GITHUB_WORKSPACE/vitabrevis-cockpit" >> "$GITHUB_ENV"
+            echo "Konsole (vitabrevis-cockpit): $(git -C vitabrevis-cockpit rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::Ohne Checkout von vitabrevis-cockpit mit scripts/cockpit.sh prüft plattform-konsole.test.sh nur gegen eine Attrappe (Secret COCKPIT_DEPLOY_KEY, docs/runbooks/ci-cockpit.md)."
+          fi
 
       - name: Syntax aller Shell-Skripte
         run: |
@@ -53,3 +77,6 @@ jobs:
 
       - name: Jeder Dienst kommt nach einem Neustart des Hosts wieder
         run: ./scripts/tests/compose-neustart.test.sh
+
+      - name: Aufbau der Konsole über scripts/cockpit.sh (Schnittstelle)
+        run: ./scripts/tests/plattform-konsole.test.sh
