@@ -243,7 +243,7 @@ In Produktion macht das der DNS. Auf einer Testmaschine reicht die Datei:
 
 ```bash
 # Die Adresse ist die aus `konfig` (PLATTFORM_BIND), nicht zwingend 127.0.0.1:
-echo "172.25.12.10 konsole.dev-mgmt.int.vitabrevis.ch thun.dev-mgmt.int.vitabrevis.ch bern.dev-mgmt.int.vitabrevis.ch" >> /etc/hosts
+echo "192.0.2.10 konsole.dev-mgmt.int.vitabrevis.ch thun.dev-mgmt.int.vitabrevis.ch bern.dev-mgmt.int.vitabrevis.ch" >> /etc/hosts
 ```
 
 **Ein Platzhalter-Zertifikat gilt für genau eine Ebene.**
@@ -498,7 +498,7 @@ der Datenebene fehlt — bei jedem `up` für alle Kunden, oder gezielt:
 
 ```bash
 sudo ./scripts/plattform-aufbau.sh kunde-anbinden          # alle
-sudo ./scripts/plattform-aufbau.sh kunde-anbinden gmp      # einer
+sudo ./scripts/plattform-aufbau.sh kunde-anbinden kunde_a  # einer
 ```
 
 Ohne Shell: in der Konsole beim Kunden *Übersicht → Anbindung an die

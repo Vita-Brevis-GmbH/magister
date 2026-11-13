@@ -22,7 +22,7 @@ disk), writes a correct `deploy/compose/.env`, and brings the stack up.
 ```bash
 # LAN/IP demo over plain HTTP (no DNS, no cert warnings):
 sudo ./scripts/install-magister.sh --mode dev
-#   Hostname  -> the host's LAN IP (e.g. 172.25.8.27) or localhost
+#   Hostname  -> the host's LAN IP (e.g. 192.0.2.27) or localhost
 #   ACME mail -> any address (ignored in dev mode)
 #   Admin pw  -> chosen interactively, min 12 chars
 

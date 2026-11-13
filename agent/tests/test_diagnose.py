@@ -193,7 +193,7 @@ class TestNetworkProblemsAreNamedAsSuch:
 
 
 class TestIpHint:
-    @pytest.mark.parametrize("endpoint", ["https://172.25.12.10:46200", "https://[::1]:46200"])
+    @pytest.mark.parametrize("endpoint", ["https://192.0.2.10:46200", "https://[::1]:46200"])
     def test_ip_literals_get_a_hint(self, endpoint: str) -> None:
         hint = ip_endpoint_hint(endpoint)
         assert hint is not None

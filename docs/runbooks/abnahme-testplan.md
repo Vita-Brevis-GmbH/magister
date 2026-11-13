@@ -12,7 +12,7 @@ Der Plan ergänzt die bestehenden Prüfungen, er ersetzt sie nicht:
 |---|---|---|
 | CI | `.github/workflows/*` | Unit-, Router-, Vertrags- und Paket-Tests |
 | Prüfer | `scripts/dev-pruefen.sh` (38 Prüfungen) | Trennung, Versions-Schranke, Lastgrenzen, Welle, Flotte, Sonden — **nur gegen die Prozess-Umgebung** (`dev-umgebung.sh`) |
-| Dieser Plan | dev01 (Container-Aufbau) + Windows-Testserver + Test-AD | was eine Person, ein Browser, ein echter Agent oder ein echtes AD verlangt |
+| Dieser Plan | Dev-Host (Container-Aufbau) + Windows-Testserver + Test-AD | was eine Person, ein Browser, ein echter Agent oder ein echtes AD verlangt |
 
 ## 0 · Wie man ihn abarbeitet
 
@@ -32,7 +32,7 @@ Der Plan ergänzt die bestehenden Prüfungen, er ersetzt sie nicht:
 
 | Was | Wert |
 |---|---|
-| Plattform-Host | dev01-000-vb, 172.25.12.10, `/opt/magister` |
+| Plattform-Host | Dev-Host, 192.0.2.10, `/opt/magister` |
 | Domäne | `dev-mgmt.int.vitabrevis.ch` |
 | Konsole | `https://konsole.dev-mgmt.int.vitabrevis.ch:4444` |
 | Kunde A | Profil **Schule**, Slug z.B. `thun` |
@@ -188,7 +188,7 @@ Cockpit (ADR-0014, Nachtrag „Agent auf dem DC“). Vorbereitung: Gruppe
 
 ### 5.1 Paket und Installation
 
-- [ ] **C-01** Auf dev01 `./scripts/agentenpakete.sh holen` (bzw. `plattform-aufbau.sh update` mit Token) → Cockpit, Kunde A → AD-Connector → „Agent herunterladen“ zeigt oben `magister-connector-0.2.<N>-x64-<commit>.msi`, darunter „Stammzertifikat der Plattform“ mit Fingerprint.
+- [ ] **C-01** Auf dem Dev-Host `./scripts/agentenpakete.sh holen` (bzw. `plattform-aufbau.sh update` mit Token) → Cockpit, Kunde A → AD-Connector → „Agent herunterladen“ zeigt oben `magister-connector-0.2.<N>-x64-<commit>.msi`, darunter „Stammzertifikat der Plattform“ mit Fingerprint.
 - [ ] **C-02** Auf dem DC `msiexec /i magister-connector-0.2.<N>-x64-….msi /l*v C:\Temp\msi.log` → kein Fehler, Dienst `MagisterConnector` installiert (gestoppt), `magister-connector --version` = `0.2.<N> (<commit>)`.
 - [ ] **C-03** Update: Cockpit zeigt beim Agenten „Update auf 0.2.<N> bereit“. Auf dem DC `magister-connector update --nur-pruefen` → nennt beide Fassungen, ändert nichts. `magister-connector update` (als Administrator) → nach ~1 Minute `--version` = neue Fassung, Dienst läuft, Anmeldung bleibt, ein Eintrag in „Apps & Features“, Cockpit-Hinweis verschwindet.
 - [ ] **C-03a** `magister-connector update` ohne Administratorrechte → „braucht Administratorrechte“, nichts verändert; bei aktueller Fassung → „Der Agent ist aktuell.“
@@ -359,7 +359,7 @@ Abnahme-Issue schreiben.
 | ~~L-05~~ | **Behoben 2026-10-05.** Verbindungsfehler nach Ursache benannt; `check` prüft Kanal und AD-Bind und warnt bei IP-Endpunkt; Installationsordner im System-PATH; INSTALL.txt, README und Beispielkonfiguration verlangen den Zertifikatsnamen. | — | C-11–C-13a |
 | L-06 | FR/IT/EN nicht von Muttersprachlern geprüft, einzelne Texte noch deutsch. | nicht produktiv für Romandie/Tessin | S-04 |
 | L-07 | Umschalter „auch bei Kunde X berechtigt" (E16, multitenancy.md §9.3) nicht gebaut. | Person mit zwei Kunden meldet sich zweimal an | — |
-| L-08 | `dev-pruefen.sh` läuft nur gegen die Prozess-Umgebung, nicht gegen den Container-Aufbau auf dev01. | Stufe 2 auf dev01 von Hand | A-07 |
+| L-08 | `dev-pruefen.sh` läuft nur gegen die Prozess-Umgebung, nicht gegen den Container-Aufbau auf dem Dev-Host. | Stufe 2 auf dem Dev-Host von Hand | A-07 |
 | ~~L-09~~ | **Behoben 2026-10-06 (ADR-0024 D6).** Tägliche Sicherung in der Konsole, Prüfer als Timer. | — | K-47, K-48 |
 | L-10 | Organisatorisch offen: CA-Zeremonie (bis dahin nur Test-CA → kein echter Agent beim Fremdkunden), externer Pentest, Wildcard-Zertifikat. | blockiert ersten gehosteten Fremdkunden | §10 Punkt 5 |
 | ~~L-11~~ | **Behoben 2026-10-05.** Hostname wird beim Anlegen auf Form, Plattform-Domäne (eine Ebene) und reservierte Namen geprüft. | — | K-11a |

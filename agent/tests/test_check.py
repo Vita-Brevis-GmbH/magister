@@ -39,7 +39,7 @@ def config_file(tmp_path: Path) -> Path:
     path.write_text(
         json.dumps(
             {
-                "endpoint": "https://172.25.12.10:46200",
+                "endpoint": "https://192.0.2.10:46200",
                 "state_dir": str(state),
                 "ca_bundle": str(tmp_path / "ca.pem"),
             }
@@ -176,7 +176,7 @@ class TestCheck:
             probe=ProbeResult(False, "Zertifikat passt nicht"),
         )
         assert code == 1
-        assert "WARNUNG — Der Endpunkt nennt die IP-Adresse 172.25.12.10" in text
+        assert "WARNUNG — Der Endpunkt nennt die IP-Adresse 192.0.2.10" in text
         assert "Kanal:        FEHLER — Zertifikat passt nicht" in text
 
 

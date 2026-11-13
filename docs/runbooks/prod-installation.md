@@ -9,15 +9,15 @@
 
 | Was | Name | Port | Erreichbar von |
 |---|---|---|---|
-| Kundenseiten | `<kunde>.mgmt.vitabrevis.ch` (z. B. `gmp.mgmt.vitabrevis.ch`) | 443 | Internet, **über die WAF** |
+| Kundenseiten | `<kunde>.mgmt.vitabrevis.ch` (z. B. `kunde-a.mgmt.vitabrevis.ch`) | 443 | Internet, **über die WAF** |
 | Connector-Kanal (AD-Agent auf dem DC) | `connect.mgmt.vitabrevis.ch` | 46200 | Internet (Kunden-DCs), **an der WAF vorbei** |
 | Konsole (Cockpit) | `https://konsole.int.vitabrevis.ch:4444` | 4444 | **nur intern** (Verwaltungsnetz/VPN) |
-| Server selbst | `web02-002-vb.int.vitabrevis.ch`, CNAME `mgmt.int.vitabrevis.ch` | 22 | nur intern |
+| Server selbst | `srv01.int.vitabrevis.ch`, CNAME `mgmt.int.vitabrevis.ch` | 22 | nur intern |
 
 **Zertifikate:**
 
 - **Kundenseiten:** gekauftes Wildcard **`*.mgmt.vitabrevis.ch`** (§3a), auf dem Server und auf der WAF.
-  - `*.vitabrevis.ch` reicht nicht: ein Wildcard deckt nur **eine** Ebene ab. `mgmt.vitabrevis.ch` wäre gedeckt, `gmp.mgmt.vitabrevis.ch` nicht.
+  - `*.vitabrevis.ch` reicht nicht: ein Wildcard deckt nur **eine** Ebene ab. `mgmt.vitabrevis.ch` wäre gedeckt, `kunde-a.mgmt.vitabrevis.ch` nicht.
   - Let's Encrypt geht hinter der WAF nicht. Ohne WAF wäre es die Alternative (§9).
 - **Konsole und Connector:** Zertifikate aus der Plattform-CA.
   - `root.pem` kommt auf die Admin-Geräte und auf die DCs (`enroll --ca`).
@@ -30,11 +30,11 @@ Firewall.
 
 - Ubuntu Server 26.04 LTS, minimal, mit OpenSSH.
 - Empfohlen sind 4 vCPU, 8 GB RAM und 80 GB Platte. Der Bau der Abbilder braucht anfangs am meisten.
-- Netz: feste IP `<PRIVATE_IP>`, Hostname `web02-002-vb`:
+- Netz: feste IP `<PRIVATE_IP>`, Hostname `srv01`:
 
 ```bash
-sudo hostnamectl set-hostname web02-002-vb
-# /etc/hosts: <PRIVATE_IP>  web02-002-vb.int.vitabrevis.ch web02-002-vb
+sudo hostnamectl set-hostname srv01
+# /etc/hosts: <PRIVATE_IP>  srv01.int.vitabrevis.ch srv01
 ```
 
 ## 2 · DNS und Firewall (vor dem Aufbau)
@@ -54,14 +54,14 @@ Client-Zertifikat an (mTLS). Eine WAF, die TLS aufbricht, nimmt ihm das weg.
 
 | Eintrag | Typ | Ziel |
 |---|---|---|
-| `web02-002-vb.int.vitabrevis.ch` | A | `<PRIVATE_IP>` |
-| `konsole.int.vitabrevis.ch` | CNAME | `web02-002-vb.int.vitabrevis.ch` (Konsole) |
-| `mgmt.int.vitabrevis.ch` | CNAME | `web02-002-vb.int.vitabrevis.ch` (SSH, Betrieb) |
+| `srv01.int.vitabrevis.ch` | A | `<PRIVATE_IP>` |
+| `konsole.int.vitabrevis.ch` | CNAME | `srv01.int.vitabrevis.ch` (Konsole) |
+| `mgmt.int.vitabrevis.ch` | CNAME | `srv01.int.vitabrevis.ch` (SSH, Betrieb) |
 
 Die Konsole antwortet auf **zwei** Namen: ihren festen
 `konsole.mgmt.vitabrevis.ch` und den zweiten Namen aus `--zusatzname`, hier
 `konsole.int.vitabrevis.ch`. Beide stehen im Zertifikat. Unter
-`mgmt.int.vitabrevis.ch:4444` oder `web02-002-vb…:4444` gibt es eine
+`mgmt.int.vitabrevis.ch:4444` oder `srv01…:4444` gibt es eine
 Zertifikatswarnung bzw. 421, weil diese Namen nicht im Zertifikat stehen. Für SSH gehen alle drei.
 `konsole.mgmt.vitabrevis.ch` braucht keinen internen DNS-Eintrag: die
 Datenebene erreicht die Konsole über einen festen Eintrag, nicht über den DNS.
@@ -71,7 +71,7 @@ Datenebene erreicht die Konsole über einen festen Eintrag, nicht über den DNS.
 
 - Das Zertifikat `*.mgmt.vitabrevis.ch` mit Schlüssel einspielen, wenn die WAF TLS aufbricht.
 - Backend `https://<PRIVATE_IP>:443`. Nicht HTTP: Caddy leitet HTTP auf HTTPS um, das gäbe eine Schleife.
-- Den **Host-Header** (`gmp.mgmt.vitabrevis.ch`) unverändert weitergeben. Auch die **SNI** zum Backend sollte der Kundenname sein. An beidem erkennt die Plattform den Kunden.
+- Den **Host-Header** (`kunde-a.mgmt.vitabrevis.ch`) unverändert weitergeben. Auch die **SNI** zum Backend sollte der Kundenname sein. An beidem erkennt die Plattform den Kunden.
 - `X-Forwarded-For` mit der Client-Adresse setzen bzw. anhängen.
 - Die Adressen, mit denen die WAF beim Server ankommt, braucht §5 (`--waf`).
 - Für die Anmeldung über Entra muss die WAF Folgendes zulassen: Weiterleitungen mit `?code=…&state=…` auf `/api/auth/callback` und Cookies mit `SameSite=Lax`.
@@ -298,11 +298,11 @@ ein GitHub-Token mit **Actions: read**.
 
 **Ersten Kunden** in der Konsole anlegen:
 
-1. Kunden → Neu, Kürzel `gmp`, Hostname `gmp.mgmt.vitabrevis.ch`.
+1. Kunden → Neu, Kürzel `kunde_a`, Hostname `kunde-a.mgmt.vitabrevis.ch`.
 2. Auf der Datenebene eintragen:
 
    ```bash
-   ./scripts/plattform-aufbau.sh kunde-anbinden gmp
+   ./scripts/plattform-aufbau.sh kunde-anbinden kunde_a
    ```
 
    Das setzt DSN und Kundenschlüssel in `deploy/compose/.env` und startet die
@@ -312,11 +312,11 @@ ein GitHub-Token mit **Actions: read**.
 
    ```bash
    # auf dem Server: Zertifikat und Antwort von Caddy
-   curl -sI --resolve gmp.mgmt.vitabrevis.ch:443:<PRIVATE_IP> https://gmp.mgmt.vitabrevis.ch | head -1
-   echo | openssl s_client -connect <PRIVATE_IP>:443 -servername gmp.mgmt.vitabrevis.ch 2>/dev/null \
+   curl -sI --resolve kunde-a.mgmt.vitabrevis.ch:443:<PRIVATE_IP> https://kunde-a.mgmt.vitabrevis.ch | head -1
+   echo | openssl s_client -connect <PRIVATE_IP>:443 -servername kunde-a.mgmt.vitabrevis.ch 2>/dev/null \
      | openssl x509 -noout -subject -issuer -enddate
    # von aussen
-   curl -sI https://gmp.mgmt.vitabrevis.ch | head -1
+   curl -sI https://kunde-a.mgmt.vitabrevis.ch | head -1
    ```
 
 4. Kommt die echte Client-Adresse an? Im Portal unter Administration →
@@ -356,8 +356,8 @@ Offline-Rechner, beschreibt [platform-ca.md](platform-ca.md).
 ## 8 · Entra und AD-Connector testen
 
 - **Entra:**
-  - Cockpit → Kunde `gmp` → Einstellungen → Entra ID → **„? Hilfe / Help“**.
-  - Die Umleitungs-URI ist `https://gmp.mgmt.vitabrevis.ch/api/auth/callback`.
+  - Cockpit → Kunde `kunde_a` → Einstellungen → Entra ID → **„? Hilfe / Help“**.
+  - Die Umleitungs-URI ist `https://kunde-a.mgmt.vitabrevis.ch/api/auth/callback`.
 - **AD-Connector auf dem DC:**
   - `root.pem` im Cockpit herunterladen (Kunde → Connector).
   - Auf dem DC einschreiben:
@@ -408,5 +408,5 @@ git pull && ./scripts/plattform-aufbau.sh update
 | Entra-Anmeldung endet mit `oidc_state_mismatch` / `oidc_callback_invalid` | Die WAF verwirft Cookies oder Query-Parameter auf `/api/auth/callback` | Ausnahme in der WAF für `/api/auth/*` |
 | `up`: „deckt *.mgmt.vitabrevis.ch nicht ab“ | Falsches Zertifikat abgelegt (z. B. `*.vitabrevis.ch`) | Das Zertifikat aus dem Antrag von §3a ablegen |
 | Kundenseite 503 „maintenance“, `status`: keine Kunden | Datenebene erreicht die Konsole nicht | `docker exec magister-magister-api-1 getent hosts konsole.mgmt.vitabrevis.ch` muss `<PRIVATE_IP>` zeigen; sonst `up` erneut |
-| Konsole 421 | Aufruf unter einem Namen, der nicht im Zertifikat steht (z. B. `mgmt.int…` oder `web02-002-vb…`) | `https://konsole.int.vitabrevis.ch:4444` verwenden |
+| Konsole 421 | Aufruf unter einem Namen, der nicht im Zertifikat steht (z. B. `mgmt.int…` oder `srv01…`) | `https://konsole.int.vitabrevis.ch:4444` verwenden |
 | Agent: `CERTIFICATE_VERIFY_FAILED` | `root.pem` fehlt beim `enroll` oder ein Proxy bricht TLS auf | `enroll --ca …\root.pem`; 46200 am Proxy vorbei |

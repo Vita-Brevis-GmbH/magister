@@ -14,7 +14,7 @@
 #     sieht sie den Namen des Containers und bedient niemanden.
 #   * Kein ACME. Das Zertifikat liegt als Datei da und deckt die Namen aller
 #     Kunden ab (ein Platzhalter `*.<domäne>` reicht für genau eine Ebene —
-#     `*.vitabrevis.ch` deckt also `gmp.mgmt.vitabrevis.ch` NICHT ab). Es
+#     `*.vitabrevis.ch` deckt also `kunde-a.mgmt.vitabrevis.ch` NICHT ab). Es
 #     kommt aus der Plattform-CA (Test) oder ist ein gekauftes Wildcard
 #     (`PLATTFORM_TLS=eigen`). Mit Let's Encrypt je Kunde gilt stattdessen
 #     `Caddyfile.mandanten-acme`.

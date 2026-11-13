@@ -1,6 +1,6 @@
 # Magister DEV/demo reverse proxy — plain HTTP, no TLS, no ACME.
 #
-# For local or dev-server demos reached by IP, e.g. http://172.25.8.27 — no
+# For local or dev-server demos reached by IP, e.g. http://192.0.2.27 — no
 # DNS, no Let's-Encrypt, no cert warnings. Loaded ONLY via
 # docker-compose.dev.yml; production keeps ../caddy/Caddyfile with auto-TLS.
 #
