@@ -70,6 +70,7 @@ const base: CurrentUserOut = {
   kind: "teacher",
   school_scope: [1],
   roles: ["schulleitung"],
+  has_permissions: true,
   expires_at: "2026-09-11T18:00:00Z",
   is_operator: false,
   operator_active: null,

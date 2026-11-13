@@ -90,7 +90,10 @@ export function Layout() {
   // School-side modules default visible while loading (they are on in the
   // school profile, the historical default); departments defaults hidden
   // because it only ships in the company profile.
-  const hasClasses = enabledModules.data?.has("classes") ?? true;
+  // Ein Anmeldekonto ohne jede Rolle (ADR-0025) bekommt keine Menüpunkte:
+  // sie führten auf leere oder verbotene Seiten. Die Übersicht sagt warum.
+  const noPermissions = me.data?.has_permissions === false;
+  const hasClasses = !noPermissions && (enabledModules.data?.has("classes") ?? true);
   const hasImports = enabledModules.data?.has("imports") ?? true;
   const hasReports = enabledModules.data?.has("reports") ?? true;
   const hasDevices = enabledModules.data?.has("devices") ?? true;
@@ -209,7 +212,14 @@ export function Layout() {
                     >
                       {t("nav.audit")}
                     </Link>
-                    {navAsAdmin && !managedByPlatform ? (
+                    {/*
+                      Auch gehostet: die Rechte-MATRIX gehört dann dem
+                      Betreiber, die Rollen-ZUWEISUNG an Personen und die
+                      Anmeldekonten bleiben hier (Entscheid E2, ADR-0025).
+                      Ohne Menüpunkt war die Seite gehostet nur über die
+                      Adresszeile erreichbar.
+                    */}
+                    {navAsAdmin ? (
                       <Link
                         to="/admin/roles"
                         role="menuitem"

@@ -11,17 +11,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-/** Grund eines abgewiesenen Entra-Rückwegs (`/login?error=…&entra=…`). */
+/**
+ * Grund eines abgewiesenen Rückwegs vom Anmeldedienst
+ * (`/login?error=…&idp=…`, ADR-0025: Keycloak-Realm des Kunden).
+ */
 interface LoginSearch {
   error?: string;
-  entra?: string;
+  idp?: string;
 }
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     error: typeof search.error === "string" ? search.error : undefined,
-    entra: typeof search.entra === "string" ? search.entra : undefined,
+    idp: typeof search.idp === "string" ? search.idp : undefined,
   }),
 });
 
@@ -37,13 +40,13 @@ export function OidcErrorBanner({
   const search = new URLSearchParams(query);
   const code = search.get("error") ?? "";
   if (!OIDC_CODE.test(code)) return null;
-  const entra = search.get("entra") ?? "";
+  const idp = search.get("idp") ?? "";
   return (
     <ErrorBanner>
       <p className="font-medium">{t("auth.oidc_errors.title")}</p>
       <p>
         {t([`auth.oidc_errors.${code}`, "auth.oidc_errors.generic"], {
-          entra: OIDC_CODE.test(entra) ? entra : "—",
+          idp: OIDC_CODE.test(idp) ? idp : "—",
         })}
       </p>
     </ErrorBanner>

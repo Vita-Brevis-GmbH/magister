@@ -39,6 +39,13 @@ function DashboardPage(): JSX.Element {
   const isManager =
     me.data?.is_admin || (me.data?.roles ?? []).some((r) => r === "schulleitung" || r === "smi");
 
+  // Ein Anmeldekonto aus Keycloak ohne jede Rolle (ADR-0025): angemeldet, aber
+  // ohne Rechte. Statt Karten, die auf leere oder verbotene Seiten führen, ein
+  // Satz, der sagt, woran es liegt und wer es ändert.
+  if (me.data?.has_permissions === false) {
+    return <NoPermissions name={me.data.upn} />;
+  }
+
   // The edition decides the overview, driven by the INSTANCE PROFILE (not the
   // module set): the company edition never renders the school dashboard — which
   // would query the disabled /classes endpoint and surface a spurious error —
@@ -288,6 +295,29 @@ function CompanyDashboard(): JSX.Element {
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Signed in without any permission (ADR-0025)
+// ---------------------------------------------------------------------------
+
+export function NoPermissions({ name }: { name: string }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-6">
+      <header className="space-y-1">
+        <h1 className="font-serif text-2xl font-semibold">{t("app.title")}</h1>
+      </header>
+      <Card role="status">
+        <CardHeader>
+          <CardTitle className="text-base">{t("auth.no_permissions_title")}</CardTitle>
+        </CardHeader>
+        <CardContent className="text-sm text-muted-foreground">
+          {t("auth.no_permissions_intro", { name })}
+        </CardContent>
+      </Card>
     </div>
   );
 }

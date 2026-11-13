@@ -85,6 +85,8 @@ import type {
   LocalAdminPasswordChangeRequest,
   LocalLoginRequest,
   LocalLoginStageOut,
+  LoginAccountOut,
+  LogoutOut,
   LocalRecoveryCodesOut,
   LocalTotpRequest,
   RbacConfig,
@@ -149,6 +151,7 @@ export const queryKeys = {
   userDepartments: (guid: string) => ["user-departments", guid] as const,
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
+  loginAccounts: ["admin-login-accounts"] as const,
   rbac: ["admin-rbac"] as const,
   devices: ["devices"] as const,
   device: (deviceId: number) => ["device", deviceId] as const,
@@ -502,16 +505,25 @@ export function useArchiveGroupTemplate() {
   });
 }
 
+/** Nur eine absolute http(s)-Adresse wird angesteuert — sonst bleibt es bei /login. */
+export function logoutTarget(res: LogoutOut | undefined): string {
+  const redirect = res?.redirect;
+  if (redirect && /^https?:\/\//i.test(redirect)) return redirect;
+  return "/login";
+}
+
 export function useLogout() {
   const qc = useQueryClient();
-  return useMutation({
-    mutationFn: () => apiFetch<{ ok: true }>("/auth/logout", { method: "POST" }),
+  return useMutation<LogoutOut, ApiError, void>({
+    mutationFn: () => apiFetch<LogoutOut>("/auth/logout", { method: "POST" }),
     // Land on /login whether or not the server call succeeded, so the button
     // never appears to "do nothing" — the session is cleared server-side on
     // success, and on any failure the login screen re-evaluates the session.
-    onSettled: () => {
+    // A Keycloak session ends at the realm too (ADR-0025): the server names
+    // its logout address, which leads back to /login afterwards.
+    onSettled: (res) => {
       qc.clear();
-      window.location.assign("/login");
+      window.location.assign(logoutTarget(res));
     },
   });
 }
@@ -1082,6 +1094,63 @@ export function useRevokeRole() {
       });
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.roles }),
+  });
+}
+
+// --- Anmeldekonten aus Keycloak (admin-only, ADR-0025) --------------------
+
+export function useLoginAccounts(search: string, enabled = true) {
+  const q = search.trim();
+  return useQuery<LoginAccountOut[]>({
+    queryKey: [...queryKeys.loginAccounts, q],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (q) params.set("search", q);
+      const qs = params.toString();
+      return apiFetch<LoginAccountOut[]>(`/admin/login-accounts${qs ? `?${qs}` : ""}`);
+    },
+    enabled,
+  });
+}
+
+export function useCreateLoginAccount() {
+  const qc = useQueryClient();
+  return useMutation<LoginAccountOut, ApiError, { username: string; display_name?: string }>({
+    mutationFn: (body) =>
+      apiFetch<LoginAccountOut>("/admin/login-accounts", { method: "POST", body }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.loginAccounts }),
+  });
+}
+
+export function useSetLoginAccountEnabled() {
+  const qc = useQueryClient();
+  return useMutation<LoginAccountOut, ApiError, { id: number; enabled: boolean }>({
+    mutationFn: ({ id, enabled }) =>
+      apiFetch<LoginAccountOut>(`/admin/login-accounts/${id}`, {
+        method: "PATCH",
+        body: { enabled },
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.loginAccounts }),
+  });
+}
+
+export function useUnbindLoginAccount() {
+  const qc = useQueryClient();
+  return useMutation<LoginAccountOut, ApiError, number>({
+    mutationFn: (id) =>
+      apiFetch<LoginAccountOut>(`/admin/login-accounts/${id}/unbind`, { method: "POST" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.loginAccounts }),
+  });
+}
+
+export function useDeleteLoginAccount() {
+  const qc = useQueryClient();
+  return useMutation<void, ApiError, number>({
+    mutationFn: (id) => apiFetch<void>(`/admin/login-accounts/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: queryKeys.loginAccounts });
+      void qc.invalidateQueries({ queryKey: queryKeys.roles });
+    },
   });
 }
 

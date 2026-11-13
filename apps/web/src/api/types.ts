@@ -20,11 +20,42 @@ export interface CurrentUserOut {
   kind: "teacher" | "student" | "admin" | null;
   school_scope: number[];
   roles: string[];
+  /**
+   * Darf das Konto ueberhaupt etwas sehen (Rolle, Klasse, Fach, Leitung)?
+   * Ein neues Anmeldekonto aus Keycloak ohne Rechte bekommt einen Hinweis
+   * statt leerer Seiten (ADR-0025).
+   */
+  has_permissions: boolean;
   expires_at: string;
   /** Diese Sitzung ist selbst ein Operator-Zugriff. */
   is_operator: boolean;
   /** Gesetzt, solange ein Zugriff laeuft — fuer alle Benutzer. */
   operator_active: OperatorBanner | null;
+}
+
+/** Ein Anmeldekonto aus dem Keycloak-Realm des Kunden (ADR-0025). */
+export interface LoginAccountOut {
+  id: number;
+  username: string;
+  display_name: string | null;
+  email: string | null;
+  /** Schluessel fuer Rollen — im Rolleneditor als `guid` verwendet. */
+  principal_guid: string;
+  /** Schon einmal angemeldet und an den Keycloak-Benutzer gebunden. */
+  bound: boolean;
+  enabled: boolean;
+  /** Einer Person aus dem AD zugeordnet. */
+  ad_linked: boolean;
+  /** Steht in den ersten Administratoren der Konsole. */
+  bootstrap_admin: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+/** Antwort von `POST /auth/logout`: `redirect` fuehrt zum Abmelden beim Realm. */
+export interface LogoutOut {
+  ok: true;
+  redirect?: string;
 }
 
 /** Ein Zugriff in der Liste, die der Kunde sieht (ADR-0019 D6). */

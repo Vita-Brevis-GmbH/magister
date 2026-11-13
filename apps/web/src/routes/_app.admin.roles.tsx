@@ -1,26 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
 import {
+  useCreateLoginAccount,
   useCreateRole,
+  useDeleteLoginAccount,
   useDeleteRole,
+  useLoginAccounts,
   usePlatformManaged,
   useRbacConfig,
   useRevokeRole,
   useRoles,
   useSchools,
+  useSetLoginAccountEnabled,
   useSetRoleCapabilities,
   useSetUserRoles,
+  useUnbindLoginAccount,
   useUsers,
 } from "@/api/hooks";
-import type { RbacRole, RoleAssignmentOut, RoleGrantRequest } from "@/api/types";
+import type { LoginAccountOut, RbacRole, RoleAssignmentOut, RoleGrantRequest } from "@/api/types";
 import { ManagedByPlatform } from "@/components/ManagedByPlatform";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useFormatters } from "@/lib/useFormatters";
 import { useTerms } from "@/lib/useTerms";
 
 export const Route = createFileRoute("/_app/admin/roles")({
@@ -84,6 +90,8 @@ function RolesPage(): JSX.Element {
       {managed ? <ManagedByPlatform area="roles" /> : <RightsMatrix />}
 
       <AssignCard />
+
+      <LoginAccountsCard />
 
       <Card>
         <CardHeader>
@@ -419,8 +427,31 @@ function AssignCard(): JSX.Element {
     );
   }
 
-  const results = useUsers(search.trim().length >= 2 ? { search: search.trim(), limit: 8 } : {});
-  const showResults = search.trim().length >= 2 && !selected;
+  const term = search.trim();
+  const results = useUsers(term.length >= 2 ? { search: term, limit: 8 } : {});
+  // Anmeldekonten aus Keycloak (ADR-0025): auch wer keine AD-Zeile hat — etwa
+  // `automato-admin` oder ein vorab angelegtes Konto — bekommt Rollen.
+  const accounts = useLoginAccounts(term, term.length >= 2);
+  const showResults = term.length >= 2 && !selected;
+  const candidates = useMemo(() => {
+    const out: { guid: string; label: string; sub: string; account: boolean }[] = [];
+    const seen = new Set<string>();
+    for (const u of results.data?.items ?? []) {
+      seen.add(u.ad_object_guid);
+      out.push({ guid: u.ad_object_guid, label: userLabel(u), sub: u.upn, account: false });
+    }
+    for (const a of accounts.data ?? []) {
+      if (seen.has(a.principal_guid)) continue;
+      out.push({
+        guid: a.principal_guid,
+        label: a.display_name || a.username,
+        sub: a.username,
+        account: true,
+      });
+    }
+    return out;
+  }, [results.data, accounts.data]);
+  const searching = results.isLoading || accounts.isLoading;
 
   return (
     <Card>
@@ -448,19 +479,22 @@ function AssignCard(): JSX.Element {
           )}
           {showResults ? (
             <div className="mt-1 rounded-md border">
-              {results.isLoading ? (
+              {searching && candidates.length === 0 ? (
                 <p className="px-3 py-2 text-sm text-muted-foreground">{t("common.loading")}</p>
-              ) : results.data && results.data.items.length > 0 ? (
+              ) : candidates.length > 0 ? (
                 <ul className="max-h-56 overflow-y-auto text-sm">
-                  {results.data.items.map((u) => (
-                    <li key={u.ad_object_guid}>
+                  {candidates.map((c) => (
+                    <li key={c.guid}>
                       <button
                         type="button"
                         className="flex w-full flex-col items-start px-3 py-1.5 text-left hover:bg-muted"
-                        onClick={() => setSelected({ guid: u.ad_object_guid, label: userLabel(u) })}
+                        onClick={() => setSelected({ guid: c.guid, label: c.label })}
                       >
-                        <span className="font-medium">{userLabel(u)}</span>
-                        <span className="text-xs text-muted-foreground">{u.upn}</span>
+                        <span className="font-medium">{c.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {c.sub}
+                          {c.account ? ` · ${t("admin.roles.result_login_account")}` : ""}
+                        </span>
                       </button>
                     </li>
                   ))}
@@ -548,6 +582,215 @@ function AssignCard(): JSX.Element {
           )
         ) : (
           <p className="text-sm text-muted-foreground">{t("admin.roles.select_user_first")}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Fehler einer Kontoaktion → i18n-Schlüssel (ADR-0025). */
+function loginAccountErrorKey(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.code === "login_account_exists") return "admin.login_accounts.error_exists";
+    if (err.code === "account_principal_conflict") return "admin.login_accounts.error_conflict";
+    if (err.code === "login_account_is_bootstrap_admin") {
+      return "admin.login_accounts.error_bootstrap";
+    }
+    if (err.status === 422) return "admin.login_accounts.error_invalid";
+  }
+  return "errors.generic";
+}
+
+/**
+ * Anmeldekonten aus dem Keycloak-Realm (ADR-0025). Die Benutzer verwaltet
+ * Keycloak; hier stehen die Handgriffe, die nur Magister kann: vorab anlegen
+ * (damit Rollen vor der ersten Anmeldung passen), sperren, Bindung lösen,
+ * löschen.
+ */
+export function LoginAccountsCard(): JSX.Element {
+  const { t } = useTranslation();
+  const fmt = useFormatters();
+  const [search, setSearch] = useState("");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const accounts = useLoginAccounts(search);
+  const create = useCreateLoginAccount();
+  const setEnabled = useSetLoginAccountEnabled();
+  const unbind = useUnbindLoginAccount();
+  const remove = useDeleteLoginAccount();
+  const busy = setEnabled.isPending || unbind.isPending || remove.isPending;
+  const actionError = setEnabled.error ?? unbind.error ?? remove.error;
+
+  function submit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    const name = username.trim();
+    if (!name) return;
+    create.mutate(
+      { username: name, display_name: displayName.trim() || undefined },
+      {
+        onSuccess: () => {
+          setUsername("");
+          setDisplayName("");
+        },
+      },
+    );
+  }
+
+  function status(a: LoginAccountOut): string {
+    if (!a.enabled) return t("admin.login_accounts.status_disabled");
+    return a.bound
+      ? t("admin.login_accounts.status_bound")
+      : t("admin.login_accounts.status_unbound");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">{t("admin.login_accounts.title")}</CardTitle>
+        <CardDescription>{t("admin.login_accounts.desc")}</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1">
+            <Label htmlFor="login-account-username">
+              {t("admin.login_accounts.create_username")}
+            </Label>
+            <Input
+              id="login-account-username"
+              className="w-64"
+              placeholder="automato-admin"
+              autoComplete="off"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="login-account-name">{t("admin.login_accounts.create_name")}</Label>
+            <Input
+              id="login-account-name"
+              className="w-56"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={!username.trim() || create.isPending}>
+            {t("admin.login_accounts.create_button")}
+          </Button>
+        </form>
+        {create.isError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t(loginAccountErrorKey(create.error))}
+          </p>
+        ) : null}
+
+        <Input
+          aria-label={t("admin.login_accounts.search_placeholder")}
+          placeholder={t("admin.login_accounts.search_placeholder")}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {actionError ? (
+          <p role="alert" className="text-sm text-destructive">
+            {t(loginAccountErrorKey(actionError))}
+          </p>
+        ) : null}
+
+        {accounts.isLoading ? (
+          <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+        ) : accounts.isError ? (
+          <p className="text-sm text-destructive">{t("errors.generic")}</p>
+        ) : accounts.data && accounts.data.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="py-2 pr-4">{t("admin.login_accounts.col_username")}</th>
+                  <th className="py-2 pr-4">{t("admin.login_accounts.col_name")}</th>
+                  <th className="py-2 pr-4">{t("admin.login_accounts.col_status")}</th>
+                  <th className="py-2 pr-4">{t("admin.login_accounts.col_last_login")}</th>
+                  <th className="py-2 pr-4" />
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.data.map((a) => (
+                  <tr key={a.id} className="border-b align-top last:border-0">
+                    <td className="py-2 pr-4">
+                      <div className="font-mono text-xs">{a.username}</div>
+                      <div className="mt-1 flex gap-1">
+                        {a.ad_linked ? (
+                          <span className="rounded border px-1 text-xs text-muted-foreground">
+                            {t("admin.login_accounts.badge_ad")}
+                          </span>
+                        ) : null}
+                        {a.bootstrap_admin ? (
+                          <span className="rounded border px-1 text-xs text-muted-foreground">
+                            {t("admin.login_accounts.badge_bootstrap")}
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="py-2 pr-4">{a.display_name ?? "—"}</td>
+                    <td className="py-2 pr-4">{status(a)}</td>
+                    <td className="py-2 pr-4 text-xs text-muted-foreground">
+                      {a.last_login_at
+                        ? fmt.formatDateTime(a.last_login_at)
+                        : t("admin.login_accounts.never")}
+                    </td>
+                    <td className="py-2 pr-4">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        {!a.bootstrap_admin ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setEnabled.mutate({ id: a.id, enabled: !a.enabled })}
+                          >
+                            {a.enabled
+                              ? t("admin.login_accounts.disable")
+                              : t("admin.login_accounts.enable")}
+                          </Button>
+                        ) : null}
+                        {a.bound ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            title={t("admin.login_accounts.unbind_hint")}
+                            disabled={busy}
+                            onClick={() => unbind.mutate(a.id)}
+                          >
+                            {t("admin.login_accounts.unbind")}
+                          </Button>
+                        ) : null}
+                        {!a.bootstrap_admin ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  t("admin.login_accounts.delete_confirm", { name: a.username }),
+                                )
+                              ) {
+                                remove.mutate(a.id);
+                              }
+                            }}
+                          >
+                            {t("admin.login_accounts.delete")}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">{t("admin.login_accounts.empty")}</p>
         )}
       </CardContent>
     </Card>

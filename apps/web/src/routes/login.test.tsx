@@ -40,7 +40,7 @@ describe("LoginPage", () => {
   it("renders the OIDC anchor when capabilities flag oidc_enabled", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: false }));
     renderWithQuery(<LoginPage />);
-    const link = await screen.findByRole("link", { name: /entra id/i });
+    const link = await screen.findByRole("link", { name: /^anmelden$/i });
     expect(link).toHaveAttribute("href", "/api/auth/login");
   });
 
@@ -50,13 +50,13 @@ describe("LoginPage", () => {
     expect(await screen.findByLabelText(/benutzername/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^passwort$/i)).toBeInTheDocument();
     // OIDC anchor must not appear when oidc_enabled is false.
-    expect(screen.queryByRole("link", { name: /entra id/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^anmelden$/i })).toBeNull();
   });
 
   it("hides the local form behind a disclosure when both paths are enabled", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: true }));
     renderWithQuery(<LoginPage />);
-    expect(await screen.findByRole("link", { name: /entra id/i })).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: /^anmelden$/i })).toBeInTheDocument();
     // Disclosure summary present, password field initially not visible.
     expect(screen.getByText(/anderen anmeldeweg/i)).toBeInTheDocument();
   });
@@ -70,7 +70,7 @@ describe("LoginPage", () => {
     renderWithQuery(<LoginPage />);
     expect(await screen.findByText(/kein anmeldeweg eingerichtet/i)).toBeInTheDocument();
     expect(screen.getByText(/betreiber-konsole/i)).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /entra id/i })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^anmelden$/i })).toBeNull();
     expect(screen.queryByLabelText(/benutzername/i)).toBeNull();
   });
 
@@ -80,16 +80,31 @@ describe("LoginPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/anmeldewege/i);
   });
 
-  it("explains a refused Entra sign-in instead of showing raw JSON", () => {
-    render(<OidcErrorBanner query="?error=user_not_synced" />);
-    expect(screen.getByRole("alert")).toHaveTextContent(/noch nicht bekannt/i);
+  it("explains a refused sign-in instead of showing raw JSON", () => {
+    render(<OidcErrorBanner query="?error=account_bound_to_other_subject" />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/anmeldung nicht möglich/i);
+    expect(alert).toHaveTextContent(/anderen konto/i);
   });
 
-  it("names Entra's own reason and ignores foreign text in the address", () => {
-    render(<OidcErrorBanner query="?error=oidc_error&entra=%3Cb%3Ex%3C%2Fb%3E" />);
+  it("explains a locked account", () => {
+    render(<OidcErrorBanner query="?error=account_disabled" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/gesperrt/i);
+  });
+
+  it("names the provider's own reason and ignores foreign text in the address", () => {
+    const { unmount } = render(<OidcErrorBanner query="?error=oidc_error&idp=access_denied" />);
+    expect(screen.getByRole("alert")).toHaveTextContent(/abgebrochen \(access_denied\)/);
+    unmount();
+    render(<OidcErrorBanner query="?error=oidc_error&idp=%3Cb%3Ex%3C%2Fb%3E" />);
     const alert = screen.getByRole("alert");
-    expect(alert).toHaveTextContent(/Entra hat die Anmeldung abgebrochen \(—\)/);
+    expect(alert).toHaveTextContent(/Der Anmeldedienst hat die Anmeldung abgebrochen \(—\)/);
     expect(alert.innerHTML).not.toContain("<b>");
+  });
+
+  it("does not mention a particular identity provider", () => {
+    render(<OidcErrorBanner query="?error=oidc_discovery_failed" />);
+    expect(screen.getByRole("alert").textContent).not.toMatch(/entra/i);
   });
 
   it("falls back to a general message for an unknown code and ignores junk", () => {
