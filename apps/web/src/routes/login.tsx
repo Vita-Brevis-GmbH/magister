@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/api/client";
@@ -18,6 +18,8 @@ import { cn } from "@/lib/utils";
 interface LoginSearch {
   error?: string;
   idp?: string;
+  /** `?lokal=1`: das lokale Administrationskonto statt der Weiterleitung zum Realm. */
+  lokal?: string;
 }
 
 export const Route = createFileRoute("/login")({
@@ -25,6 +27,7 @@ export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>): LoginSearch => ({
     error: typeof search.error === "string" ? search.error : undefined,
     idp: typeof search.idp === "string" ? search.idp : undefined,
+    lokal: search.lokal === undefined ? undefined : String(search.lokal),
   }),
 });
 
@@ -111,6 +114,15 @@ export function LoginPage(): JSX.Element {
   // sonst nichts — auf dem Dev-Host sah das aus, als lade die Seite nicht
   // fertig, und gesucht wurde im Frontend statt in der Konfiguration.
   const keinWeg = caps.isSuccess && !oidcEnabled && !localEnabled;
+  // Anmeldung über den Realm ohne zweite Maske (SSO, ADR-0025): ist der Realm eingerichtet, geht
+  // es gleich dorthin – mit einer Keycloak-Sitzung (etwa vom Anmelde-Tor) ohne Rückfrage. Nicht
+  // nach einem Fehler (sonst Schleife) und nicht mit `?lokal` (Notzugang).
+  const search = new URLSearchParams(window.location.search);
+  const lokal = search.has("lokal");
+  const weiterleiten = showOidc && !lokal && !search.has("error");
+  useEffect(() => {
+    if (weiterleiten) window.location.assign("/api/auth/login");
+  }, [weiterleiten]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
@@ -135,13 +147,18 @@ export function LoginPage(): JSX.Element {
             </div>
           ) : null}
 
+          {weiterleiten ? (
+            <p className="text-sm text-muted-foreground">{t("auth.login_redirecting")}</p>
+          ) : null}
+
           {showOidc ? (
             <a href="/api/auth/login" className={cn(anchorButtonClasses)}>
               {t("auth.login_button")}
             </a>
           ) : null}
 
-          {showLocal && showOidc ? (
+          {showLocal && showOidc && lokal ? <LocalLoginForm /> : null}
+          {showLocal && showOidc && !lokal ? (
             <details>
               <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
                 {t("auth.login_local_disclosure")}

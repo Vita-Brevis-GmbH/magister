@@ -178,6 +178,20 @@ bekommen kein `redirect`.
   legt fehlende Konten vorab an und berechnet die GUID selbst. Von Hand bleibt
   die Vergabe in Magister möglich.
 
+## Nachtrag 2026-11-14: Anmeldung ohne zweite Maske (SSO)
+
+Fund aus dem Test (Anwender: „Bekomme für das Login weiterhin das Anmelde Fenster von Magister …
+also noch kein SSO mit dem Keycloak“): Hinter dem Anmelde-Tor von Automato hat der Benutzer schon
+eine Keycloak-Sitzung, Magister zeigte trotzdem seine Anmeldeseite mit dem Knopf „Anmelden“.
+
+- Ist der Realm eingerichtet (`oidc_enabled`), leitet `/login` gleich zu `/api/auth/login` weiter;
+  mit bestehender Keycloak-Sitzung kommt der Benutzer ohne Rückfrage hinein.
+- Nicht nach einem abgewiesenen Rückweg (`/login?error=…`): sonst entstünde eine Schleife, die
+  Seite zeigt den Grund und den Knopf.
+- Der lokale Notzugang bleibt unter `/login?lokal=1` (Formular direkt, keine Weiterleitung).
+- Nach dem Abmelden führt der Weg über die Abmeldeseite von Keycloak zurück auf `/login` und von
+  dort zur Anmeldemaske von Keycloak – die Sitzung ist dann beendet, es meldet nicht still wieder an.
+
 ## Abgelöst
 
 - ADR-0013 D5 (letzter Absatz) und ADR-0015 D3 („Was bleibt: OIDC gegen Entra")

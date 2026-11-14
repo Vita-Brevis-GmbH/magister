@@ -32,6 +32,7 @@
     "login_title": "Sign in",
     "login_intro": "Sign in with your account.",
     "login_checking": "Checking sign-in methods …",
+    "login_redirecting": "Redirecting to sign-in …",
     "login_none_title": "No sign-in method configured",
     "login_none_intro": "This installation has neither sign-in via Keycloak (OIDC) configured nor local sign-in enabled. Until that changes nobody can get in — not even administrators. It is set up in the operator console: enter the OIDC details of the realm, or enable the local administration account.",
     "login_capabilities_failed": "The available sign-in methods cannot be retrieved right now. That is a server error, not something you typed. Reload the page; if it persists, tell your administrators.",

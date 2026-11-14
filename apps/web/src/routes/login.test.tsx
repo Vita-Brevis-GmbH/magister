@@ -44,6 +44,39 @@ describe("LoginPage", () => {
     expect(link).toHaveAttribute("href", "/api/auth/login");
   });
 
+  it("goes straight to the realm when OIDC is set up (SSO, ADR-0025)", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: true }));
+    renderWithQuery(<LoginPage />);
+    await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith("/api/auth/login"));
+    expect(screen.getByText(/weiterleitung zur anmeldung/i)).toBeInTheDocument();
+  });
+
+  it("stays on the page after a refused sign-in (no loop)", async () => {
+    vi.stubGlobal("location", {
+      ...window.location,
+      assign: vi.fn(),
+      pathname: "/login",
+      search: "?error=oidc_token_invalid",
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: true }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByRole("link", { name: /^anmelden$/i })).toBeInTheDocument();
+    expect(window.location.assign).not.toHaveBeenCalled();
+  });
+
+  it("shows the local account with ?lokal instead of redirecting", async () => {
+    vi.stubGlobal("location", {
+      ...window.location,
+      assign: vi.fn(),
+      pathname: "/login",
+      search: "?lokal=1",
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: true }));
+    renderWithQuery(<LoginPage />);
+    expect(await screen.findByLabelText(/benutzername/i)).toBeInTheDocument();
+    expect(window.location.assign).not.toHaveBeenCalled();
+  });
+
   it("renders the local-login form when only local_login_enabled is true", async () => {
     fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: false, local_login_enabled: true }));
     renderWithQuery(<LoginPage />);
