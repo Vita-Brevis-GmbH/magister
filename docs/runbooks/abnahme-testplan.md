@@ -63,7 +63,7 @@ git log -1 --format=%h                   # im Protokoll notieren
 - [ ] **A-05** Frontends: in `apps/web`
   `pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build`,
   in `web/` im Repo `vitabrevis-cockpit` `pnpm lint && pnpm build` (mehr Skripte hat sie nicht).
-- [ ] **A-06** Skripte: `bash scripts/tests/plattform-konfig.test.sh`, `bash scripts/tests/plattform-zustand.test.sh`, `bash scripts/tests/plattform-schritte.test.sh` — alle bestanden.
+- [ ] **A-06** Skripte: `bash scripts/tests/plattform-konfig.test.sh`, `bash scripts/tests/plattform-zustand.test.sh`, `bash scripts/tests/plattform-schritte.test.sh`, `bash scripts/tests/plattform-ca.test.sh` — alle bestanden.
 - [ ] **A-07** Prüfer gegen die Prozess-Umgebung (auf einer Entwicklermaschine):
   `./scripts/dev-umgebung.sh up && ./scripts/dev-pruefen.sh` — **38 bestanden, 0 gescheitert**.
 - [ ] **A-08** Integrations-Test der Trennung:

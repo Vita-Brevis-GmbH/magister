@@ -484,6 +484,14 @@ port_pruefen() {  # $1 = Port
 # --- Plattform-CA ------------------------------------------------------------
 # Dieselbe Form wie in der Zeremonie: Wurzel, zwei Zwischenstellen, daraus
 # Server- und Client-Zertifikate. Was hier entsteht, ist eine TEST-CA.
+#
+# Schlüsselkennungen (SKI, AKI) stehen bei jedem Zertifikat ausdrücklich da,
+# obwohl OpenSSL 3 sie von selbst setzt: frühere Fassungen tun es nicht, und
+# ohne Authority Key Identifier lehnt ein Agent unter Python 3.13
+# (VERIFY_X509_STRICT) die Kette ab — mit einer Meldung, die nach allem
+# klingt, nur nicht nach diesem Skript. `keyid:always` lässt das Ausstellen
+# scheitern, statt still ein Zertifikat ohne Kennung zu schreiben.
+# scripts/tests/plattform-ca.test.sh prüft das ohne die Vorgaben von OpenSSL.
 make_ca() {
   mkdir -p "$CERTS"
   if [ -f "$CERTS/root.pem" ]; then
@@ -500,7 +508,8 @@ make_ca() {
     -keyout "$CERTS/root-key.pem" -out "$CERTS/root.pem" \
     -subj "/CN=Magister Plattform Root ($DOMAIN)" \
     -addext "basicConstraints=critical,CA:TRUE" \
-    -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null
+    -addext "keyUsage=critical,keyCertSign,cRLSign" \
+    -addext "subjectKeyIdentifier=hash" 2>/dev/null
 
   for zweck in operator connector; do
     openssl req -newkey rsa:3072 -nodes -keyout "$CERTS/$zweck-int-key.pem" \
@@ -508,7 +517,7 @@ make_ca() {
     openssl x509 -req -in "$CERTS/$zweck-int.csr" -CA "$CERTS/root.pem" \
       -CAkey "$CERTS/root-key.pem" -CAcreateserial -days 730 -sha256 \
       -out "$CERTS/$zweck-int.pem" \
-      -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n') 2>/dev/null
+      -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n') 2>/dev/null
   done
   # ZWEI Dateien, weil es zwei Fragen sind, und eine Datei für beide die
   # schwächere Antwort gibt:
@@ -545,7 +554,7 @@ make_ca() {
     openssl x509 -req -in "$CERTS/$wer.csr" -CA "$CERTS/operator-int.pem" \
       -CAkey "$CERTS/operator-int-key.pem" -CAcreateserial -days 365 -sha256 \
       -out "$CERTS/$wer.pem" \
-      -extfile <(printf 'extendedKeyUsage=clientAuth\nkeyUsage=critical,digitalSignature\n') 2>/dev/null
+      -extfile <(printf 'extendedKeyUsage=clientAuth\nkeyUsage=critical,digitalSignature\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n') 2>/dev/null
   done
 
   # Der Signierschlüssel für Operator-Einlösescheine (ADR-0019).
@@ -577,7 +586,7 @@ zertifikat() {  # $1 = Name, $2 = CN, $3 = SAN
   openssl x509 -req -in "$CERTS/$1.csr" -CA "$CERTS/root.pem" \
     -CAkey "$CERTS/root-key.pem" -CAcreateserial -days 730 -sha256 \
     -out "$CERTS/$1.pem" \
-    -extfile <(printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth\n' "$3") 2>/dev/null
+    -extfile <(printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n' "$3") 2>/dev/null
 }
 
 # --- Kundenzertifikate --------------------------------------------------------

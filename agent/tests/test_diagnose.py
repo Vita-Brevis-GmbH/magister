@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from connector_agent import diagnose
 from connector_agent.config import AgentConfig
 from connector_agent.diagnose import (
     explain_transport_error,
@@ -22,6 +23,7 @@ from connector_agent.diagnose import (
     probe_channel,
 )
 from connector_agent.enrollment import EnrollmentFailedError, enroll
+from connector_agent.tls import build_context
 from tests.helpers import FakeCa
 
 
@@ -110,6 +112,28 @@ class TestTheRightNameWorks:
         result = probe_channel(config)
         assert result.ok, result.message
         assert "Zertifikat der Plattform gültig" in result.message
+
+    def test_probe_succeeds_under_strict_x509_verification(
+        self, tmp_path: Path, ca: FakeCa, server: _TlsServer, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ab Python 3.13 prüft der Agent mit ``VERIFY_X509_STRICT``; die CI läuft unter 3.12.
+
+        Hier wird die Strenge von 3.13 erzwungen, damit eine Test-CA ohne
+        AKI/SKI schon unter 3.12 auffällt und nicht erst beim ersten Lauf
+        unter 3.13 vier Tests mit einer irreführenden Meldung umwirft.
+        """
+
+        def strict(
+            *, ca_bundle: Path, cert: Path | None = None, key: Path | None = None
+        ) -> ssl.SSLContext:
+            context = build_context(ca_bundle=ca_bundle, cert=cert, key=key)
+            context.verify_flags |= ssl.VERIFY_X509_STRICT
+            return context
+
+        monkeypatch.setattr(diagnose, "build_context", strict)
+        config = _config(tmp_path, f"https://localhost:{server.port}", ca.certificate_pem)
+        result = probe_channel(config)
+        assert result.ok, result.message
 
 
 class TestCertificateProblemsAreNamedAsSuch:

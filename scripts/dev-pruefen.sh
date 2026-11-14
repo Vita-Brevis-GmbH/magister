@@ -437,7 +437,7 @@ t12() {
       openssl x509 -req -in "$CERTS/pruef-agent.csr" -CA "$CERTS/connector-int.pem" \
         -CAkey "$CERTS/connector-int-key.pem" -CAcreateserial -days 30 -sha256 \
         -out "$CERTS/pruef-agent-leaf.pem" \
-        -extfile <(printf 'extendedKeyUsage=clientAuth\n') 2>/dev/null
+        -extfile <(printf 'extendedKeyUsage=clientAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n') 2>/dev/null
       # Blatt UND Zwischenstelle: wer angreift, schickt die Kette mit — die
       # Zwischenstelle ist öffentlich. Nur das Blatt zu schicken würde die
       # Prüfung grün machen, ohne dass der Trust Pool etwas dazu beigetragen

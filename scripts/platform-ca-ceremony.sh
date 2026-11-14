@@ -270,7 +270,8 @@ niemals über einen bestehenden Root schreiben."
         -key "$WORKDIR/root.key" -out "$WORKDIR/root.crt" \
         -subj "/C=$SUBJ_C/O=$SUBJ_O/CN=$ROOT_CN" \
         -addext "basicConstraints=critical,CA:TRUE,pathlen:1" \
-        -addext "keyUsage=critical,keyCertSign,cRLSign"
+        -addext "keyUsage=critical,keyCertSign,cRLSign" \
+        -addext "subjectKeyIdentifier=hash"
 
     local fp ser
     fp="$(fingerprint "$WORKDIR/root.crt")"
@@ -391,16 +392,21 @@ cmd_intermediate() {
 
     step "Signieren ($INT_DAYS Tage)"
     # pathlen:0 — das Intermediate stellt Endzertifikate aus, keine weiteren CAs.
+    # Die Schlüsselkennungen ausdrücklich: das Live-System bestimmt sonst über
+    # die Vorgaben seiner OpenSSL-Fassung, ob ein Authority Key Identifier
+    # entsteht — und ohne ihn lehnen Agenten unter Python 3.13 die Kette ab.
     local ext
     ext="$(mktemp)"
-    printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n' >"$ext"
+    printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n' >"$ext"
     openssl x509 -req -in "$CSR" \
         -CA "$WORKDIR/root.crt" -CAkey "$WORKDIR/root.key" -CAcreateserial \
         -"$DIGEST" -days "$INT_DAYS" -out "$out" -extfile "$ext"
     rm -f "$ext"
 
     step "Kette prüfen"
-    openssl verify -CAfile "$WORKDIR/root.crt" "$out" \
+    # -x509_strict: dieselbe Prüfung nach RFC 5280, die Python ab 3.13 beim
+    # Agenten einschaltet. Was hier durchfällt, fiele dort durch.
+    openssl verify -x509_strict -CAfile "$WORKDIR/root.crt" "$out" \
         || die "Kette verifiziert nicht — Zertifikat nicht ausliefern."
 
     local fp ser

@@ -2,6 +2,14 @@
 
 ``FakeCa`` und nicht ``TestCa``: pytest versucht sonst, die Klasse als
 Testsammlung zu behandeln.
+
+Die Zertifikate halten RFC 5280 ein: die CA mit ``basicConstraints`` (kritisch),
+``keyUsage`` und Subject Key Identifier, jedes ausgestellte Zertifikat mit
+Authority Key Identifier auf diese CA. Ab Python 3.13 setzt
+``ssl.create_default_context()`` ``VERIFY_X509_STRICT``, und OpenSSL lehnt eine
+Kette ohne diese Erweiterungen ab ("Missing Authority Key Identifier") — der
+Agent prüft also genau so streng, und eine schlampige Test-CA liesse jeden
+TLS-Test scheitern, bevor er bei seiner eigentlichen Frage ankommt.
 """
 
 from __future__ import annotations
@@ -14,7 +22,20 @@ from pathlib import Path
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.types import CertificatePublicKeyTypes
 from cryptography.x509.oid import NameOID
+
+_CA_KEY_USAGE = x509.KeyUsage(
+    digital_signature=False,
+    content_commitment=False,
+    key_encipherment=False,
+    data_encipherment=False,
+    key_agreement=False,
+    key_cert_sign=True,
+    crl_sign=True,
+    encipher_only=False,
+    decipher_only=False,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +49,8 @@ class FakeCa:
         self._key = ec.generate_private_key(ec.SECP384R1())
         name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Magister Connector Issuing CA")])
         now = dt.datetime.now(dt.UTC)
-        self.certificate = (
+        self._key_id = x509.SubjectKeyIdentifier.from_public_key(self._key.public_key())
+        self.certificate = self._identified(
             x509.CertificateBuilder()
             .subject_name(name)
             .issuer_name(name)
@@ -37,13 +59,25 @@ class FakeCa:
             .not_valid_before(now - dt.timedelta(days=1))
             .not_valid_after(now + dt.timedelta(days=365))
             .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
-            .sign(self._key, hashes.SHA384())
+            .add_extension(_CA_KEY_USAGE, critical=True),
+            self._key.public_key(),
+        ).sign(self._key, hashes.SHA384())
+
+    def _identified(
+        self, builder: x509.CertificateBuilder, public_key: CertificatePublicKeyTypes
+    ) -> x509.CertificateBuilder:
+        """Subject Key Identifier des Zertifikats und Authority Key Identifier dieser CA."""
+        return builder.add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(public_key), critical=False
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_subject_key_identifier(self._key_id),
+            critical=False,
         )
 
     def issue(self, csr_pem: str) -> Issued:
         csr = x509.load_pem_x509_csr(csr_pem.encode("ascii"))
         now = dt.datetime.now(dt.UTC)
-        cert = (
+        cert = self._identified(
             x509.CertificateBuilder()
             .subject_name(
                 x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "connector-agent:dc01")])
@@ -57,9 +91,9 @@ class FakeCa:
             .add_extension(
                 x509.ExtendedKeyUsage([x509.ObjectIdentifier("1.3.6.1.5.5.7.3.2")]),
                 critical=True,
-            )
-            .sign(self._key, hashes.SHA384())
-        )
+            ),
+            csr.public_key(),
+        ).sign(self._key, hashes.SHA384())
         der = csr.public_key().public_bytes(
             serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
         )
@@ -77,7 +111,7 @@ class FakeCa:
         """
         key = ec.generate_private_key(ec.SECP256R1())
         now = dt.datetime.now(dt.UTC)
-        cert = (
+        cert = self._identified(
             x509.CertificateBuilder()
             .subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, dns_name)]))
             .issuer_name(self.certificate.subject)
@@ -89,9 +123,9 @@ class FakeCa:
             .add_extension(
                 x509.ExtendedKeyUsage([x509.ObjectIdentifier("1.3.6.1.5.5.7.3.1")]),
                 critical=False,
-            )
-            .sign(self._key, hashes.SHA384())
-        )
+            ),
+            key.public_key(),
+        ).sign(self._key, hashes.SHA384())
         key_pem = key.private_bytes(
             serialization.Encoding.PEM,
             serialization.PrivateFormat.PKCS8,

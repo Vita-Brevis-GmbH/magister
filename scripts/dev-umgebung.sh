@@ -190,14 +190,15 @@ make_ca() {
   say "Test-CA erzeugen"
   openssl req -x509 -newkey rsa:3072 -sha256 -days 825 -nodes -keyout "$CERTS/root-key.pem" \
     -out "$CERTS/root.pem" -subj "/CN=Magister DEV Root" \
-    -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" 2>/dev/null
+    -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+    -addext "subjectKeyIdentifier=hash" 2>/dev/null
 
   for kind in operator connector; do
     openssl req -newkey rsa:3072 -nodes -keyout "$CERTS/$kind-int-key.pem" \
       -out "$CERTS/$kind-int.csr" -subj "/CN=Magister DEV $kind Intermediate" 2>/dev/null
     openssl x509 -req -in "$CERTS/$kind-int.csr" -CA "$CERTS/root.pem" -CAkey "$CERTS/root-key.pem" \
       -CAcreateserial -days 730 -sha256 -out "$CERTS/$kind-int.pem" \
-      -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\n') 2>/dev/null
+      -extfile <(printf 'basicConstraints=critical,CA:TRUE,pathlen:0\nkeyUsage=critical,keyCertSign,cRLSign\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n') 2>/dev/null
   done
   # Zwei Dateien, zwei Fragen: `platform-ca.pem` beantwortet „ist der Server
   # echt?" (Wurzel + Operator-Zweig), `operator-ca.pem` beantwortet „darf
@@ -215,7 +216,7 @@ make_ca() {
     -out "$CERTS/server.csr" -subj "/CN=$CONSOLE_HOST" 2>/dev/null
   openssl x509 -req -in "$CERTS/server.csr" -CA "$CERTS/root.pem" -CAkey "$CERTS/root-key.pem" \
     -CAcreateserial -days 730 -sha256 -out "$CERTS/server.pem" \
-    -extfile <(printf 'subjectAltName=DNS:%s,DNS:*.mgmt.vitabrevis.dev,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\n' "$CONSOLE_HOST") 2>/dev/null
+    -extfile <(printf 'subjectAltName=DNS:%s,DNS:*.mgmt.vitabrevis.dev,DNS:localhost,IP:127.0.0.1\nextendedKeyUsage=serverAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n' "$CONSOLE_HOST") 2>/dev/null
 
   # Zwei Client-Zertifikate: eine Person und die Überwachung. Der Monitor ist
   # bewusst KEINE Person und wird nicht als Operator eingetragen (ADR-0020 D4).
@@ -224,7 +225,7 @@ make_ca() {
       -out "$CERTS/$who.csr" -subj "/CN=$who" 2>/dev/null
     openssl x509 -req -in "$CERTS/$who.csr" -CA "$CERTS/operator-int.pem" \
       -CAkey "$CERTS/operator-int-key.pem" -CAcreateserial -days 730 -sha256 \
-      -out "$CERTS/$who.pem" -extfile <(printf 'extendedKeyUsage=clientAuth\n') 2>/dev/null
+      -out "$CERTS/$who.pem" -extfile <(printf 'extendedKeyUsage=clientAuth\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always\n') 2>/dev/null
   done
 
   # Ed25519 für die Einlösescheine des Operator-Zugriffs (ADR-0019).

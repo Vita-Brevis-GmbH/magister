@@ -63,6 +63,9 @@ jobs:
       - name: Rangfolge der Installations-Angaben
         run: ./scripts/tests/plattform-konfig.test.sh
 
+      - name: Test-CA nach RFC 5280, auch ohne die Vorgaben von OpenSSL 3
+        run: ./scripts/tests/plattform-ca.test.sh
+
       - name: Ort der Konsole und Umzug in den eigenen Checkout
         run: ./scripts/tests/konsole-pfad.test.sh
 
