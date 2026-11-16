@@ -78,6 +78,15 @@ jobs:
       - name: Host-Agent führt nur bekannte Aufträge aus
         run: ./scripts/tests/plattform-ops-agent.test.sh
 
+      # age verschlüsselt und entschlüsselt die Rückfall-Sicherung im Test echt.
+      - name: Betrieb aus dem Cockpit (scripts/betrieb.sh, Vertrag betrieb/v1)
+        run: |
+          if ! command -v age >/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq --no-install-recommends age
+          fi
+          ./scripts/tests/betrieb.test.sh
+
       - name: Jeder Dienst kommt nach einem Neustart des Hosts wieder
         run: ./scripts/tests/compose-neustart.test.sh
 
