@@ -19,7 +19,8 @@ Admin-GUI editierbar.
   Admins (PKCE; MFA, Entra oder LDAP hängen im Realm — ADR-0025). Wer sich
   anmeldet, bekommt ein Anmeldekonto; Rechte vergibt Magister — die Rollen
   Administrator, Leitung und IT-Verantwortliche auch der IT-Anbieter im
-  Cockpit (ADR-0026).
+  Cockpit (ADR-0026). Führt das Cockpit die Rollen, vergibt nur noch es sie;
+  in Magister sind sie dann nur lesbar, ausser mit dem Notzugang (ADR-0027).
 - **Lokaler Break-Glass-Admin** (argon2id-gehasht) für Day-1-Setup und
   Recovery, wenn der Realm nicht erreichbar ist
 - **Admin-GUI** für OIDC- + AD-Konfiguration; Secrets pgcrypto-verschlüsselt

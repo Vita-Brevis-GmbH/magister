@@ -150,3 +150,22 @@ hatte deshalb keine Rollen in `roles`. Der Abgleich legt fehlende System-Rollen 
 bekommt Rollen und Standard-Matrix wie beim Erst-Seed, einer bestehenden fehlen höchstens
 System-Rollen, die ohne Rechte dazukommen. Eigene Rollen und die Matrix des Kunden bleiben. Der
 Probelauf (`dry_run`) kennt die System-Rollen auch ohne Zeile in `roles`.
+
+## Nachtrag 2026-11-16: Rollen nur aus dem Cockpit (ADR-0027)
+
+Entscheid des Anwenders: „die Rollen und User … sollen nur noch im Cockpit sein. Die Kunden
+sollen dies nicht machen können". Seit [ADR-0027](0027-rollen-nur-aus-dem-cockpit.md) gilt,
+solange der Soll-Zustand `role_assignments` trägt (Merker `app_settings.roles_from_cockpit`):
+
+- **D5 entfällt für diese Kunden:** Vergeben, Setzen und Entziehen in Magister lehnt die API mit
+  409 `roles_managed_by_cockpit` ab, ebenso Konten vorab anlegen, Bindung lösen und löschen. Die
+  Oberfläche ist nur lesbar. Ausgenommen ist das lokale Administrationskonto (Notzugang). Der
+  Einwand aus D5 („Zuweisungen, die niemand mehr entfernen kann, sobald das Cockpit die Anmeldung
+  nicht mehr führt") trifft nicht: bei `null` fällt der Merker, und die Vergabe von Hand geht
+  wieder.
+- **D3 bleibt** (der Abgleich fasst nur die Herkunft `cockpit` an). Zuweisungen aus anderer
+  Quelle meldet Magister dem Cockpit als `rollen_fremd`; entzogen werden sie nur auf dessen Wunsch
+  (`role_revocations`), mit Audit `via: "cockpit_revocation"`. Entzieht das Cockpit eine fremde
+  Rolle, die es selbst nennt, vergibt es sie im selben Lauf mit Herkunft `cockpit` neu.
+- Ein Lauf, in dem das Cockpit die Rollen übernimmt oder abgibt, schreibt `roles_source_changed`
+  und gilt als Änderung (auch ein Lauf mit `role_assignments: null`, wenn vorher eine Liste kam).

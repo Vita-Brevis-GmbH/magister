@@ -104,10 +104,29 @@ Benutzer am **Keycloak-Realm des Kunden** an; Magister sieht nur den Realm.
   ([ADR-0026](../adr/0026-rollen-aus-dem-cockpit.md)). Fehlende Anmeldekonten
   legt Magister vorab an. In Magister stehen diese Rollen als „aus dem
   Cockpit"; dauerhaft ändern lassen sie sich nur dort.
+- **Rollen nur aus dem Cockpit** ([ADR-0027](../adr/0027-rollen-nur-aus-dem-cockpit.md)):
+  sobald das Cockpit die Rollenliste eines Kunden sendet (spätestens nach dem
+  nächsten Abgleich), ist *Rollen & Berechtigungen* beim Kunden nur lesbar.
+  Rollen vergeben oder entziehen, Konten vorab anlegen, Bindung lösen und
+  löschen lehnt Magister ab („Rollen dieses Kunden vergibt der Betreiber im
+  Cockpit"); Konten sperren und freigeben geht weiter. Im Audit steht der
+  Wechsel als `roles_source_changed`.
+- **Notzugang:** das lokale Administrationskonto (`/login?lokal=1`) darf
+  weiter alles — für den Fall, dass der Abgleich ausfällt oder im Cockpit etwas
+  falsch steht (etwa „Bindung lösen" nach einem in Keycloak neu angelegten
+  Benutzer). Was es vergibt, meldet Magister dem Cockpit als fremde Rolle.
+- **Rollen von Hand aus der Zeit davor** (und solche des Notzugangs) meldet
+  Magister dem Cockpit als `rollen_fremd`: Benutzername, Kennung, Rolle,
+  vergeben von. Entziehen lassen sie sich nur im Cockpit (`role_revocations`);
+  nennt das Cockpit dieselbe Person mit derselben Rolle, übernimmt es die
+  Zuweisung dabei. Fremde Rollen an einer Einheit halten das Löschen der
+  Einheit auf, bis sie entzogen sind.
 - Alle anderen bekommen bei der ersten Anmeldung ein Anmeldekonto **ohne
-  Rechte**. Weitere Rollen vergibt ein Admin unter *Rollen & Berechtigungen* —
-  dort lassen sich Konten auch vorab anlegen. Lehrpersonen, deren
-  Keycloak-Benutzername ihrem UPN im AD entspricht, behalten ihre Klassen.
+  Rechte**. Ohne Rollen aus dem Cockpit (Installation ohne Cockpit oder Kunde
+  ohne Rollenliste) vergibt ein Admin weitere Rollen unter *Rollen &
+  Berechtigungen* — dort lassen sich Konten auch vorab anlegen. Lehrpersonen,
+  deren Keycloak-Benutzername ihrem UPN im AD entspricht, behalten ihre
+  Klassen.
 - **Selbstprüfung:** Magister prüft die Anmeldung mit jeder Zustandsmeldung
   (alle paar Minuten) und meldet sie dem Cockpit (Feld `oidc`, ADR-0025
   Nachtrag 2026-11-16) — „Kunde prüfen" zeigt einen Fehler, bevor sich jemand
