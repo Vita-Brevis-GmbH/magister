@@ -462,6 +462,10 @@ Lebenszeichen des Prüfers) und beim Kunden *Übersicht → Zustand der
 Installation* (meldet sich die Installation, kommt der Abgleich an, gilt das
 richtige Profil).
 
+Update und Neustart kommen künftig aus dem Cockpit über dessen Host-Agenten —
+mit Sicherung vorher, Health danach und Rückfall (§5f, ADR-0028). `restart`
+und `update` des Ops-Agenten bleiben, solange die Konsole sie anbietet.
+
 ## 5d · Kommt eine Einstellung aus der Konsole nicht an?
 
 Profil, Module oder Einstellungen stehen in der Konsole richtig, das Portal
@@ -536,6 +540,71 @@ Prüfen nach dem Neustart:
 docker ps --format '{{.Names}}  {{.Status}}'
 ./scripts/plattform-aufbau.sh status
 ```
+
+## 5f · Update aus dem Cockpit (Host-Agent, ADR-0028)
+
+Mit dem Host-Agenten des Cockpits (im Cockpit: *Hosts → Host-Agent
+einrichten*, Produkt `magister=<dieser Checkout>`) kommen Stand, Sicherung,
+Update, Zurück und Neustart aus dem Cockpit, ohne SSH. Der Agent ruft dafür nur
+`scripts/betrieb.sh` auf. Von Hand geht dasselbe:
+
+```bash
+sudo ./scripts/betrieb.sh stand
+sudo ./scripts/betrieb.sh sichern
+sudo ./scripts/betrieb.sh aktualisieren --ref main   # Branch, Tag oder Commit von origin
+sudo ./scripts/betrieb.sh zurueck                    # einmal, auf den Stand vor dem Update
+sudo ./scripts/betrieb.sh neustart                   # nur die Datenebene, ohne Neubau
+```
+
+Antwort: eine Zeile JSON auf stdout (Format `betrieb/v1`), Fortschritt auf
+stderr. Exit 0 ok · 1 gescheitert, selbst zurückgefallen · 2 von Hand (die
+Meldung nennt den nächsten Schritt) · 3 abgelehnt, nichts geändert · 4 belegt.
+
+**Ein Update** prüft zuerst (lokale Änderungen, `git fetch`, Ref, nicht älter
+als der laufende Stand), sichert dann die Datenbank (`pg-backup`, verschlüsselt,
+mit Eigentümern und Rechten: `magister-<zeit>-rueckfall.dump.age` im Volume
+`backups`), schaltet um, ruft `plattform-aufbau.sh update` auf und wartet bis
+5 min auf Health (alle Dienste der Datenebene laufen, `/healthz` der API ok).
+Sonst fällt es selbst zurück. Den Checkout der Konsole fasst es nicht an — die
+Konsole hat ihren eigenen Einstiegspunkt im Cockpit.
+
+**Rückfall und `zurueck`** hängen am privaten Sicherungsschlüssel:
+
+| Lage | Was geschieht |
+|---|---|
+| Schlüssel in `plattform/certs/backup-age.key` (Test-Host) | Datenbank **und** Code zurück; die bisherige Datenbank bleibt als `magister_vor_rueckfall_<zeit>` liegen |
+| kein Schlüssel, Schemastand unverändert | nur der Code zurück, die Daten bleiben |
+| kein Schlüssel, Schemastand geändert (Migration) | nichts automatisch, läuft auf dem neuen Stand weiter |
+
+Im letzten Fall, und nur dann, den Schlüssel bringen:
+
+```bash
+sudo install -m 600 /pfad/aus/dem/tresor/backup-age.key plattform/certs/backup-age.key
+sudo ./scripts/betrieb.sh zurueck        # oder im Cockpit „Zurück"
+sudo shred -u plattform/certs/backup-age.key
+```
+
+Nach einem Rückfall mit Datenbank, wenn alles wieder läuft, die beiseitegelegte
+Datenbank löschen (sie hält die Daten seit dem Update):
+
+```bash
+docker exec magister-postgres-1 psql -U magister -d postgres -c '\l magister*'
+docker exec magister-postgres-1 psql -U magister -d postgres \
+  -c 'DROP DATABASE "magister_vor_rueckfall_20261116t120000z"'
+```
+
+Grenzen:
+
+* Daten seit dem Update gehen beim Zurück mit Datenbank verloren (sie liegen
+  bis zum Löschen in der umbenannten Datenbank).
+* `zurueck` geht einmal, und mit Datenbank nur, solange die Sicherung liegt
+  (Aufbewahrung von `pg-backup`, `BACKUP_RETENTION_DAYS`, Vorgabe 14 Tage).
+* Kunden, die nach dem Update angelegt wurden, haben danach ihre Rolle, aber
+  kein Schema.
+* `stand` sagt mit `zurueck_moeglich`, ob es gerade geht; der Zustand liegt in
+  `plattform/betrieb/zustand`.
+* Der Ops-Agent (§5c) bleibt für das Anbinden von Kunden, neue
+  Rollenpasswörter und die Überwachung.
 
 ## 6 · Anhalten und Abbauen
 
