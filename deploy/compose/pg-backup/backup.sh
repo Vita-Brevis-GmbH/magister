@@ -45,8 +45,25 @@ fi
 BACKUP_DIR=/var/backups/magister
 mkdir -p "$BACKUP_DIR"
 
+# Art der Sicherung. Leer: die tägliche — ohne Eigentümer und Rechte, damit
+# sie sich auf dem Backup-Host in eine andere Datenbank einspielen lässt, wo
+# es die Rollen der Kunden nicht gibt.
+#
+# `rueckfall` (scripts/betrieb.sh, ADR-0028): vor einem Update aus dem
+# Cockpit. MIT Eigentümern und Rechten — der Rückfall legt die Datenbank auf
+# DIESEM Cluster zurück, und dort gehört jedes Kundenschema seiner Rolle
+# (REVOKE … FROM PUBLIC ist die Mandantentrennung). Ohne sie gehörte nach dem
+# Einspielen alles dem Administrator, und kein Kunde käme mehr an seine Daten.
+dump_rechte=(--no-owner --no-privileges)
+art_suffix=""
+case "${BACKUP_ART:-}" in
+    "") ;;
+    rueckfall) dump_rechte=(); art_suffix="-rueckfall" ;;
+    *) echo "[pg-backup] FEHLER: unbekannte Art der Sicherung (BACKUP_ART)." >&2; exit 1 ;;
+esac
+
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-out="${BACKUP_DIR}/${POSTGRES_DB}-${stamp}.dump.age"
+out="${BACKUP_DIR}/${POSTGRES_DB}-${stamp}${art_suffix}.dump.age"
 # Erst unter einem Arbeitsnamen: sonst liegt bei einem Abbruch eine halbe
 # Datei da, die aussieht wie eine Sicherung.
 partial="${out}.partial"
@@ -56,7 +73,7 @@ echo "[pg-backup] Sicherung startet: ${out}"
 
 # pipefail ist gesetzt: scheitert pg_dump, scheitert die Kette.
 pg_dump --host="$POSTGRES_HOST" --username="$POSTGRES_USER" \
-        --dbname="$POSTGRES_DB" --no-owner --no-privileges --format=custom \
+        --dbname="$POSTGRES_DB" ${dump_rechte[@]+"${dump_rechte[@]}"} --format=custom \
     | age -r "$MAGISTER_BACKUP_AGE_RECIPIENT" -o "$partial"
 
 if [[ ! -s "$partial" ]]; then

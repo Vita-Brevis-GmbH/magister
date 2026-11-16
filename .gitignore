@@ -59,6 +59,8 @@ tsconfig.tsbuildinfo
 
 # Erzeugt von scripts/plattform-aufbau.sh: Test-CA, Schlüssel, Kundendumps.
 /plattform/
+# Sperre von scripts/betrieb.sh (eine Aktion je Checkout, ADR-0028).
+/.betrieb.lock
 # Der Rest der Konsole nach ihrem Auszug (vitabrevis-cockpit): `git pull`
 # entfernt nur die versionierten Dateien. Umgebung (.env) und Zertifikate
 # samt privaten Schlüsseln bleiben in cockpit/deploy/ stehen — sie sind die
