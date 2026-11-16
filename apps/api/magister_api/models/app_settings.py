@@ -204,6 +204,14 @@ class AppSettings(Base):
         JSONB, nullable=False, default=lambda: [14, 7, 1], server_default="[14, 7, 1]"
     )
 
+    # --- Rollen nur aus dem Cockpit (ADR-0027) ---
+    # Setzt der Abgleich, solange der Soll-Zustand `role_assignments` trägt.
+    # Dann vergibt und entzieht nur das Cockpit Rollen, und Anmeldekonten legt
+    # nur es an; ausgenommen ist das lokale Administrationskonto (Notzugang).
+    roles_from_cockpit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
     # --- Audit fingerprint ---
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

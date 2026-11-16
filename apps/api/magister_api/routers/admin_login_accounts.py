@@ -5,6 +5,14 @@ weiss, und die Handgriffe, die nur Magister kann: ein Konto vorab anlegen
 (damit Rollen vor der ersten Anmeldung vergeben werden können), sperren, die
 Bindung an den Keycloak-Benutzer lösen und löschen. Die Rollen selbst vergibt
 der Rolleneditor (``/admin/users/{guid}/roles``) mit der ``principal_guid``.
+
+Führt das Cockpit die Rollen (ADR-0027), legt nur noch es Konten an:
+vorab anlegen, Bindung lösen und löschen lehnen mit 409 ab — jede der drei
+kann einer neuen Person Rechte verschaffen (ein vorab angelegtes Konto bindet,
+wer sich zuerst so anmeldet; ein gelöstes oder gelöschtes Konto übernimmt mit
+der GUID die Rollen). Sperren und Freigeben bleiben: sie geben niemandem neue
+Rechte, und Sperren ist der schnelle Griff bei einem Vorfall. Ausgenommen ist
+das lokale Administrationskonto (Notzugang).
 """
 
 from __future__ import annotations
@@ -19,6 +27,7 @@ from magister_api.auth.bootstrap import is_bootstrap_admin
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.effective_settings import get_effective_settings
 from magister_api.auth.rbac import require_admin
+from magister_api.auth.role_lock import require_roles_editable
 from magister_api.config import Settings
 from magister_api.db import get_session
 from magister_api.models.auth import LoginAccount
@@ -103,7 +112,12 @@ async def list_login_accounts(
     return await _out(session, settings, rows)
 
 
-@router.post("", response_model=LoginAccountOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=LoginAccountOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles_editable)],
+)
 async def create_login_account(
     payload: LoginAccountCreate,
     request: Request,
@@ -158,7 +172,11 @@ async def update_login_account(
     return (await _out(session, settings, [row]))[0]
 
 
-@router.post("/{account_id}/unbind", response_model=LoginAccountOut)
+@router.post(
+    "/{account_id}/unbind",
+    response_model=LoginAccountOut,
+    dependencies=[Depends(require_roles_editable)],
+)
 async def unbind_login_account(
     account_id: int,
     request: Request,
@@ -181,7 +199,11 @@ async def unbind_login_account(
     return (await _out(session, settings, [row]))[0]
 
 
-@router.delete("/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{account_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles_editable)],
+)
 async def delete_login_account(
     account_id: int,
     request: Request,

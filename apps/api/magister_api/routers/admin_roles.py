@@ -7,6 +7,10 @@ derived from class-teacher assignments (see class_teachers router).
 
 A role holder is an AD user **or** a Keycloak login account without an AD row
 (ADR-0025): the path parameter is the ``principal_guid`` either way.
+
+Führt das Cockpit die Rollen (ADR-0027), lehnen Vergeben und Entziehen mit 409
+ab (``require_roles_editable``); ausgenommen ist das lokale
+Administrationskonto (Notzugang). Lesen bleibt.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from magister_api.audit.service import AuditService
 from magister_api.auth.current_user import AuthenticatedUser
 from magister_api.auth.rbac import require_admin
+from magister_api.auth.role_lock import is_emergency_access, require_roles_editable
 from magister_api.auth.roles import GRANTED_BY_COCKPIT
 from magister_api.config import Settings, get_settings
 from magister_api.db import get_session
@@ -25,7 +30,12 @@ from magister_api.models.auth import AdUserCache
 from magister_api.models.school import School
 from magister_api.repositories.auth import LoginAccountRepository, RoleAssignmentRepository
 from magister_api.routers._helpers import _ip_request_id
-from magister_api.schemas.roles import RoleAssignmentOut, RoleGrantRequest, RoleSetRequest
+from magister_api.schemas.roles import (
+    RoleAssignmentOut,
+    RoleGrantRequest,
+    RoleSetRequest,
+    RoleSourceOut,
+)
 from magister_api.services._user_enrich import (
     UserLabelFields,
     fetch_principal_labels,
@@ -33,6 +43,7 @@ from magister_api.services._user_enrich import (
     user_label_fields,
 )
 from magister_api.services.rbac import RbacService
+from magister_api.services.role_lock import roles_from_cockpit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -114,10 +125,26 @@ async def list_roles(
     ]
 
 
+@router.get("/roles/source", response_model=RoleSourceOut)
+async def role_source(
+    user: AuthenticatedUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+) -> RoleSourceOut:
+    """Führt das Cockpit die Rollen, und darf diese Person hier trotzdem ändern?"""
+    from_cockpit = await roles_from_cockpit(session)
+    emergency = is_emergency_access(user)
+    return RoleSourceOut(
+        from_cockpit=from_cockpit,
+        editable=emergency or not from_cockpit,
+        emergency_access=emergency,
+    )
+
+
 @router.post(
     "/users/{ad_object_guid}/roles",
     response_model=RoleAssignmentOut,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_roles_editable)],
 )
 async def grant_role(
     ad_object_guid: str,
@@ -165,7 +192,11 @@ async def grant_role(
     )
 
 
-@router.put("/users/{ad_object_guid}/roles", response_model=list[RoleAssignmentOut])
+@router.put(
+    "/users/{ad_object_guid}/roles",
+    response_model=list[RoleAssignmentOut],
+    dependencies=[Depends(require_roles_editable)],
+)
 async def set_roles(
     ad_object_guid: str,
     payload: RoleSetRequest,
@@ -256,7 +287,11 @@ async def set_roles(
     ]
 
 
-@router.delete("/users/{ad_object_guid}/roles", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/users/{ad_object_guid}/roles",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_roles_editable)],
+)
 async def revoke_role(
     ad_object_guid: str,
     request: Request,

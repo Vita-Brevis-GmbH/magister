@@ -50,6 +50,7 @@ from magister_api.services.document_templates import (
     TemplateRenderError,
     sample_context,
 )
+from magister_api.services.foreign_roles import ForeignRoleRevoker, RevokedForeignRole
 from magister_api.services.imports import purge_import_history
 from magister_api.services.local_admin import LocalAdminService
 from magister_api.services.local_admin_mfa import LocalAdminMfaService
@@ -59,6 +60,7 @@ from magister_api.services.rbac import (
     RoleImmutableError,
     RoleNotFoundError,
 )
+from magister_api.services.role_lock import set_roles_from_cockpit
 from magister_api.tenancy.desired_state import (
     MAINTENANCE_ACTIONS,
     DesiredMaintenance,
@@ -191,6 +193,11 @@ class ReconcileResult:
     skipped_assignments: dict[str, str] = field(default_factory=dict[str, str])
     #: System-Rollen, die diesem Mandanten fehlten und angelegt wurden.
     seeded_system_roles: list[str] = field(default_factory=list[str])
+    #: Das Cockpit hat in diesem Lauf die Rollen übernommen oder abgegeben
+    #: (``app_settings.roles_from_cockpit``, ADR-0027).
+    roles_source_changed: bool = False
+    #: Fremde Rollen, auf Wunsch des Cockpits entzogen (``role_revocations``).
+    revoked_foreign: list[RevokedForeignRole] = field(default_factory=list[RevokedForeignRole])
 
     @property
     def problems(self) -> list[str]:
@@ -222,6 +229,8 @@ class ReconcileResult:
             or self.revoked_assignments
             or self.created_login_accounts
             or self.seeded_system_roles
+            or self.roles_source_changed
+            or self.revoked_foreign
         )
 
 
@@ -382,6 +391,8 @@ class Reconciler:
                 desired.rbac, result, tenant_slug=tenant_slug, dry_run=dry_run
             )
 
+        await self._reconcile_role_source(desired, result, tenant_slug=tenant_slug, dry_run=dry_run)
+
         if desired.role_assignments is not None:
             roles = await CockpitRoleSync(
                 self.session,
@@ -444,7 +455,7 @@ class Reconciler:
         if result.touched:
             logger.info(
                 "Soll-Zustand für %s materialisiert: %d Einstellung(en), %d Rolle(n), "
-                "%d Vorlage(n), Zuweisungen +%d/-%d, %d Konto/Konten vorab",
+                "%d Vorlage(n), Zuweisungen +%d/-%d, %d fremde entzogen, %d Konto/Konten vorab",
                 tenant_slug,
                 len(result.changed_settings),
                 len(result.changed_roles),
@@ -453,9 +464,67 @@ class Reconciler:
                 + len(result.removed_templates),
                 len(result.granted_assignments),
                 len(result.revoked_assignments),
+                len(result.revoked_foreign),
                 len(result.created_login_accounts),
             )
         return result
+
+    async def _reconcile_role_source(
+        self,
+        desired: DesiredState,
+        result: ReconcileResult,
+        *,
+        tenant_slug: str,
+        dry_run: bool,
+    ) -> None:
+        """Rollen nur aus dem Cockpit (ADR-0027): Merker setzen, fremde Rollen entziehen.
+
+        Vor der Rollenliste: entzieht das Cockpit eine fremde Zuweisung, die es
+        selbst auch nennt, vergibt die Rollenliste sie im selben Lauf neu mit
+        Herkunft ``cockpit`` — so übernimmt das Cockpit eine Rolle von Hand.
+        """
+        request_id = f"reconcile:{tenant_slug}"
+        if not dry_run:
+            result.roles_source_changed = await set_roles_from_cockpit(
+                self.session,
+                self.settings,
+                desired.role_assignments is not None,
+                actor=RECONCILER_ACTOR,
+                request_id=request_id,
+                tenant_slug=tenant_slug,
+            )
+        if not desired.role_revocations:
+            return
+        if desired.role_assignments is None:
+            logger.warning(
+                "Soll-Zustand für %s will %d fremde Rolle(n) entziehen, führt die Rollen aber "
+                "nicht (role_assignments fehlt) — nichts entzogen.",
+                tenant_slug,
+                len(desired.role_revocations),
+            )
+            return
+        revoked, unmatched = await ForeignRoleRevoker(
+            self.session,
+            self.settings,
+            actor=RECONCILER_ACTOR,
+            request_id=request_id,
+            tenant_slug=tenant_slug,
+        ).revoke(desired.role_revocations, dry_run=dry_run)
+        result.revoked_foreign = revoked
+        if revoked and not dry_run:
+            logger.info(
+                "Fremde Rollen von %s auf Wunsch des Cockpits entzogen: %d Zuweisung(en)",
+                tenant_slug,
+                len(revoked),
+            )
+        if unmatched:
+            # Schon entzogen oder nicht fremd: das Cockpit sendet den Eintrag,
+            # bis die Zustandsmeldung ihn nicht mehr nennt. Kein Fehler.
+            logger.debug(
+                "Entzug für %s ohne fremde Rolle übergangen: %s",
+                tenant_slug,
+                ", ".join(unmatched),
+            )
 
     async def _reconcile_templates(
         self,

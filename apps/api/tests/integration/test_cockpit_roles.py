@@ -329,9 +329,15 @@ class TestRevoke:
 
         result = await _reconcile(db_session, app_settings, DesiredState(role_assignments=None))
 
-        assert not result.touched
+        # Geändert hat sich nur, wer die Rollen führt (ADR-0027): ein Ereignis,
+        # keine Zuweisung.
+        assert result.roles_source_changed
+        assert result.granted_assignments == result.revoked_assignments == []
         assert await _active(db_session) == state
-        assert await _events(db_session) == events
+        assert await _events(db_session) == events + 1
+        again = await _reconcile(db_session, app_settings, DesiredState(role_assignments=None))
+        assert not again.touched
+        assert await _events(db_session) == events + 1
 
     async def test_a_role_given_back_by_the_cockpit_revives_its_row(
         self, db_session: AsyncSession, app_settings: Settings, school_a: int

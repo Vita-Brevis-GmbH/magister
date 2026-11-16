@@ -11,13 +11,14 @@ ersetzt nichts — sonst setzte ein Fehler in der Konsole alle Kunden zurück.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, cast
 
 import httpx
 
 from magister_api.auth.roles import ROLE_ASSIGNMENT_ROLES
-from magister_api.schemas.common import validate_login_name
+from magister_api.schemas.common import validate_login_name, validate_object_guid
 from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 
 logger = logging.getLogger(__name__)
@@ -72,6 +73,27 @@ class DesiredRoleAssignment:
     role: str
 
 
+@dataclass(frozen=True)
+class DesiredRoleRevocation:
+    """Eine fremde Rolle, die das Cockpit entziehen lässt (ADR-0027).
+
+    Fremd heisst: nicht aus dem Cockpit vergeben (von Hand, per Bootstrap vor
+    dieser Version). Magister meldet sie in der Zustandsmeldung
+    (``rollen_fremd``) und entzieht nur, was dort stehen kann — eine Zuweisung
+    aus dem Cockpit, der Notzugang und die ersten Administratoren aus der
+    Konsole bleiben, auch wenn das Cockpit sie hier nennt.
+    """
+
+    #: ``principal_guid`` der Person, klein geschrieben.
+    principal: str
+    #: Rollenschlüssel; gilt für alle Einheiten der Person.
+    role: str
+
+
+#: Schlüssel einer Rolle, wie in ``roles.key`` (ADR-0010).
+_ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
+
+
 #: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
 #: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
 #: als Fehler zurückgemeldet.
@@ -117,6 +139,9 @@ class DesiredState:
     #: ist **vollständig**, auch `[]` — sonst liesse sich eine Rolle im Cockpit
     #: nie wieder wegnehmen.
     role_assignments: tuple[DesiredRoleAssignment, ...] | None = None
+    #: Fremde Rollen, die das Cockpit entziehen lässt (ADR-0027). Leer heisst
+    #: nichts entziehen; gilt nur, solange ``role_assignments`` nicht `None` ist.
+    role_revocations: tuple[DesiredRoleRevocation, ...] = ()
 
     @property
     def has_rbac(self) -> bool:
@@ -160,7 +185,47 @@ def parse_desired_state(payload: object) -> DesiredState:
         platform_sealed_secrets=_parse_sealed(payload, "platform_sealed_secrets"),
         maintenance=_parse_maintenance(payload),
         role_assignments=_parse_role_assignments(payload),
+        role_revocations=_parse_role_revocations(payload),
     )
+
+
+def _parse_role_revocations(payload: dict[str, Any]) -> tuple[DesiredRoleRevocation, ...]:
+    """Die Liste ``role_revocations`` aus dem Cockpit (ADR-0027); fehlt sie, keine.
+
+    Streng wie die Rollenliste: ein Eintrag, der nicht die Form hat, ist ein
+    Fehler des Soll-Zustands und kein Eintrag, den man auslässt (der Abgleich
+    bleibt dann beim letzten guten Stand). Zusätzliche Felder eines Eintrags
+    werden übergangen, doppelte zählen einmal. Ob es die Zuweisung gibt und ob
+    sie fremd ist, entscheidet erst der Abgleich.
+    """
+    raw = payload.get("role_revocations")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise DesiredStateUnavailableError("'role_revocations' ist keine Liste.")
+    parsed: list[DesiredRoleRevocation] = []
+    for index, entry in enumerate(cast(list[object], raw)):
+        if not isinstance(entry, dict):
+            raise DesiredStateUnavailableError(f"Entzug {index} ist kein Objekt.")
+        item = cast(dict[str, object], entry)
+        principal, role = item.get("principal"), item.get("role")
+        if not isinstance(principal, str) or not isinstance(role, str):
+            raise DesiredStateUnavailableError(
+                f"Entzug {index} hat nicht die erwartete Form (principal, role)."
+            )
+        try:
+            guid = validate_object_guid(principal)
+        except ValueError as exc:
+            # Ohne den Wert: die Meldung geht in den Log und an die Konsole.
+            raise DesiredStateUnavailableError(
+                f"Entzug {index}: 'principal' ist keine GUID."
+            ) from exc
+        if not _ROLE_KEY_RE.match(role):
+            raise DesiredStateUnavailableError(f"Entzug {index}: Rolle {role[:40]!r} ungültig.")
+        revocation = DesiredRoleRevocation(principal=guid, role=role)
+        if revocation not in parsed:
+            parsed.append(revocation)
+    return tuple(parsed)
 
 
 def _parse_role_assignments(
@@ -356,6 +421,7 @@ async def fetch_desired_state(
 
 __all__ = [
     "DesiredRoleAssignment",
+    "DesiredRoleRevocation",
     "DesiredState",
     "DesiredTemplate",
     "DesiredStateUnavailableError",

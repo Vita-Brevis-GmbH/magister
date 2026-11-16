@@ -19,6 +19,10 @@ Seit 2026-11-16 trägt sie die Selbstprüfung der Anmeldung (``oidc``, ADR-0025
 Nachtrag). Ein älteres Cockpit kennt das Feld nicht und weist die ganze
 Meldung ab (HTTP 422, es prüft streng). Dann geht sie einmal ohne ``oidc``
 noch einmal hinaus — so kommt es auf die Reihenfolge der Updates nicht an.
+
+Ebenso ``rollen_fremd`` (ADR-0027): solange das Cockpit die Rollen führt, die
+Rollen aus anderer Quelle — Benutzername, Kennung, Rolle, Herkunft, sonst
+nichts —, damit das Cockpit sie zeigen und entziehen lassen kann.
 """
 
 from __future__ import annotations
@@ -39,7 +43,9 @@ from magister_api.models.audit import AuditEvent
 from magister_api.modules import catalog
 from magister_api.repositories.local_admin import LocalAdminRepository
 from magister_api.services.app_settings import AppSettingsService
+from magister_api.services.foreign_roles import foreign_roles_report
 from magister_api.services.local_admin_mfa import LocalAdminMfaService
+from magister_api.services.role_lock import roles_from_cockpit
 from magister_api.tenancy.console_report import ReportRejectedError, console_base
 from magister_api.tenancy.console_tls import ConsoleTlsError, console_verify
 from magister_api.tenancy.keys import keys_for
@@ -148,12 +154,17 @@ async def collect_status(
         platform_public = public_key_b64(platform_key)
         report["platform_sealed_public_key"] = platform_public
         report["platform_sealed_key_id"] = key_id(platform_public)
+    if await roles_from_cockpit(session):
+        # Nur solange das Cockpit die Rollen führt: sonst vergibt der Kunde
+        # selbst, und jede Rolle wäre „fremd".
+        report["rollen_fremd"] = await foreign_roles_report(session, base)
     return report
 
 
 #: Felder, die ein älteres Cockpit noch nicht kennt. Weist es die Meldung mit
-#: 422 ab, geht sie einmal ohne diese Felder hinaus.
-OPTIONAL_FIELDS = ("oidc",)
+#: 422 ab, geht sie einmal ohne die beanstandeten dieser Felder hinaus (ohne
+#: alle, wenn die Antwort keines nennt).
+OPTIONAL_FIELDS = ("oidc", "rollen_fremd")
 #: Mandanten (Konsolen-Id), für die das Weglassen schon im Protokoll steht —
 #: einmal je Prozess als Warnung, danach leiser; die Meldung läuft alle paar
 #: Minuten, und bis zum Update des Cockpits ist das der Normalfall.
@@ -192,8 +203,12 @@ async def post_status(
         ) as client:
             response = await client.post(url, headers=headers, json=report)
             if response.status_code == 422 and optional:
-                _log_without_optional(tenant_console_id, optional, response)
-                reduced = {k: v for k, v in report.items() if k not in optional}
+                # Nur, was das Cockpit beanstandet: ein Cockpit, das `oidc`
+                # schon kennt und `rollen_fremd` noch nicht, bekommt `oidc`
+                # weiter. Nennt die Antwort keines, gehen alle.
+                dropped = _rejected_optional(response, optional) or optional
+                _log_without_optional(tenant_console_id, dropped, response)
+                reduced = {k: v for k, v in report.items() if k not in dropped}
                 response = await client.post(url, headers=headers, json=reduced)
             elif response.status_code in (200, 204):
                 _without_optional_logged.discard(tenant_console_id)
@@ -217,6 +232,25 @@ def _log_without_optional(
         _rejected_fields(response),
         ", ".join(fields),
     )
+
+
+def _rejected_optional(response: httpx.Response, optional: list[str]) -> list[str]:
+    """Die Felder aus ``optional``, die die 422-Antwort beanstandet (``body.<feld>``)."""
+    try:
+        body: Any = response.json()
+    except ValueError:
+        return []
+    detail: Any = cast(dict[str, Any], body).get("detail") if isinstance(body, dict) else None
+    if not isinstance(detail, list):
+        return []
+    named: set[str] = set()
+    for item in cast(list[Any], detail):
+        loc: Any = cast(dict[str, Any], item).get("loc") if isinstance(item, dict) else None
+        if isinstance(loc, list) and len(cast(list[Any], loc)) >= 2:
+            where = cast(list[Any], loc)
+            if where[0] == "body" and where[1] in optional:
+                named.add(str(where[1]))
+    return [k for k in optional if k in named]
 
 
 def _rejected_fields(response: httpx.Response) -> str:

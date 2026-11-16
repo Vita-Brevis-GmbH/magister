@@ -24,6 +24,18 @@ class RoleAssignmentOut(BaseModel):
     upn: str | None = None
 
 
+class RoleSourceOut(BaseModel):
+    """Wer die Rollen dieses Kunden führt (ADR-0027)."""
+
+    #: Das Cockpit führt die Rollen (Soll-Zustand ``role_assignments`` ≠ ``null``).
+    from_cockpit: bool
+    #: Darf die angemeldete Person hier trotzdem ändern? Nur ohne Cockpit oder
+    #: mit dem lokalen Administrationskonto (Notzugang).
+    editable: bool
+    #: Angemeldet mit dem Notzugang (lokales Administrationskonto).
+    emergency_access: bool
+
+
 class RoleGrantRequest(BaseModel):
     """A role grant. The role must exist (built-in or custom, ADR-0010); the
     admin super-role is cross-school (``school_id`` null) and every other role
@@ -56,6 +68,7 @@ class RoleSetRequest(BaseModel):
 
 __all__ = [
     "RoleAssignmentOut",
+    "RoleSourceOut",
     "RoleGrantRequest",
     "RoleRevokeRequest",
     "RoleSetRequest",

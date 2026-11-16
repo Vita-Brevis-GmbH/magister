@@ -48,3 +48,21 @@ def test_the_roles_line_counts_and_names_nobody() -> None:
     )
     assert line == "1 Eintrag/Einträge; +1/-0 Zuweisungen, 1 Konto/Konten vorab"
     assert "anna" not in line
+
+
+def test_the_roles_line_counts_foreign_revocations() -> None:
+    """Fremde Rollen, die das Cockpit entziehen lässt (ADR-0027) — gezählt, ohne Namen."""
+    from magister_api.cli.abgleich import _roles_line
+    from magister_api.services.foreign_roles import RevokedForeignRole
+    from magister_api.services.reconciler import ReconcileResult
+    from magister_api.tenancy.desired_state import DesiredState
+
+    preview = ReconcileResult(
+        revoked_foreign=[
+            RevokedForeignRole("g", "smi", 1, "anna", "admin@example.ch"),
+            RevokedForeignRole("g", "smi", 2, "anna", "admin@example.ch"),
+        ]
+    )
+    line = _roles_line(DesiredState(role_assignments=()), preview)
+    assert line == "0 Eintrag/Einträge; +0/-0 Zuweisungen, 0 Konto/Konten vorab, -2 fremde"
+    assert "anna" not in line

@@ -60,11 +60,15 @@ def _roles_line(desired: DesiredState, preview: ReconcileResult) -> str:
     """Rollen aus dem Cockpit (ADR-0026) als Zahlen, ohne Namen."""
     if desired.role_assignments is None:
         return "keine Aussage"
-    return (
+    line = (
         f"{len(desired.role_assignments)} Eintrag/Einträge; "
         f"+{len(preview.granted_assignments)}/-{len(preview.revoked_assignments)} Zuweisungen, "
         f"{len(preview.created_login_accounts)} Konto/Konten vorab"
     )
+    if preview.revoked_foreign:
+        # Fremde Rollen, die das Cockpit entziehen lässt (ADR-0027).
+        line += f", -{len(preview.revoked_foreign)} fremde"
+    return line
 
 
 async def _current(settings: Settings, tenant: Tenant) -> tuple[str, dict[str, bool], int]:
