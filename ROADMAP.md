@@ -226,6 +226,15 @@ Grundsetup durch das Cockpit. Referenz:
   Gleichlauf gegen das `StatusReport` des Cockpits; Test gegen einen echten
   Keycloak (Anmelden bis Abmelden), in der CI mit Wegwerf-Keycloak.
 
+## Betrieb aus dem Cockpit (2026-11)
+
+- ✅ **Update aus dem Cockpit** ([ADR-0028](docs/adr/0028-betrieb-ueber-den-host-agenten.md)):
+  `scripts/betrieb.sh` nach Vertrag betrieb/v1 (stand, sichern, aktualisieren --ref, zurueck,
+  neustart) für den Host-Agenten v2 des Cockpits; Sicherung `-rueckfall` mit Eigentümern und
+  Rechten, Health bis 5 min, Rückfall mit Datenbank nur mit privatem Schlüssel, sonst nur Code bei
+  gleichem Schemastand oder Exit 2 mit nächstem Schritt; Ops-Agent bleibt für attach, rotate-role
+  und Überwachung.
+
 ## Cross-Cutting (laufend)
 
 - Sicherheits-Updates der Dependencies (renovate)
