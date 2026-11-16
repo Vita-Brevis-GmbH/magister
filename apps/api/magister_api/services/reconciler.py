@@ -189,6 +189,8 @@ class ReconcileResult:
     created_login_accounts: list[str] = field(default_factory=list[str])
     #: {benutzer: Grund} — Einträge der Rollenliste, die ausgelassen wurden.
     skipped_assignments: dict[str, str] = field(default_factory=dict[str, str])
+    #: System-Rollen, die diesem Mandanten fehlten und angelegt wurden.
+    seeded_system_roles: list[str] = field(default_factory=list[str])
 
     @property
     def problems(self) -> list[str]:
@@ -219,6 +221,7 @@ class ReconcileResult:
             or self.granted_assignments
             or self.revoked_assignments
             or self.created_login_accounts
+            or self.seeded_system_roles
         )
 
 
@@ -351,6 +354,28 @@ class Reconciler:
 
         if result.changed_settings and not dry_run:
             await self._apply_settings(result.changed_settings, tenant_slug=tenant_slug)
+
+        if not dry_run and (desired.has_rbac or desired.role_assignments is not None):
+            # Gehostet fehlen die Erst-Seeds (System-Rollen); ohne sie liefen
+            # Rechte-Matrix und Rollen aus dem Cockpit ins Leere.
+            result.seeded_system_roles = await RbacService(self.session).ensure_system_roles()
+            if result.seeded_system_roles:
+                logger.info(
+                    "System-Rollen für %s angelegt: %s",
+                    tenant_slug,
+                    ", ".join(result.seeded_system_roles),
+                )
+                await AuditService(self.session, self.settings).emit(
+                    action="rbac_system_roles_seeded",
+                    target_kind="role",
+                    target_id="system",
+                    actor_upn=RECONCILER_ACTOR,
+                    actor_object_guid=None,
+                    school_id=None,
+                    ip=None,
+                    request_id=f"reconcile:{tenant_slug}",
+                    payload={"roles": result.seeded_system_roles},
+                )
 
         if desired.has_rbac:
             await self._reconcile_rbac(

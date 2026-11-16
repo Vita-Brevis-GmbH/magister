@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
@@ -94,6 +94,74 @@ async def _school(session: AsyncSession, kuerzel: str) -> int:
     session.add(row)
     await session.commit()
     return row.id
+
+
+class TestHostedTenantWithoutRoles:
+    """Gehostet laufen die Erst-Seeds nicht: ein bereitgestellter Mandant hatte keine Rollen, und
+    die Rollen aus dem Cockpit scheiterten mit ``role_not_found`` (Dev-Test 2026-11-16)."""
+
+    async def _ohne_rollen(self, session: AsyncSession, *keys: str) -> None:
+        from magister_api.models.rbac import Role, RoleCapability
+
+        if keys:
+            await session.execute(delete(RoleCapability).where(RoleCapability.role_key.in_(keys)))
+            await session.execute(delete(Role).where(Role.key.in_(keys)))
+        else:
+            await session.execute(delete(RoleCapability))
+            await session.execute(delete(Role))
+        await session.commit()
+
+    async def test_the_system_roles_come_with_the_first_run(
+        self, db_session: AsyncSession, app_settings: Settings, school_a: int
+    ) -> None:
+        await self._ohne_rollen(db_session)
+        result = await _reconcile(
+            db_session,
+            app_settings,
+            _desired(("automato-admin", "admin"), (LEITUNG, "schulleitung")),
+        )
+
+        assert result.skipped_assignments == {}
+        assert sorted(result.seeded_system_roles) == ["admin", "kl", "schulleitung", "smi"]
+        assert await _active(db_session) == {
+            (synthetic_principal("automato-admin"), "admin", None, "cockpit"),
+            (synthetic_principal(LEITUNG), "schulleitung", school_a, "cockpit"),
+        }
+        assert await _payloads(db_session, app_settings, "rbac_system_roles_seeded") == [
+            {"roles": ["admin", "schulleitung", "smi", "kl"]}
+        ]
+        again = await _reconcile(
+            db_session,
+            app_settings,
+            _desired(("automato-admin", "admin"), (LEITUNG, "schulleitung")),
+        )
+        assert again.seeded_system_roles == [] and not again.touched
+
+    async def test_only_the_missing_system_role_is_added(
+        self, db_session: AsyncSession, app_settings: Settings, school_a: int
+    ) -> None:
+        from magister_api.services.rbac import RbacService
+
+        before = await RbacService(db_session).capabilities_by_role()
+        await self._ohne_rollen(db_session, "admin")
+        result = await _reconcile(db_session, app_settings, _desired(("automato-admin", "admin")))
+
+        assert result.seeded_system_roles == ["admin"] and result.skipped_assignments == {}
+        after = await RbacService(db_session).capabilities_by_role()
+        assert {k: sorted(v) for k, v in after.items()} == {
+            k: sorted(v) for k, v in before.items() if k != "admin"
+        }
+
+    async def test_dry_run_plans_the_system_roles_without_writing(
+        self, db_session: AsyncSession, app_settings: Settings, school_a: int
+    ) -> None:
+        await self._ohne_rollen(db_session)
+        result = await _reconcile(
+            db_session, app_settings, _desired(("automato-admin", "admin")), dry_run=True
+        )
+        assert result.skipped_assignments == {}
+        assert result.seeded_system_roles == []
+        assert [c.role for c in result.granted_assignments] == ["admin"]
 
 
 class TestGrant:

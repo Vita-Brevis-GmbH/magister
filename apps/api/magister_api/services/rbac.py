@@ -100,6 +100,40 @@ class RbacService:
                 self.session.add(RoleCapability(role_key=role_key, capability=cap.value))
         await self.session.flush()
 
+    async def ensure_system_roles(self) -> list[str]:
+        """Fehlende System-Rollen anlegen; die angelegten Schlüssel.
+
+        Gehostet laufen die Erst-Seeds beim Start nicht (mehrere Mandanten,
+        siehe ``main._run_seeds``) – ein bereitgestellter Mandant hatte dann
+        gar keine Rollen, und die Rollen aus dem Cockpit scheiterten mit
+        ``role_not_found`` (Dev-Test 2026-11-16). Der Abgleich ruft das
+        deshalb auf: eine leere Installation bekommt dasselbe wie beim
+        Erst-Seed (Rollen und Standard-Matrix), einer bestehenden fehlen
+        höchstens System-Rollen – die kommen ohne Rechte dazu, eigene Rollen
+        und die Matrix des Kunden bleiben unberührt.
+        """
+        have = set((await self.session.execute(select(Role.key))).scalars().all())
+        if not have:
+            await self.seed_defaults_if_empty()
+            return [spec.key for spec in SEED_ROLES]
+        added: list[str] = []
+        for spec in SEED_ROLES:
+            if spec.key in have:
+                continue
+            self.session.add(
+                Role(
+                    key=spec.key,
+                    name=spec.name,
+                    is_system=True,
+                    is_admin=spec.is_admin,
+                    is_derived=spec.is_derived,
+                )
+            )
+            added.append(spec.key)
+        if added:
+            await self.session.flush()
+        return added
+
     # -- read ---------------------------------------------------------------
     async def load_matrix(self) -> RbacMatrix:
         roles = list((await self.session.execute(select(Role))).scalars().all())

@@ -140,3 +140,13 @@ Admin-Oberfläche wie im Abgleich. Den Verlauf hält das Audit.
 - **Keine Aussage behält alles.** Führt das Cockpit die Anmeldung nicht mehr
   (`null`), bleiben seine Zuweisungen stehen und sind in Magister von Hand zu
   entziehen.
+
+## Nachtrag 2026-11-16: System-Rollen gehostet
+
+Fund aus dem Test: „Abgleich gescheitert: role_assignments automato-admin:admin: role_not_found“.
+Gehostet (mehrere Mandanten) laufen die Erst-Seeds beim Start nicht, ein bereitgestellter Mandant
+hatte deshalb keine Rollen in `roles`. Der Abgleich legt fehlende System-Rollen jetzt selbst an
+(`RbacService.ensure_system_roles`, Audit `rbac_system_roles_seeded`): eine leere Installation
+bekommt Rollen und Standard-Matrix wie beim Erst-Seed, einer bestehenden fehlen höchstens
+System-Rollen, die ohne Rechte dazukommen. Eigene Rollen und die Matrix des Kunden bleiben. Der
+Probelauf (`dry_run`) kennt die System-Rollen auch ohne Zeile in `roles`.

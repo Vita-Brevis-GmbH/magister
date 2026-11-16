@@ -29,7 +29,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from magister_api.audit.service import AuditService
-from magister_api.auth.roles import GRANTED_BY_COCKPIT
+from magister_api.auth.roles import GRANTED_BY_COCKPIT, ROLE_ADMIN, ROLE_ASSIGNMENT_ROLES
 from magister_api.config import Settings
 from magister_api.models.school import School
 from magister_api.repositories.auth import LoginAccountRepository, RoleAssignmentRepository
@@ -152,7 +152,16 @@ class CockpitRoleSync:
 
         for entry in entries:
             role_def = catalog.get(entry.role)
-            if role_def is None or role_def.is_derived:
+            if role_def is not None:
+                if role_def.is_derived:
+                    plan.skipped[f"{entry.username}:{entry.role}"] = "role_not_found"
+                    continue
+                cross_unit = role_def.is_admin
+            elif entry.role in ROLE_ASSIGNMENT_ROLES:
+                # System-Rolle, die (noch) nicht in `roles` steht – etwa im
+                # Probelauf vor dem ersten Abgleich eines gehosteten Mandanten.
+                cross_unit = entry.role == ROLE_ADMIN
+            else:
                 plan.skipped[f"{entry.username}:{entry.role}"] = "role_not_found"
                 continue
             if entry.username in plan.skipped:
@@ -175,7 +184,7 @@ class CockpitRoleSync:
                         continue
                     plan.create[entry.username] = principal
                 principals[entry.username] = principal
-            units: list[int | None] = [None] if role_def.is_admin else list(schools)
+            units: list[int | None] = [None] if cross_unit else list(schools)
             for school_id in units:
                 plan.wanted.setdefault((principal, entry.role, school_id), entry.username)
 

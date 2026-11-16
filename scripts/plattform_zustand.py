@@ -248,7 +248,10 @@ def probes(domain: str, bind: str, ziele: list[dict[str, str]]) -> list[dict[str
             {
                 "401": "bedient",
                 "503": "Wartung — Kundenschlüssel, Schemastand oder Konsole (Kunde anbinden?)",
-                "404": "der Datenebene unbekannt — Kunde anbinden",
+                # Auch kurz nach einer neuen Adresse: Konsole und Datenebene
+                # lernen sie unabhängig voneinander (je bis 5 Minuten).
+                "404": "der Datenebene unbekannt — Kunde anbinden "
+                "(nach einer neuen Adresse bis 5 Minuten normal)",
                 "502": "Caddy läuft, die Datenebene nicht",
                 "000": "keine Antwort auf 443",
             },
