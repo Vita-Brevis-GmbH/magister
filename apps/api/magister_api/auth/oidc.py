@@ -97,7 +97,16 @@ class StandardOidcClient:
             meta: Any = resp.json()
         except (httpx.HTTPError, ValueError) as exc:
             # Falscher Realm im Issuer, kein Netz zum Anbieter: ein Code, den
-            # die Anmeldeseite übersetzt — kein 500.
+            # die Anmeldeseite übersetzt — kein 500. Ins Protokoll Adresse und
+            # Art des Fehlers (Namensauflösung, Verbindung, TLS, HTTP-Status),
+            # sonst sucht der Betrieb blind (Dev-Test 2026-11-16).
+            status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+            logger.warning(
+                "Discovery des Anbieters gescheitert: %s (%s%s)",
+                url,
+                type(exc).__name__,
+                f", HTTP {status}" if status is not None else f": {str(exc)[:200]}",
+            )
             raise ValueError("oidc_discovery_failed") from exc
         if not isinstance(meta, dict):
             raise ValueError("oidc_discovery_failed")
