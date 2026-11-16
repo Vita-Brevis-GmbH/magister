@@ -198,6 +198,11 @@ Grundsetup durch das Cockpit. Referenz:
   `user_not_synced`, kein `oid`-Zwang mehr.
 - ✅ **Bootstrap-Admins sind Keycloak-Benutzernamen** (`automato-admin`), ohne
   Zeile in `ad_user_cache`; Regel für Benutzernamen an `AppSettingsUpdate`.
+- ✅ **Rollen nur aus dem Cockpit** ([ADR-0027](docs/adr/0027-rollen-nur-aus-dem-cockpit.md)):
+  Merker `roles_from_cockpit` (Migration 0054); Vergeben/Entziehen und Konten anlegen/lösen/löschen
+  409 ausser Notzugang, Oberfläche nur lesbar; `rollen_fremd` in der Zustandsmeldung (≤200),
+  `role_revocations` im Soll-Zustand (nur fremde, auditiert); Rückfall bei 422 nur ohne die
+  beanstandeten Felder.
 - ✅ **Rollen an Anmeldekonten:** Rolleneditor nimmt Konten ohne AD-Zeile;
   `/admin/login-accounts` (vorab anlegen, sperren, Bindung lösen, löschen);
   Konto ohne Rechte sieht einen Hinweis statt Menüs.
