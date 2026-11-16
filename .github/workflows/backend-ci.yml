@@ -40,8 +40,26 @@ jobs:
     env:
       MAGISTER_TEST_DATABASE_URL: postgresql+asyncpg://magister_test:magister_test@localhost:5432/magister_test
       HAT_KONSOLE_KEY: ${{ secrets.COCKPIT_DEPLOY_KEY != '' }}
+      # Wegwerf-Keycloak (start-dev) NUR FÜR DEN TEST der Anmeldung gegen einen
+      # echten Realm (tests/integration/test_keycloak_anmeldung.py, ADR-0025
+      # Nachtrag 2026-11-16). Benutzer und Passwort sind feste Test-Werte, kein
+      # Geheimnis: der Keycloak lebt nur in diesem Lauf und ist von aussen
+      # nicht erreichbar.
+      MAGISTER_TEST_KEYCLOAK_URL: http://127.0.0.1:8180
+      MAGISTER_TEST_KEYCLOAK_ADMIN: admin
+      MAGISTER_TEST_KEYCLOAK_ADMIN_PASSWORD: nur-test-keycloak-admin
     steps:
       - uses: actions/checkout@v4
+
+      # Kein Service-Container: dem lässt sich kein Befehl mitgeben, und das
+      # Keycloak-Image startet nur mit einem (`start-dev`). Früh gestartet,
+      # damit er hochfährt, während die Abhängigkeiten installiert werden.
+      - name: Keycloak starten (nur Test)
+        run: |
+          docker run -d --name keycloak -p 8180:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME="$MAGISTER_TEST_KEYCLOAK_ADMIN" \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD="$MAGISTER_TEST_KEYCLOAK_ADMIN_PASSWORD" \
+            quay.io/keycloak/keycloak:26.4.2 start-dev
 
       # Die Konsole lebt seit PR #60 im Repo vitabrevis-cockpit. Ohne ihren
       # Checkout überspringen sich die Abgleichstests (Versiegeln,
@@ -107,6 +125,19 @@ jobs:
 
       - name: Pyright (strict)
         run: uv run pyright
+
+      - name: Auf Keycloak warten
+        run: |
+          for _ in $(seq 1 90); do
+            if curl -fs "$MAGISTER_TEST_KEYCLOAK_URL/realms/master/.well-known/openid-configuration" > /dev/null 2>&1; then
+              echo "Keycloak bereit"
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs keycloak 2>&1 | tail -50
+          echo "::error::Keycloak ist nicht hochgefahren – der Test der Anmeldung gegen einen echten Realm liefe nicht."
+          exit 1
 
       - name: Pytest (unit + integration) with coverage gate
         run: uv run pytest -q --cov=magister_api --cov-report=term-missing --cov-fail-under=75

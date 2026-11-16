@@ -4,6 +4,11 @@ Die Konsole lebt seit PR #60 im eigenen Repo `Vita-Brevis-GmbH/vitabrevis-cockpi
 Zusagen tragen beide Seiten. Die Abgleichstests in `apps/api` lesen deshalb Dateien der Konsole:
 
 - Versiegeln (`tests/integration/test_reconcile_operations.py`, `services/sealing.py`);
+- Zustandsmeldung gegen das Pydantic-Modell `StatusReport` des Cockpits
+  (`test_reconcile_operations.py::TestStatusReportMatchesTheCockpit`, `schemas/operations.py`;
+  der Teil mit `oidc` überspringt sich, solange das Cockpit das Feld nicht kennt);
+- Client `magister`, wie das Cockpit ihn im Realm anlegt (`tests/integration/test_keycloak_anmeldung.py`,
+  `services/magister_anmeldung.py`; ohne Checkout eine Abschrift);
 - Präfix der Operator-Assertion (`tests/unit/test_operator_assertion.py`);
 - Policy-Keys (`tests/unit/test_reconciler.py`, `services/settings.py`).
 
@@ -53,3 +58,26 @@ MAGISTER_TEST_KONSOLE_DIR=/pfad/zu/vitabrevis-cockpit uv run pytest -q tests/uni
 
 Ohne die Variable suchen die Tests einen Ordner `vitabrevis-cockpit` im Repo oder daneben
 (`apps/api/tests/konsole.py`).
+
+## Anmeldung gegen einen echten Keycloak
+
+`tests/integration/test_keycloak_anmeldung.py` (Marker `keycloak`, ADR-0025 Nachtrag 2026-11-16)
+fährt den ganzen Anmeldeweg gegen einen echten Keycloak: Realm und Client wie das Cockpit,
+Anmeldeformular, Callback, `/auth/me`, Abmelden am Realm, dazu die Selbstprüfung. Ohne
+`MAGISTER_TEST_KEYCLOAK_URL` überspringt er sich. Die `backend-ci` startet dafür einen
+Wegwerf-Keycloak (`docker run … start-dev`, kein Service-Container: dem lässt sich kein Befehl
+mitgeben); Admin-Benutzer und -Passwort sind feste Test-Werte im Workflow, kein Geheimnis.
+
+Lokal (Keycloak aus dem Zip, Java 21; jeder Test legt einen eigenen Realm an und löscht ihn):
+
+```bash
+KC_BOOTSTRAP_ADMIN_USERNAME=admin KC_BOOTSTRAP_ADMIN_PASSWORD=<test-passwort> \
+  bin/kc.sh start-dev --http-port=8180 &
+cd apps/api
+MAGISTER_TEST_KEYCLOAK_URL=http://127.0.0.1:8180 MAGISTER_TEST_KEYCLOAK_ADMIN_PASSWORD=<test-passwort> \
+MAGISTER_TEST_DATABASE_URL=postgresql+asyncpg://… uv run pytest -q tests/integration/test_keycloak_anmeldung.py
+```
+
+`127.0.0.1` statt `localhost`: die Cookie-Ablage von Python schickt Cookies für `localhost` nicht
+zurück.
+
