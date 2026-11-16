@@ -12,11 +12,15 @@ import importlib.util
 import sys
 import uuid
 from types import ModuleType
+from typing import Any
 
+import httpx
 import pytest
+from pydantic import BaseModel, SecretStr, ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from magister_api.auth.oidc_check import REASON_MAX, check_oidc
 from magister_api.config import Settings
 from magister_api.models.audit import AuditEvent
 from magister_api.repositories.local_admin import LocalAdminRepository
@@ -29,7 +33,7 @@ from magister_api.tenancy.keys import keys_for
 from magister_api.tenancy.registry import Tenant
 from magister_api.tenancy.sealing import public_key_b64
 from magister_api.tenancy.status_report import collect_status, reconcile_outcome
-from tests.konsole import konsole_datei_oder_skip
+from tests.konsole import konsole_datei_oder_skip, konsole_modul
 
 pytestmark = pytest.mark.postgres
 
@@ -307,3 +311,100 @@ class TestStatusReport:
         assert report["local_admin"] == {"exists": False}
         # Kein Geheimnis im Klartext, nur ob es gesetzt ist.
         assert "client-secret" not in repr(report)
+
+
+def _cockpit_status_report() -> type[BaseModel]:
+    """`StatusReport` des Cockpits, aus seiner Datei (`schemas/operations.py`)."""
+    module = konsole_modul("schemas", "operations.py", name="console_operations_it")
+    model: type[BaseModel] = module.StatusReport
+    return model
+
+
+def _tenant(app_settings: Settings) -> Tenant:
+    return Tenant(
+        slug="alpha",
+        name="Alpha",
+        dsn=app_settings.database_url,
+        schema_name="public",
+        db_role=None,
+        schema_version="x",
+        console_id=TENANT_REF,
+    )
+
+
+async def _oidc_variants() -> list[dict[str, Any]]:
+    """Was die Selbstprüfung melden kann: nicht eingerichtet, in Ordnung, Fehler mit 300 Zeichen."""
+    issuer = "https://auth.example.ch/realms/kunde-a"
+    settings = Settings(
+        oidc_issuer=issuer, oidc_client_id="magister", oidc_client_secret=SecretStr("x")
+    )
+
+    def provider(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/certs"):
+            return httpx.Response(200, json={"keys": [{"kty": "RSA", "kid": "k"}]})
+        named = issuer if request.url.host == "auth.example.ch" else "https://x/" + "y" * 400
+        return httpx.Response(
+            200,
+            json={
+                "issuer": named,
+                "authorization_endpoint": f"{issuer}/auth",
+                "token_endpoint": f"{issuer}/token",
+                "jwks_uri": f"{issuer}/certs",
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(provider)) as http:
+        ok = await check_oidc(settings, http=http)
+        # Ein langer Rechnername: der Grund stösst an seine Grenze von 300 Zeichen.
+        long_host = ".".join(c * 63 for c in "abc") + ".example.ch"
+        wrong = await check_oidc(
+            settings.model_copy(update={"oidc_issuer": f"https://{long_host}/realms/a"}),
+            http=http,
+        )
+    assert ok["ok"] is True
+    assert wrong["ok"] is False and len(wrong["reason"]) == REASON_MAX
+    unconfigured = await check_oidc(settings.model_copy(update={"oidc_issuer": ""}))
+    return [unconfigured, ok, wrong]
+
+
+class TestStatusReportMatchesTheCockpit:
+    """Gleichlauf mit dem Cockpit: die Meldung gegen sein echtes Pydantic-Modell.
+
+    Das Cockpit prüft streng (`extra=forbid`): ein Feld, das es nicht kennt,
+    weist die ganze Meldung ab. Bis 2026-11-16 verglich kein Test die Meldung
+    mit dem Cockpit.
+    """
+
+    async def test_the_report_without_oidc_is_accepted(
+        self, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        """So geht die Meldung an ein Cockpit, das `oidc` noch nicht kennt (Rückfall bei 422)."""
+        model = _cockpit_status_report()
+        report = await collect_status(
+            db_session, app_settings, _tenant(app_settings), reconcile=reconcile_outcome(ok=True)
+        )
+        assert "oidc" not in report
+        model.model_validate(report)
+        if "oidc" not in model.model_fields:
+            # Die Voraussetzung für den Rückfall: dieses Cockpit weist `oidc` ab.
+            with pytest.raises(ValidationError, match="oidc"):
+                model.model_validate({**report, "oidc": (await _oidc_variants())[0]})
+
+    async def test_the_report_with_oidc_is_accepted(
+        self, db_session: AsyncSession, app_settings: Settings
+    ) -> None:
+        model = _cockpit_status_report()
+        if "oidc" not in model.model_fields:
+            pytest.skip("Das Cockpit kennt das Feld `oidc` der Zustandsmeldung noch nicht.")
+        report = await collect_status(
+            db_session, app_settings, _tenant(app_settings), reconcile=reconcile_outcome(ok=True)
+        )
+        for oidc in await _oidc_variants():
+            parsed = model.model_validate({**report, "oidc": oidc})
+            back = parsed.model_dump(mode="json")["oidc"]
+            assert set(back) == {"configured", "ok", "reason", "checked_at"}
+            assert (back["configured"], back["ok"], back["reason"]) == (
+                oidc["configured"],
+                oidc["ok"],
+                oidc["reason"],
+            )

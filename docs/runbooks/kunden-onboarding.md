@@ -108,6 +108,22 @@ Benutzer am **Keycloak-Realm des Kunden** an; Magister sieht nur den Realm.
   Rechte**. Weitere Rollen vergibt ein Admin unter *Rollen & Berechtigungen* —
   dort lassen sich Konten auch vorab anlegen. Lehrpersonen, deren
   Keycloak-Benutzername ihrem UPN im AD entspricht, behalten ihre Klassen.
+- **Selbstprüfung:** Magister prüft die Anmeldung mit jeder Zustandsmeldung
+  (alle paar Minuten) und meldet sie dem Cockpit (Feld `oidc`, ADR-0025
+  Nachtrag 2026-11-16) — „Kunde prüfen" zeigt einen Fehler, bevor sich jemand
+  anmelden will. Der Grund nennt Kürzel, Art und Rechner:
+
+  | Grund | Bedeutung | Abhilfe |
+  |-------|-----------|---------|
+  | `discovery_tls: CERTIFICATE_VERIFY_FAILED …` | Magister vertraut dem Zertifikat des Keycloak nicht | Issuer auf die **öffentliche** Adresse des Realms stellen (Cockpit), nicht die interne |
+  | `discovery_dns` / `discovery_connect` / `discovery_timeout` / `discovery_proxy` | Name unbekannt, Verbindung abgewiesen, keine Antwort, Proxy leitet nicht weiter | Adresse und Netz vom Magister-Host aus prüfen |
+  | `discovery_http_404` | Realm unter dieser Adresse gibt es nicht | Realm-Name im Issuer prüfen |
+  | `issuer_mismatch: <Issuer>` | Der Realm nennt sich unter einer anderen Adresse (Hostname des Keycloak) | Issuer genau auf den genannten Wert stellen |
+  | `discovery_incomplete` / `jwks_failed` | Dokument unvollständig oder Schlüssel nicht abrufbar | Keycloak und Realm prüfen |
+  | `client_secret_missing` | Geheimnis des Clients `magister` nicht angekommen | Das Cockpit versiegelt es erst, wenn Magister seinen Schlüssel gemeldet hat; danach Verknüpfung des Kunden mit dem Realm im Cockpit prüfen |
+
+  Nicht geprüft: ob Client und Geheimnis im Realm passen — das zeigt erst eine
+  Anmeldung (`oidc_token_exchange_failed`).
 
 ### 1.7 Stammdaten
 
@@ -232,6 +248,7 @@ Der Kunde ist erst produktiv, wenn alle sechs Punkte grün sind:
 - [ ] Anmeldung über den Keycloak-Realm funktioniert für `automato-admin`
       (Admin in Magister) und für einen Kunden-Admin, dem eine Rolle gegeben
       wurde; Abmelden führt über die Abmeldeseite des Realms zurück auf `/login`.
+      Vorher meldet die Selbstprüfung im Cockpit die Anmeldung als in Ordnung.
 - [ ] AD-Sync liefert die erwartete Zahl an Benutzern.
 - [ ] Ein Passwort-Reset an einem Testkonto geht durch — der Beweis, dass der
       ganze Weg Konsole → Warteschlange → Agent → LDAPS → AD trägt.

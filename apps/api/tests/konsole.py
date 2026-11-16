@@ -23,8 +23,11 @@ nicht von `cockpit_api` ab und umgekehrt.
 
 from __future__ import annotations
 
+import ast
 import os
+import sys
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -67,3 +70,32 @@ def konsole_datei_oder_skip(*teile: str) -> Path:
             "(MAGISTER_TEST_KONSOLE_DIR, docs/runbooks/ci-cockpit.md)"
         )
     return pfad
+
+
+def konsole_modul(*teile: str, name: str) -> ModuleType:
+    """Eine Datei der Konsole als Modul, ohne `cockpit_api` zu importieren.
+
+    Ihre Importe aus `cockpit_api` werden zu `typing.Any` — für Schemas, die
+    daraus nur Typen für Felder nehmen, die der Test nicht prüft (etwa die
+    Enums der Wartungsaufträge in `schemas/operations.py`). So prüft Magister
+    seine Meldung gegen das echte Pydantic-Modell des Cockpits (Längen,
+    `extra=forbid`), statt Feldnamen zu vergleichen. Fehlt die Datei, wird
+    übersprungen.
+    """
+    pfad = konsole_datei_oder_skip(*teile)
+    tree = ast.parse(pfad.read_text(encoding="utf-8"), filename=str(pfad))
+    body: list[ast.stmt] = []
+    for node in tree.body:
+        if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] == "cockpit_api":
+            for alias in node.names:
+                ersatz = f"{alias.asname or alias.name} = __import__('typing').Any"
+                body.extend(ast.parse(ersatz).body)
+            continue
+        body.append(node)
+    tree.body = body
+    ast.fix_missing_locations(tree)
+    module = ModuleType(name)
+    module.__file__ = str(pfad)
+    sys.modules[name] = module
+    exec(compile(tree, str(pfad), "exec"), module.__dict__)  # noqa: S102
+    return module

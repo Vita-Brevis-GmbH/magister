@@ -15,6 +15,8 @@ import base64
 import hashlib
 import logging
 import secrets
+import socket
+import ssl
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 from urllib.parse import urlencode, urlsplit
@@ -76,6 +78,90 @@ def post_logout_redirect_uri(redirect_uri: str) -> str | None:
     return f"{parts.scheme}://{parts.netloc}/login"
 
 
+class OidcDiscoveryError(ValueError):
+    """Discovery gescheitert.
+
+    ``str(exc)`` bleibt ``oidc_discovery_failed`` — der Code, den die
+    Anmeldeseite übersetzt. ``reason`` sagt, woran es lag, in der Form der
+    Selbstprüfung (:mod:`magister_api.auth.oidc_check`): festes Kürzel, kurze
+    Art, Rechner — etwa ``discovery_tls: CERTIFICATE_VERIFY_FAILED: … (host)``.
+    """
+
+    def __init__(self, reason: str) -> None:
+        super().__init__("oidc_discovery_failed")
+        self.reason = reason
+
+
+def discovery_url(issuer: str) -> str:
+    return f"{issuer.rstrip('/')}/.well-known/openid-configuration"
+
+
+def host_of(url: str) -> str:
+    """Rechner und Port einer Adresse — ohne Benutzerteil, Pfad und Abfrage."""
+    try:
+        parts = urlsplit(url)
+        host = parts.hostname or ""
+        port = parts.port
+    except ValueError:
+        return "?"
+    if not host:
+        return "?"
+    return f"{host}:{port}" if port else host
+
+
+def _chain(exc: BaseException) -> list[BaseException]:
+    """Die Ausnahme und ihre Ursachen (httpx → httpcore → ssl/socket)."""
+    out: list[BaseException] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        out.append(current)
+        current = current.__cause__ or current.__context__
+    return out
+
+
+def failure_kind(exc: BaseException) -> str:
+    """Art eines gescheiterten Abrufs, kurz und ohne Geheimnisse.
+
+    ``tls: CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate``,
+    ``dns``, ``connect: refused``, ``timeout``, ``proxy``, ``http_404``, ``invalid``
+    (kein JSON) — der Grund aus der Kette der Ursachen, nicht der Text von httpx:
+    der sagt bei TLS und Namensauflösung nur „ConnectError".
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        return f"http_{exc.response.status_code}"
+    if isinstance(exc, httpx.TimeoutException):
+        return "timeout"
+    chain = _chain(exc)
+    for cause in chain:
+        if isinstance(cause, ssl.SSLCertVerificationError):
+            detail = cause.verify_message or ""
+            return f"tls: {cause.reason or 'CERTIFICATE_VERIFY_FAILED'}" + (
+                f": {detail}" if detail else ""
+            )
+        if isinstance(cause, ssl.SSLError):
+            return f"tls: {cause.reason or type(cause).__name__}"
+        if isinstance(cause, socket.gaierror):
+            return "dns"
+        if isinstance(cause, ConnectionRefusedError):
+            return "connect: refused"
+    if isinstance(exc, httpx.ProxyError):
+        # Ein Proxy aus der Umgebung (HTTPS_PROXY) hat nicht weitergeleitet;
+        # den Grund dahinter (Name, Verbindung) kennt nur er.
+        return "proxy"
+    if isinstance(exc, httpx.TransportError):
+        return f"connect: {type(exc).__name__}"
+    if isinstance(exc, ValueError):
+        return "invalid"
+    return f"failed: {type(exc).__name__}"
+
+
+def oidc_http(timeout_s: float = 10.0) -> httpx.AsyncClient:
+    """Der HTTP-Client zum Anbieter — für die Anmeldung und ihre Selbstprüfung derselbe."""
+    return httpx.AsyncClient(timeout=timeout_s)
+
+
 class StandardOidcClient:
     """Minimal standards-based OIDC client (discovery, PKCE, JWKS)."""
 
@@ -86,11 +172,12 @@ class StandardOidcClient:
     @property
     def http(self) -> httpx.AsyncClient:
         if self._http is None:
-            self._http = httpx.AsyncClient(timeout=10.0)
+            self._http = oidc_http()
         return self._http
 
-    async def _discover(self) -> dict[str, Any]:
-        url = f"{self._settings.oidc_issuer.rstrip('/')}/.well-known/openid-configuration"
+    async def discover(self) -> dict[str, Any]:
+        """Das Discovery-Dokument des Issuers. Wirft :class:`OidcDiscoveryError`."""
+        url = discovery_url(self._settings.oidc_issuer)
         try:
             resp = await self.http.get(url)
             resp.raise_for_status()
@@ -100,16 +187,12 @@ class StandardOidcClient:
             # die Anmeldeseite übersetzt — kein 500. Ins Protokoll Adresse und
             # Art des Fehlers (Namensauflösung, Verbindung, TLS, HTTP-Status),
             # sonst sucht der Betrieb blind (Dev-Test 2026-11-16).
-            status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
-            logger.warning(
-                "Discovery des Anbieters gescheitert: %s (%s%s)",
-                url,
-                type(exc).__name__,
-                f", HTTP {status}" if status is not None else f": {str(exc)[:200]}",
-            )
-            raise ValueError("oidc_discovery_failed") from exc
+            kind = failure_kind(exc)
+            logger.warning("Discovery des Anbieters gescheitert: %s (%s)", url, kind)
+            raise OidcDiscoveryError(_discovery_reason(kind, url)) from exc
         if not isinstance(meta, dict):
-            raise ValueError("oidc_discovery_failed")
+            logger.warning("Discovery des Anbieters gescheitert: %s (kein JSON-Objekt)", url)
+            raise OidcDiscoveryError(_discovery_reason("invalid", url))
         return cast(dict[str, Any], meta)
 
     async def build_authorize_request(self) -> OidcAuthorizeRequest:
@@ -135,7 +218,7 @@ class StandardOidcClient:
         # bei Keycloak ist er `…/realms/<realm>/protocol/openid-connect/auth`,
         # bei anderen Anbietern wieder anders. Aus dem Issuer zusammengesetzt
         # landete der Browser auf einer Seite, die es nicht gibt.
-        meta = await self._discover()
+        meta = await self.discover()
         endpoint = str(
             meta.get("authorization_endpoint")
             or f"{self._settings.oidc_issuer.rstrip('/')}/authorize"
@@ -155,7 +238,7 @@ class StandardOidcClient:
         if not secrets.compare_digest(state, expected_state):
             raise ValueError("oidc_state_mismatch")
 
-        meta = await self._discover()
+        meta = await self.discover()
         token_endpoint = meta["token_endpoint"]
         try:
             resp = await self.http.post(
@@ -247,7 +330,7 @@ class StandardOidcClient:
         logout has already happened and must not fail on this.
         """
         try:
-            meta = await self._discover()
+            meta = await self.discover()
         except ValueError:
             logger.warning("Abmelden beim Anbieter: Discovery nicht erreichbar")
             return None
@@ -259,6 +342,12 @@ class StandardOidcClient:
         if back is not None:
             params["post_logout_redirect_uri"] = back
         return f"{endpoint}?{urlencode(params)}"
+
+
+def _discovery_reason(kind: str, url: str) -> str:
+    """``discovery_http_404 (host)``, ``discovery_tls: … (host)`` — Kürzel, Art, Rechner."""
+    head, sep, detail = kind.partition(": ")
+    return f"discovery_{head}{sep}{detail} ({host_of(url)})"
 
 
 def _text(value: Any, *, limit: int = 200) -> str | None:

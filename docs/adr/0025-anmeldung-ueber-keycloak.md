@@ -192,6 +192,71 @@ eine Keycloak-Sitzung, Magister zeigte trotzdem seine Anmeldeseite mit dem Knopf
 - Nach dem Abmelden führt der Weg über die Abmeldeseite von Keycloak zurück auf `/login` und von
   dort zur Anmeldemaske von Keycloak – die Sitzung ist dann beendet, es meldet nicht still wieder an.
 
+## Nachtrag 2026-11-16: Selbstprüfung der Anmeldung, Feld `oidc` der Zustandsmeldung
+
+Fund aus dem Test: Magister hatte als Issuer die **interne** Keycloak-Adresse, deren Zertifikat es
+nicht vertraute. Sichtbar wurde das erst beim Anmelden (`oidc_discovery_failed`), die öffentliche
+Adresse wäre erreichbar gewesen. Anwender: „Kunde prüfen" im Cockpit soll die ganze Kette prüfen,
+und solche Fehler sollen sofort sichtbar sein.
+
+**Selbstprüfung** (`auth/oidc_check.py`): mit jeder Zustandsmeldung (nach jedem Abgleich, je
+Mandant der Registry mit Konsolen-Id, Vorgabe alle 300 s) prüft Magister mit den wirksamen
+Einstellungen und demselben HTTP-Client wie die Anmeldung, aber ausserhalb der
+Datenbanksitzung und mit 5 s statt 10 s Zeitlimit:
+
+1. Discovery `<oidc_issuer>/.well-known/openid-configuration`: HTTP 200, ein JSON-Objekt;
+2. `issuer` im Dokument gleich `oidc_issuer` (ohne Schrägstrich am Ende verglichen) — Keycloak
+   nennt den Issuer nach seinem Hostnamen, nicht nach der gefragten Adresse;
+3. `authorization_endpoint`, `token_endpoint`, `jwks_uri` vorhanden;
+4. JWKS abrufbar, mindestens ein Schlüssel;
+5. `oidc_client_secret` gesetzt (nur ob).
+
+Nicht geprüft wird, ob der Client im Realm existiert und das Secret passt: das ginge nur mit
+einem Code-Tausch, und der hinterliesse alle paar Minuten einen gescheiterten Anmeldeversuch im
+Realm des Kunden.
+
+**Vertrag mit dem Cockpit** — die Zustandsmeldung trägt genau dieses optionale Feld:
+
+```json
+"oidc": {"configured": true, "ok": false,
+         "reason": "discovery_tls: CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate (auth.example.ch)",
+         "checked_at": "2026-11-16T08:00:00+00:00"}
+```
+
+- `configured` = `oidc_issuer` und `oidc_client_id` gesetzt; sonst `ok`, `reason` und
+  `checked_at` `null` (kein Fehler, etwa vor dem Grundsetup).
+- `reason`: der **erste** Fehler in der Reihenfolge oben, als festes Kürzel, kurze Art und
+  Rechner (ohne Benutzerteil, Pfad, Abfrage), höchstens 300 Zeichen, nie ein Geheimnis:
+  `discovery_dns`, `discovery_connect: refused`, `discovery_timeout`, `discovery_proxy`,
+  `discovery_tls: <Grund>[: <Meldung>]`, `discovery_http_<Status>`, `discovery_invalid`,
+  `issuer_mismatch: <Issuer im Dokument>`, `discovery_incomplete: <fehlende Felder>`,
+  `jwks_failed: <Art>` (Art wie bei der Discovery, oder `no_keys`), `client_secret_missing`,
+  `check_failed: <Typ>` (Fehler der Prüfung selbst). Jeweils mit ` (<rechner[:port]>)`, ausser
+  bei `client_secret_missing`.
+- Dieselbe Art steht jetzt auch im Protokoll der gescheiterten Discovery beim Anmelden
+  (`OidcDiscoveryError.reason`); die Anmeldeseite bekommt weiter `oidc_discovery_failed`.
+
+**Reihenfolge der Updates.** Das Cockpit prüft die Meldung streng (`extra=forbid`); ein älteres
+weist sie mit dem neuen Feld ganz ab (422). Magister sendet sie dann **einmal ohne `oidc`**
+erneut (`status_report.OPTIONAL_FIELDS`) und protokolliert das je Mandant einmal als Warnung,
+danach leiser; scheitert auch der zweite Versuch, gilt die Meldung wie bisher als nicht
+angekommen. Verworfen: eine Fähigkeit oder Schemaversion, nach der Magister fragt — im Vertrag
+gibt es keine (weder im Soll-Zustand noch in der Antwort auf die Meldung), und eine neue bräuchte
+selbst zuerst ein Update des Cockpits. Kosten des Rückfalls: eine zweite Anfrage je Meldung,
+solange das Cockpit älter ist.
+
+**Tests.** Gleichlauf gegen das echte Pydantic-Modell des Cockpits
+(`test_reconcile_operations.py::TestStatusReportMatchesTheCockpit`, die Datei des Cockpits mit
+`typing.Any` an Stelle seiner Paketimporte): die Meldung ohne `oidc` wird angenommen; mit `oidc`
+überspringt sich der Test, solange das Cockpit das Feld nicht kennt. Dazu ein Test gegen einen
+**echten Keycloak** (`test_keycloak_anmeldung.py`, Marker `keycloak`, nur mit
+`MAGISTER_TEST_KEYCLOAK_URL`): Realm, Client wie das Cockpit ihn anlegt (aus dessen Datei, sonst
+Abschrift), `automato-admin`; Anmeldeformular → Callback → `/auth/me` Admin → Abmelden über
+`end_session_endpoint` bis zurück auf `/login`; die Selbstprüfung gegen denselben Realm (in
+Ordnung), einen fehlenden Realm (`discovery_http_404`) und einen Realm mit anderer
+`frontendUrl` (`issuer_mismatch`). In der CI startet `backend-ci` dafür einen Wegwerf-Keycloak
+(`start-dev`, Admin mit festen Test-Werten).
+
 ## Abgelöst
 
 - ADR-0013 D5 (letzter Absatz) und ADR-0015 D3 („Was bleibt: OIDC gegen Entra")
