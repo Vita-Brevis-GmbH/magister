@@ -38,6 +38,13 @@ function renderWithQuery(node: React.ReactNode): void {
 
 describe("LoginPage", () => {
   it("renders the OIDC anchor when capabilities flag oidc_enabled", async () => {
+    // Karte mit Knopf nur, wenn nicht gleich weitergeleitet wird (hier: nach einem Fehler)
+    vi.stubGlobal("location", {
+      ...window.location,
+      assign: vi.fn(),
+      pathname: "/login",
+      search: "?error=oidc_token_invalid",
+    });
     fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: false }));
     renderWithQuery(<LoginPage />);
     const link = await screen.findByRole("link", { name: /^anmelden$/i });
@@ -49,6 +56,17 @@ describe("LoginPage", () => {
     renderWithQuery(<LoginPage />);
     await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith("/api/auth/login"));
     expect(screen.getByText(/weiterleitung zur anmeldung/i)).toBeInTheDocument();
+    // keine Anmeldemaske, die kurz aufblitzt (Anwender 2026-11-16)
+    expect(screen.queryByRole("link", { name: /^anmelden$/i })).toBeNull();
+    expect(screen.queryByText(/anmelden/i, { selector: "summary" })).toBeNull();
+    expect(screen.queryByLabelText(/passwort/i)).toBeNull();
+  });
+
+  it("shows no sign-in card while it is still unclear whether to redirect", () => {
+    fetchMock.mockReturnValue(new Promise(() => {}));
+    renderWithQuery(<LoginPage />);
+    expect(screen.getByRole("status")).toHaveTextContent(/werden geprüft/i);
+    expect(screen.queryByRole("link", { name: /^anmelden$/i })).toBeNull();
   });
 
   it("stays on the page after a refused sign-in (no loop)", async () => {
@@ -87,6 +105,13 @@ describe("LoginPage", () => {
   });
 
   it("hides the local form behind a disclosure when both paths are enabled", async () => {
+    // Karte mit Knopf nur, wenn nicht gleich weitergeleitet wird (hier: nach einem Fehler)
+    vi.stubGlobal("location", {
+      ...window.location,
+      assign: vi.fn(),
+      pathname: "/login",
+      search: "?error=oidc_token_invalid",
+    });
     fetchMock.mockResolvedValue(jsonResponse({ oidc_enabled: true, local_login_enabled: true }));
     renderWithQuery(<LoginPage />);
     expect(await screen.findByRole("link", { name: /^anmelden$/i })).toBeInTheDocument();

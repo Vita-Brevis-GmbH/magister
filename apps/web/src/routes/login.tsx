@@ -124,6 +124,19 @@ export function LoginPage(): JSX.Element {
     if (weiterleiten) window.location.assign("/api/auth/login");
   }, [weiterleiten]);
 
+  // Bis klar ist, ob es zum Realm weitergeht, und während der Weiterleitung keine Anmeldemaske –
+  // sonst blitzt sie kurz auf, obwohl der Benutzer (etwa vom Anmelde-Tor) schon angemeldet ist
+  // (Anwender 2026-11-16). Nach einem Fehler und mit `?lokal` gleich die Karte.
+  if (weiterleiten || (caps.isPending && !lokal && !search.has("error"))) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <p role="status" className="text-sm text-muted-foreground">
+          {t(weiterleiten ? "auth.login_redirecting" : "auth.login_checking")}
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
@@ -145,10 +158,6 @@ export function LoginPage(): JSX.Element {
               <p className="font-medium">{t("auth.login_none_title")}</p>
               <p className="text-muted-foreground">{t("auth.login_none_intro")}</p>
             </div>
-          ) : null}
-
-          {weiterleiten ? (
-            <p className="text-sm text-muted-foreground">{t("auth.login_redirecting")}</p>
           ) : null}
 
           {showOidc ? (

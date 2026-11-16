@@ -189,6 +189,9 @@ eine Keycloak-Sitzung, Magister zeigte trotzdem seine Anmeldeseite mit dem Knopf
 - Nicht nach einem abgewiesenen Rückweg (`/login?error=…`): sonst entstünde eine Schleife, die
   Seite zeigt den Grund und den Knopf.
 - Der lokale Notzugang bleibt unter `/login?lokal=1` (Formular direkt, keine Weiterleitung).
+- Bis feststeht, ob weitergeleitet wird, und während der Weiterleitung zeigt `/login` nur einen
+  Hinweis, keine Anmeldemaske (2026-11-16, Anwender: „auch wenn noch kurz die Anmelde Maske
+  gezeigt wird, ist unschön“).
 - Nach dem Abmelden führt der Weg über die Abmeldeseite von Keycloak zurück auf `/login` und von
   dort zur Anmeldemaske von Keycloak – die Sitzung ist dann beendet, es meldet nicht still wieder an.
 
