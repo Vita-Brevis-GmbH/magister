@@ -662,7 +662,11 @@
       "grant_school_not_found": "{{unit}} non trovato.",
       "grant_role_not_found": "Ruolo non trovato.",
       "grant_invalid": "Assegnazione non valida — controlla il ruolo e il {{unit}}.",
-      "result_login_account": "Account di accesso"
+      "result_login_account": "Account di accesso",
+      "cockpit_managed_title": "Ruoli dal cockpit",
+      "cockpit_managed": "I ruoli di questo cliente sono assegnati dal gestore nel cockpit. Qui sono di sola lettura: i ruoli non possono essere assegnati né revocati e gli account di accesso non possono essere creati in anticipo.",
+      "cockpit_managed_emergency": "Accesso di emergenza: i ruoli di questo cliente sono altrimenti assegnati dal gestore nel cockpit. Ciò che assegna qui, Magister lo segnala al cockpit come ruolo di un'altra fonte.",
+      "error_cockpit": "I ruoli di questo cliente sono assegnati dal gestore nel cockpit."
     },
     "user_new": {
       "title": "Crea un nuovo utente",
@@ -824,7 +828,9 @@
       "error_exists": "Questo nome utente esiste già.",
       "error_conflict": "Questa persona ha già un altro account di accesso.",
       "error_bootstrap": "Un primo amministratore della console non può essere né bloccato né eliminato qui.",
-      "error_invalid": "Nome utente: senza spazi, al massimo 255 caratteri."
+      "error_invalid": "Nome utente: senza spazi, al massimo 255 caratteri.",
+      "cockpit_managed": "Gli account di accesso sono creati dal cockpit. Qui gli account possono solo essere bloccati e sbloccati.",
+      "error_cockpit": "Gli account di accesso di questo cliente sono gestiti dal gestore nel cockpit."
     }
   },
   "substitutions": {

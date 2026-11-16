@@ -662,7 +662,11 @@
       "grant_school_not_found": "{{unit}} introuvable.",
       "grant_role_not_found": "Rôle introuvable.",
       "grant_invalid": "Attribution invalide — vérifier le rôle et le/la {{unit}}.",
-      "result_login_account": "Compte de connexion"
+      "result_login_account": "Compte de connexion",
+      "cockpit_managed_title": "Rôles du cockpit",
+      "cockpit_managed": "Les rôles de ce client sont attribués par l'exploitant dans le cockpit. Ici, ils sont en lecture seule : aucun rôle ne peut être attribué ni retiré, aucun compte de connexion créé à l'avance.",
+      "cockpit_managed_emergency": "Accès d'urgence : les rôles de ce client sont sinon attribués par l'exploitant dans le cockpit. Ce que vous attribuez ici, Magister le signale au cockpit comme rôle d'une autre source.",
+      "error_cockpit": "Les rôles de ce client sont attribués par l'exploitant dans le cockpit."
     },
     "user_new": {
       "title": "Créer un nouvel utilisateur",
@@ -824,7 +828,9 @@
       "error_exists": "Ce nom d'utilisateur existe déjà.",
       "error_conflict": "Cette personne a déjà un autre compte de connexion.",
       "error_bootstrap": "Un premier administrateur de la console ne peut être ni bloqué ni supprimé ici.",
-      "error_invalid": "Nom d'utilisateur : sans espace, 255 caractères au maximum."
+      "error_invalid": "Nom d'utilisateur : sans espace, 255 caractères au maximum.",
+      "cockpit_managed": "Les comptes de connexion sont créés par le cockpit. Ici, les comptes peuvent seulement être bloqués et débloqués.",
+      "error_cockpit": "Les comptes de connexion de ce client sont gérés par l'exploitant dans le cockpit."
     }
   },
   "substitutions": {

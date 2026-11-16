@@ -659,7 +659,11 @@
       "grant_school_not_found": "{{unit}} nicht gefunden.",
       "grant_role_not_found": "Rolle nicht gefunden.",
       "grant_invalid": "Ungültige Zuweisung — bitte Rolle und {{unit}} prüfen.",
-      "result_login_account": "Anmeldekonto"
+      "result_login_account": "Anmeldekonto",
+      "cockpit_managed_title": "Rollen aus dem Cockpit",
+      "cockpit_managed": "Rollen dieses Kunden vergibt der Betreiber im Cockpit. Hier sind sie nur lesbar: Rollen lassen sich weder vergeben noch entziehen, Anmeldekonten nicht vorab anlegen.",
+      "cockpit_managed_emergency": "Notzugang: Rollen dieses Kunden vergibt sonst der Betreiber im Cockpit. Was Sie hier vergeben, meldet Magister dem Cockpit als fremde Rolle.",
+      "error_cockpit": "Rollen dieses Kunden vergibt der Betreiber im Cockpit."
     },
     "user_new": {
       "title": "Neuen Benutzer anlegen",
@@ -821,7 +825,9 @@
       "error_exists": "Diesen Benutzernamen gibt es schon.",
       "error_conflict": "Diese Person hat schon ein anderes Anmeldekonto.",
       "error_bootstrap": "Ein erster Administrator aus der Konsole lässt sich hier weder sperren noch löschen.",
-      "error_invalid": "Benutzername: ohne Leerzeichen, höchstens 255 Zeichen."
+      "error_invalid": "Benutzername: ohne Leerzeichen, höchstens 255 Zeichen.",
+      "cockpit_managed": "Anmeldekonten legt das Cockpit an. Hier lassen sich Konten nur sperren und freigeben.",
+      "error_cockpit": "Anmeldekonten dieses Kunden verwaltet der Betreiber im Cockpit."
     }
   },
   "substitutions": {

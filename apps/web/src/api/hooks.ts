@@ -95,6 +95,7 @@ import type {
   RoleCreateRequest,
   RoleGrantRequest,
   RoleSetRequest,
+  RoleSourceOut,
   MailDomainsOut,
   SchoolOut,
   SchoolCreate,
@@ -152,6 +153,7 @@ export const queryKeys = {
   auditEvents: (params: UseAuditEventsParams) => ["audit-events", params] as const,
   roles: ["admin-roles"] as const,
   loginAccounts: ["admin-login-accounts"] as const,
+  roleSource: ["admin-roles", "source"] as const,
   rbac: ["admin-rbac"] as const,
   devices: ["devices"] as const,
   device: (deviceId: number) => ["device", deviceId] as const,
@@ -1068,6 +1070,14 @@ export function useRoles() {
   return useQuery<RoleAssignmentOut[]>({
     queryKey: queryKeys.roles,
     queryFn: () => apiFetch<RoleAssignmentOut[]>("/admin/roles"),
+  });
+}
+
+/** Führt das Cockpit die Rollen, und darf die angemeldete Person hier ändern (ADR-0027)? */
+export function useRoleSource() {
+  return useQuery<RoleSourceOut>({
+    queryKey: queryKeys.roleSource,
+    queryFn: () => apiFetch<RoleSourceOut>("/admin/roles/source"),
   });
 }
 

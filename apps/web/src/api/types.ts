@@ -95,6 +95,16 @@ export interface RoleAssignmentOut {
   upn: string | null;
 }
 
+/** Wer die Rollen dieses Kunden führt (ADR-0027). */
+export interface RoleSourceOut {
+  /** Das Cockpit führt die Rollen: Vergeben und Entziehen nur dort. */
+  from_cockpit: boolean;
+  /** Darf die angemeldete Person hier trotzdem ändern (ohne Cockpit oder Notzugang)? */
+  editable: boolean;
+  /** Angemeldet mit dem lokalen Administrationskonto (Notzugang). */
+  emergency_access: boolean;
+}
+
 export interface RoleGrantRequest {
   role: GrantableRole;
   school_id: number | null;

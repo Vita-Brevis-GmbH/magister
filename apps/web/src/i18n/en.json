@@ -659,7 +659,11 @@
       "grant_school_not_found": "{{unit}} not found.",
       "grant_role_not_found": "Role not found.",
       "grant_invalid": "Invalid assignment — check the role and {{unit}}.",
-      "result_login_account": "Sign-in account"
+      "result_login_account": "Sign-in account",
+      "cockpit_managed_title": "Roles from the cockpit",
+      "cockpit_managed": "The operator assigns this customer's roles in the cockpit. They are read-only here: roles can neither be granted nor revoked, and sign-in accounts cannot be created in advance.",
+      "cockpit_managed_emergency": "Emergency access: the operator otherwise assigns this customer's roles in the cockpit. Magister reports whatever you grant here to the cockpit as a role from another source.",
+      "error_cockpit": "The operator assigns this customer's roles in the cockpit."
     },
     "user_new": {
       "title": "Create a new user",
@@ -821,7 +825,9 @@
       "error_exists": "This user name already exists.",
       "error_conflict": "This person already has another sign-in account.",
       "error_bootstrap": "A first administrator from the console can be neither locked nor deleted here.",
-      "error_invalid": "User name: no spaces, at most 255 characters."
+      "error_invalid": "User name: no spaces, at most 255 characters.",
+      "cockpit_managed": "Sign-in accounts are created by the cockpit. Here accounts can only be locked and unlocked.",
+      "error_cockpit": "The operator manages this customer's sign-in accounts in the cockpit."
     }
   },
   "substitutions": {

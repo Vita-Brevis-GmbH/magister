@@ -12,6 +12,7 @@ import {
   usePlatformManaged,
   useRbacConfig,
   useRevokeRole,
+  useRoleSource,
   useRoles,
   useSchools,
   useSetLoginAccountEnabled,
@@ -60,6 +61,7 @@ function userLabel(a: {
  *  entity is missing (user vs org unit vs role) instead of a lumped message. */
 function grantErrorKey(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.code === "roles_managed_by_cockpit") return "admin.roles.error_cockpit";
     if (err.code === "user_not_found") return "admin.roles.grant_user_not_found";
     if (err.code === "school_not_found") return "admin.roles.grant_school_not_found";
     if (err.code === "role_not_found") return "admin.roles.grant_role_not_found";
@@ -68,12 +70,16 @@ function grantErrorKey(err: unknown): string {
   return "errors.generic";
 }
 
-function RolesPage(): JSX.Element {
+export function RolesPage(): JSX.Element {
   const { t } = useTranslation();
   const terms = useTerms();
   const unitVars = { unit: terms.unit, unit_plural: terms.unit_plural };
   const roles = useRoles();
   const managed = usePlatformManaged().data ?? false;
+  // Führt das Cockpit die Rollen (ADR-0027), ist die Seite nur lesbar — ausser
+  // mit dem Notzugang. Bis die Antwort da ist ebenfalls; die API sperrt ohnehin.
+  const source = useRoleSource();
+  const locked = source.isError ? false : !(source.data?.editable ?? false);
 
   return (
     <div className="space-y-6">
@@ -89,9 +95,13 @@ function RolesPage(): JSX.Element {
       */}
       {managed ? <ManagedByPlatform area="roles" /> : <RightsMatrix />}
 
-      <AssignCard />
+      {source.data?.from_cockpit ? (
+        <CockpitRolesNotice emergency={source.data.emergency_access} />
+      ) : null}
 
-      <LoginAccountsCard />
+      {locked ? null : <AssignCard />}
+
+      <LoginAccountsCard locked={locked} />
 
       <Card>
         <CardHeader>
@@ -117,7 +127,11 @@ function RolesPage(): JSX.Element {
                 </thead>
                 <tbody>
                   {roles.data.map((a) => (
-                    <RoleRow key={`${a.ad_object_guid}:${a.role}:${a.school_id ?? "null"}`} a={a} />
+                    <RoleRow
+                      key={`${a.ad_object_guid}:${a.role}:${a.school_id ?? "null"}`}
+                      a={a}
+                      locked={locked}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -322,7 +336,35 @@ function CockpitBadge(): JSX.Element {
   );
 }
 
-export function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
+/**
+ * Hinweis, solange das Cockpit die Rollen dieses Kunden führt (ADR-0027): die
+ * Seite ist dann nur lesbar. Mit dem Notzugang bleibt sie bearbeitbar, und der
+ * Hinweis sagt, dass das Cockpit solche Rollen als fremd sieht.
+ */
+export function CockpitRolesNotice({ emergency }: { emergency: boolean }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <Card role="status">
+      <CardHeader>
+        <CardTitle className="text-base">{t("admin.roles.cockpit_managed_title")}</CardTitle>
+        <CardDescription>
+          {emergency
+            ? t("admin.roles.cockpit_managed_emergency")
+            : t("admin.roles.cockpit_managed")}
+        </CardDescription>
+      </CardHeader>
+    </Card>
+  );
+}
+
+export function RoleRow({
+  a,
+  locked = false,
+}: {
+  a: RoleAssignmentOut;
+  /** Nur lesbar: das Cockpit führt die Rollen (ADR-0027). */
+  locked?: boolean;
+}): JSX.Element {
   const { t } = useTranslation();
   const revoke = useRevokeRole();
   return (
@@ -337,22 +379,29 @@ export function RoleRow({ a }: { a: RoleAssignmentOut }): JSX.Element {
         {a.from_cockpit ? <CockpitBadge /> : (a.granted_by ?? "—")}
       </td>
       <td className="py-2 pr-4 text-right">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={revoke.isPending}
-          onClick={() => {
-            // Entziehen geht, wirkt aber nur bis zum nächsten Abgleich — das
-            // soll niemand erst merken, wenn die Rolle wieder da ist.
-            if (a.from_cockpit && !window.confirm(t("admin.roles.revoke_cockpit_confirm"))) {
-              return;
-            }
-            revoke.mutate({ guid: a.ad_object_guid, role: a.role, school_id: a.school_id });
-          }}
-        >
-          {t("admin.roles.revoke")}
-        </Button>
+        {locked ? null : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={revoke.isPending}
+            onClick={() => {
+              // Entziehen geht, wirkt aber nur bis zum nächsten Abgleich — das
+              // soll niemand erst merken, wenn die Rolle wieder da ist.
+              if (a.from_cockpit && !window.confirm(t("admin.roles.revoke_cockpit_confirm"))) {
+                return;
+              }
+              revoke.mutate({ guid: a.ad_object_guid, role: a.role, school_id: a.school_id });
+            }}
+          >
+            {t("admin.roles.revoke")}
+          </Button>
+        )}
+        {revoke.isError ? (
+          <p role="alert" className="mt-1 text-xs text-destructive">
+            {t(grantErrorKey(revoke.error))}
+          </p>
+        ) : null}
       </td>
     </tr>
   );
@@ -629,6 +678,7 @@ function AssignCard(): JSX.Element {
 /** Fehler einer Kontoaktion → i18n-Schlüssel (ADR-0025). */
 function loginAccountErrorKey(err: unknown): string {
   if (err instanceof ApiError) {
+    if (err.code === "roles_managed_by_cockpit") return "admin.login_accounts.error_cockpit";
     if (err.code === "login_account_exists") return "admin.login_accounts.error_exists";
     if (err.code === "account_principal_conflict") return "admin.login_accounts.error_conflict";
     if (err.code === "login_account_is_bootstrap_admin") {
@@ -644,8 +694,12 @@ function loginAccountErrorKey(err: unknown): string {
  * Keycloak; hier stehen die Handgriffe, die nur Magister kann: vorab anlegen
  * (damit Rollen vor der ersten Anmeldung passen), sperren, Bindung lösen,
  * löschen.
+ *
+ * Führt das Cockpit die Rollen (ADR-0027, ``locked``), legt nur es Konten an:
+ * vorab anlegen, Bindung lösen und löschen fallen weg, sperren und freigeben
+ * bleiben.
  */
-export function LoginAccountsCard(): JSX.Element {
+export function LoginAccountsCard({ locked = false }: { locked?: boolean }): JSX.Element {
   const { t } = useTranslation();
   const fmt = useFormatters();
   const [search, setSearch] = useState("");
@@ -688,33 +742,39 @@ export function LoginAccountsCard(): JSX.Element {
         <CardDescription>{t("admin.login_accounts.desc")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
-            <Label htmlFor="login-account-username">
-              {t("admin.login_accounts.create_username")}
-            </Label>
-            <Input
-              id="login-account-username"
-              className="w-64"
-              placeholder="automato-admin"
-              autoComplete="off"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="login-account-name">{t("admin.login_accounts.create_name")}</Label>
-            <Input
-              id="login-account-name"
-              className="w-56"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-            />
-          </div>
-          <Button type="submit" disabled={!username.trim() || create.isPending}>
-            {t("admin.login_accounts.create_button")}
-          </Button>
-        </form>
+        {locked ? (
+          <p className="text-sm text-muted-foreground">
+            {t("admin.login_accounts.cockpit_managed")}
+          </p>
+        ) : (
+          <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="login-account-username">
+                {t("admin.login_accounts.create_username")}
+              </Label>
+              <Input
+                id="login-account-username"
+                className="w-64"
+                placeholder="automato-admin"
+                autoComplete="off"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="login-account-name">{t("admin.login_accounts.create_name")}</Label>
+              <Input
+                id="login-account-name"
+                className="w-56"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+            </div>
+            <Button type="submit" disabled={!username.trim() || create.isPending}>
+              {t("admin.login_accounts.create_button")}
+            </Button>
+          </form>
+        )}
         {create.isError ? (
           <p role="alert" className="text-sm text-destructive">
             {t(loginAccountErrorKey(create.error))}
@@ -789,7 +849,7 @@ export function LoginAccountsCard(): JSX.Element {
                               : t("admin.login_accounts.enable")}
                           </Button>
                         ) : null}
-                        {a.bound ? (
+                        {a.bound && !locked ? (
                           <Button
                             type="button"
                             variant="outline"
@@ -801,7 +861,7 @@ export function LoginAccountsCard(): JSX.Element {
                             {t("admin.login_accounts.unbind")}
                           </Button>
                         ) : null}
-                        {!a.bootstrap_admin ? (
+                        {!a.bootstrap_admin && !locked ? (
                           <Button
                             type="button"
                             variant="outline"
