@@ -124,6 +124,7 @@ asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 markers = [
     "postgres: integration test that requires PostgreSQL with pgcrypto (env MAGISTER_TEST_DATABASE_URL)",
+    "keycloak: integration test against a real Keycloak start-dev (env MAGISTER_TEST_KEYCLOAK_URL, MAGISTER_TEST_KEYCLOAK_ADMIN_PASSWORD)",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

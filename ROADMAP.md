@@ -214,6 +214,12 @@ Grundsetup durch das Cockpit. Referenz:
   Oberfläche „aus dem Cockpit", Entziehen mit Hinweis. Nebenbei behoben: eine
   entzogene Rolle liess sich nicht wieder vergeben (`UniqueViolation`);
   Zuweisungen aus dem Cockpit halten das Löschen einer Einheit nicht auf.
+- ✅ **Selbstprüfung der Anmeldung** (ADR-0025 Nachtrag 2026-11-16): mit jeder
+  Zustandsmeldung Discovery, Issuer, Endpunkte, JWKS und Client-Secret
+  prüfen; Feld `oidc` (`configured`, `ok`, `reason`, `checked_at`) ans
+  Cockpit, ein älteres Cockpit bekommt die Meldung nach 422 ohne `oidc`.
+  Gleichlauf gegen das `StatusReport` des Cockpits; Test gegen einen echten
+  Keycloak (Anmelden bis Abmelden), in der CI mit Wegwerf-Keycloak.
 
 ## Cross-Cutting (laufend)
 

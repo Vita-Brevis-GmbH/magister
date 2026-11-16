@@ -14,13 +14,18 @@ Was diese Meldung **nicht** trägt: Personendaten, Namen, DSNs, Geheimnisse.
 Zeitpunkte, Zählerstände, Schlüsselnamen, Ursachen-Codes. Und wie die
 Schemastand-Meldung: scheitert sie, ist das eine Warnung, kein Fehler — der
 Betrieb hängt nicht an der Konsole.
+
+Seit 2026-11-16 trägt sie die Selbstprüfung der Anmeldung (``oidc``, ADR-0025
+Nachtrag). Ein älteres Cockpit kennt das Feld nicht und weist die ganze
+Meldung ab (HTTP 422, es prüft streng). Dann geht sie einmal ohne ``oidc``
+noch einmal hinaus — so kommt es auf die Reihenfolge der Updates nicht an.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import func, select
@@ -92,6 +97,10 @@ async def collect_status(
 ) -> dict[str, Any]:
     """Die Meldung für einen Kunden zusammenstellen. Liest nur, schreibt nichts.
 
+    Ohne die Selbstprüfung der Anmeldung (``oidc``): die geht ins Netz und
+    kommt ausserhalb der Datenbanksitzung dazu
+    (:func:`magister_api.services.reconcile_loop._report`).
+
     `# scope-bypass: app_settings und ad_sync_state sind Singletons je
     Kundenschema ohne Schul-Scope.`
     """
@@ -142,6 +151,15 @@ async def collect_status(
     return report
 
 
+#: Felder, die ein älteres Cockpit noch nicht kennt. Weist es die Meldung mit
+#: 422 ab, geht sie einmal ohne diese Felder hinaus.
+OPTIONAL_FIELDS = ("oidc",)
+#: Mandanten (Konsolen-Id), für die das Weglassen schon im Protokoll steht —
+#: einmal je Prozess als Warnung, danach leiser; die Meldung läuft alle paar
+#: Minuten, und bis zum Update des Cockpits ist das der Normalfall.
+_without_optional_logged: set[str] = set()
+
+
 async def post_status(
     console_url: str,
     tenant_console_id: str,
@@ -150,21 +168,80 @@ async def post_status(
     token: str,
     management_marker: str = "",
     timeout_s: float = 5.0,
+    transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
-    """Die Meldung abschicken. Wirft :class:`ReportRejectedError`, wenn sie nicht ankam."""
+    """Die Meldung abschicken. Wirft :class:`ReportRejectedError`, wenn sie nicht ankam.
+
+    Antwortet das Cockpit mit 422 und trägt die Meldung ein Feld aus
+    :data:`OPTIONAL_FIELDS`, geht sie einmal ohne diese Felder hinaus. Das
+    ist der Weg für ein Cockpit, das älter ist als Magister (es prüft mit
+    ``extra=forbid``). Eine Fähigkeit, nach der man fragen könnte, gibt es im
+    Vertrag nicht (weder im Soll-Zustand noch in der Antwort auf die Meldung),
+    und eine neue bräuchte selbst wieder ein Update des Cockpits zuerst. Kosten:
+    eine zweite Anfrage je Meldung, solange das Cockpit älter ist. Scheitert
+    auch sie, gilt die Meldung wie bisher als nicht angekommen.
+    """
     url = f"{console_base(console_url)}/tenants/{tenant_console_id}/status"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     if management_marker:
         headers["X-Magister-Management"] = management_marker
+    optional = [k for k in OPTIONAL_FIELDS if k in report]
     try:
-        async with httpx.AsyncClient(timeout=timeout_s, verify=console_verify()) as client:
+        async with httpx.AsyncClient(
+            timeout=timeout_s, verify=console_verify(), transport=transport
+        ) as client:
             response = await client.post(url, headers=headers, json=report)
+            if response.status_code == 422 and optional:
+                _log_without_optional(tenant_console_id, optional, response)
+                reduced = {k: v for k, v in report.items() if k not in optional}
+                response = await client.post(url, headers=headers, json=reduced)
+            elif response.status_code in (200, 204):
+                _without_optional_logged.discard(tenant_console_id)
     except (httpx.HTTPError, ConsoleTlsError) as exc:
         raise ReportRejectedError(f"Konsole nicht erreichbar: {exc}") from exc
     if response.status_code not in (200, 204):
         raise ReportRejectedError(
             f"Konsole antwortete mit HTTP {response.status_code} auf die Zustandsmeldung."
         )
+
+
+def _log_without_optional(
+    tenant_console_id: str, fields: list[str], response: httpx.Response
+) -> None:
+    first = tenant_console_id not in _without_optional_logged
+    _without_optional_logged.add(tenant_console_id)
+    logger.log(
+        logging.WARNING if first else logging.DEBUG,
+        "Konsole weist die Zustandsmeldung ab (HTTP 422, %s) — erneut ohne %s gesendet "
+        "(ein Cockpit, das älter ist als dieses Feld?).",
+        _rejected_fields(response),
+        ", ".join(fields),
+    )
+
+
+def _rejected_fields(response: httpx.Response) -> str:
+    """Die beanstandeten Felder aus der 422-Antwort (``body.oidc``), ohne Werte.
+
+    FastAPI nennt unter ``detail`` auch den eingereichten Wert (``input``); der
+    kommt nicht ins Protokoll, nur der Ort und die Art.
+    """
+    try:
+        body: Any = response.json()
+    except ValueError:
+        return "ohne Angabe"
+    detail: Any = cast(dict[str, Any], body).get("detail") if isinstance(body, dict) else None
+    if not isinstance(detail, list):
+        return "ohne Angabe"
+    places: list[str] = []
+    for item in cast(list[Any], detail)[:5]:
+        if not isinstance(item, dict):
+            continue
+        entry = cast(dict[str, Any], item)
+        loc: Any = entry.get("loc")
+        kind: Any = entry.get("type")
+        where = ".".join(str(p) for p in cast(list[Any], loc)) if isinstance(loc, list) else "?"
+        places.append(f"{where}: {kind}" if isinstance(kind, str) else where)
+    return "; ".join(places)[:300] or "ohne Angabe"
 
 
 def reconcile_outcome(
@@ -180,4 +257,4 @@ def reconcile_outcome(
     }
 
 
-__all__ = ["collect_status", "post_status", "reconcile_outcome"]
+__all__ = ["OPTIONAL_FIELDS", "collect_status", "post_status", "reconcile_outcome"]

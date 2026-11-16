@@ -21,6 +21,8 @@ import asyncio
 import logging
 from typing import Any
 
+from magister_api.auth.effective_settings import load_effective_settings
+from magister_api.auth.oidc_check import check_oidc
 from magister_api.config import Settings, get_settings
 from magister_api.services.reconciler import Reconciler, safe_error
 from magister_api.tenancy.console_report import ReportRejectedError
@@ -119,7 +121,12 @@ async def _report(
     outcome: dict[str, Any],
     maintenance: list[dict[str, Any]] | None,
 ) -> None:
-    """Zustand melden. Scheitert das, bleibt es bei einer Warnung."""
+    """Zustand melden. Scheitert das, bleibt es bei einer Warnung.
+
+    Dazu die Selbstprüfung der Anmeldung (``oidc``, ADR-0025 Nachtrag): nach
+    dem Schliessen der Datenbanksitzung, weil sie ins Netz geht — eine
+    Verbindung aus dem Pool soll nicht auf den Anbieter warten.
+    """
     if not tenant.console_id:
         return
     try:
@@ -130,7 +137,9 @@ async def _report(
             report = await collect_status(
                 session, settings, tenant, reconcile=outcome, maintenance=maintenance
             )
+            effective = await load_effective_settings(session, settings)
             await session.rollback()
+        report["oidc"] = await check_oidc(effective)
         await post_status(
             settings.console_registry_url,
             tenant.console_id,
