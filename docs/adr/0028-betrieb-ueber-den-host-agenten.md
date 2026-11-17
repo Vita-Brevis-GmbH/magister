@@ -225,3 +225,22 @@ geht ein `git pull` von Hand (und der Ops-Agent der Konsole mit `git pull
 Magister-Plattform als Vorlage im Cockpit (`plattform-aufbau.sh` aus einer
 Konfigurationsdatei) kommt in dieser Runde nicht: das Cockpit führt genau eine
 Datenebene.
+
+## Nachtrag 2026-11-17 · Nur Nachfahren, Herkunft im Stand
+
+Befund des Anwenders (Cockpit 0.8.0, Plattform → Updates): Der Host stand auf
+einem Entwicklungs-Branch; die Übersicht nahm `main` als Quelle (eine andere
+Linie) und bot das als Update an. `betrieb.sh` lehnte nur ältere Stände ab,
+das Update lief, scheiterte und fiel zurück. Das darf gar nicht erst laufen:
+
+* **`aktualisieren --ref`** (mit und ohne Bundle): Ist das Ziel kein Nachfahre
+  des laufenden Commits (und nicht derselbe), Exit 3 „Abgelehnt: <ref> liegt
+  auf einer anderen Linie als der laufende Stand <version> (<branch>) – nichts
+  geändert“ — auch mit neuerer Version, vor Sicherung und Umschalten. Geprüft
+  nur mit Objekten im Repo (`git merge-base --is-ancestor`), mit Bundle nie
+  origin; lässt sich die Abstammung nicht prüfen, ebenfalls Exit 3. Ältere
+  Stände bleiben abgelehnt (D3), zurück nur über `zurueck`.
+* **`stand.herkunft`** (rückwärts verträglich): `{"branch": <Branch des
+  Checkouts>|null, "losgeloest": bool}`. Das Cockpit nimmt den Branch als
+  Vorgabe seiner Quelle und bietet nur an, was nach dem Vergleich bei GitHub
+  auf dem installierten Stand aufbaut (Cockpit ADR 0015 Nachtrag U6).
