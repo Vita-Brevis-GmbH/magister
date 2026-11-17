@@ -306,3 +306,40 @@ D3 kannte bisher nur Geheimnisse **eines** Kunden.
   früheren Anbindung liegen.
 * Nur `mail_secret` ist als Plattform-Geheimnis erlaubt
   (`PLATFORM_SEALABLE`, auf beiden Seiten gleich).
+
+## Nachtrag 2026-11-17 · Meldungen des Cockpits über den Plattform-Standard
+
+Anwender 2026-11-17: „Mail Versand, warum braucht es mein SMTP PW, wenn ich
+einen Mail Versand oben festgelegt habe, welcher funktioniert.“ Die
+Benachrichtigung des Cockpits (Cockpit ADR 0018) sendete Mails selbst und
+brauchte dafür eine eigene Kopie des Geheimnisses des Standard-Mailversands –
+das Geheimnis ist für die Datenebene versiegelt (Nachtrag 2026-10-22), das
+Cockpit kann es nicht öffnen.
+
+* Neuer Wartungsauftrag **`notify`** (Allowlist `MAINTENANCE_ACTIONS`): das
+  Cockpit gibt Empfänger (`to`, mit Komma, höchstens 20), Betreff (`subject`,
+  eine Zeile, höchstens 200 Zeichen) und Text (`text`, höchstens 4096 Zeichen)
+  – keine Geheimnisse, keine Personendaten ausser Operator-Namen. Die
+  Datenebene sendet je Empfänger eine Mail (Text und daraus HTML, maskiert)
+  mit der geltenden Anbindung, **genau einmal** wie jeder Auftrag (D4).
+* **Nur über den Plattform-Standard:** der Soll-Zustand nennt `mail_source`
+  (`platform` bzw. `tenant`; das Cockpit sendet es schon, die Datenebene liest
+  es jetzt). Ist er nicht `platform`, geht nichts hinaus (`not_platform_mail`) – eine Meldung von Vita
+  Brevis über den Mailserver einer Schule wäre falsch. Das Cockpit wählt dafür
+  einen aktiven Kunden ohne eigene Anbindung, der sich meldet (wie die
+  Testmail des Plattform-Standards).
+* Ergebnis mit der Zustandsmeldung: `ok`, `transport`, `sent`, bei Fehlern
+  `failed` und der Text des Versandfehlers (nie das Geheimnis). Ungültige
+  Empfänger (`recipient_invalid`) oder ein leerer Betreff bzw. Text
+  (`message_empty`) senden nichts.
+* **Audit:** wie jeder Auftrag das Ereignis `platform_maintenance_executed` im
+  Protokoll des Kunden, über dessen Installation gesendet wurde – mit Grund
+  und Zählern, ohne Adressen, Betreff und Text (die Meldung nennt andere
+  Kunden). Die Parameter leert das Cockpit nach dem Abschluss.
+
+Verworfen: ein eigener Endpunkt der Datenebene für das Cockpit (neuer
+Rückkanal, neue Anmeldung) und Mails direkt aus dem Cockpit (das Geheimnis
+doppelt halten). Folge: eine Meldung kommt erst mit dem nächsten Abgleich
+hinaus (`MAGISTER_CONSOLE_REGISTRY_INTERVAL_S`, Vorgabe 5 Minuten) und nur,
+solange eine Installation mit Plattform-Standard läuft – für Ausfälle der
+Datenebene bleibt Teams bzw. die Überwachung von aussen.
