@@ -228,6 +228,11 @@ Grundsetup durch das Cockpit. Referenz:
 
 ## Betrieb aus dem Cockpit (2026-11)
 
+- ✅ **Nur Nachfahren, Herkunft im Stand** (2026-11-17, [ADR-0028](docs/adr/0028-betrieb-ueber-den-host-agenten.md)
+  Nachtrag): `scripts/betrieb.sh aktualisieren --ref` lehnt ein Ziel ab, das kein Nachfahre des
+  laufenden Stands ist (anderer Branch: Exit 3, nichts geändert, vor der Sicherung, auch aus dem
+  Bundle ohne origin). `stand` meldet `herkunft` (Branch des Checkouts bzw. losgelöst); das
+  Cockpit nimmt diesen Branch als Quelle statt `main`.
 - ✅ **Repo privat: Stand aus dem Bundle des Cockpits** (2026-11-17,
   [ADR-0028](docs/adr/0028-betrieb-ueber-den-host-agenten.md) Nachtrag): `scripts/betrieb.sh
   aktualisieren --ref <ref> --bundle <datei> --commit <sha>` – origin nie kontaktiert, Bundle
