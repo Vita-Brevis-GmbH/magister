@@ -228,6 +228,11 @@ Grundsetup durch das Cockpit. Referenz:
 
 ## Betrieb aus dem Cockpit (2026-11)
 
+- ✅ **Repo privat: Stand aus dem Bundle des Cockpits** (2026-11-17,
+  [ADR-0028](docs/adr/0028-betrieb-ueber-den-host-agenten.md) Nachtrag): `scripts/betrieb.sh
+  aktualisieren --ref <ref> --bundle <datei> --commit <sha>` – origin nie kontaktiert, Bundle
+  defekt bzw. ohne Commit → Exit 3, Branch ohne Upstream, Tags des Bundles für `git describe`;
+  ohne Bundle wie bisher.
 - ✅ **Auftrag `notify`** (2026-11-17): Meldungen des Cockpits (Benachrichtigung) mit dem
   Plattform-Standard, nur bei `mail_source: platform`, Ergebnis nur als Zähler
   ([ADR-0024](docs/adr/0024-betrieb-aus-der-konsole.md) Nachtrag).
