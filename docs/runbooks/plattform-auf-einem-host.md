@@ -569,12 +569,16 @@ Repo privat stellen. Danach geht `aktualisieren --ref` ohne Bundle (und `git
 pull` von Hand) nur mit einem eigenen Lese-Zugang des Hosts.
 
 **Ein Update** prüft zuerst (lokale Änderungen, `git fetch`, Ref, nicht älter
-als der laufende Stand), sichert dann die Datenbank (`pg-backup`, verschlüsselt,
-mit Eigentümern und Rechten: `magister-<zeit>-rueckfall.dump.age` im Volume
-`backups`), schaltet um, ruft `plattform-aufbau.sh update` auf und wartet bis
-5 min auf Health (alle Dienste der Datenebene laufen, `/healthz` der API ok).
-Sonst fällt es selbst zurück. Den Checkout der Konsole fasst es nicht an — die
-Konsole hat ihren eigenen Einstiegspunkt im Cockpit.
+als der laufende Stand und nur ein Nachfahre davon – eine andere Linie, etwa ein
+anderer Branch, lehnt es mit Exit 3 ab, auch aus dem Bundle), sichert dann die
+Datenbank (`pg-backup`, verschlüsselt, mit Eigentümern und Rechten:
+`magister-<zeit>-rueckfall.dump.age` im Volume `backups`), schaltet um, ruft
+`plattform-aufbau.sh update` auf und wartet bis 5 min auf Health (alle Dienste
+der Datenebene laufen, `/healthz` der API ok). Sonst fällt es selbst zurück.
+Den Checkout der Konsole fasst es nicht an — die Konsole hat ihren eigenen
+Einstiegspunkt im Cockpit. `stand` meldet dazu die Herkunft des Checkouts
+(`herkunft`: Branch bzw. losgelöst); das Cockpit nimmt diesen Branch als
+Vorgabe seiner Quelle.
 
 **Rückfall und `zurueck`** hängen am privaten Sicherungsschlüssel:
 

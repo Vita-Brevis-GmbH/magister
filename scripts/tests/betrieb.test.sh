@@ -11,9 +11,11 @@
 #
 # Geprüft wird, was das Cockpit sich darauf verlässt:
 #   * stdout ist genau eine Zeile JSON nach betrieb/v1 — bei jedem Ausgang;
-#   * ungültige oder unbekannte Ref, lokale Änderungen, ältere Version,
+#   * ungültige oder unbekannte Ref, lokale Änderungen, ältere Version, eine
+#     andere Linie (kein Nachfahre des laufenden Stands, auch aus dem Bundle),
 #     gescheiterte Sicherung → Exit 3, nichts geändert (kein Umschalten, kein
 #     Aufbau, keine Sicherung);
+#   * `stand.herkunft` nennt den Branch des Checkouts bzw. losgelöst;
 #   * gleiche Version → Exit 0 „schon auf";
 #   * Health scheitert → selbst zurück (Code und Datenbank), Exit 1;
 #   * ohne privaten Schlüssel: nur der Code zurück, wenn der Schemastand gleich
@@ -216,7 +218,10 @@ try:
     assert isinstance(d["meldung"], str) and 0 < len(d["meldung"]) <= 300, "meldung"
     s = d["stand"]
     assert set(s) == {"version", "commit", "quelle", "kanal", "gesund",
-                      "zurueck_moeglich", "vorher", "letzte_sicherung"}, sorted(s)
+                      "zurueck_moeglich", "vorher", "letzte_sicherung", "herkunft"}, sorted(s)
+    h = s["herkunft"]
+    assert set(h) == {"branch", "losgeloest"} and isinstance(h["losgeloest"], bool), h
+    assert h["branch"] is None or (isinstance(h["branch"], str) and not h["losgeloest"]), h
     assert s["quelle"] == "git" and s["kanal"] is None, "quelle/kanal"
     assert s["commit"] is None or re.fullmatch(r"[0-9a-f]{40}", s["commit"]), "commit"
     assert s["vorher"] is None or set(s["vorher"]) == {"version", "commit", "zeit"}, "vorher"
@@ -264,6 +269,7 @@ pruefe "gesund" true "$(wert stand gesund)"
 pruefe "zurück nicht möglich (kein Update)" false "$(wert stand zurueck_moeglich)"
 pruefe "vorher leer" null "$(wert stand vorher)"
 pruefe "noch keine Sicherung" null "$(wert stand letzte_sicherung)"
+pruefe "Herkunft: Branch main" "main|false" "$(wert stand herkunft branch)|$(wert stand herkunft losgeloest)"
 
 printf '\n\033[1m2 · abgelehnt, nichts geändert\033[0m\n'
 merken
@@ -440,6 +446,23 @@ pruefe "sichern → Exit 0" 0 "$RC"
 pruefe "Meldung: pg-backup neu bauen" ja "$(enthaelt "pg-backup ist alt" "$(wert meldung)")"
 rm -f "$DZ/pg-backup-alt"
 
+printf '\n\033[1m10b · andere Linie → abgelehnt, nichts geändert\033[0m\n'
+# H auf „andere-linie": abgezweigt von A, kein Nachfahre von B (wie ein Host auf
+# einem Entwicklungs-Branch und main als Quelle) – auch mit neuerer Version.
+"${G[@]}" -C "$A_W" checkout -q -b andere-linie "$A"
+echo h >"$A_W/VERSION"; commit "H"; "${G[@]}" -C "$A_W" tag v1.9.0
+"${G[@]}" -C "$A_W" push -q origin andere-linie v1.9.0 2>/dev/null
+merken
+lauf aktualisieren --ref andere-linie
+pruefe "andere Linie → Exit 3" 3 "$RC"
+pruefe "Meldung" "Abgelehnt: andere-linie liegt auf einer anderen Linie als der laufende Stand $(git -C "$CO" describe --tags "$B") (main) – nichts geändert" \
+  "$(wert meldung)"
+nichts_geaendert "andere Linie"
+pruefe "Branch main bleibt" main "$(branch_co)"
+lauf aktualisieren --ref v1.9.0
+pruefe "andere Linie als Tag → Exit 3" 3 "$RC"
+nichts_geaendert "andere Linie (Tag)"
+
 printf '\n\033[1m11 · Repo privat: Stand aus dem Bundle des Cockpits, origin nie kontaktiert\033[0m\n'
 # Neue Stände nur im Arbeits-Klon (nie nach origin): F auf main (Tag v1.1.0),
 # G auf „weiter" (Tag v1.2.0), X auf „fremd" (nie in einem Bundle).
@@ -507,6 +530,7 @@ pruefe "HEAD auf F" "$F" "$(head_co)"
 pruefe "Branch main angehängt" main "$(branch_co)"
 pruefe "Branch ohne Upstream" ohne "$(upstream main)"
 pruefe "Version aus dem Tag des Bundles" v1.1.0 "$(wert stand version)"
+pruefe "Herkunft: Branch main" "main|false" "$(wert stand herkunft branch)|$(wert stand herkunft losgeloest)"
 pruefe "plattform-aufbau.sh update auf F" "update $F fragen=1" "$(tail -n 1 "$DZ/aufbau")"
 pruefe "origin nie kontaktiert" nein "$(kontakt)"
 pruefe "docker erbt DOCKER_CONFIG" "$T/docker-zugang-nur-fuer-diesen-auftrag" \
@@ -520,6 +544,18 @@ pruefe "HEAD auf G" "$G_C" "$(head_co)"
 pruefe "Tag: losgelöst" losgelöst "$(branch_co)"
 pruefe "Version v1.2.0" v1.2.0 "$(wert stand version)"
 pruefe "vorher = F" "$F" "$(wert stand vorher commit)"
+pruefe "Herkunft: losgelöst" "null|true" "$(wert stand herkunft branch)|$(wert stand herkunft losgeloest)"
+
+# X („fremd", abgezweigt von F) baut nicht auf G auf: abgelehnt, auch aus dem Bundle
+"${G[@]}" -C "$A_W" bundle create -q "$T/agent/fremd.bundle" "$F..fremd" 2>/dev/null
+merken
+lauf aktualisieren --ref fremd --bundle "$T/agent/fremd.bundle" --commit "$X"
+pruefe "andere Linie aus dem Bundle → Exit 3" 3 "$RC"
+pruefe "Meldung nennt die andere Linie (losgelöst)" \
+  "Abgelehnt: fremd liegt auf einer anderen Linie als der laufende Stand v1.2.0 (losgelöst) – nichts geändert" \
+  "$(wert meldung)"
+nichts_geaendert "andere Linie aus dem Bundle"
+pruefe "andere Linie: origin nie kontaktiert" nein "$(kontakt)"
 
 lauf zurueck
 pruefe "zurueck ohne origin → Exit 0" 0 "$RC"

@@ -24,9 +24,14 @@
 #   3 abgelehnt, nichts geändert · 4 belegt (eine andere Aktion läuft)
 #
 # Ein Update ist: Sperre → Ref prüfen (git fetch, Branch/Tag/Commit, nicht
-# älter als der laufende Stand) → Sicherung → umschalten → plattform-aufbau.sh
-# update → Health bis 5 min → sonst selbst zurück: Datenbank aus der eben
-# gemachten Sicherung, alter Commit, plattform-aufbau.sh update, Exit 1.
+# älter als der laufende Stand und nur ein Nachfahre davon: eine andere Linie,
+# etwa ein anderer Branch, → Exit 3) → Sicherung → umschalten →
+# plattform-aufbau.sh update → Health bis 5 min → sonst selbst zurück:
+# Datenbank aus der eben gemachten Sicherung, alter Commit, plattform-aufbau.sh
+# update, Exit 1.
+#
+# `stand` meldet die Herkunft des Checkouts (`herkunft`: Branch bzw.
+# losgelöst); das Cockpit nimmt den Branch als Vorgabe seiner Quelle.
 #
 # Repo privat (ADR-0028 Nachtrag): nur das Cockpit hat einen GitHub-Zugang. Es
 # löst die Ref auf und gibt den Stand als git-Bundle mit; der Host-Agent prüft
@@ -539,9 +544,22 @@ json_text() {  # $1 -> JSON-Zeichenkette, leer -> null
 json_bool() { case "${1:-}" in true|false) printf '%s' "$1" ;; *) printf 'null' ;; esac; }
 kuerzen() { local LC_ALL=C.UTF-8; printf '%s' "${1:0:300}"; }
 
+#: Herkunft des Checkouts: angehängter Branch bzw. losgelöst. Das Cockpit nimmt
+#: den Branch als Vorgabe seiner Quelle (statt main). Ein Branch mit ungültigem
+#: Namen: null, aber nicht losgelöst; ohne git-Checkout wie losgelöst.
+herkunft_erheben() {
+  local b
+  S_BRANCH=""; S_LOSGELOEST=true
+  if b="$(git_r symbolic-ref -q --short HEAD 2>/dev/null)" && [ -n "$b" ]; then
+    S_LOSGELOEST=false
+    if ref_gueltig "$b"; then S_BRANCH="$b"; fi
+  fi
+}
+
 stand_erheben() {  # $1 = Exit-Code
   S_COMMIT="$(git_r rev-parse -q --verify HEAD 2>/dev/null)"
   [[ "$S_COMMIT" =~ ^[0-9a-f]{40}$ ]] || S_COMMIT=""
+  herkunft_erheben
   S_VERSION=""
   [ -z "$S_COMMIT" ] || S_VERSION="$(version_von "$S_COMMIT")"
   [[ "$S_VERSION" =~ ^[A-Za-z0-9._+/-]{1,64}$ ]] || S_VERSION=""
@@ -570,11 +588,11 @@ antwort() {  # $1 = Exit-Code, $2 = Meldung (fester Text, keine fremden Ausgaben
   [ "$code" -eq 0 ] && ok=true
   m="$(kuerzen "$2")"
   stand_erheben "$code"
-  printf '{"format":"betrieb/v1","produkt":"magister","aktion":%s,"ok":%s,"meldung":%s,"stand":{"version":%s,"commit":%s,"quelle":"git","kanal":null,"gesund":%s,"zurueck_moeglich":%s,"vorher":%s,"letzte_sicherung":%s}}\n' \
+  printf '{"format":"betrieb/v1","produkt":"magister","aktion":%s,"ok":%s,"meldung":%s,"stand":{"version":%s,"commit":%s,"quelle":"git","kanal":null,"gesund":%s,"zurueck_moeglich":%s,"vorher":%s,"letzte_sicherung":%s,"herkunft":{"branch":%s,"losgeloest":%s}}}\n' \
     "$(json_text "$AKTION")" "$ok" "$(json_text "$m")" \
     "$(json_text "$S_VERSION")" "$(json_text "$S_COMMIT")" \
     "$(json_bool "$GESUND")" "$(json_bool "$ZURUECK_MOEGLICH")" "$S_VORHER" \
-    "$(json_text "$S_LETZTE")" >&3
+    "$(json_text "$S_LETZTE")" "$(json_text "$S_BRANCH")" "$(json_bool "$S_LOSGELOEST")" >&3
   say "Ende (Exit $code): $m"
   exit "$code"
 }
@@ -667,6 +685,15 @@ cmd_aktualisieren() {  # $1 = Ref, $2 = Bundle (leer = von origin), $3 = Commit
      && ! git_r merge-base --is-ancestor "refs/heads/$ZIEL_BRANCH" "$ZIEL_COMMIT" 2>/dev/null; then
     antwort 3 "Abgelehnt: der lokale Branch $ZIEL_BRANCH hat Commits, die $herkunft nicht hat. Nichts geändert."
   fi
+  # Nur Nachfahren des laufenden Stands: eine andere Linie (anderer Branch, umgeschrieben) nie,
+  # auch nicht mit neuerer Version. Nur mit Objekten im Repo – mit Bundle nie origin.
+  local linie=0
+  git_r merge-base --is-ancestor "$alt_commit" "$ZIEL_COMMIT" </dev/null 2>/dev/null || linie=$?
+  case "$linie" in
+    0) ;;
+    1) antwort 3 "Abgelehnt: $ref liegt auf einer anderen Linie als der laufende Stand $alt_version (${alt_branch:-losgelöst}) – nichts geändert" ;;
+    *) antwort 3 "Abgelehnt: Abstammung von $ref gegenüber dem laufenden Stand $alt_version nicht prüfbar (git merge-base) – nichts geändert" ;;
+  esac
 
   schema_vorher="$(schemastand)" || { schema_vorher=""; warn "Schemastand vor dem Update nicht lesbar"; }
   sichern_lauf \
