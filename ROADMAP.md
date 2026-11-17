@@ -228,6 +228,9 @@ Grundsetup durch das Cockpit. Referenz:
 
 ## Betrieb aus dem Cockpit (2026-11)
 
+- ✅ **Auftrag `notify`** (2026-11-17): Meldungen des Cockpits (Benachrichtigung) mit dem
+  Plattform-Standard, nur bei `mail_source: platform`, Ergebnis nur als Zähler
+  ([ADR-0024](docs/adr/0024-betrieb-aus-der-konsole.md) Nachtrag).
 - ✅ **Rücklink „Kundenportal“** (2026-11-17): hinter dem Front-Proxy von Automato
   (`<kunde>-um.<domain>`) zeigt die Kopfzeile „Kundenportal“ mit Link auf die Startseite
   `https://<kunde>.<domain>` (feste Namensregel des Front-Proxys; unter jedem anderen Namen kein
