@@ -228,6 +228,10 @@ Grundsetup durch das Cockpit. Referenz:
 
 ## Betrieb aus dem Cockpit (2026-11)
 
+- ✅ **Rücklink „Kundenportal“** (2026-11-17): hinter dem Front-Proxy von Automato
+  (`<kunde>-um.<domain>`) zeigt die Kopfzeile „Kundenportal“ mit Link auf die Startseite
+  `https://<kunde>.<domain>` (feste Namensregel des Front-Proxys; unter jedem anderen Namen kein
+  Link); i18n de/en/fr/it.
 - ✅ **Update aus dem Cockpit** ([ADR-0028](docs/adr/0028-betrieb-ueber-den-host-agenten.md)):
   `scripts/betrieb.sh` nach Vertrag betrieb/v1 (stand, sichern, aktualisieren --ref, zurueck,
   neustart) für den Host-Agenten v2 des Cockpits; Sicherung `-rueckfall` mit Eigentümern und
