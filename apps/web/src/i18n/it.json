@@ -29,7 +29,9 @@
     "modules": "Moduli e funzioni",
     "departments": "Reparti",
     "document_templates": "Modelli",
-    "group_templates": "Gruppi di destinazione"
+    "group_templates": "Gruppi di destinazione",
+    "customer_portal": "Portale clienti",
+    "customer_portal_hint": "Alla pagina iniziale del portale clienti"
   },
   "auth": {
     "login_title": "Accedi",

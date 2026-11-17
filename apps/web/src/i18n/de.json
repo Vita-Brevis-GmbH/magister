@@ -26,7 +26,9 @@
     "modules": "Module & Funktionen",
     "departments": "Abteilungen",
     "document_templates": "Vorlagen",
-    "group_templates": "Zielgruppen"
+    "group_templates": "Zielgruppen",
+    "customer_portal": "Kundenportal",
+    "customer_portal_hint": "Zur Startseite des Kundenportals"
   },
   "auth": {
     "login_title": "Anmeldung",

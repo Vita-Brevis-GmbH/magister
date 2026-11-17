@@ -11,6 +11,7 @@ import {
   useMyPreferences,
   usePlatformManaged,
 } from "@/api/hooks";
+import { CustomerPortalLink } from "@/components/CustomerPortalLink";
 import { OperatorAccessBanner } from "@/components/OperatorAccessBanner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
@@ -308,6 +309,7 @@ export function Layout() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <CustomerPortalLink />
             <Button
               size="sm"
               variant="ghost"

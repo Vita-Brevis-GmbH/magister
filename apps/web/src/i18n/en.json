@@ -26,7 +26,9 @@
     "modules": "Modules & Features",
     "departments": "Departments",
     "document_templates": "Templates",
-    "group_templates": "Target groups"
+    "group_templates": "Target groups",
+    "customer_portal": "Customer portal",
+    "customer_portal_hint": "To the start page of the customer portal"
   },
   "auth": {
     "login_title": "Sign in",

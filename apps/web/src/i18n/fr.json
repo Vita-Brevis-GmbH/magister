@@ -29,7 +29,9 @@
     "modules": "Modules et fonctions",
     "departments": "Départements",
     "document_templates": "Modèles",
-    "group_templates": "Groupes cibles"
+    "group_templates": "Groupes cibles",
+    "customer_portal": "Portail client",
+    "customer_portal_hint": "Vers la page d'accueil du portail client"
   },
   "auth": {
     "login_title": "Connexion",
