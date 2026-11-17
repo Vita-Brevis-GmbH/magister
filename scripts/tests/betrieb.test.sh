@@ -18,7 +18,12 @@
 #   * Health scheitert → selbst zurück (Code und Datenbank), Exit 1;
 #   * ohne privaten Schlüssel: nur der Code zurück, wenn der Schemastand gleich
 #     ist (Exit 1), sonst Exit 2 mit dem nächsten Schritt;
-#   * `zurueck` genau einmal; Sperre belegt → Exit 4.
+#   * `zurueck` genau einmal; Sperre belegt → Exit 4;
+#   * Repo privat: `--bundle <datei> --commit <sha>` holt den Stand aus dem
+#     git-Bundle und kontaktiert origin nie (origin zeigt auf eine ungültige
+#     Adresse mit einer Falle als upload-pack); Bundle defekt bzw. ohne den
+#     Commit → Exit 3; Branch ohne Upstream, sonst losgelöst; docker erbt
+#     DOCKER_CONFIG, die Antwort nennt es nie.
 #
 #   ./scripts/tests/betrieb.test.sh
 set -uo pipefail
@@ -184,9 +189,11 @@ chmod +x "$T/bin/"*
 # --- Aufruf ------------------------------------------------------------------------
 # So wie der Agent: im Checkout, ohne Terminal, nur PATH/LANG/BETRIEB_AUFTRAG
 # (dazu DZ für die Attrappen und kurze Wartezeiten).
+ZUSATZ_ENV=()  # weitere Umgebung für einen Lauf (z. B. DOCKER_CONFIG vom Agenten)
 lauf() {  # Argumente für betrieb.sh -> RC; stdout in $T/out, stderr in $T/err
   (cd "$CO" && env -i PATH="$T/bin:$PATH" LANG=C.UTF-8 BETRIEB_AUFTRAG="auftrag-$RANDOM" \
      DZ="$DZ" BETRIEB_HEALTH_SEK=10 BETRIEB_RUECKFALL_HEALTH_SEK=10 \
+     ${ZUSATZ_ENV[@]+"${ZUSATZ_ENV[@]}"} \
      ./scripts/betrieb.sh "$@" </dev/null >"$T/out" 2>"$T/err")
   RC=$?
   AKTION_ERWARTET="${1:-}"
@@ -432,6 +439,105 @@ lauf sichern
 pruefe "sichern → Exit 0" 0 "$RC"
 pruefe "Meldung: pg-backup neu bauen" ja "$(enthaelt "pg-backup ist alt" "$(wert meldung)")"
 rm -f "$DZ/pg-backup-alt"
+
+printf '\n\033[1m11 · Repo privat: Stand aus dem Bundle des Cockpits, origin nie kontaktiert\033[0m\n'
+# Neue Stände nur im Arbeits-Klon (nie nach origin): F auf main (Tag v1.1.0),
+# G auf „weiter" (Tag v1.2.0), X auf „fremd" (nie in einem Bundle).
+"${G[@]}" -C "$A_W" checkout -q main
+echo f >"$A_W/VERSION"; commit "F"; "${G[@]}" -C "$A_W" tag v1.1.0
+F="$("${G[@]}" -C "$A_W" rev-parse HEAD)"
+"${G[@]}" -C "$A_W" checkout -q -b weiter
+echo g >"$A_W/VERSION"; commit "G"; "${G[@]}" -C "$A_W" tag v1.2.0
+G_C="$("${G[@]}" -C "$A_W" rev-parse HEAD)"
+"${G[@]}" -C "$A_W" checkout -q -b fremd main
+echo x >"$A_W/VERSION"; commit "X"
+X="$("${G[@]}" -C "$A_W" rev-parse HEAD)"
+mkdir -m 700 "$T/agent"
+"${G[@]}" -C "$A_W" bundle create -q "$T/agent/main.bundle" main v1.1.0 2>/dev/null
+"${G[@]}" -C "$A_W" bundle create -q "$T/agent/tag.bundle" "$F..v1.2.0" 2>/dev/null
+"${G[@]}" -C "$A_W" bundle create -q "$T/agent/alt.bundle" v1.0.0 2>/dev/null
+echo "kein Bundle" >"$T/agent/kaputt.bundle"
+
+# origin: ungültige Adresse, jede Verbindung hinterlässt eine Marke
+cat >"$T/bin/falle-upload-pack" <<X
+#!/bin/sh
+echo kontakt >>"$T/origin-kontaktiert"
+echo "ERROR: Repository not found." >&2
+exit 128
+X
+chmod +x "$T/bin/falle-upload-pack"
+git -C "$CO" remote set-url origin /nicht/vorhanden/magister.git
+git -C "$CO" config remote.origin.uploadpack "$T/bin/falle-upload-pack"
+kontakt() { if [ -e "$T/origin-kontaktiert" ]; then echo ja; else echo nein; fi; }
+upstream() { git -C "$CO" config --get "branch.$1.remote" || echo ohne; }
+
+# docker erbt den Pull-Zugang des Agenten
+mv "$T/bin/docker" "$T/bin/docker-attrappe"
+cat >"$T/bin/docker" <<X
+#!/usr/bin/env bash
+echo "\${DOCKER_CONFIG-ohne}" >>"$DZ/docker-config"
+exec "$T/bin/docker-attrappe" "\$@"
+X
+chmod +x "$T/bin/docker"
+mkdir -m 700 "$T/docker-zugang-nur-fuer-diesen-auftrag"
+
+merken
+for fall in "alt.bundle|$F|fehlt im Bundle" "kaputt.bundle|$F|Bundle ungültig" \
+            "gibt-es-nicht.bundle|$F|Bundle fehlt" "main.bundle|${F:0:39}|kein Commit" \
+            "main.bundle|$X|fehlt im Bundle"; do
+  IFS='|' read -r datei c text <<<"$fall"
+  lauf aktualisieren --ref main --bundle "$T/agent/$datei" --commit "$c"
+  pruefe "$datei, ${c:0:8}… → Exit 3" 3 "$RC"
+  pruefe "$datei: Meldung „$text\"" ja "$(enthaelt "$text" "$(wert meldung)")"
+done
+lauf aktualisieren --ref main --bundle "$T/agent/main.bundle"
+pruefe "--bundle ohne --commit → Exit 3" 3 "$RC"
+lauf aktualisieren --ref main --commit "$F"
+pruefe "--commit ohne --bundle → Exit 3" 3 "$RC"
+lauf aktualisieren --ref main --bundle "$T/agent/main.bundle" --bundle "$T/agent/main.bundle" --commit "$F"
+pruefe "--bundle zweimal → Exit 3" 3 "$RC"
+nichts_geaendert "Bundle abgelehnt"
+pruefe "abgelehnt: origin nie kontaktiert" nein "$(kontakt)"
+
+ZUSATZ_ENV=(DOCKER_CONFIG="$T/docker-zugang-nur-fuer-diesen-auftrag")
+lauf aktualisieren --ref main --bundle "$T/agent/main.bundle" --commit "$F"
+ZUSATZ_ENV=()
+pruefe "main aus dem Bundle → Exit 0" 0 "$RC"
+pruefe "HEAD auf F" "$F" "$(head_co)"
+pruefe "Branch main angehängt" main "$(branch_co)"
+pruefe "Branch ohne Upstream" ohne "$(upstream main)"
+pruefe "Version aus dem Tag des Bundles" v1.1.0 "$(wert stand version)"
+pruefe "plattform-aufbau.sh update auf F" "update $F fragen=1" "$(tail -n 1 "$DZ/aufbau")"
+pruefe "origin nie kontaktiert" nein "$(kontakt)"
+pruefe "docker erbt DOCKER_CONFIG" "$T/docker-zugang-nur-fuer-diesen-auftrag" \
+  "$(sort -u "$DZ/docker-config" | grep -v '^ohne$')"
+pruefe "DOCKER_CONFIG nie in Antwort oder Journal" nein \
+  "$(enthaelt docker-zugang-nur "$(cat "$T/out" "$T/err")")"
+
+lauf aktualisieren --ref v1.2.0 --bundle "$T/agent/tag.bundle" --commit "$G_C"
+pruefe "Tag aus einem dünnen Bundle → Exit 0" 0 "$RC"
+pruefe "HEAD auf G" "$G_C" "$(head_co)"
+pruefe "Tag: losgelöst" losgelöst "$(branch_co)"
+pruefe "Version v1.2.0" v1.2.0 "$(wert stand version)"
+pruefe "vorher = F" "$F" "$(wert stand vorher commit)"
+
+lauf zurueck
+pruefe "zurueck ohne origin → Exit 0" 0 "$RC"
+pruefe "HEAD wieder F" "$F" "$(head_co)"
+pruefe "Branch main" main "$(branch_co)"
+rm -f "$DZ/beiseite"
+pruefe "origin nie kontaktiert (zurueck)" nein "$(kontakt)"
+
+lauf aktualisieren --ref main
+pruefe "ohne Bundle, origin privat → Exit 3" 3 "$RC"
+pruefe "Meldung verweist auf das Bundle aus dem Cockpit" ja \
+  "$(enthaelt "Code als Bundle aus dem Cockpit" "$(wert meldung)")"
+pruefe "ohne Bundle fragt es origin" ja "$(kontakt)"
+
+git -C "$CO" remote remove origin
+lauf stand
+pruefe "stand ganz ohne Remote → Exit 0" 0 "$RC"
+pruefe "stand ohne Remote: Commit" "$F" "$(wert stand commit)"
 
 printf '\n%s ok, %s fehlgeschlagen\n' "$GRUEN" "$ROT"
 [ "$ROT" -eq 0 ] || { echo "--- stderr des letzten Laufs ---"; cat "$T/err"; exit 1; }

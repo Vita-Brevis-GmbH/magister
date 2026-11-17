@@ -9,6 +9,9 @@
 #   scripts/betrieb.sh stand                      Version, Commit, Health, ob `zurueck` geht
 #   scripts/betrieb.sh sichern                    Sicherung der Datenbank, verschlüsselt
 #   scripts/betrieb.sh aktualisieren --ref <ref>  Branch, Tag oder Commit von origin
+#   scripts/betrieb.sh aktualisieren --ref <ref> --bundle <datei> --commit <sha>
+#                                                 derselbe Ablauf, der Stand kommt aus dem
+#                                                 git-Bundle des Cockpits (Repo privat)
 #   scripts/betrieb.sh zurueck                    einmal zurück auf den Stand vor dem Update
 #   scripts/betrieb.sh neustart                   Datenebene neu starten (ohne Neubau) + Health
 #
@@ -24,6 +27,17 @@
 # älter als der laufende Stand) → Sicherung → umschalten → plattform-aufbau.sh
 # update → Health bis 5 min → sonst selbst zurück: Datenbank aus der eben
 # gemachten Sicherung, alter Commit, plattform-aufbau.sh update, Exit 1.
+#
+# Repo privat (ADR-0028 Nachtrag): nur das Cockpit hat einen GitHub-Zugang. Es
+# löst die Ref auf und gibt den Stand als git-Bundle mit; der Host-Agent prüft
+# dessen SHA-256 und ruft `aktualisieren --ref <ref> --bundle <datei> --commit
+# <sha>` auf. Dann wird origin NIE kontaktiert: `git bundle verify` → `git
+# fetch <bundle> <commit>` → der Commit muss zum Stand des Bundles gehören
+# (sonst Exit 3, nichts geändert). Ist die Ref ein Branch, wird er lokal
+# angehängt — ohne Upstream —, sonst losgelöst. Tags des Bundles kommen mit
+# (die Version ist `git describe`). Ohne --bundle wie bisher von origin.
+# Einen Pull-Zugang für Images gibt der Agent als DOCKER_CONFIG mit: docker
+# erbt ihn, dieses Skript setzt und nennt ihn nie.
 #
 # Die Sicherung macht der Container pg-backup, mit dem öffentlichen
 # age-Schlüssel (ADR-0016 D9) — dieselbe wie vor jeder Migration, nur MIT
@@ -133,15 +147,86 @@ ref_aufloesen() {  # $1 = Ref
   return 1
 }
 
-#: HEAD auf $1 stellen — mit Branch angehängt, sonst losgelöst.
-umschalten() {  # $1 = Commit, $2 = Branch (leer = losgelöst) -> 0, wenn HEAD dort steht
+#: HEAD auf $1 stellen — mit Branch angehängt, sonst losgelöst. Mit
+#: `ohne-upstream` (Stand aus dem Bundle) hat der Branch keinen Upstream.
+umschalten() {  # $1 = Commit, $2 = Branch (leer = losgelöst), $3 = ohne-upstream -> 0, wenn HEAD dort steht
   if [ -n "${2:-}" ]; then
     git_r checkout -q -B "$2" "$1" || return 1
-    git_r branch -q --set-upstream-to="origin/$2" "$2" >/dev/null 2>&1 || true
+    if [ "${3:-}" = "ohne-upstream" ]; then
+      git_r branch -q --unset-upstream "$2" >/dev/null 2>&1 || true
+    else
+      git_r branch -q --set-upstream-to="origin/$2" "$2" >/dev/null 2>&1 || true
+    fi
   else
     git_r checkout -q --detach "$1" || return 1
   fi
   [ "$(git_r rev-parse HEAD 2>/dev/null)" = "$1" ]
+}
+
+# --- Stand aus dem git-Bundle des Cockpits (Repo privat) -----------------------
+BUNDLE_KOEPFE=""  # git bundle list-heads: je Zeile "<commit> <name>"
+BUNDLE_FEHLER=""
+
+#: Absoluter Pfad einer lesbaren, nicht leeren Datei — nie ein Remote-Name.
+bundle_datei() {  # $1 = Angabe
+  local d="${1:-}" ordner
+  [ -n "$d" ] && [ -f "$d" ] && [ -r "$d" ] && [ -s "$d" ] || return 1
+  ordner="$(cd "$(dirname "$d")" 2>/dev/null && pwd -P)" || return 1
+  printf '%s/%s' "$ordner" "$(basename "$d")"
+}
+
+#: Bundle prüfen und den Commit daraus holen — ohne origin. Bis hier ist nichts
+#: umgestellt (nur Objekte und Tags im Repo). -> 0 = Commit da und im Bundle.
+bundle_holen() {  # $1 = Bundle (absolut), $2 = Commit (40 hex)
+  local kopf name
+  BUNDLE_KOEPFE=""; BUNDLE_FEHLER=""
+  if ! git_r bundle verify "$1" >/dev/null; then
+    BUNDLE_FEHLER="Bundle ungültig bzw. passt nicht zu diesem Checkout (git bundle verify)"
+    return 1
+  fi
+  BUNDLE_KOEPFE="$(git_r bundle list-heads "$1" 2>/dev/null)"
+  if [ -z "$BUNDLE_KOEPFE" ]; then
+    BUNDLE_FEHLER="Bundle ohne Köpfe (git bundle list-heads)"; return 1
+  fi
+  if ! timeout 600 git -c safe.directory="$REPO" -C "$REPO" fetch --quiet --no-tags "$1" "$2" 9>&- \
+     || ! git_r cat-file -e "$2^{commit}" 2>/dev/null; then
+    BUNDLE_FEHLER="Commit ${2:0:12} fehlt im Bundle bzw. Bundle beschädigt"; return 1
+  fi
+  while read -r kopf name; do
+    [[ "$kopf" =~ ^[0-9a-f]{40}$ ]] || continue
+    if [ "$kopf" = "$2" ] || git_r merge-base --is-ancestor "$2" "$kopf" </dev/null 2>/dev/null; then
+      # Tags des Bundles für `git describe`; bestehende werden nie überschrieben
+      git_r fetch --quiet --no-tags "$1" 'refs/tags/*:refs/tags/*' </dev/null 9>&- 2>/dev/null \
+        || warn "Nicht alle Tags aus dem Bundle übernommen (gleichnamige zeigen woanders hin)"
+      return 0
+    fi
+  done <<<"$BUNDLE_KOEPFE"
+  BUNDLE_FEHLER="Commit ${2:0:12} gehört nicht zum Stand des Bundles"
+  return 1
+}
+
+bundle_kopf() {  # $1 = voller Name -> 0, wenn das Bundle ihn als Kopf hat
+  local kopf name
+  while read -r kopf name; do [ "$name" != "$1" ] || return 0; done <<<"$BUNDLE_KOEPFE"
+  return 1
+}
+
+#: Ist die Ref ein Branch? -> Name des Branches, sonst nichts (losgelöst).
+#: Commit und Tag (im Bundle oder lokal) losgelöst; Branch nur, wenn das
+#: Bundle bzw. der Checkout ihn als Branch kennt — im Zweifel losgelöst.
+bundle_branch() {  # $1 = Ref, $2 = Commit
+  [ "$1" != "HEAD" ] || return 0
+  if [[ "$1" =~ ^[0-9a-f]{7,40}$ && "$2" == "$1"* ]]; then return 0; fi
+  git_r check-ref-format --branch "$1" >/dev/null 2>&1 || return 0
+  if bundle_kopf "refs/tags/$1" || git_r rev-parse -q --verify "refs/tags/$1" >/dev/null 2>&1; then
+    return 0
+  fi
+  if bundle_kopf "refs/heads/$1" \
+     || git_r rev-parse -q --verify "refs/heads/$1" >/dev/null 2>&1 \
+     || git_r rev-parse -q --verify "refs/remotes/origin/$1" >/dev/null 2>&1; then
+    printf '%s' "$1"
+  fi
+  return 0
 }
 
 # --- Datenebene (Compose-Projekt magister) ------------------------------------
@@ -541,8 +626,9 @@ cmd_neustart() {
   antwort 2 "Datenebene neu gestartet, Health nach $HEALTH_SEK s nicht ok ($GESUND_GRUND). Nächster Schritt: scripts/plattform-aufbau.sh status"
 }
 
-cmd_aktualisieren() {  # $1 = Ref
-  local ref="$1" alt_commit alt_branch alt_version neu_version n schema_vorher alter_zustand=""
+cmd_aktualisieren() {  # $1 = Ref, $2 = Bundle (leer = von origin), $3 = Commit
+  local ref="$1" bundle="${2:-}" commit="${3:-}" herkunft upstream=""
+  local alt_commit alt_branch alt_version neu_version n schema_vorher alter_zustand=""
   local hatte_zustand=0 grund
   alt_commit="$(git_r rev-parse -q --verify HEAD 2>/dev/null)" \
     || antwort 3 "Abgelehnt: $REPO ist kein git-Checkout. Nichts geändert."
@@ -554,11 +640,20 @@ cmd_aktualisieren() {  # $1 = Ref
   [ "$n" -eq 0 ] \
     || antwort 3 "Abgelehnt: $n lokale Änderung(en) an versionierten Dateien im Checkout (git status). Nichts geändert."
 
-  say "Neuen Stand holen (git fetch origin)"
-  timeout 180 git -c safe.directory="$REPO" -C "$REPO" fetch --quiet --prune --tags --force origin \
-    || antwort 3 "Abgelehnt: git fetch von origin gescheitert (Netz oder Zugang des Hosts). Nichts geändert."
-  ref_aufloesen "$ref" \
-    || antwort 3 "Abgelehnt: $ref ist weder Branch auf origin noch Tag noch Commit. Nichts geändert."
+  if [ -n "$bundle" ]; then
+    say "Neuen Stand aus dem Bundle des Cockpits holen (${commit:0:12}, ohne origin)"
+    bundle_holen "$bundle" "$commit" || antwort 3 "Abgelehnt: $BUNDLE_FEHLER. Nichts geändert."
+    ZIEL_COMMIT="$commit"
+    ZIEL_BRANCH="$(bundle_branch "$ref" "$commit")"
+    herkunft="der Stand aus dem Cockpit"; upstream="ohne-upstream"
+  else
+    say "Neuen Stand holen (git fetch origin)"
+    timeout 180 git -c safe.directory="$REPO" -C "$REPO" fetch --quiet --prune --tags --force origin \
+      || antwort 3 "Abgelehnt: git fetch von origin gescheitert (Netz oder Zugang des Hosts; Repo privat: Code als Bundle aus dem Cockpit, Host-Agent aktualisieren). Nichts geändert."
+    ref_aufloesen "$ref" \
+      || antwort 3 "Abgelehnt: $ref ist weder Branch auf origin noch Tag noch Commit. Nichts geändert."
+    herkunft="origin/$ZIEL_BRANCH"
+  fi
   neu_version="$(version_von "$ZIEL_COMMIT")"
 
   if [ "$ZIEL_COMMIT" = "$alt_commit" ]; then
@@ -570,7 +665,7 @@ cmd_aktualisieren() {  # $1 = Ref
   fi
   if [ -n "$ZIEL_BRANCH" ] && git_r rev-parse -q --verify "refs/heads/$ZIEL_BRANCH" >/dev/null 2>&1 \
      && ! git_r merge-base --is-ancestor "refs/heads/$ZIEL_BRANCH" "$ZIEL_COMMIT" 2>/dev/null; then
-    antwort 3 "Abgelehnt: der lokale Branch $ZIEL_BRANCH hat Commits, die origin/$ZIEL_BRANCH nicht hat. Nichts geändert."
+    antwort 3 "Abgelehnt: der lokale Branch $ZIEL_BRANCH hat Commits, die $herkunft nicht hat. Nichts geändert."
   fi
 
   schema_vorher="$(schemastand)" || { schema_vorher=""; warn "Schemastand vor dem Update nicht lesbar"; }
@@ -587,7 +682,7 @@ cmd_aktualisieren() {  # $1 = Ref
   z_schreiben || antwort 3 "Abgelehnt: Zustand $ZUSTAND lässt sich nicht schreiben. Nichts geändert."
 
   say "Umschalten: $alt_version → $neu_version (${ZIEL_BRANCH:-losgelöst})"
-  if ! umschalten "$ZIEL_COMMIT" "$ZIEL_BRANCH"; then
+  if ! umschalten "$ZIEL_COMMIT" "$ZIEL_BRANCH" "$upstream"; then
     if [ "$(git_r rev-parse HEAD 2>/dev/null)" = "$alt_commit" ]; then
       zustand_zurueck "$hatte_zustand" "$alter_zustand"
       antwort 3 "Abgelehnt: git checkout von $ref gescheitert (Journal des Agenten). Nichts geändert."
@@ -713,6 +808,42 @@ cmd_zurueck() {
 }
 
 # --- Aufruf --------------------------------------------------------------------
+#: aktualisieren --ref <ref> [--bundle <datei> --commit <sha>] -> A_REF,
+#: A_BUNDLE (absolut, leer = von origin), A_COMMIT. Jede Angabe höchstens einmal.
+angaben_lesen() {
+  local gesehen=" " aufruf="Abgelehnt: Magister wird aus git aktualisiert – aktualisieren --ref <git-ref> [--bundle <datei> --commit <sha>]. Nichts geändert."
+  A_REF=""; A_BUNDLE=""; A_COMMIT=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --ref|--bundle|--commit)
+        [ $# -ge 2 ] || antwort 3 "$aufruf"
+        case "$gesehen" in *" $1 "*) antwort 3 "$aufruf" ;; esac
+        gesehen="$gesehen$1 " ;;
+      *) antwort 3 "$aufruf" ;;
+    esac
+    case "$1" in
+      --ref)    A_REF="$2" ;;
+      --bundle) A_BUNDLE="$2" ;;
+      --commit) A_COMMIT="$2" ;;
+    esac
+    shift 2
+  done
+  case "$gesehen" in *" --ref "*) ;; *) antwort 3 "$aufruf" ;; esac
+  if ! ref_gueltig "$A_REF" || [ "$A_REF" = "HEAD" ]; then
+    antwort 3 "Abgelehnt: ungültige Ref – erlaubt sind Branch, Tag oder Commit (Buchstaben, Ziffern, . _ / -, ohne ..). Nichts geändert."
+  fi
+  local mit_bundle=0 mit_commit=0
+  case "$gesehen" in *" --bundle "*) mit_bundle=1 ;; esac
+  case "$gesehen" in *" --commit "*) mit_commit=1 ;; esac
+  [ "$mit_bundle" = "$mit_commit" ] \
+    || antwort 3 "Abgelehnt: --bundle und --commit nur zusammen. Nichts geändert."
+  [ "$mit_bundle" = 1 ] || return 0
+  [[ "$A_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+    || antwort 3 "Abgelehnt: --commit ist kein Commit (40 Zeichen 0-9, a-f). Nichts geändert."
+  A_BUNDLE="$(bundle_datei "$A_BUNDLE")" \
+    || antwort 3 "Abgelehnt: Bundle fehlt bzw. ist leer. Nichts geändert."
+}
+
 # Alles steht in Funktionen, und diese Datei wird erst ganz gelesen, bevor
 # etwas läuft: `aktualisieren` tauscht sie im Checkout aus, während sie läuft.
 main() {
@@ -723,12 +854,7 @@ main() {
     stand|sichern|zurueck|neustart)
       [ $# -eq 0 ] || antwort 3 "Abgelehnt: $aktion nimmt keine Argumente. Nichts geändert." ;;
     aktualisieren)
-      if [ $# -ne 2 ] || [ "$1" != "--ref" ]; then
-        antwort 3 "Abgelehnt: Magister wird aus git aktualisiert – aktualisieren --ref <git-ref>. Nichts geändert."
-      fi
-      if ! ref_gueltig "$2" || [ "$2" = "HEAD" ]; then
-        antwort 3 "Abgelehnt: ungültige Ref – erlaubt sind Branch, Tag oder Commit (Buchstaben, Ziffern, . _ / -, ohne ..). Nichts geändert."
-      fi ;;
+      angaben_lesen "$@" ;;
     *)
       AKTION="${AKTION:-unbekannt}"
       antwort 3 "Abgelehnt: unbekannte Aktion – erlaubt: stand, sichern, aktualisieren, zurueck, neustart. Nichts geändert." ;;
@@ -738,7 +864,7 @@ main() {
   case "$aktion" in
     stand)         cmd_stand ;;
     sichern)       cmd_sichern ;;
-    aktualisieren) cmd_aktualisieren "$2" ;;
+    aktualisieren) cmd_aktualisieren "$A_REF" "$A_BUNDLE" "$A_COMMIT" ;;
     zurueck)       cmd_zurueck ;;
     neustart)      cmd_neustart ;;
   esac
