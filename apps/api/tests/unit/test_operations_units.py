@@ -34,6 +34,21 @@ class TestDesiredStateParsing:
         state = parse_desired_state({"settings": {}})
         assert state.sealed_secrets == {}
         assert state.maintenance == ()
+        assert state.mail_source is None
+
+    @pytest.mark.parametrize(
+        ("raw", "parsed"),
+        [("platform", "platform"), ("tenant", "tenant"), ("anders", None), (1, None)],
+    )
+    def test_mail_source(self, raw: object, parsed: str | None) -> None:
+        """Nur ein bekannter Wert zählt (ADR-0024 Nachtrag 2026-11-17, Auftrag ``notify``)."""
+        state = parse_desired_state({"settings": {}, "mail_source": raw})
+        assert state.mail_source == parsed
+
+    def test_notify_is_an_allowed_action(self) -> None:
+        from magister_api.tenancy.desired_state import MAINTENANCE_ACTIONS
+
+        assert "notify" in MAINTENANCE_ACTIONS
 
     @pytest.mark.parametrize(
         "payload",

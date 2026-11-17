@@ -23,6 +23,7 @@ Zwei Grenzen, die der Reconciler nicht überschreitet:
 
 from __future__ import annotations
 
+import html
 import logging
 import re
 from dataclasses import dataclass, field
@@ -262,6 +263,36 @@ def settings_diff(current: dict[str, Any], desired: dict[str, Any]) -> dict[str,
     return diff
 
 
+#: Höchstens so viele Empfänger einer Meldung des Cockpits (wie dort).
+NOTIFY_MAX_RECIPIENTS = 20
+
+
+def _notify_recipients(raw: str) -> list[str]:
+    """Empfänger einer Meldung: mit Komma getrennt, je eine Adresse, ohne Doppelte.
+
+    Leer heisst ungültig - eine Liste mit einer falschen Adresse ist es ganz,
+    damit nicht die Hälfte der Meldungen still verloren geht.
+    """
+    out: list[str] = []
+    for part in raw.split(","):
+        address = part.strip()
+        if not address:
+            continue
+        local, at, domain = address.rpartition("@")
+        if (
+            not at
+            or not local
+            or "." not in domain
+            or len(address) > 254
+            or any(ch.isspace() or ch in "<>;\"'" for ch in address)
+            or not address.isprintable()
+        ):
+            return []
+        if address.lower() not in {a.lower() for a in out}:
+            out.append(address)
+    return out if len(out) <= NOTIFY_MAX_RECIPIENTS else []
+
+
 def safe_error(exc: BaseException) -> str:
     """Ein Fehler als ein Satz für die Konsole — nie SQL, Parameter oder Geheimnisse.
 
@@ -439,7 +470,11 @@ class Reconciler:
                 try:
                     async with self.session.begin_nested():
                         await self._run_maintenance(
-                            request, result, tenant_slug=tenant_slug, tenant_ref=tenant_ref
+                            request,
+                            result,
+                            tenant_slug=tenant_slug,
+                            tenant_ref=tenant_ref,
+                            mail_source=desired.mail_source,
                         )
                 except Exception as exc:
                     logger.exception(
@@ -776,6 +811,7 @@ class Reconciler:
         *,
         tenant_slug: str,
         tenant_ref: str | None = None,
+        mail_source: str | None = None,
     ) -> None:
         """Einen Wartungsauftrag genau einmal ausführen (ADR-0024 D4).
 
@@ -822,6 +858,8 @@ class Reconciler:
             outcome = await self._local_admin_setup(request, actor=actor, tenant_ref=tenant_ref)
         elif request.action == "mail_test":
             outcome = await self._mail_test(request)
+        elif request.action == "notify":
+            outcome = await self._notify(request, mail_source=mail_source)
         else:  # audit_reset
             imports_deleted = await purge_import_history(self.session)
             deleted = await audit.purge(
@@ -875,6 +913,52 @@ class Reconciler:
         except MailError as exc:
             return {"ok": False, "transport": config.transport, "error": str(exc)[:200]}
         return {"ok": True, "transport": config.transport}
+
+    async def _notify(
+        self, request: DesiredMaintenance, *, mail_source: str | None
+    ) -> dict[str, Any]:
+        """Eine Meldung des Cockpits an den Betrieb senden (ADR-0024 Nachtrag 2026-11-17).
+
+        Das Cockpit hat für seine Benachrichtigung kein eigenes Mail-Geheimnis
+        mehr: es gibt Empfänger, Betreff und Text als Auftrag, und die
+        Datenebene sendet mit dem **Plattform-Standard** wie die Testmail.
+        Nur dann: hat dieser Kunde eine eigene Anbindung (``mail_source`` nicht
+        ``platform``), geht nichts hinaus - eine Meldung von Vita Brevis über
+        den Mailserver einer Schule wäre falsch. Je Empfänger eine Mail; das
+        Ergebnis zählt nur (keine Adressen, kein Text im Ergebnis und im Log).
+        """
+        if mail_source != "platform":
+            return {"ok": False, "error": "not_platform_mail"}
+        recipients = _notify_recipients(request.params.get("to", ""))
+        if not recipients:
+            return {"ok": False, "error": "recipient_invalid"}
+        subject = " ".join(request.params.get("subject", "").split())[:200]
+        body = request.params.get("text", "").strip()
+        if not subject or not body:
+            return {"ok": False, "error": "message_empty"}
+        eff = await AppSettingsService(self.session, self.settings).get_effective()
+        config = mail_config_from(eff)
+        message_html = "".join(
+            "<p>" + "<br>".join(html.escape(line) for line in block.splitlines()) + "</p>"
+            for block in body.split("\n\n")
+            if block.strip()
+        )
+        sent, error = 0, None
+        for to in recipients:
+            try:
+                await send_mail(
+                    config, MailMessage(to=to, subject=subject, html=message_html, text=body)
+                )
+            except MailError as exc:
+                error = error or str(exc)[:200]
+                continue
+            sent += 1
+        outcome: dict[str, Any] = {"ok": sent == len(recipients), "transport": config.transport}
+        outcome["sent"] = sent
+        if error is not None:
+            outcome["failed"] = len(recipients) - sent
+            outcome["error"] = error
+        return outcome
 
     async def _local_admin_setup(
         self, request: DesiredMaintenance, *, actor: str, tenant_ref: str | None

@@ -96,10 +96,15 @@ _ROLE_KEY_RE = re.compile(r"^[a-z][a-z0-9_-]{0,31}$")
 
 #: Was die Konsole an Wartung auslösen darf. Eine Allowlist wie bei den
 #: Einstellungen: ein unbekannter Auftrag wird nicht ausgeführt, sondern
-#: als Fehler zurückgemeldet.
+#: als Fehler zurückgemeldet. ``notify``: eine Meldung des Cockpits an den
+#: Betrieb mit dem Plattform-Standard senden (ADR-0024 Nachtrag 2026-11-17).
 MAINTENANCE_ACTIONS: frozenset[str] = frozenset(
-    {"demo_purge", "audit_reset", "local_admin_setup", "mail_test"}
+    {"demo_purge", "audit_reset", "local_admin_setup", "mail_test", "notify"}
 )
+
+#: Woher die Mail-Anbindung eines Kunden kommt (Feld ``mail_source`` des
+#: Soll-Zustands): Plattform-Standard oder eigene Anbindung.
+MAIL_SOURCES: frozenset[str] = frozenset({"platform", "tenant"})
 
 
 @dataclass(frozen=True)
@@ -142,6 +147,11 @@ class DesiredState:
     #: Fremde Rollen, die das Cockpit entziehen lässt (ADR-0027). Leer heisst
     #: nichts entziehen; gilt nur, solange ``role_assignments`` nicht `None` ist.
     role_revocations: tuple[DesiredRoleRevocation, ...] = ()
+    #: ``platform`` (Plattform-Standard) oder ``tenant`` (eigene Anbindung des
+    #: Kunden); `None` heisst keine Aussage. Meldungen des Cockpits (``notify``)
+    #: gehen nur über den Plattform-Standard hinaus, nie über die Anbindung
+    #: eines Kunden (ADR-0024 Nachtrag 2026-11-17).
+    mail_source: str | None = None
 
     @property
     def has_rbac(self) -> bool:
@@ -186,7 +196,14 @@ def parse_desired_state(payload: object) -> DesiredState:
         maintenance=_parse_maintenance(payload),
         role_assignments=_parse_role_assignments(payload),
         role_revocations=_parse_role_revocations(payload),
+        mail_source=_parse_mail_source(payload),
     )
+
+
+def _parse_mail_source(payload: dict[str, Any]) -> str | None:
+    """``mail_source``: nur ein bekannter Wert zählt, alles andere ist keine Aussage."""
+    raw = payload.get("mail_source")
+    return raw if isinstance(raw, str) and raw in MAIL_SOURCES else None
 
 
 def _parse_role_revocations(payload: dict[str, Any]) -> tuple[DesiredRoleRevocation, ...]:

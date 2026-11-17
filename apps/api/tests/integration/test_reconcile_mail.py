@@ -259,3 +259,136 @@ async def test_a_failing_order_is_reported_and_does_not_sink_the_round(
     text = safe_error(caught.value)
     assert text.startswith("ValidationError: mail_transport:")
     assert "sendmail" not in text
+
+
+def _notify_order(order_id: str, *, mail_source: str | None, **params: str) -> DesiredState:
+    from magister_api.tenancy.desired_state import DesiredMaintenance
+
+    return DesiredState(
+        settings=GRAPH_STANDARD,
+        mail_source=mail_source,
+        maintenance=(
+            DesiredMaintenance(
+                id=order_id,
+                action="notify",
+                requested_by="cockpit (Benachrichtigung)",
+                reason="Benachrichtigung des Betriebs (Cockpit)",
+                params=params,
+            ),
+        ),
+    )
+
+
+async def test_notify_sends_the_cockpit_message_with_the_platform_standard(
+    db_session: AsyncSession, app_settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ADR-0024 Nachtrag 2026-11-17: das Cockpit hat kein eigenes Mail-Geheimnis mehr."""
+    from magister_api.mail import MailConfig, MailError, MailMessage
+    from magister_api.models.audit import AuditEvent
+    from magister_api.services.reconciler import MAINTENANCE_EVENT
+
+    sent: list[tuple[MailConfig, MailMessage]] = []
+
+    async def fake_send(config: MailConfig, message: MailMessage) -> None:
+        if message.to == "kaputt@example.ch":
+            raise MailError("smtp: 550 mailbox unavailable")
+        sent.append((config, message))
+
+    monkeypatch.setattr("magister_api.services.reconciler.send_mail", fake_send)
+    settings = _settings(app_settings)
+    text_ = "Meldung · Auftrag des Host-Agenten · host-a\n  <fehlgeschlagen>\n\nDetails im Cockpit."
+    order_id = "55555555-5555-5555-5555-555555555555"
+    desired = _notify_order(
+        order_id,
+        mail_source="platform",
+        to="betrieb@example.ch, b@example.ch, BETRIEB@example.ch",
+        subject="[Vita Brevis Cockpit]  Meldung:\n Auftrag",
+        text=text_,
+    )
+    result = await _run(db_session, settings, desired)
+    assert result.maintenance_results == [
+        {"id": order_id, "ok": True, "result": {"ok": 1, "transport": "graph", "sent": 2}}
+    ]
+    assert [m.to for _, m in sent] == ["betrieb@example.ch", "b@example.ch"]
+    message = sent[0][1]
+    assert message.subject == "[Vita Brevis Cockpit] Meldung: Auftrag"
+    assert message.text == text_
+    assert "&lt;fehlgeschlagen&gt;" in message.html and "<fehlgeschlagen>" not in message.html
+    assert message.html.count("<p>") == 2
+
+    # genau einmal; im Protokoll des Kunden nur Zahlen, keine Adressen und kein Text
+    again = await _run(db_session, settings, desired)
+    assert len(sent) == 2 and again.maintenance_results[0]["ok"] is True
+    from sqlalchemy import func, select
+
+    events = (
+        await db_session.execute(
+            select(func.count())
+            .select_from(AuditEvent)
+            .where(AuditEvent.action == MAINTENANCE_EVENT)
+            .where(AuditEvent.target_id == order_id)
+        )
+    ).scalar_one()
+    assert events == 1
+
+    # ein Empfänger scheitert: gezählt, die übrigen bekommen die Meldung
+    failed = await _run(
+        db_session,
+        settings,
+        _notify_order(
+            "66666666-6666-6666-6666-666666666666",
+            mail_source="platform",
+            to="kaputt@example.ch,c@example.ch",
+            subject="Betreff",
+            text="Text",
+        ),
+    )
+    outcome = failed.maintenance_results[0]
+    assert outcome["ok"] is False
+    assert outcome["result"]["sent"] == 1 and outcome["result"]["failed"] == 1
+    assert outcome["result"]["error"] == "smtp: 550 mailbox unavailable"
+    assert "kaputt@example.ch" not in repr(outcome)
+
+
+@pytest.mark.parametrize(
+    ("mail_source", "params", "error"),
+    [
+        # eigene Anbindung des Kunden bzw. keine Aussage: nie über dessen Mailserver
+        ("tenant", {"to": "a@example.ch", "subject": "S", "text": "T"}, "not_platform_mail"),
+        (None, {"to": "a@example.ch", "subject": "S", "text": "T"}, "not_platform_mail"),
+        (
+            "platform",
+            {"to": "a@example.ch, kein-at", "subject": "S", "text": "T"},
+            "recipient_invalid",
+        ),  # fmt: skip
+        ("platform", {"to": "", "subject": "S", "text": "T"}, "recipient_invalid"),
+        (
+            "platform",
+            {"to": ",".join(f"a{i}@example.ch" for i in range(21)), "subject": "S", "text": "T"},
+            "recipient_invalid",
+        ),  # fmt: skip
+        ("platform", {"to": "a@example.ch", "subject": " ", "text": "T"}, "message_empty"),
+        ("platform", {"to": "a@example.ch", "subject": "S", "text": "\n"}, "message_empty"),
+    ],
+)
+async def test_notify_refuses_without_platform_mail_or_a_valid_message(
+    db_session: AsyncSession,
+    app_settings: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+    mail_source: str | None,
+    params: dict[str, str],
+    error: str,
+) -> None:
+    from magister_api.mail import MailConfig, MailMessage
+
+    async def never(config: MailConfig, message: MailMessage) -> None:
+        raise AssertionError("darf nicht senden")
+
+    monkeypatch.setattr("magister_api.services.reconciler.send_mail", never)
+    result = await _run(
+        db_session,
+        _settings(app_settings),
+        _notify_order("77777777-7777-7777-7777-777777777777", mail_source=mail_source, **params),
+    )
+    assert result.maintenance_results[0]["ok"] is False
+    assert result.maintenance_results[0]["result"]["error"] == error
