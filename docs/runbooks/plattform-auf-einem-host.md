@@ -560,6 +560,14 @@ Antwort: eine Zeile JSON auf stdout (Format `betrieb/v1`), Fortschritt auf
 stderr. Exit 0 ok · 1 gescheitert, selbst zurückgefallen · 2 von Hand (die
 Meldung nennt den nächsten Schritt) · 3 abgelehnt, nichts geändert · 4 belegt.
 
+**Repo privat** (ADR-0028 Nachtrag 2026-11-17): Nur das Cockpit hat einen
+GitHub-Zugang. Es gibt den Stand als git-Bundle mit, der Agent ruft
+`aktualisieren --ref <ref> --bundle <datei> --commit <sha>` auf — origin wird
+dann nie kontaktiert, ein Branch wird lokal ohne Upstream angehängt. Erst den
+Host auf diesen Stand bringen und den Host-Agenten neu einrichten, dann das
+Repo privat stellen. Danach geht `aktualisieren --ref` ohne Bundle (und `git
+pull` von Hand) nur mit einem eigenen Lese-Zugang des Hosts.
+
 **Ein Update** prüft zuerst (lokale Änderungen, `git fetch`, Ref, nicht älter
 als der laufende Stand), sichert dann die Datenbank (`pg-backup`, verschlüsselt,
 mit Eigentümern und Rechten: `magister-<zeit>-rueckfall.dump.age` im Volume

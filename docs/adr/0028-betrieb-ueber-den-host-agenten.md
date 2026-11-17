@@ -183,3 +183,45 @@ Datenebene neu.
   Das Umbenennen beim Rückfall nutzt dieselbe Idee nur im Fehlerfall.
 * **`zurueck` ohne Datenbank**, immer. Nach einem Update mit Migration passt
   der alte Code nicht zur Datenbank; Alembic kennt die neuere Revision nicht.
+
+## Nachtrag 2026-11-17 · Repo privat: Stand aus dem git-Bundle des Cockpits
+
+Die Repos (Magister, Automato, Cockpit) werden privat; **nur das Cockpit** hat
+einen GitHub-Zugang (Cockpit ADR 0019, Vertrag „Alles privat“). Hosts sprechen
+nie mit GitHub. Für jeden Auftrag mit Code löst das Cockpit die Ref auf, holt
+den Stand als git-Bundle und gibt im signierten Auftrag Commit und SHA-256 mit;
+der Host-Agent lädt das Bundle über den Host-Kanal und prüft es.
+
+* **`aktualisieren --ref <ref> --bundle <datei> --commit <40 hex>`**
+  (Erweiterung von `betrieb/v1`, rückwärts verträglich): `--bundle` und
+  `--commit` nur zusammen, jede Angabe einmal. Dann wird origin **nie**
+  kontaktiert: `git bundle verify` → `git fetch <bundle> <commit>` → der Commit
+  muss ein Kopf des Bundles sein bzw. von einem Kopf erreichbar. Bundle fehlt,
+  defekt, passt nicht zum Checkout (Voraussetzungen) oder ohne den Commit →
+  Exit 3, nichts geändert (noch keine Sicherung). Ohne `--bundle` wie bisher
+  von origin; scheitert `git fetch`, nennt die Meldung den Weg über das Bundle.
+* **Branch oder losgelöst:** Commit (Hex-Präfix) und Tag (im Bundle oder
+  lokal) → losgelöst; ein Branch, den das Bundle (`refs/heads/<ref>`) bzw. der
+  Checkout kennt → `git checkout -B <ref> <commit>` **ohne Upstream** (ein
+  früherer wird entfernt); unbekannt → losgelöst. Lokale Commits auf dem
+  Ziel-Branch → Exit 3 wie bisher.
+* **Tags des Bundles** kommen mit (bestehende werden nie überschrieben): die
+  Version ist `git describe --tags` (D2), ohne sie stünde nach einem Update auf
+  einen Tag nur „älterer Tag + Abstand“ da.
+* **Images:** Magister baut weiterhin aus dem Checkout (D2, D7: keine Abbilder aus
+  GHCR). Gibt der Agent trotzdem einen Pull-Zugang als `DOCKER_CONFIG` mit,
+  erbt docker ihn; `betrieb.sh` setzt und nennt die Variable nie.
+* `stand`, `sichern`, `zurueck` und `neustart` brauchen kein origin (getestet
+  ohne Remote).
+
+Verworfen: ein Archiv statt Bundle (Commit, `git describe` und `zurueck` per
+Checkout gingen verloren); ein Lese-Zugang je Host (widerspricht „nur das
+Cockpit hat einen GitHub-Zugang“).
+
+Folge: Reihenfolge für den Betrieb — erst jeden Host auf diesen Stand bringen
+und den Host-Agenten neu einrichten, dann das Repo privat stellen. Danach
+geht ein `git pull` von Hand (und der Ops-Agent der Konsole mit `git pull
+--ff-only`, ADR-0024 D5) nur mit eigenem Lese-Zugang des Hosts. Die
+Magister-Plattform als Vorlage im Cockpit (`plattform-aufbau.sh` aus einer
+Konfigurationsdatei) kommt in dieser Runde nicht: das Cockpit führt genau eine
+Datenebene.
