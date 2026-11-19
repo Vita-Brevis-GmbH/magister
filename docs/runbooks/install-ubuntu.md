@@ -45,7 +45,8 @@ sudo ufw --force enable
 sudo ufw status
 ```
 
-Hostname stimmig setzen (taucht in HSTS-Headers + Audit-Logs auf):
+Hostname stimmig setzen (taucht in HSTS-Headers + Audit-Logs auf) – **nur bei einer neuen VM**;
+eine bestehende VM behält ihren Namen (Inventar, Monitoring, DNS):
 
 ```bash
 sudo hostnamectl set-hostname magister

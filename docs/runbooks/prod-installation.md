@@ -30,7 +30,9 @@ Firewall.
 
 - Ubuntu Server 26.04 LTS, minimal, mit OpenSSH.
 - Empfohlen sind 4 vCPU, 8 GB RAM und 80 GB Platte. Der Bau der Abbilder braucht anfangs am meisten.
-- Netz: feste IP `<PRIVATE_IP>`, Hostname `srv01`:
+- Netz: feste IP `<PRIVATE_IP>`, Hostname `srv01` – **nur bei einer neuen VM**. Eine bestehende VM
+  behält ihren Namen (Inventar, Monitoring, DNS); den Hostnamen nie auf einen Dienstnamen wie
+  `mgmt` oder `magister` setzen:
 
 ```bash
 sudo hostnamectl set-hostname srv01
